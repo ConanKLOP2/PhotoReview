@@ -320,16 +320,17 @@ public sealed class ReviewCatalog
     /// was displayed, exactly like <see cref="Restore"/>; it only moves when the catalog was empty.
     /// </summary>
     /// <returns>True when at least one entry was restored.</returns>
-    public bool RestoreMembers(IEnumerable<string> paths, int index, CaptureGroup? group = null)
+    public bool RestoreMembers(IEnumerable<string> paths, int index, CaptureGroup? group = null, bool rawEnabled = true)
     {
         AssertOwnerThread();
+        if (!rawEnabled) group = null; // RAW is off: a hidden RAW member must not come back or re-form the capture, its JPEG returns as a plain entry
         ArgumentNullException.ThrowIfNull(paths);
         var all = paths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         // A retried partial undo: one member is already listed as an independent entry (restored earlier) and the other has
         // just come back -- fold them into the grouped entry at the present member's position instead of listing a second one.
         var reformed = TryReformGroup(all, group);
         if (reformed) all = all.Where(path => !group!.ImagePaths.Contains(path, StringComparer.OrdinalIgnoreCase)).ToArray();
-        var unique = all.Where(IsRestorableImage).Where(path => IndexOf(path) < 0).ToArray();
+        var unique = all.Where(path => IsRestorableImage(path, rawEnabled)).Where(path => IndexOf(path) < 0).ToArray();
         if (unique.Length == 0) return reformed;
 
         var groups = new List<CaptureGroup>();
@@ -383,7 +384,7 @@ public sealed class ReviewCatalog
                 if (_entries[at].CaptureGroup is not null) return false; // already grouped: not a partial restore
                 standalone.Add(at);
             }
-            else if (!restoredPaths.Contains(member, StringComparer.OrdinalIgnoreCase) || !IsRestorableImage(member))
+            else if (!restoredPaths.Contains(member, StringComparer.OrdinalIgnoreCase) || !IsRestorableImage(member, rawEnabled: true))
             {
                 return false; // a member is still missing: keep the independent entry
             }
@@ -410,10 +411,10 @@ public sealed class ReviewCatalog
         return true;
     }
 
-    private static bool IsRestorableImage(string path)
+    private static bool IsRestorableImage(string path, bool rawEnabled)
     {
         var extension = System.IO.Path.GetExtension(path);
-        return ImageFileTypes.SupportedExtensions.Contains(extension) || ImageFileTypes.RawExtensions.Contains(extension);
+        return ImageFileTypes.SupportedExtensions.Contains(extension) || (rawEnabled && ImageFileTypes.RawExtensions.Contains(extension));
     }
 
     /// <summary>

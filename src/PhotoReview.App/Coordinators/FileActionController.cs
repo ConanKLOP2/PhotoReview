@@ -206,13 +206,13 @@ public sealed class FileActionController
             var memberNames = string.Join(", ", selectedGroup.Paths.Select(Path.GetFileName));
             string prompt;
             if (operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0)
-                prompt = Tr.DialogConfirmGroupPermanentDeleteMessage(Path.GetFileName(source), permanentGroupPaths.Length, selectedGroup.Paths.Count);
+                prompt = Tr.DialogConfirmGroupPermanentDeleteMessage(permanentGroupPaths.Length, selectedGroup.Paths.Count, Path.GetFileName(source));
             else if (fromCompareGroup)
                 prompt = operation == FileOperationType.Move
                     ? Tr.DialogConfirmCompareGroupMoveMessage(Path.GetFileName(source), memberNames)
                     : Tr.DialogConfirmCompareGroupRecycleMessage(Path.GetFileName(source), memberNames);
             else
-                prompt = Tr.DialogConfirmGroupRecycleMessage(Path.GetFileName(source), selectedGroup.Paths.Count);
+                prompt = Tr.DialogConfirmGroupRecycleMessage(selectedGroup.Paths.Count, Path.GetFileName(source));
             var title = operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0
                 ? Tr.DialogConfirmPermanentDeleteTitle : Tr.DialogConfirmActionTitle;
             if (_dialogService is null || !_dialogService.ShowConfirmation(title, prompt)) return false;
@@ -388,7 +388,7 @@ public sealed class FileActionController
                         : groupResult.Members.Where(member => imagePaths.Contains(member.Member.Source)
                                 && (!member.StateKnown || member.SourceExists))
                             .Select(member => member.Member.Source);
-                    _catalog.RestoreMembers(available, sourceIndex, group);
+                    _catalog.RestoreMembers(available, sourceIndex, group, _getSettings().RawSupportEnabled);
                     _sink.OnCatalogChanged(null);
                 }
             }
@@ -441,7 +441,7 @@ public sealed class FileActionController
         else index = SortedInsertIndex(source);
 
         if (restoredPaths is { Count: > 0 })
-            _catalog.RestoreMembers(restoredPaths, index, position?.Group);
+            _catalog.RestoreMembers(restoredPaths, index, position?.Group, _getSettings().RawSupportEnabled);
         else
             _catalog.Restore(source, index);
     }

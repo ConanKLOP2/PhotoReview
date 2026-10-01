@@ -184,7 +184,7 @@ public sealed class RecoveryRetryService
                         _recycleBin.DeletePermanently(member.Source);
                     }
                     else _recycleBin!.SendToRecycleBin(member.Source);
-                    if (failed.Undo != true && _fileSystem.FileExists(member.Source)) throw new IOException(JournalErrors.SourceStillExistsAfterRecovery);
+                    if (failed.Undo != true && _fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.SourceStillExistsAfterRecovery);
                     if (failed.Undo == true && !_fileSystem.FileExists(member.Source))
                         throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
                 }
@@ -203,13 +203,13 @@ public sealed class RecoveryRetryService
                     {
                         _fileSystem.Copy(sourcePath, destinationPath);
                         var copied = _fileSystem.GetFileStat(destinationPath);
-                        if (copied?.Length != member.Size) throw new IOException(JournalErrors.RetryVerifyFailed);
+                        if (copied?.Length != member.Size) throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
                     }
                     else
                     {
                         _fileSystem.Move(sourcePath, destinationPath);
                         if (_fileSystem.FileExists(sourcePath) || _fileSystem.GetFileStat(destinationPath)?.Length != member.Size)
-                            throw new IOException(JournalErrors.RetryVerifyFailed);
+                            throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
                     }
                 }
             }

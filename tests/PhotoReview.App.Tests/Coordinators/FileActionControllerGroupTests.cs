@@ -235,7 +235,9 @@ public sealed class FileActionControllerGroupTests : IDisposable
         await controller.RunActionAsync(1, null, jpeg);
 
         var (_, message) = Assert.Single(_dialog.Confirmations);
-        Assert.Equal(Tr.DialogConfirmGroupRecycleMessage("pair.jpg", 2), message);
+        Assert.Equal(Tr.DialogConfirmGroupRecycleMessage(2, "pair.jpg"), message);
+        Assert.Contains("2", message, StringComparison.Ordinal); // the arguments are object?: pin the rendered text, not just the call shape
+        Assert.Contains("pair.jpg", message, StringComparison.Ordinal);
         Assert.Equal(2, _bin.Recycled.Count);
     }
 
@@ -287,6 +289,8 @@ public sealed class FileActionControllerGroupTests : IDisposable
 
         var prompt = Assert.Single(_dialog.Confirmations);
         Assert.Equal(Tr.DialogConfirmPermanentDeleteTitle, prompt.Title);
+        // The message arguments are object?: pin the argument ORDER (permanentCount, count, fileName), a swap compiles silently.
+        Assert.Equal(Tr.DialogConfirmGroupPermanentDeleteMessage(3, 3, "pair.jpg"), prompt.Message);
         Assert.Equal(3, _bin.Deleted.Count);
     }
 

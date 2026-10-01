@@ -842,7 +842,7 @@
   "core.recovery.alreadyHandled": "This entry was already handled by another PhotoReview window, or is being retried there right now. Nothing was changed; the entry has been removed from this list.",
   "recovery.retry.stale.title": "Already handled elsewhere",
   "settings.group.raw": "Camera RAW",
-  "settings.rawSupportEnabled.label": "Enable Camera RAW support (.cr2, .cr3, .nef, .arw, .dng, .orf, .rw2)",
+  "settings.rawSupportEnabled.label": "Enable Camera RAW support (.cr2, .cr3, .nef, .arw, .dng, .raf, .orf, .rw2)",
   "settings.rawSupportEnabled.automationName": "Enable Camera RAW support",
   "settings.rawSupportEnabled.hint": "Loads embedded JPEG previews from camera RAW files for fast viewing and navigation.",
   "settings.rawFullDecode.label": "RAW full decode (demosaic)",

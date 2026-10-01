@@ -834,7 +834,7 @@
   "core.recovery.alreadyHandled": "Mục này đã được một cửa sổ PhotoReview khác xử lý, hoặc đang được thử lại ở đó. Không có gì bị thay đổi; mục đã được gỡ khỏi danh sách này.",
   "recovery.retry.stale.title": "Đã được xử lý ở nơi khác",
   "settings.group.raw": "Camera RAW",
-  "settings.rawSupportEnabled.label": "Bật hỗ trợ định dạng Camera RAW (.cr2, .cr3, .nef, .arw, .dng, .orf, .rw2)",
+  "settings.rawSupportEnabled.label": "Bật hỗ trợ định dạng Camera RAW (.cr2, .cr3, .nef, .arw, .dng, .raf, .orf, .rw2)",
   "settings.rawSupportEnabled.automationName": "Bật hỗ trợ định dạng Camera RAW",
   "settings.rawSupportEnabled.hint": "Tải bản xem trước JPEG nhúng từ tệp RAW để xem và chuyển ảnh nhanh chóng.",
   "settings.rawFullDecode.label": "Giải mã RAW đầy đủ (demosaic)",

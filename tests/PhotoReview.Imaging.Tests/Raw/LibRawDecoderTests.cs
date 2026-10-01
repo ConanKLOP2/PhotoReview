@@ -18,8 +18,7 @@ public sealed class LibRawDecoderTests
 {
     private const string StrictCorpusEnvironmentVariable = "PHOTOREVIEW_LIBRAW_STRICT_CORPUS";
     private static readonly string[] RequiredRawExtensions = [".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"];
-    private static readonly string CorpusDirectory = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "../../../../../tests/Fixtures/raw-corpus"));
+    private static readonly string CorpusDirectory = RawCorpus.Directory;
 
     [Fact]
     [Trait("Category", "Native")]
@@ -34,8 +33,9 @@ public sealed class LibRawDecoderTests
     [Fact]
     public void Decode_OfficialCorpusSamples_ReturnsValidRgbBackedBitmap()
     {
-        var strictFullCorpus = IsStrictFullCorpusRequested();
         var selectedSample = Environment.GetEnvironmentVariable("PHOTOREVIEW_LIBRAW_SAMPLE");
+        // The shared PHOTOREVIEW_RAW_CORPUS_STRICT also demands the complete corpus (unless one sample was picked on purpose).
+        var strictFullCorpus = IsStrictFullCorpusRequested() || (RawCorpus.IsStrict && string.IsNullOrWhiteSpace(selectedSample));
         if (!Directory.Exists(CorpusDirectory))
         {
             if (strictFullCorpus || !string.IsNullOrWhiteSpace(selectedSample))
@@ -52,7 +52,7 @@ public sealed class LibRawDecoderTests
         if (strictFullCorpus)
         {
             var formats = files.Select(path => Path.GetExtension(path).ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
-            Assert.Subset(RequiredRawExtensions.ToHashSet(StringComparer.Ordinal), formats);
+            Assert.Empty(RequiredRawExtensions.Except(formats)); // every required format must be present (Subset(required, formats) was inverted)
         }
 
         var decoder = new LibRawDecoder();
@@ -76,12 +76,6 @@ public sealed class LibRawDecoderTests
                 Assert.Equal(info.PixelWidth, bounded.OriginalWidth);
                 Assert.Equal(info.PixelHeight, bounded.OriginalHeight);
             }
-        }
-
-        if (string.IsNullOrWhiteSpace(selectedSample))
-        {
-            var decodedFormats = files.Select(path => Path.GetExtension(path).ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
-            Assert.Subset(RequiredRawExtensions.ToHashSet(StringComparer.Ordinal), decodedFormats);
         }
 
         Console.WriteLine($"LibRaw corpus: {files.Length}/{files.Length} decoded; sampled peak private bytes={memorySampler.PeakPrivateBytes}; "

@@ -162,8 +162,8 @@ public sealed class DngContainerReader : IRawContainerReader
                     Offset: stripOffset,
                     Length: stripLength,
                     Kind: EmbeddedPreviewKind.Jpeg,
-                    Width: width > 0 ? width : jpegWidth,
-                    Height: height > 0 ? height : jpegHeight,
+                    Width: jpegWidth, // the probed frame size wins over a declared IFD size
+                    Height: jpegHeight,
                     ColorSpace: PreviewColorSpace.Unknown));
                 isPreview = true;
             }

@@ -116,7 +116,7 @@ public sealed class NefContainerReader : IRawContainerReader
                      TiffHeaderNavigator.TryReadSingleStrip(source, entries, littleEndian, out long stripOffset, out long stripLength) &&
                      JpegMarkerProbe.TryReadLossyFrame(source, stripOffset, stripLength, out int jpegWidth, out int jpegHeight))
             {
-                AddPreview(previews, stripOffset, stripLength, width > 0 ? width : jpegWidth, height > 0 ? height : jpegHeight);
+                AddPreview(previews, stripOffset, stripLength, jpegWidth, jpegHeight); // the probed frame size wins over a declared IFD size
                 isPreview = true;
             }
 

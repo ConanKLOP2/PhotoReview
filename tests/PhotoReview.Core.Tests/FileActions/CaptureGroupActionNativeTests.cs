@@ -1,3 +1,4 @@
+using PhotoReview.TestSupport;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
@@ -13,9 +14,8 @@ public sealed class CaptureGroupActionNativeTests
     [Fact]
     public async Task GroupMoveAndUndo_CopiedRawCorpusMember_PreservesOriginalAndRestoresPair()
     {
-        var corpusRaw = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
-            "../../../../../tests/Fixtures/raw-corpus/Canon - EOS 350D - RAW (3_2).CR2"));
-        if (!File.Exists(corpusRaw)) return;
+        var corpusRaw = RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2"); // null = corpus absent (throws instead in strict mode)
+        if (corpusRaw is null) return;
 
         using var root = new TempRoot("raw-group-corpus-action");
         var sourceFolder = root.Dir("photos");

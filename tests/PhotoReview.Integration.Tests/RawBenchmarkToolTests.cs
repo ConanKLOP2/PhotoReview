@@ -203,7 +203,9 @@ public sealed class RawSurveyReportTests : IDisposable
 
         Assert.Null(result.Error);
         Assert.NotEqual("jpeg", result.SensorSource);
-        Assert.Equal(result.SensorWidth > 0 ? "container" : "unknown", result.SensorSource);
+        // The builder writes no sensor size (only a 640x480 preview): the survey must say "unknown", not borrow the preview size.
+        Assert.Equal(0, result.SensorWidth);
+        Assert.Equal("unknown", result.SensorSource);
     }
 
     [Fact(DisplayName = "an unreadable RAW is reported as a failed file (not a crash), the markdown is still written and the exit code is non-zero")]

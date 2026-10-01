@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using PhotoReview.App.Composition;
 using PhotoReview.Imaging.Raw;
+using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.Composition;
@@ -37,9 +38,8 @@ public sealed class LibRawPreviewFallbackTests
     [Trait("Category", "Native")]
     public void ReadJpegThumbnail_OrfCorpusFile_ReturnsCompleteJpeg()
     {
-        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
-            "../../../../../tests/Fixtures/raw-corpus/Olympus - E-P3 - 16bit (4_3).ORF"));
-        if (!File.Exists(path)) return;
+        var path = RawCorpus.TryGetFile("Olympus - E-P3 - 16bit (4_3).ORF"); // null = corpus absent (throws instead in strict mode)
+        if (path is null) return;
 
         var thumbnail = new LibRawPreviewFallback().ReadJpegThumbnail(path, RawFormat.Orf);
 

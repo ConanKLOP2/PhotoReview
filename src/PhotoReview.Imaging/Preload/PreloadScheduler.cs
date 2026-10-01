@@ -427,7 +427,7 @@ public sealed class PreloadScheduler : IDisposable
                         _log.Warn($"Preload skipped, cannot stat: {path}"); // deleted between scan and stat
                         continue;
                     }
-                    if (_target.TryGetCachedPreview(key)) continue;
+                    if (_target.TryGetCachedPreview(key)) { _busyBackoff.RecordSuccess(path); continue; } // decoded by another route (viewer): its busy history no longer applies
                     // Busy recently (decoder queue full): not retried on every order rebuild, see PreloadBusyBackoff.
                     if (_busyBackoff.ShouldSkip(path, key)) continue;
                     queued.Add(path);

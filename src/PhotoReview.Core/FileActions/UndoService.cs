@@ -396,7 +396,7 @@ public sealed class UndoService
                     if (_moveOverride is not null) await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
                     else _fileSystem.Move(member.Source, member.Destination!);
                     if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
-                        throw new IOException(JournalErrors.VerifySizeChanged);
+                        throw new JournalCodedException(JournalErrors.VerifySizeChanged);
                     restored.Add(member.Destination!);
                     restoredByThisUndo++;
                 }

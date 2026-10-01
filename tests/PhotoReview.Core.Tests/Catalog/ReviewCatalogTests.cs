@@ -20,6 +20,19 @@ public class ReviewCatalogTests
     }
 
     [Fact]
+    public void RestoreMembers_RawSupportOff_RestoresOnlyTheJpegAsAPlainEntry()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset([new CatalogEntry(@"C:\photos\before.jpg"), new CatalogEntry(@"C:\photos\after.jpg")]);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2");
+
+        catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1, group, rawEnabled: false);
+
+        Assert.Equal([@"C:\photos\before.jpg", @"C:\photos\p.jpg", @"C:\photos\after.jpg"], catalog.Paths);
+        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+    }
+
+    [Fact]
     public void Reset_PathsOverload_ForgetsThePreviousPairMode()
     {
         var catalog = PairCatalog(RawPairMode.PreferJpeg);

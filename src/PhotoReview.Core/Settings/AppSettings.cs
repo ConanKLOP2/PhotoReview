@@ -363,7 +363,7 @@ public class AppSettings
     // ---- Camera RAW support (feat/raw-support-integration). Absent in older configs = these defaults. ----
 
     /// <summary>
-    /// Master switch for Camera RAW format support (.cr2, .cr3, .nef, .arw, .dng, .orf, .rw2).
+    /// Master switch for Camera RAW format support (.cr2, .cr3, .nef, .arw, .dng, .raf, .orf, .rw2).
     /// Default true (RAW-70 enables the completed RAW support by default).
     /// </summary>
     public bool RawSupportEnabled { get; set; } = true;

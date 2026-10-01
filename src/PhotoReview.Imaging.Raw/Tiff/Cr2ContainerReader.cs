@@ -91,15 +91,18 @@ public sealed class Cr2ContainerReader : IRawContainerReader
             {
                 // Full size preview in IFD0 StripOffsets/ByteCounts (a JPEG split over several strips is rejected).
                 if (TiffHeaderNavigator.TryReadSingleStrip(source, entries, littleEndian, out long stripOffset, out long stripLength) &&
-                    source.Read(stripOffset, Math.Min(2, (int)stripLength)) is [0xFF, 0xD8])
+                    TiffHeaderNavigator.StartsWithSoi(source, stripOffset, stripLength))
                 {
+                    int stripWidth = ifdWidth;
+                    int stripHeight = ifdHeight;
+                    TiffHeaderNavigator.ReconcileJpegSize(source, stripOffset, stripLength, ref stripWidth, ref stripHeight);
                     previews.Add(new EmbeddedPreview(
                         Index: previews.Count,
                         Offset: stripOffset,
                         Length: stripLength,
                         Kind: EmbeddedPreviewKind.Jpeg,
-                        Width: ifdWidth,
-                        Height: ifdHeight,
+                        Width: stripWidth,
+                        Height: stripHeight,
                         ColorSpace: PreviewColorSpace.Unknown));
                 }
             }
