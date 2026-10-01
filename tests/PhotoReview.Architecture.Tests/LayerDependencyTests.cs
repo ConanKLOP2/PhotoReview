@@ -20,6 +20,7 @@ public sealed class LayerDependencyTests
                 "WindowsBase",
                 "Microsoft.VisualBasic",
                 "PhotoReview.Imaging",
+                "PhotoReview.Imaging.Raw",
                 "PhotoReview.Platform.Windows",
                 "PhotoReview.App")
             .GetResult();
@@ -38,6 +39,7 @@ public sealed class LayerDependencyTests
             .ShouldNot()
             .HaveDependencyOnAny(
                 "PhotoReview.App",
+                "PhotoReview.Imaging.Raw",
                 "PhotoReview.Platform.Windows",
                 "PresentationFramework",
                 "System.Windows.Forms")
@@ -57,6 +59,7 @@ public sealed class LayerDependencyTests
             .ShouldNot()
             .HaveDependencyOnAny(
                 "PhotoReview.Imaging",
+                "PhotoReview.Imaging.Raw",
                 "PhotoReview.App")
             .GetResult();
 
@@ -64,6 +67,66 @@ public sealed class LayerDependencyTests
             result.IsSuccessful,
             $"Platform has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
     }
+
+    [Fact(DisplayName = "Rule 9: Imaging.Raw depends only on Imaging and Core")]
+    public void ImagingRaw_DoesNotDependOn_ForbiddenLayers()
+    {
+        var rawAssembly = typeof(PhotoReview.Imaging.Raw.RawFormat).Assembly;
+
+        var result = Types.InAssembly(rawAssembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "PhotoReview.App",
+                "PhotoReview.Platform.Windows",
+                "PhotoReview.Benchmarking",
+                "PhotoReview.Imaging.LibRaw",
+                "PresentationFramework",
+                "System.Windows.Forms")
+            .GetResult();
+
+        Assert.True(
+            result.IsSuccessful,
+            $"Imaging.Raw has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
+        Assert.Empty(UnexpectedPhotoReviewReferences(rawAssembly, "PhotoReview.Core", "PhotoReview.Imaging"));
+    }
+
+    [Fact(DisplayName = "Rule 10: Imaging.LibRaw depends only on Imaging and Core")]
+    public void ImagingLibRaw_DoesNotDependOn_ForbiddenLayers()
+    {
+        var libRawAssembly = typeof(PhotoReview.Imaging.LibRaw.LibRawAvailability).Assembly;
+
+        var result = Types.InAssembly(libRawAssembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "PhotoReview.App",
+                "PhotoReview.Platform.Windows",
+                "PhotoReview.Benchmarking",
+                "PhotoReview.Imaging.Raw",
+                "System.Windows.Forms")
+            .GetResult();
+
+        Assert.True(
+            result.IsSuccessful,
+            $"Imaging.LibRaw has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
+        Assert.Empty(UnexpectedPhotoReviewReferences(libRawAssembly, "PhotoReview.Core", "PhotoReview.Imaging"));
+    }
+
+    [Fact(DisplayName = "Reference allow-list check reports a forbidden assembly reference")]
+    public void UnexpectedPhotoReviewReferences_AssemblyWithOtherReferences_ReportsThem()
+    {
+        // The App assembly references far more than Core: the helper behind rules 9/10 must name them, so adding a
+        // forbidden project reference to Imaging.Raw / Imaging.LibRaw makes those rules fail.
+        var unexpected = UnexpectedPhotoReviewReferences(typeof(PhotoReview.App.App).Assembly, "PhotoReview.Core");
+
+        Assert.Contains("PhotoReview.Imaging", unexpected);
+    }
+
+    /// <summary>Names of the PhotoReview.* assemblies <paramref name="assembly"/> references that are not in <paramref name="allowed"/>.</summary>
+    private static string[] UnexpectedPhotoReviewReferences(System.Reflection.Assembly assembly, params string[] allowed) =>
+        assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name ?? string.Empty)
+            .Where(name => name.StartsWith("PhotoReview.", StringComparison.Ordinal) && !allowed.Contains(name, StringComparer.Ordinal))
+            .ToArray();
 
     [Fact(DisplayName = "Rule 8: Platform.Windows does not reference WPF presentation assemblies (AR03b: builds without UseWPF)")]
     public void PlatformWindows_DoesNotDependOn_WpfPresentationAssemblies()

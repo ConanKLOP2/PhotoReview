@@ -1,10 +1,11 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Preload;
 
@@ -21,7 +22,6 @@ public sealed class PreloadScheduler : IDisposable
     // GetCurrentCacheKey(entry), which reuses the folder scan's Length/LastWriteUtc instead of
     // stat-ing every candidate examined during a preload scan.
     private readonly Func<CatalogEntry[]> _snapshotEntries;
-    private readonly Func<long> _totalSourceBytes;
     private readonly PreloadOptions _options;
     private readonly IMemoryProbe _memoryProbe;
     private readonly IUiScheduler _ui;
@@ -31,6 +31,8 @@ public sealed class PreloadScheduler : IDisposable
     private readonly NavigationPace _pace;
     // Q-R17: measured preview sizes behind the whole-folder estimate.
     private readonly PreviewSizeSampler _sizes = new();
+    // Paths the decoder refused as busy: cooldown (in order passes) + retry cap, see PreloadBusyBackoff.
+    private readonly PreloadBusyBackoff _busyBackoff = new();
     // Concurrent preload decodes allowed to start while a viewer decode is running.
     private readonly int _viewerBusyWorkerLimit = Math.Max(2, Environment.ProcessorCount / 3);
     // Q-R29 option C-2: above this observed source-read wall time (ms, DecodeMillisecondsEwma), the link is
@@ -86,7 +88,7 @@ public sealed class PreloadScheduler : IDisposable
         _pace = pace ?? new NavigationPace();
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _snapshotEntries = snapshotEntries ?? throw new ArgumentNullException(nameof(snapshotEntries));
-        _totalSourceBytes = totalSourceBytes ?? throw new ArgumentNullException(nameof(totalSourceBytes));
+        ArgumentNullException.ThrowIfNull(totalSourceBytes); // retained for constructor compatibility; estimates now use per-entry metadata.
         _options = options ?? new PreloadOptions();
         _memoryProbe = memoryProbe ?? throw new ArgumentNullException(nameof(memoryProbe));
         _ui = uiScheduler ?? ImmediateUiScheduler.Instance;
@@ -156,7 +158,11 @@ public sealed class PreloadScheduler : IDisposable
     }
 
     /// <summary>Drops the warmed-key set (folder reload / cache clear).</summary>
-    public void ClearPreloadedKeys() { lock (_preloadedKeysGate) _preloadedKeys.Clear(); }
+    public void ClearPreloadedKeys()
+    {
+        lock (_preloadedKeysGate) _preloadedKeys.Clear();
+        _busyBackoff.Clear();
+    }
 
     /// <summary>Removes warmed keys for one normalized (full, upper-invariant) path.</summary>
     public void RemovePreloadedKeysForPath(string normalizedPath)
@@ -301,6 +307,8 @@ public sealed class PreloadScheduler : IDisposable
         var seenBox = DecodeBox.Unbounded;
         var seenCalibrated = false;
         var seenWholeFolder = false;
+        // The O(n) folder estimate only changes with the snapshot, the box or the calibration, not with every navigation.
+        var estimateCache = new FolderEstimateCache();
         var orderCenter = 0;
         IEnumerator<int>? order = null;
         var examinedSinceYield = 0;
@@ -327,15 +335,15 @@ public sealed class PreloadScheduler : IDisposable
                 if (seenVersion != currentVersion || shape != seenShape || calibrated != seenCalibrated)
                 {
                     order?.Dispose();
-                    var sourceBytes = _totalSourceBytes();
+                    _busyBackoff.BeginPass();
                     var center = Volatile.Read(ref _preloadCenter);
                     var box = CurrentBox(entries, center);
                     var measured = _sizes.MeanBytes(box);
-                    var estimated = RamBudgetPolicy.EstimateFolderPreviewBytes(entries.Length, box, sourceBytes, measured);
+                    var estimated = estimateCache.GetOrCompute(entries, box, measured);
                     var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(estimated,
                         _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes, _options.MemoryLoadLimit);
                     if (_log.Enabled)
-                        _log.Info($"Preload policy: sourceBytes={sourceBytes} images={entries.Length} box={box.Width}x{box.Height} measuredMeanBytes={measured?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"} estimatedBytes={estimated} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
+                        _log.Info($"Preload policy: images={entries.Length} box={box.Width}x{box.Height} measuredMeanBytes={measured?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"} estimatedBytes={estimated} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
                     order = PreloadOrderService.Build(center, entries.Length,
                         wholeFolder, shape.Direction, shape.Lead, _options.Window).GetEnumerator();
                     seenVersion = currentVersion;
@@ -419,7 +427,9 @@ public sealed class PreloadScheduler : IDisposable
                         _log.Warn($"Preload skipped, cannot stat: {path}"); // deleted between scan and stat
                         continue;
                     }
-                    if (_target.TryGetCachedPreview(key)) continue;
+                    if (_target.TryGetCachedPreview(key)) { _busyBackoff.RecordSuccess(path); continue; } // decoded by another route (viewer): its busy history no longer applies
+                    // Busy recently (decoder queue full): not retried on every order rebuild, see PreloadBusyBackoff.
+                    if (_busyBackoff.ShouldSkip(path, key)) continue;
                     queued.Add(path);
                     headroom.DecodeQueuedSinceCheck = true;
                     var work = PreloadOneAsync(order.Current, path, key, cancellationToken);
@@ -503,6 +513,8 @@ public sealed class PreloadScheduler : IDisposable
         Cached,
         Superseded,
         Failed,
+        /// <summary>The decoder refused the background decode because its queue is full: transient, retried by a later pass.</summary>
+        Busy,
     }
 
     private static async Task DrainWorkersAsync(IEnumerable<Task> workers)
@@ -573,7 +585,8 @@ public sealed class PreloadScheduler : IDisposable
     }
 
     /// <returns><see cref="PreloadOutcome.Superseded"/> when the item was dropped (see <see cref="IsStillWanted"/>),
-    /// <see cref="PreloadOutcome.Cached"/> when its preview is in the RAM cache afterwards, otherwise
+    /// <see cref="PreloadOutcome.Cached"/> when its preview is in the RAM cache afterwards, <see cref="PreloadOutcome.Busy"/> when the
+    /// decoder refused the work for now (retry later), otherwise
     /// <see cref="PreloadOutcome.Failed"/>.</returns>
     private async Task<PreloadOutcome> PreloadOneAsync(int index, string path, ImageCacheKey key, CancellationToken cancellationToken)
     {
@@ -609,7 +622,8 @@ public sealed class PreloadScheduler : IDisposable
             {
                 // A preview already in the disk cache decodes from there without touching the original:
                 // prefetching the whole source file would be a read nobody uses.
-                if (_prefetchSourceBytes is not null && !_target.HasDiskCachedPreview(key))
+                var isRawSource = ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path));
+                if (!isRawSource && _prefetchSourceBytes is not null && !_target.HasDiskCachedPreview(key))
                     await _prefetchSourceBytes(path, cancellationToken).ConfigureAwait(false);
                 // Snapshot() copies/sorts the per-path open table: only pay for it when tracing.
                 var beforeReads = perf ? _metrics.Snapshot().SourceReads : 0;
@@ -629,7 +643,19 @@ public sealed class PreloadScheduler : IDisposable
                     var kind = sourceRead ? "decoded" : isHit ? "hit" : "miss";
                     PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, kind, stopwatch.Elapsed.TotalMilliseconds);
                 }
+                if (isHit) _busyBackoff.RecordSuccess(path);
                 return isHit ? PreloadOutcome.Cached : PreloadOutcome.Failed;
+            }
+            catch (DecoderBusyException)
+            {
+                // Not a failure: the decoder's bounded queue was full. Leave the path retryable (ForgetUnlessFailed forgets it).
+                stopwatch.Stop();
+                // The first busy of a path is worth one Info line; repeats (bounded by PreloadBusyBackoff) only go to the debugger.
+                if (_busyBackoff.NoteBusy(path, key) == 1) _log.Info($"Preload deferred, decoder busy: {path}");
+                else Debug.WriteLine($"Preload deferred again, decoder busy: {path}");
+                BusyNoted?.Invoke(path);
+                if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "busy", stopwatch.Elapsed.TotalMilliseconds);
+                return PreloadOutcome.Busy;
             }
             catch (IOException ex)
             {
@@ -652,6 +678,9 @@ public sealed class PreloadScheduler : IDisposable
             _preloadSlots.Release();
         }
     }
+
+    /// <summary>Test seam: invoked with the path right AFTER a busy preload outcome was recorded in the backoff (set before the first pass).</summary>
+    internal Action<string>? BusyNoted { get; set; }
 
     /// <summary>Cancellation lifetimes and scheduler tasks this scheduler still tracks for Dispose (test seam: must stay bounded over a long session).</summary>
     internal (int Lifetimes, int Tasks) TrackedLifetimeCounts

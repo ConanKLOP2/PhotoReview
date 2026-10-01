@@ -13,6 +13,7 @@ PhotoReview is a Windows WPF application for browsing, comparing, and organizing
 
 - Reads file order from Windows Explorer when a valid native snapshot is available; falls back to an internal sorting order during wait times or when Shell is unavailable. Sort modes `Default` (folder order as returned by the file system) and `Name A→Z / Z→A` (app order) skip the Explorer query.
 - Features Fast, Preview, and Original modes; bounded RAM/disk image caching; memory pressure checks for preloading.
+- Opens CR2, CR3, NEF, ARW, DNG, RAF, ORF and RW2 using embedded JPEG previews by default; optional LibRaw sensor decode on zoom and configurable JPG+RAW grouping (ADR 0009).
 - Delete operations move files to the Recycle Bin; Move/Copy/Delete actions are journaled to support Undo and recovery.
 - Supports side-by-side Compare, optional hash/dimension verification, batch duplicate cleanup with a confirmation step, zoom in source pixels (wheel, click-to-zoom, arrow-key pan, right-click Zoom menu), Fit and fullscreen views, and keyboard shortcuts.
 - Images and file paths are processed locally; internal diagnostics are only enabled when configured.
@@ -38,6 +39,10 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 **Releasing:** CI tags every merge to `master` (`v2.0.N`) and then automatically creates a **draft** GitHub Release for that tag (framework-dependent zip, exe SHA256, generated notes). Drafts are invisible to the public: review one under Releases and press **Publish** to release it. Delete drafts you do not want. You can also run the **Release** workflow by hand (Actions → Release → Run workflow) for an existing tag that has no release yet.
 
+**Downgrade note (camera RAW release):** this release writes JPEG+RAW capture actions to the operation journal as one line that lists every file of the capture. An older build only understands the first file of such a line. Before going back to an older build, open **Recovery** and resolve any unfinished Move/Copy/Delete of a JPEG+RAW capture first; a new build repairs lines an older build rewrote the next time it starts (see `docs/adr/0003-journal-startup.md`, "Older builds"), but it cannot recover a journal the older build already compacted.
+
+**Upgrade note (camera RAW release):** camera RAW support is ON by default (`RawSupportEnabled`, RAW-70), so a `config.json` written by an older build, which has no such field, starts listing RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2) in opened folders after the upgrade. JPEG+RAW pairing stays off by default (`RawPairMode` = Separate, so a JPEG and its RAW are two separate entries); you can change it under **Settings > JPEG+RAW pairs**. To go back, turn off **Settings > Enable Camera RAW support**. The app shows no in-app notice for this: there is no persisted "seen once" mechanism for informational notices (the startup dialog for `LastLoadRepairs` is for repaired invalid values; the repaired settings are written back once, so it does not repeat).
+
 Note: `Microsoft.CodeAnalysis.CSharp` (Localization generator, `Directory.Packages.props`) must not be newer than the compiler in the installed .NET SDK; upgrade it only together with the SDK.
 
 ### Benchmarks
@@ -57,7 +62,7 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 
 ### File Associations (Optional)
 
-Register "Open with" for every extension in `ImageFileTypes` (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); the uninstall script removes the same seven:
+Register "Open with" for the seven raster extensions (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); the uninstall script removes exactly these seven. Camera RAW extensions are not registered: with Camera RAW support enabled in Settings, open RAW files by dragging them onto the window or by opening their folder.
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
@@ -127,6 +132,8 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 **Phát hành:** CI gắn tag cho mỗi lần merge vào `master` (`v2.0.N`) rồi tự tạo một **bản nháp (draft)** GitHub Release cho tag đó (zip framework-dependent, SHA256 của exe, release notes tự sinh). Bản nháp không hiện công khai: vào Releases xem lại rồi bấm **Publish** để phát hành, bản không cần thì xoá. Vẫn có thể chạy tay workflow **Release** (Actions → Release → Run workflow) cho một tag chưa có release.
 
+**Lưu ý nâng cấp (bản hỗ trợ Camera RAW):** hỗ trợ Camera RAW được BẬT mặc định (`RawSupportEnabled`, RAW-70), nên `config.json` do bản cũ ghi (chưa có trường này) sẽ bắt đầu liệt kê các tệp RAW (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2) trong thư mục được mở sau khi nâng cấp. Việc ghép cặp JPEG+RAW mặc định là `RawPairMode` = Separate, nghĩa là JPEG và RAW của cùng một bộ ảnh là hai mục riêng; có thể đổi trong **Cài đặt > Cặp ảnh JPEG+RAW**. Muốn quay về như trước, tắt **Cài đặt > Bật hỗ trợ định dạng Camera RAW**. Ứng dụng không hiện thông báo riêng cho việc này: chưa có cơ chế lưu "đã xem một lần" cho thông báo thông tin (hộp thoại khi khởi động cho `LastLoadRepairs` dành cho giá trị không hợp lệ đã được sửa ; cấu hình đã sửa được ghi lại một lần nên hộp thoại không lặp lại).
+
 Lưu ý: `Microsoft.CodeAnalysis.CSharp` (generator Localization, `Directory.Packages.props`) không được mới hơn compiler của .NET SDK đang cài; chỉ nâng cùng lúc với SDK.
 
 ### Benchmark
@@ -146,7 +153,7 @@ Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh
 
 ### File association (tùy chọn)
 
-Đăng ký Open With cho mọi đuôi trong `ImageFileTypes` (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); script gỡ đăng ký xóa đúng bảy đuôi này:
+Đăng ký Open With cho bảy đuôi ảnh thường (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); script gỡ đăng ký xóa đúng bảy đuôi này. Các đuôi Camera RAW không được đăng ký: khi đã bật hỗ trợ Camera RAW trong Cài đặt, hãy mở tệp RAW bằng cách kéo thả vào cửa sổ hoặc mở thư mục chứa chúng:
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'

@@ -42,6 +42,30 @@ public sealed class PhysicalFileSystem : IFileSystem
         File.Copy(source, destination);
     }
 
+    // File.Copy without overwrite is CopyFile with COPY_FILE_FAIL_IF_EXISTS: the existence check and the creation are
+    // one atomic step, and an already-existing destination surfaces as ERROR_FILE_EXISTS (80) / ERROR_ALREADY_EXISTS (183).
+    public bool TryCopyNew(string source, string destination)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+        try
+        {
+            File.Copy(source, destination);
+            return true;
+        }
+        // A directory at the destination is not "a file already exists": some Windows builds also report it as 80 (others as
+        // access denied), so it is rethrown explicitly to keep the result independent of the OS build.
+        catch (Exception ex) when (IsSwallowedAsDestinationExists(ex) && !DirectoryExists(destination))
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Which failures of the no-overwrite copy mean "the destination already exists" (TryCopyNew returns false): only the
+    /// Win32 file-exists/already-exists IOExceptions. Everything else (access denied, missing folder, sharing violation, disk full,
+    /// an IOException without such an HResult) must be rethrown: a false means nothing of the caller's is at the destination.</summary>
+    internal static bool IsSwallowedAsDestinationExists(Exception ex) => FileSystemErrors.IsDestinationExists(ex);
+
     public void Delete(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

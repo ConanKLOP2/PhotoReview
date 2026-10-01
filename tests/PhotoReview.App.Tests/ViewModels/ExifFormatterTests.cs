@@ -39,6 +39,34 @@ public sealed class ExifFormatterTests
             Format(ExifInfoFields.All));
     }
 
+    [Fact(DisplayName = "Q-RAW-03: a RAW preview size follows the dimensions; no preview size leaves the line byte-for-byte unchanged")]
+    public void RawPreviewSize_FollowsDimensions_AndIsAbsentOtherwise()
+    {
+        using var _ = TestLocalization.Use(TestLocalization.English);
+        var plain = Format(ExifInfoFields.All);
+
+        var withPreview = ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 6000, 4000, Exif, provider: Invariant,
+            rawPreviewWidth: 1620, rawPreviewHeight: 1080);
+
+        Assert.Equal(plain.Replace("6000×4000", "6000×4000 · RAW preview 1620×1080", StringComparison.Ordinal), withPreview);
+        Assert.Equal(plain, ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 6000, 4000, Exif, provider: Invariant,
+            rawPreviewWidth: 0, rawPreviewHeight: 0));
+        Assert.Equal(plain, ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 6000, 4000, Exif, provider: Invariant,
+            rawPreviewWidth: 1620, rawPreviewHeight: 0));
+        // Part of the dimensions field: switched off with it.
+        Assert.Equal("IMG_1234.jpg", ExifFormatter.Format(ExifInfoFields.FileName, "IMG_1234.jpg", 6000, 4000, Exif,
+            provider: Invariant, rawPreviewWidth: 1620, rawPreviewHeight: 1080));
+    }
+
+    [Fact(DisplayName = "Q-RAW-03: the RAW preview label is localized (Vietnamese)")]
+    public void RawPreviewSize_IsLocalized()
+    {
+        using var _ = TestLocalization.Use(TestLocalization.Vietnamese);
+
+        Assert.Equal("6000×4000 · Bản xem trước RAW 1620×1080", ExifFormatter.Format(ExifInfoFields.Dimensions, null, 6000, 4000,
+            null, provider: Invariant, rawPreviewWidth: 1620, rawPreviewHeight: 1080));
+    }
+
     [Fact(DisplayName = "Units come from the language catalog (Vietnamese)")]
     public void UnitsAreLocalized()
     {

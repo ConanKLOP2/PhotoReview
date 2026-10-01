@@ -132,7 +132,7 @@ public sealed class InMemoryFileSystem : IFileSystem
 
             if (_files.ContainsKey(dstNorm))
             {
-                throw new IOException($"Tệp tin đích đã tồn tại: '{destination}'.");
+                throw DestinationExistsException(destination);
             }
 
             var destDir = NormalizeDirectoryPath(Path.GetDirectoryName(destination) ?? string.Empty);
@@ -154,7 +154,19 @@ public sealed class InMemoryFileSystem : IFileSystem
         }
     }
 
+    /// <summary>The IOException a real no-overwrite Move/Copy raises when the destination exists (Win32 ERROR_ALREADY_EXISTS, 183).</summary>
+    public static IOException DestinationExistsException(string destination) =>
+        new($"Tệp tin đích đã tồn tại: '{destination}'.", unchecked((int)0x800700B7));
+
     public void Copy(string source, string destination)
+    {
+        CopyCore(source, destination, failIfExists: false);
+    }
+
+    /// <summary>Atomic create-new copy (existence check and creation under one lock), like the physical implementation.</summary>
+    public bool TryCopyNew(string source, string destination) => CopyCore(source, destination, failIfExists: true);
+
+    private bool CopyCore(string source, string destination, bool failIfExists)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
@@ -176,6 +188,7 @@ public sealed class InMemoryFileSystem : IFileSystem
 
             if (_files.ContainsKey(dstNorm))
             {
+                if (failIfExists) return false;
                 throw new IOException($"Tệp tin đích đã tồn tại: '{destination}'.");
             }
 
@@ -187,6 +200,7 @@ public sealed class InMemoryFileSystem : IFileSystem
 
             _files[dstNorm] = (byte[])bytes.Clone();
             _fileWriteTimes[dstNorm] = DateTime.UtcNow;
+            return true;
         }
     }
 

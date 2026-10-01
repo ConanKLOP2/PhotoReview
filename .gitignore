@@ -389,3 +389,7 @@ FodyWeavers.xsd
 /docs/refactoring/diagnosis/runs/**/raw/
 *.local.json
 *.local.csv
+
+# Camera RAW test corpus (fetched by tools/fetch-raw-samples.ps1, CC0 samples)
+tests/Fixtures/raw-corpus/
+

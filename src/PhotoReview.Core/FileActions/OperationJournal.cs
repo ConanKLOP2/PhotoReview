@@ -30,7 +30,56 @@ public sealed record JournalEntry(
     string? Error = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Permanent = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Undo = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Undo = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GroupId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<JournalGroupMember>? GroupMembers = null)
+{
+    // GroupMembers is a list: the compiler-generated record equality would compare it by reference, and every journal read
+    // builds a fresh list, so two reads of the same group line would never be equal (Dismiss skipped every group entry).
+    // Value equality over the members keeps every comparison (Dismiss, AppendIfUnchangedSince, ...) correct.
+    public bool Equals(JournalEntry? other) =>
+        other is not null
+        && string.Equals(Id, other.Id, StringComparison.Ordinal)
+        && Type == other.Type
+        && State == other.State
+        && string.Equals(Source, other.Source, StringComparison.Ordinal)
+        && string.Equals(Destination, other.Destination, StringComparison.Ordinal)
+        && Size == other.Size
+        && LastWriteUtc == other.LastWriteUtc
+        && TimestampUtc == other.TimestampUtc
+        && string.Equals(Error, other.Error, StringComparison.Ordinal)
+        && string.Equals(ErrorCode, other.ErrorCode, StringComparison.Ordinal)
+        && Permanent == other.Permanent
+        && Undo == other.Undo
+        && string.Equals(GroupId, other.GroupId, StringComparison.Ordinal)
+        && MembersEqual(GroupMembers, other.GroupMembers);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Id, StringComparer.Ordinal);
+        hash.Add(Type);
+        hash.Add(State);
+        hash.Add(Source, StringComparer.Ordinal);
+        hash.Add(Destination, StringComparer.Ordinal);
+        hash.Add(Size);
+        hash.Add(LastWriteUtc);
+        hash.Add(TimestampUtc);
+        hash.Add(Error, StringComparer.Ordinal);
+        hash.Add(ErrorCode, StringComparer.Ordinal);
+        hash.Add(Permanent);
+        hash.Add(Undo);
+        hash.Add(GroupId, StringComparer.Ordinal);
+        if (GroupMembers is not null)
+        {
+            foreach (var member in GroupMembers) hash.Add(member);
+        }
+        return hash.ToHashCode();
+    }
+
+    private static bool MembersEqual(IReadOnlyList<JournalGroupMember>? left, IReadOnlyList<JournalGroupMember>? right) =>
+        left is null || right is null ? left is null && right is null : left.SequenceEqual(right);
+}
 
 /// <summary>
 /// Result of <see cref="OperationJournal.Dismiss"/>: <see cref="Dismissed"/> are the entries actually appended as
@@ -225,6 +274,7 @@ public sealed class OperationJournal
     private static bool IsSharingOrLockViolation(IOException ex) =>
         ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021);
 
+    /// <summary>Committed Move lines. A capture-group line is one entry: top level = first member, every member in <see cref="JournalEntry.GroupMembers"/> (lookups by top-level Destination only see the first member; see ADR 0003).</summary>
     public IReadOnlyList<JournalEntry> ReadCommittedMoves()
     {
         lock (_gate)
@@ -316,15 +366,11 @@ public sealed class OperationJournal
         // Perf (CORE-08): a compact-written Recycle/Copy line cannot be a Move, so skip its JSON parse. The exact
         // token never occurs inside a string value (there quotes are escaped as \"), so a Move line is never skipped.
         if (line.IsEmpty || IsRecycleOrCopyLine(line)) return null;
-        try
-        {
-            var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-            return entry is { Type: FileOperationType.Move, State: JournalState.Committed } ? entry : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        // Same acceptance rule as every other reader (JournalLineParser.Accept, which also swallows malformed JSON): a line
+        // whose group members are unusable (null element, blank Source) is quarantined here too, so it can never reach Undo
+        // or compaction as a Committed Move.
+        var entry = JournalLineParser.TryParse(line);
+        return entry is { Type: FileOperationType.Move, State: JournalState.Committed } ? entry : null;
     }
 
     private static bool IsRecycleOrCopyLine(ReadOnlySpan<byte> line) =>
@@ -353,21 +399,23 @@ public sealed class OperationJournal
     // state must be resolved from its most recent entry, not from "was any terminal
     // entry ever appended for this Id" — otherwise an old Failed entry permanently
     // shadows a later, still-in-flight retry under the same Id.
-    private Dictionary<string, JournalEntry> ComputeLatestEntries()
+    private Dictionary<string, JournalEntry> ComputeLatestEntries(Dictionary<string, (string? GroupId, IReadOnlyList<JournalGroupMember> Members)>? groupHistory = null)
     {
         var latest = new Dictionary<string, JournalEntry>(StringComparer.Ordinal);
         ReadEntries(entry =>
         {
-            // FA-01 (cross-process residue): another process's reconcile judged this operation from a stale snapshot and its
-            // Failed landed after the owner's Committed (the recheck-then-append window cannot be closed without a file lock).
-            // A reconcile verdict can only ever follow Prepared, so after Committed it is stale and must not win.
-            if (entry.State == JournalState.Failed && IsReconcileCode(entry.ErrorCode)
-                && latest.TryGetValue(entry.Id, out var previous) && previous.State == JournalState.Committed)
-                return;
-            latest[entry.Id] = entry;
+            if (groupHistory is not null && entry.GroupMembers is { Count: > 0 } members) groupHistory[entry.Id] = (entry.GroupId, members);
+            if (!IsStaleReconcileAfterCommitted(entry, latest.GetValueOrDefault(entry.Id))) latest[entry.Id] = entry;
         });
         return latest;
     }
+
+    // FA-01 (cross-process residue): another process's reconcile judged this operation from a stale snapshot and its
+    // Failed landed after the owner's Committed (the recheck-then-append window cannot be closed without a file lock).
+    // A reconcile verdict can only ever follow Prepared, so after Committed it is stale and must not win. ONE rule for every
+    // reader of "the latest line of an Id" (ComputeLatestEntries, AppendIfLatestIs).
+    private static bool IsStaleReconcileAfterCommitted(JournalEntry entry, JournalEntry? previous) =>
+        entry.State == JournalState.Failed && IsReconcileCode(entry.ErrorCode) && previous?.State == JournalState.Committed;
 
     internal static bool IsReconcileCode(string? code) =>
         code is JournalErrors.PendingUnconfirmed or JournalErrors.SourceStillExistsAfterRecovery;
@@ -402,11 +450,21 @@ public sealed class OperationJournal
     public IReadOnlyList<JournalEntry> ReconcilePendingOperations(DateTime? preparedBeforeUtc = null)
     {
         var reconciled = new List<JournalEntry>();
-        foreach (var pending in ReadPendingOperations())
+        var groupHistory = new Dictionary<string, (string? GroupId, IReadOnlyList<JournalGroupMember> Members)>(StringComparer.Ordinal);
+        var latestEntries = ComputeLatestEntries(groupHistory);
+        RepairGroupLinesSettledByOlderBuild(latestEntries, groupHistory, reconciled);
+        foreach (var pending in latestEntries.Values.Where(entry => entry.State == JournalState.Prepared).ToList())
         {
             if (preparedBeforeUtc is { } cutoff && pending.TimestampUtc >= cutoff) continue;
             if (IsExecuting(pending.Id)) continue; // Q-R27: skip before any (possibly slow) file check
-            if (pending.Type == FileOperationType.Recycle)
+            if (pending.GroupMembers is { Count: > 0 })
+            {
+                var allCompleted = pending.GroupMembers.All(member => IsGroupMemberCompleted(pending, member));
+                var entry = WithOutcome(pending, allCompleted ? JournalState.Committed : JournalState.Failed,
+                    pending.Type == FileOperationType.Recycle ? JournalErrors.SourceStillExistsAfterRecovery : JournalErrors.PendingUnconfirmed);
+                if (AppendIfStillPending(entry)) reconciled.Add(entry);
+            }
+            else if (pending.Type == FileOperationType.Recycle)
             {
                 var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
                 var entry = WithOutcome(pending, state, JournalErrors.SourceStillExistsAfterRecovery);
@@ -428,6 +486,90 @@ public sealed class OperationJournal
             }
         }
         return reconciled;
+    }
+
+    /// <summary>
+    /// English text of a group line an older build settled (ADR 0003, downgrade guard). Deliberately no <see cref="JournalEntry.ErrorCode"/>:
+    /// the reconcile codes are ignored when they follow a Committed line (FA-01), and this verdict follows exactly that.
+    /// </summary>
+    internal const string SettledByOlderBuildText =
+        "This capture group was settled by an older PhotoReview build that only tracks its first file; not every file was found in its expected place.";
+
+    // ADR 0003 downgrade guard. An older build does not know GroupId/GroupMembers, so when it reconciles, retries or dismisses a
+    // group line it appends the outcome WITHOUT them (and may call a half-moved capture Committed after seeing only the first
+    // member). A new build recognises that signature: the Id's latest line has no members although an earlier line of the same
+    // Id had them. It restores the members on a fresh line; a Committed verdict is re-checked against every member on disk and
+    // becomes a Failed Recovery item when a member is missing. Dismissed lines are left alone (the user already decided).
+    private void RepairGroupLinesSettledByOlderBuild(
+        Dictionary<string, JournalEntry> latestEntries,
+        Dictionary<string, (string? GroupId, IReadOnlyList<JournalGroupMember> Members)> groupHistory,
+        List<JournalEntry> reconciled)
+    {
+        foreach (var id in groupHistory.Keys.ToList())
+        {
+            if (!latestEntries.TryGetValue(id, out var latest) || latest.GroupMembers is { Count: > 0 }
+                || latest.State == JournalState.Dismissed) continue;
+            var (groupId, members) = groupHistory[id];
+            var restored = latest with { GroupId = groupId, GroupMembers = members };
+            if (restored.State == JournalState.Prepared)
+            {
+                latestEntries[id] = restored; // reconciled below like any group line; the outcome line carries the members
+                continue;
+            }
+            if (IsExecuting(id)) continue;
+            var outcome = restored;
+            if (restored.State == JournalState.Committed && !members.All(member => IsGroupMemberCompleted(restored, member)))
+                outcome = restored with
+                {
+                    State = JournalState.Failed,
+                    TimestampUtc = _clock.UtcNow,
+                    Error = SettledByOlderBuildText,
+                    ErrorCode = null,
+                };
+            if (!AppendIfLatestIs(latest, outcome)) continue;
+            latestEntries[id] = outcome;
+            if (outcome.State != restored.State) reconciled.Add(outcome);
+        }
+    }
+
+    private bool AppendIfLatestIs(JournalEntry expected, JournalEntry outcome)
+    {
+        lock (_gate)
+        {
+            JournalEntry? current = null;
+            // Same latest-line rule as ComputeLatestEntries (which produced `expected`): a stale reconcile Failed after a
+            // Committed line is not the current state, otherwise the downgrade repair would be skipped for such an Id.
+            ReadEntries(entry =>
+            {
+                if (string.Equals(entry.Id, expected.Id, StringComparison.Ordinal) && !IsStaleReconcileAfterCommitted(entry, current))
+                    current = entry;
+            });
+            if (current is null || !current.Equals(expected)) return false;
+            Append(outcome);
+            return true;
+        }
+    }
+
+    private bool IsGroupMemberCompleted(JournalEntry group, JournalGroupMember member)
+    {
+        if (group.Type == FileOperationType.Recycle)
+        {
+            var exists = _fileSystem.FileExists(member.Source);
+            return group.Undo == true ? exists : !exists;
+        }
+
+        // An undo group is journaled already in undo direction (UndoService: Source = the original destination, Destination =
+        // the original source), like the single-entry reconcile and RecoveryFileCheck read it: no Undo-specific swap here.
+        // Undo is only ever journaled for Move and Recycle (handled above); Copy is never undone.
+        var destination = !string.IsNullOrWhiteSpace(member.Destination) ? _fileSystem.GetFileStat(member.Destination) : null;
+        var destinationMatches = destination is not null && destination.Length == member.Size;
+        var sourceExists = _fileSystem.FileExists(member.Source);
+        return group.Type switch
+        {
+            FileOperationType.Move => !sourceExists && destinationMatches,
+            FileOperationType.Copy => destinationMatches,
+            _ => false
+        };
     }
 
     // FA-01: the verdict was computed from a stale snapshot; another process sharing this journal may have appended a
@@ -482,11 +624,22 @@ public sealed class OperationJournal
         }
     }
 
-    /// <summary>
-    /// Compaction runs only on a journal of at least this size. It must not be below <see cref="FullScanThresholdBytes"/>:
-    /// the <see cref="JournalCompactionPlan"/> argument for <see cref="ReadCommittedMoves"/> assumes the tail reader served the
-    /// uncompacted file.
-    /// </summary>
+    /// <summary>The effective latest journal line of <paramref name="id"/> (null when there is none; a stale reconcile Failed after Committed is skipped), read under the journal lock.</summary>
+    internal JournalEntry? ReadLatestEntry(string id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        lock (_gate)
+        {
+            JournalEntry? latest = null;
+            // Same latest-line rule as ComputeLatestEntries/AppendIfLatestIs: a stale reconcile Failed after Committed is not the state.
+            ReadEntries(entry =>
+            {
+                if (string.Equals(entry.Id, id, StringComparison.Ordinal) && !IsStaleReconcileAfterCommitted(entry, latest)) latest = entry;
+            });
+            return latest;
+        }
+    }
+
     internal const long CompactionThresholdBytes = FullScanThresholdBytes;
 
     /// <summary>Compaction rewrites the journal only when it drops at least this share of its bytes (no rewrite per start for a few lines).</summary>

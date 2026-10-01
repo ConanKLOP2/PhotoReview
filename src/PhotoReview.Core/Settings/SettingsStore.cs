@@ -99,8 +99,17 @@ public sealed class SettingsStore
                     _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", LastLoadRepairs));
                 var disabledShortcuts = SettingsNormalizer.DisableConflictingOptionalShortcuts(loaded);
                 if (disabledShortcuts.Count > 0)
+                {
                     _log.Info("Optional shortcuts disabled because their key is already bound: " + string.Join(", ", disabledShortcuts));
+                    // Surface it too (the startup dialog lists LastLoadRepairs): the user must not silently lose a shortcut.
+                    LastLoadRepairs = [.. LastLoadRepairs, .. disabledShortcuts.Select(name => "Shortcuts." + name)];
+                }
                 _current = loaded;
+                // Write the repaired settings back once so the start-up dialog does not repeat on every launch (the repairs
+                // are recomputed from the file on each Load). Save raises Changed itself; only the default file is rewritten.
+                // A file from a NEWER build is never rewritten: Save would drop its unknown fields and stamp the older version.
+                if (LastLoadRepairs.Count > 0 && path is null && loaded.ConfigVersion <= AppSettings.CurrentConfigVersion
+                    && TryPersistRepairs(loaded)) return _current;
                 Changed?.Invoke(this, _current);
                 return _current;
             }
@@ -152,6 +161,21 @@ public sealed class SettingsStore
             Changed?.Invoke(this, _current);
         }
         return _current;
+    }
+
+    /// <summary>Saves the repaired settings; false (nothing thrown) when the file cannot be written, so the repairs stay in memory only.</summary>
+    private bool TryPersistRepairs(AppSettings repaired)
+    {
+        try
+        {
+            Save(repaired);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogStartupError("Could not write the repaired config.json; the repairs apply to this session only", ex);
+            return false;
+        }
     }
 
     public void Save(AppSettings settings)

@@ -80,3 +80,61 @@ assert journal consistency.
   other processes are excluded with the existing share-mode contract (a deny-writers handle; appenders retry),
   lines appended after the snapshot are carried over, and the new file replaces the old one with one atomic
   POSIX-semantics rename (`PhysicalJournalCompactionFiles`); a crash before the rename leaves the journal as it was.
+
+## Amendment: capture-group entries and cross-build compatibility (2026-09-29)
+
+- A JPEG+RAW capture operation is ONE journal line with extra `GroupId` and `GroupMembers` (each member: Source,
+  Destination, Size, LastWriteUtc, Permanent). The top-level Source/Destination/Size/LastWriteUtc always equal the
+  FIRST member. A group Undo is one `Undo:true` line already in undo direction (Source = the earlier destination,
+  Destination = the earlier source); reconcile and Recovery read it as written and never swap again.
+- Reconcile marks a group Committed only when EVERY member completed; a partial group stays Failed
+  (`PendingUnconfirmed`, or `SourceStillExistsAfterRecovery` for Recycle) and is one Recovery item.
+- **Older builds** skip the unknown members, so they read a group line as a single Move/Recycle of the first member
+  and may reconcile it Committed although the other members never ran. Checked against `origin/master`'s
+  `OperationJournal`/`JournalLineParser`/`JournalCompactionPlan`: an older build ignores unknown JSON members, DROPS a line
+  whose `Type`/`State` it does not recognize (compaction keeps such lines verbatim), and its `WithOutcome` copies only the
+  record it knows, so every line it appends for a group Id (reconcile verdict, retry, Dismiss) carries NO
+  `GroupId`/`GroupMembers`. In-band guards were rejected: a schema marker is ignored by the old reader (no protection), and
+  a new `Type`/`State` value would make old builds drop the line (or, in their lenient tail reader, map it to Move) and would
+  ripple through every new switch and the file services; changing the top-level Destination/Size would break those too.
+  The format is therefore unchanged and the guard sits in the NEW build (downgrade guard):
+  `ReconcilePendingOperations` looks for an Id whose latest line has no members although an earlier line of that Id had them
+  (the signature of an older build's write). It appends a repaired line restoring `GroupId`/`GroupMembers`; a Committed
+  verdict is re-checked against EVERY member on disk and becomes Failed (no `ErrorCode`, English text
+  `OperationJournal.SettledByOlderBuildText`, because FA-01 ignores the reconcile codes after a Committed line) when a member
+  is missing, so the half-moved capture is a Recovery item again. Dismissed lines are left alone; the repair is idempotent.
+  Residual risk: (1) the repair runs at the next start of a new build, so until then Recovery shows the member-less lines;
+  (2) if an older build COMPACTED the journal after settling, the earlier member-carrying lines of that Id are gone and the
+  signature cannot be detected; (3) an older build's own Undo/Retry of a group acts on the first member only.
+  Supported downgrade path: resolve unresolved group lines in Recovery first, then run the older build.
+- `ReadCommittedMoves` returns a group as one entry (top level = first member, all members in `GroupMembers`).
+  `UndoService`'s fingerprint fallback looks entries up by top-level Destination but only serves single-file Moves;
+  group Undo uses the members registered in memory, so the fallback never needs the other members.
+- Recovery of an interrupted group Delete: members still on disk make it `CanRetry` (only members whose size and
+  last-write still match are recycled again; permanent deletion only for members journaled `Permanent`); a group mixing
+  permanent and Recycle Bin members is `PartiallyPermanentlyDeleted`, and only an all-permanent group is
+  `PermanentlyDeleted`.
+
+## Amendment: fully rolled-back group Move/Copy is not a Recovery item (2026-09-30)
+
+- A group Move/Copy that fails or is cancelled part-way is compensated (moved files put back, created copies deleted).
+  When every member is then provably back in its original state (source untouched, nothing at the destination) the
+  outcome line is `Dismissed` (same Id and manifest, no error), not `Failed`: nothing is left to retry, so Recovery must
+  not offer "retry" for an operation the user cancelled. `Dismissed` is an existing state, so older builds read it as
+  "cleared", never as unfinished; reconcile ignores it. Any other outcome (rollback incomplete, a conflict, a copy left
+  behind such as `MoveSourceNotRemoved`) stays `Failed`. Trade-off: the error reason of a fully rolled-back attempt is
+  only in the message shown to the user, not in the journal.
+- A `Failed` group line always carries the ORIGINAL failure (its `JournalCodedException` code with English text, or the raw
+  OS text without code); the localized "rollback incomplete" note is only part of the result message shown to the user.
+- A group Undo retried after it already restored some members itself, when nothing is pending any more, is an idempotent
+  success and closes its earlier `Failed` lines with `Committed` (skipped if another writer touched them).
+- A group line whose member list holds a null element or a member with a missing/blank `Source` is quarantined by the
+  parser (`JournalLineParser.HasValidGroupMembers`, `80492486`): it is dropped like any other malformed line, because a
+  blank `Source` would make every later file check throw out of reconcile/Recovery. Compaction keeps such a line
+  verbatim: `JournalCompactionPlan` gets no entry for it from `JournalLineParser.TryParse` and never drops an
+  unparseable line (the unparseable-entry check in `JournalCompactionPlan.IsDroppable`), so it stays in the file byte for byte.
+- `Committed` with a missing member becomes `Failed` (a Recovery item) in one case: the downgrade guard above re-checks a
+  `Committed` verdict of a line an older build settled against EVERY member on disk.
+- Outcome-line contract (`JournalTransaction`): `Fail` and `DismissRolledBack` return the appended record, or `null` when
+  nothing was due (never Prepared and not a retry) or when a retry's append was skipped because another writer had
+  superseded the entry (`Superseded`); `RecoveryRetryService` reports a superseded retry as "already handled" (`Superseded: true`) instead of a failure.

@@ -15,6 +15,7 @@ public static class ExifParser
     internal const ushort TagMake = 0x010F;
     internal const ushort TagModel = 0x0110;
     internal const ushort TagDateTime = 0x0132;
+    internal const ushort TagOrientation = 0x0112;
     internal const ushort TagExifIfd = 0x8769;
     internal const ushort TagExposureTime = 0x829A;
     internal const ushort TagFNumber = 0x829D;
@@ -31,7 +32,7 @@ public static class ExifParser
     private const int MaxAsciiBytes = 256;
 
     /// <summary>Reads the EXIF summary of a JPEG; null for a non-JPEG, no/corrupt EXIF, or no usable field.</summary>
-    public static ExifSummary? TryParseJpeg(ReadOnlySpan<byte> jpeg) => TryParseTiffBlock(FindExifTiffBlock(jpeg));
+    public static ExifSummary? TryParseJpeg(ReadOnlySpan<byte> jpeg) => TryParseGuarded(FindExifTiffBlock(jpeg), allowOlympusRawMagic: false);
 
     /// <summary>
     /// Reads the EXIF summary from an already-located Exif TIFF block (the bytes after "Exif\0\0" in the first
@@ -40,19 +41,68 @@ public static class ExifParser
     /// EXIF, or no usable field; never throws. Lets a caller that already walked the JPEG markers itself (to
     /// avoid a second walk over the same header bytes) reuse this parser without going through
     /// <see cref="TryParseJpeg"/>'s own <see cref="FindExifTiffBlock"/> walk.
+    /// A whole-file TIFF block of an Olympus ORF ("IIRO"/"IIRS"/"MMOR": magic 0x4F52 or 0x5352 instead of 42) is
+    /// accepted here too, because the RAW pipeline hands ORF blocks to this method; <see cref="TryParseJpeg"/> stays strict.
     /// </summary>
-    public static ExifSummary? TryParseTiffBlock(ReadOnlySpan<byte> tiffBlock)
+    public static ExifSummary? TryParseTiffBlock(ReadOnlySpan<byte> tiffBlock) =>
+        TryParseGuarded(tiffBlock, allowOlympusRawMagic: true, ifdIsExif: false);
+
+    /// <summary>
+    /// Like <see cref="TryParseTiffBlock(ReadOnlySpan{byte})"/> but, when <paramref name="ifdIsExif"/> is true, treats the
+    /// block's IFD0 itself as the Exif IFD (exposure time, f-number, ISO, dates, focal length, lens) instead of following a
+    /// 0x8769 pointer. Canon CR3 stores its exposure fields this way in the moov "CMT2" box. Make/Model/DateTime are not
+    /// read in that mode (they belong to IFD0 proper, i.e. CMT1).
+    /// </summary>
+    public static ExifSummary? TryParseTiffBlock(ReadOnlySpan<byte> tiffBlock, bool ifdIsExif) =>
+        TryParseGuarded(tiffBlock, allowOlympusRawMagic: true, ifdIsExif);
+
+    private static ExifSummary? TryParseGuarded(ReadOnlySpan<byte> tiffBlock, bool allowOlympusRawMagic, bool ifdIsExif = false)
     {
         if (tiffBlock.IsEmpty) return null;
         try
         {
-            return TryParseTiff(tiffBlock);
+            return TryParseTiff(tiffBlock, allowOlympusRawMagic, ifdIsExif);
         }
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or OverflowException or DecoderFallbackException)
         {
             // Defensive only: the bounds checks below should make this unreachable. A metadata bug must never fail a decode.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Reads the EXIF Orientation (tag 0x0112, IFD0) of a JPEG's first Exif APP1 segment. Null for a non-JPEG, no/corrupt
+    /// EXIF, or an orientation outside 1 to 8; never throws.
+    /// </summary>
+    public static int? TryReadOrientationFromJpeg(ReadOnlySpan<byte> jpeg) => TryReadOrientation(FindExifTiffBlock(jpeg));
+
+    /// <summary>
+    /// Reads the Orientation (tag 0x0112) from IFD0 of an Exif TIFF block ("II*\0" / "MM\0*" header). Null when the block is
+    /// empty/corrupt, has no Orientation, or the value is outside 1 to 8; never throws.
+    /// </summary>
+    public static int? TryReadOrientation(ReadOnlySpan<byte> tiff)
+    {
+        if (tiff.Length < 8) return null;
+        bool little;
+        if (tiff[0] == (byte)'I' && tiff[1] == (byte)'I') little = true;
+        else if (tiff[0] == (byte)'M' && tiff[1] == (byte)'M') little = false;
+        else return null;
+        if (TiffStructure.ReadU16(tiff, 2, little) != 42) return null;
+
+        var ifd0 = TiffStructure.ReadU32(tiff, 4, little);
+        if (ifd0 < 8 || ifd0 > (uint)tiff.Length - 2) return null;
+        var start = (int)ifd0;
+        int count = Math.Min(Math.Min((int)TiffStructure.ReadU16(tiff, start, little), MaxIfdEntries), (tiff.Length - start - 2) / 12);
+        for (var i = 0; i < count; i++)
+        {
+            var entry = start + 2 + (i * 12);
+            if (TiffStructure.ReadU16(tiff, entry, little) != TagOrientation) continue;
+            var type = TiffStructure.ReadU16(tiff, entry + 2, little);
+            var n = TiffStructure.ReadU32(tiff, entry + 4, little);
+            if (!TiffStructure.TryGetValueSpan(tiff, entry, type, n, little, out var value)) return null;
+            return TiffStructure.ReadUnsigned(value, type, little) is long orientation and >= 1 and <= 8 ? (int)orientation : null;
+        }
+        return null;
     }
 
     /// <summary>The TIFF structure inside the first APP1 Exif segment, or empty.</summary>
@@ -83,21 +133,30 @@ public static class ExifParser
     }
 
     /// <summary>Parses a TIFF-structured EXIF block ("II*\0" / "MM\0*" header).</summary>
-    internal static ExifSummary? TryParseTiff(ReadOnlySpan<byte> tiff)
+    internal static ExifSummary? TryParseTiff(ReadOnlySpan<byte> tiff, bool allowOlympusRawMagic = false, bool ifdIsExif = false)
     {
         if (tiff.Length < 8) return null;
         bool little;
         if (tiff[0] == (byte)'I' && tiff[1] == (byte)'I') little = true;
         else if (tiff[0] == (byte)'M' && tiff[1] == (byte)'M') little = false;
         else return null;
-        if (ReadU16(tiff, 2, little) != 42) return null;
+        ushort magic = TiffStructure.ReadU16(tiff, 2, little);
+        // Olympus ORF replaces 42 with 'RO' (0x4F52) or 'SR' (0x5352) but is otherwise plain TIFF.
+        if (magic != 42 && !(allowOlympusRawMagic && magic is 0x4F52 or 0x5352)) return null;
 
         var values = new RawValues();
-        var ifd0 = ReadU32(tiff, 4, little);
-        var exifIfd = ReadIfd(tiff, ifd0, little, ref values, isExifIfd: false);
-        // Only one level is followed (no recursion), so a hostile pointer back to IFD0 cannot loop.
-        if (exifIfd is { } exifOffset)
-            ReadIfd(tiff, exifOffset, little, ref values, isExifIfd: true);
+        var ifd0 = TiffStructure.ReadU32(tiff, 4, little);
+        if (ifdIsExif)
+        {
+            ReadIfd(tiff, ifd0, little, ref values, isExifIfd: true);
+        }
+        else
+        {
+            var exifIfd = ReadIfd(tiff, ifd0, little, ref values, isExifIfd: false);
+            // Only one level is followed (no recursion), so a hostile pointer back to IFD0 cannot loop.
+            if (exifIfd is { } exifOffset)
+                ReadIfd(tiff, exifOffset, little, ref values, isExifIfd: true);
+        }
 
         return ExifSummary.Create(
             values.DateOriginal ?? values.DateDigitized ?? values.DateTime,
@@ -117,7 +176,7 @@ public static class ExifParser
     {
         if (ifdOffset < 8 || ifdOffset > (uint)tiff.Length - 2) return null;
         var start = (int)ifdOffset;
-        int count = ReadU16(tiff, start, little);
+        int count = TiffStructure.ReadU16(tiff, start, little);
         var available = (tiff.Length - start - 2) / 12;
         count = Math.Min(Math.Min(count, MaxIfdEntries), available);
 
@@ -125,20 +184,20 @@ public static class ExifParser
         for (var i = 0; i < count; i++)
         {
             var entry = start + 2 + (i * 12);
-            var tag = ReadU16(tiff, entry, little);
-            var type = ReadU16(tiff, entry + 2, little);
-            var n = ReadU32(tiff, entry + 4, little);
-            if (!TryGetValueSpan(tiff, entry, type, n, little, out var value)) continue;
+            var tag = TiffStructure.ReadU16(tiff, entry, little);
+            var type = TiffStructure.ReadU16(tiff, entry + 2, little);
+            var n = TiffStructure.ReadU32(tiff, entry + 4, little);
+            if (!TiffStructure.TryGetValueSpan(tiff, entry, type, n, little, out var value)) continue;
 
             if (!isExifIfd)
             {
                 switch (tag)
                 {
-                    case TagMake: values.Make ??= ReadAscii(value, type); break;
-                    case TagModel: values.Model ??= ReadAscii(value, type); break;
-                    case TagDateTime: values.DateTime ??= ReadAscii(value, type); break;
+                    case TagMake: values.Make ??= TiffStructure.ReadAscii(value, type); break;
+                    case TagModel: values.Model ??= TiffStructure.ReadAscii(value, type); break;
+                    case TagDateTime: values.DateTime ??= TiffStructure.ReadAscii(value, type); break;
                     case TagExifIfd:
-                        if (exifPointer is null && ReadUnsigned(value, type, little) is long pointer && pointer is >= 8 and <= uint.MaxValue)
+                        if (exifPointer is null && TiffStructure.ReadUnsigned(value, type, little) is long pointer && pointer is >= 8 and <= uint.MaxValue)
                             exifPointer = (uint)pointer;
                         break;
                 }
@@ -147,92 +206,16 @@ public static class ExifParser
             {
                 switch (tag)
                 {
-                    case TagExposureTime: values.ExposureTime ??= ReadRational(value, type, little); break;
-                    case TagFNumber: values.FNumber ??= ReadRational(value, type, little); break;
-                    case TagIso: values.Iso ??= ReadUnsigned(value, type, little); break;
-                    case TagDateTimeOriginal: values.DateOriginal ??= ReadAscii(value, type); break;
-                    case TagDateTimeDigitized: values.DateDigitized ??= ReadAscii(value, type); break;
-                    case TagFocalLength: values.FocalLength ??= ReadRational(value, type, little); break;
-                    case TagLensModel: values.Lens ??= ReadAscii(value, type); break;
+                    case TagExposureTime: values.ExposureTime ??= TiffStructure.ReadRational(value, type, little); break;
+                    case TagFNumber: values.FNumber ??= TiffStructure.ReadRational(value, type, little); break;
+                    case TagIso: values.Iso ??= TiffStructure.ReadUnsigned(value, type, little); break;
+                    case TagDateTimeOriginal: values.DateOriginal ??= TiffStructure.ReadAscii(value, type); break;
+                    case TagDateTimeDigitized: values.DateDigitized ??= TiffStructure.ReadAscii(value, type); break;
+                    case TagFocalLength: values.FocalLength ??= TiffStructure.ReadRational(value, type, little); break;
+                    case TagLensModel: values.Lens ??= TiffStructure.ReadAscii(value, type); break;
                 }
             }
         }
         return exifPointer;
-    }
-
-    private static int TypeSize(ushort type) => type switch
-    {
-        1 or 2 or 6 or 7 => 1, // BYTE, ASCII, SBYTE, UNDEFINED
-        3 or 8 => 2,           // SHORT, SSHORT
-        4 or 9 or 11 => 4,     // LONG, SLONG, FLOAT
-        5 or 10 or 12 => 8,    // RATIONAL, SRATIONAL, DOUBLE
-        _ => 0,
-    };
-
-    /// <summary>The bytes of an entry's value (inline when it fits in 4 bytes), bounds-checked; false when out of range.</summary>
-    private static bool TryGetValueSpan(ReadOnlySpan<byte> tiff, int entry, ushort type, uint count, bool little, out ReadOnlySpan<byte> value)
-    {
-        value = default;
-        var size = TypeSize(type);
-        if (size == 0 || count == 0) return false;
-        var total = (long)size * count;
-        if (total <= 4)
-        {
-            value = tiff.Slice(entry + 8, (int)total);
-            return true;
-        }
-        if (type == 2) total = Math.Min(total, MaxAsciiBytes); // only the start of an absurdly long string is needed
-        else total = size;                                       // numeric: the first element is all we use
-        var offset = ReadU32(tiff, entry + 8, little);
-        if (offset > (uint)tiff.Length || total > tiff.Length - offset) return false;
-        value = tiff.Slice((int)offset, (int)total);
-        return true;
-    }
-
-    private static string? ReadAscii(ReadOnlySpan<byte> value, ushort type)
-    {
-        if (type is not (2 or 7)) return null;
-        var end = value.IndexOf((byte)0);
-        if (end >= 0) value = value[..end];
-        return value.IsEmpty ? null : Encoding.UTF8.GetString(value);
-    }
-
-    private static long? ReadUnsigned(ReadOnlySpan<byte> value, ushort type, bool little) => type switch
-    {
-        1 when value.Length >= 1 => value[0],
-        3 when value.Length >= 2 => ReadU16(value, 0, little),
-        4 when value.Length >= 4 => ReadU32(value, 0, little),
-        8 when value.Length >= 2 => (short)ReadU16(value, 0, little),
-        9 when value.Length >= 4 => (int)ReadU32(value, 0, little),
-        _ => null,
-    };
-
-    private static ExifRational? ReadRational(ReadOnlySpan<byte> value, ushort type, bool little)
-    {
-        if (value.Length < 8) return null;
-        var numerator = ReadU32(value, 0, little);
-        var denominator = ReadU32(value, 4, little);
-        if (type == 10)
-        {
-            // SRATIONAL: only a positive value is meaningful for these tags.
-            int n = (int)numerator, d = (int)denominator;
-            if (n <= 0 || d <= 0) return null;
-            return new ExifRational((uint)n, (uint)d);
-        }
-        return type == 5 ? new ExifRational(numerator, denominator) : null;
-    }
-
-    private static ushort ReadU16(ReadOnlySpan<byte> data, int offset, bool little)
-    {
-        if (offset < 0 || offset + 2 > data.Length) return 0;
-        var slice = data.Slice(offset, 2);
-        return little ? BinaryPrimitives.ReadUInt16LittleEndian(slice) : BinaryPrimitives.ReadUInt16BigEndian(slice);
-    }
-
-    private static uint ReadU32(ReadOnlySpan<byte> data, int offset, bool little)
-    {
-        if (offset < 0 || offset + 4 > data.Length) return 0;
-        var slice = data.Slice(offset, 4);
-        return little ? BinaryPrimitives.ReadUInt32LittleEndian(slice) : BinaryPrimitives.ReadUInt32BigEndian(slice);
     }
 }

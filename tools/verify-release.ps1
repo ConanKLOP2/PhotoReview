@@ -20,7 +20,15 @@ $required = @(
     'PhotoReview.Benchmarking.dll',
     'PhotoReview.PerfAnalysis.dll',
     'PhotoReview.Imaging.TurboJpeg.dll',
+    'PhotoReview.Imaging.LibRaw.dll',
     'turbojpeg.dll',
+    'libraw.dll',
+    'LibRaw-LICENSE.LGPL',
+    'LibRaw-LICENSE.CDDL',
+    'LibRaw-SOURCE.zip',
+    'LibRaw-NOTICE.txt',
+    # libjpeg-turbo's BSD/IJG/zlib notice and the other third-party notices ship only in this file.
+    'THIRD-PARTY-NOTICES.md',
     # Translation catalogs (ADR 0006): English is also embedded, but shipped files let users read/edit them.
     'Languages\en.json',
     'Languages\vi.json')
@@ -38,6 +46,42 @@ $actualNativeHash = (Get-FileHash -LiteralPath (Join-Path $resolved 'turbojpeg.d
 if ($actualNativeHash -ne $expectedNativeHash) {
     Write-Error "turbojpeg.dll SHA-256 mismatch: expected $expectedNativeHash, found $actualNativeHash"
     exit 1
+}
+
+$libRawHashFile = Join-Path $repoRoot 'native\libraw.sha256'
+$expectedLibRawHash = (Get-Content -LiteralPath $libRawHashFile -TotalCount 1).Trim().ToUpperInvariant()
+$actualLibRawHash = (Get-FileHash -LiteralPath (Join-Path $resolved 'libraw.dll') -Algorithm SHA256).Hash
+if ($actualLibRawHash -ne $expectedLibRawHash) {
+    Write-Error "libraw.dll SHA-256 mismatch: expected $expectedLibRawHash, found $actualLibRawHash"
+    exit 1
+}
+$libRawPackageHashFile = Join-Path $repoRoot 'native\libraw.package.sha256'
+$expectedLibRawPackageHash = (Get-Content -LiteralPath $libRawPackageHashFile -TotalCount 1).Trim().ToUpperInvariant()
+$actualLibRawPackageHash = (Get-FileHash -LiteralPath (Join-Path $resolved 'LibRaw-SOURCE.zip') -Algorithm SHA256).Hash
+if ($actualLibRawPackageHash -ne $expectedLibRawPackageHash) {
+    Write-Error "LibRaw-SOURCE.zip SHA-256 mismatch: expected $expectedLibRawPackageHash, found $actualLibRawPackageHash"
+    exit 1
+}
+
+# Shipped legal files must be real: an empty or wrong file would still pass the existence check above, so require
+# non-empty content carrying the expected marker text (LGPL/CDDL license titles, NOTICE naming the pinned LibRaw version).
+$legalMarkers = @(
+    @{ File = 'LibRaw-LICENSE.LGPL'; Marker = 'GNU LESSER GENERAL PUBLIC LICENSE' },
+    @{ File = 'LibRaw-LICENSE.CDDL'; Marker = 'COMMON DEVELOPMENT AND DISTRIBUTION LICENSE' },
+    @{ File = 'LibRaw-NOTICE.txt'; Marker = 'LibRaw 0.22.2' },
+    @{ File = 'THIRD-PARTY-NOTICES.md'; Marker = 'libjpeg-turbo' }
+)
+foreach ($check in $legalMarkers) {
+    $legalPath = Join-Path $resolved $check.File
+    $legalText = [IO.File]::ReadAllText($legalPath, [Text.Encoding]::UTF8)
+    if ([string]::IsNullOrWhiteSpace($legalText)) {
+        Write-Error "$($check.File) is empty."
+        exit 1
+    }
+    if ($legalText.IndexOf($check.Marker, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        Write-Error "$($check.File) does not contain the expected text '$($check.Marker)'."
+        exit 1
+    }
 }
 
 $exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')

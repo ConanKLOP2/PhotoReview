@@ -2,6 +2,7 @@
 using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Localization;
 
 namespace PhotoReview.App.ViewModels;
@@ -216,7 +217,10 @@ public sealed partial class CompareViewModel : ObservableObject
 
         // 3. Tính mã hash song song nếu được bật
         var hashResult = StatusFormatter.CompareHashText(null);
-        if (compareHashEnabled && getHashAsync != null)
+        // A RAW and a non-RAW file (a JPEG+RAW capture) can never be byte-identical: skip hashing both whole files from disk.
+        if (compareHashEnabled && getHashAsync != null && ImageFileTypes.IsRawPath(pair.Left) != ImageFileTypes.IsRawPath(pair.Right))
+            hashResult = StatusFormatter.CompareHashText(false);
+        else if (compareHashEnabled && getHashAsync != null)
         {
             var leftHashTask = TryGetHashAsync(getHashAsync, pair.Left);
             var rightHashTask = TryGetHashAsync(getHashAsync, pair.Right);

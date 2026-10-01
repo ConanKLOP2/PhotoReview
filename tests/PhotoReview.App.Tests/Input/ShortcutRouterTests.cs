@@ -325,6 +325,23 @@ public sealed class ShortcutRouterTests
     }
 
     [Fact]
+    public void ToggleCaptureMember_RequiresConfiguredShortcutAndCurrentCapturePair()
+    {
+        var settings = new AppSettings();
+        var router = new ShortcutRouter(settings);
+        Assert.Null(router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: true, hasCapturePair: true));
+
+        settings.Shortcuts.ToggleCaptureMember = "B";
+        router.Rebuild(settings);
+
+        Assert.Null(router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: true, hasCapturePair: false));
+        Assert.Equal(ReviewCommandType.ToggleCaptureMember,
+            router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: true, hasCapturePair: true)?.Type);
+        Assert.Null(router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: true, hasCapturePair: true, isCompareVisible: true));
+        Assert.Null(router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: false, hasCapturePair: true));
+    }
+
+    [Fact]
     public void OpenFolderAndCustomZoom_EmptyOrUnparseable_AreDisabled()
     {
         var settings = new AppSettings();

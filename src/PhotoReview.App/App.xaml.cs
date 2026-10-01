@@ -10,6 +10,8 @@ using PhotoReview.Core.Instance;
 using PhotoReview.Core.IO;
 using PhotoReview.Platform.Windows;
 using PhotoReview.Core.Settings;
+using PhotoReview.Imaging.Raw;
+using PhotoReview.Imaging.LibRaw;
 
 namespace PhotoReview.App;
 
@@ -71,10 +73,12 @@ public partial class App : System.Windows.Application, IDisposable
             () => sp.GetRequiredService<SettingsStore>().Current.JournalDurability,
             liveOperations: sp.GetRequiredService<ILiveOperationRegistry>(),
             compactionFiles: new PhysicalJournalCompactionFiles()));
-        services.AddSingleton<RecoveryRetryService>(sp => new RecoveryRetryService(
+        services.AddSingleton<RecoveryRetryService>(sp => Composition.ServiceFactories.CreateRecoveryRetryService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<IClock>()));
+            sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<IRecycleBin>(),
+            sp.GetRequiredService<SettingsStore>()));
         services.AddSingleton<FileHashService>(sp => new FileHashService(
             sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
         services.AddSingleton<FileActionService>(sp => new FileActionService(
@@ -112,7 +116,18 @@ public partial class App : System.Windows.Application, IDisposable
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp =>
         {
-            return new ImageDecoderFactory(Composition.DecoderProviders.Create(sp.GetRequiredService<ISourceReader>()), sp.GetService<ILog>(), sp.GetService<ReviewMetrics>());
+            var sourceReader = sp.GetRequiredService<ISourceReader>();
+            var settingsStore = sp.GetRequiredService<SettingsStore>();
+            var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
+            return new ImageDecoderFactory(
+                Composition.DecoderProviders.Create(sourceReader,
+                    () => settingsStore.Current.RawSupportEnabled || settingsStore.Current.DecoderBackend == PhotoReview.Core.Model.DecoderBackend.LibRaw),
+                sp.GetService<ILog>(),
+                sp.GetService<ReviewMetrics>(),
+                (_, standardDecoder) => new FormatRoutingDecoder(
+                    standardDecoder,
+                    Composition.ServiceFactories.CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache),
+                    () => settingsStore.Current.RawSupportEnabled));
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
@@ -161,7 +176,10 @@ public partial class App : System.Windows.Application, IDisposable
                 // feat/preload-window-setting: captured once (applies after restart, like PreloadWorkerCount/Q-AR6/Q-R19);
                 // only affects the "allowed X-90%" text logged when the requested percent is clamped.
                 preloadWindow: PreloadWindow.FromSettings(settingsStore.Current),
-                sourceReader: sp.GetRequiredService<ISourceReader>());
+                sourceReader: sp.GetRequiredService<ISourceReader>(),
+                rawFullDecoder: LibRawAvailability.Probe(out _) ? new LibRawDecoder() : null,
+                isRawFullDecodeEnabled: () => settingsStore.Current.RawSupportEnabled
+                    && settingsStore.Current.RawFullDecode == PhotoReview.Core.Model.RawFullDecode.OnZoom);
         });
 
         services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>(sp =>
@@ -350,7 +368,7 @@ public partial class App : System.Windows.Application, IDisposable
         {
             _services.GetRequiredService<IDialogService>().ShowMessage(
                 PhotoReview.Core.Localization.Tr.AppTitle,
-                PhotoReview.Core.Localization.Tr.SettingsLoadRepaired(string.Join(", ", store.LastLoadRepairs)));
+                PhotoReview.Core.Settings.SettingsLoadRepairText.Build(store.LastLoadRepairs));
         }
     }
 

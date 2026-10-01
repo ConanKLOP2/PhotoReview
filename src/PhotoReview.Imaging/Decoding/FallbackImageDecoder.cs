@@ -82,9 +82,11 @@ public sealed class FallbackImageDecoder : IImageDecoder
         }
     }
 
-    private static bool IsFallbackable(Exception ex)
+    internal static bool IsFallbackable(Exception ex)
     {
-        if (ex is FileNotFoundException or DirectoryNotFoundException or OperationCanceledException or OutOfMemoryException)
+        if (ex is FileNotFoundException or DirectoryNotFoundException or OperationCanceledException or OutOfMemoryException
+            // Transient "queue full" from a gated decoder: the fallback would decode the same file outside that gate.
+            or DecoderBusyException)
         {
             return false;
         }
@@ -115,6 +117,7 @@ public sealed class FallbackImageDecoder : IImageDecoder
         public DecoderBackend ActualBackend { get; }
         public int OriginalWidth => _inner.OriginalWidth;
         public int OriginalHeight => _inner.OriginalHeight;
+        public bool IsDegradedFallback => _inner.IsDegradedFallback;
         public PhotoReview.Imaging.Metadata.ExifSummary? Exif => _inner.Exif;
 
         public DecodedImageWithBackend(IDecodedImage inner, DecoderBackend actualBackend)

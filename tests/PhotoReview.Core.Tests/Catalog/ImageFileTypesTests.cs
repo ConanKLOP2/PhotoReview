@@ -6,6 +6,17 @@ namespace PhotoReview.Core.Tests.Catalog;
 [Trait("Category", "HotPath")]
 public class ImageFileTypesTests
 {
+    [Fact]
+    public void RawExtensions_AreExactlyTheEightApprovedFormats()
+    {
+        Assert.True(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"
+        }.SetEquals(ImageFileTypes.RawExtensions));
+        Assert.False(ImageFileTypes.IsSupported("photo.nrw", rawEnabled: true));
+        Assert.False(ImageFileTypes.IsSupported("photo.pef", rawEnabled: true));
+    }
+
     [Theory]
     [InlineData("photo.jpg", true)]
     [InlineData("photo.JPEG", true)]

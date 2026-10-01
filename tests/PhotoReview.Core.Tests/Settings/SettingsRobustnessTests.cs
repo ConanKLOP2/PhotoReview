@@ -212,17 +212,13 @@ public sealed class SettingsRobustnessTests : IDisposable
     [InlineData("\"Fullscreen\": null", "Fullscreen", "F11")]
     public void Load_BlankMandatoryShortcut_ResetToDefault(string field, string property, string expected)
     {
-        var s = LoadJson("{\"ConfigVersion\":3,\"Shortcuts\":{" + field + "}}");
+        Directory.CreateDirectory(Path.GetDirectoryName(_paths.ConfigFile)!);
+        File.WriteAllBytes(_paths.ConfigFile, new UTF8Encoding(false).GetBytes("{\"ConfigVersion\":3,\"Shortcuts\":{" + field + "}}"));
+        var store = NewStore(); // one Load: the repair is written back, so a second Load would report nothing
+        var s = store.Load();
 
         Assert.Equal(expected, typeof(ShortcutMappings).GetProperty(property)!.GetValue(s.Shortcuts));
-        Assert.Contains(nameof(AppSettings.Shortcuts), NewStoreLoadRepairs());
-    }
-
-    private IReadOnlyList<string> NewStoreLoadRepairs()
-    {
-        var store = NewStore();
-        store.Load();
-        return store.LastLoadRepairs;
+        Assert.Contains(nameof(AppSettings.Shortcuts), store.LastLoadRepairs);
     }
 
     [Fact(DisplayName = "Actions with null name/shortcut/destination and null entries load as usable actions")]
@@ -340,7 +336,9 @@ public sealed class SettingsRobustnessTests : IDisposable
 
     private static AppSettings RandomSettings(Random r)
     {
-        var keys = new[] { "F1", "F2", "F6", "F7", "F8", "F9", "F10", "F12", "Q", "W", "E", "R", "T", "U", "O", "P", "A", "S", "G", "H", "J", "K", "L", "X", "V", "B", "N" };
+        var keys = new[] { "F1", "F2", "F6", "F7", "F8", "F9", "F10", "F12", "Q", "W", "E", "R", "T", "U", "O", "P", "A", "S", "G", "H", "J", "K", "L", "X", "V", "B", "N",
+            // enough distinct keys for 14 mandatory + 12 optional shortcuts + up to 3 action shortcuts
+            "F3", "F4", "F5", "F11", "I", "D", "Z", "Y" };
         var pool = new Queue<string>(keys.OrderBy(_ => r.Next()));
         string Key() => pool.Dequeue();
         var text = new[] { "", "Group-2", "Đích \u65E5\u672C\u8A9E", "\u0645\u062C\u0644\u062F", "tr\u0130\u0131", "a\"b\\c", "{name}", "line\nbreak", new string('x', 500) };
@@ -398,6 +396,10 @@ public sealed class SettingsRobustnessTests : IDisposable
                 ClickZoom = r.Next(3) == 0 ? "" : Key(),
                 FitWidth = r.Next(3) == 0 ? "" : Key(), FitHeight = r.Next(3) == 0 ? "" : Key(),
                 ToggleKeepZoom = r.Next(3) == 0 ? "" : Key(),
+                // DisableConflictingOptionalShortcuts now resolves EVERY optional shortcut, so these must not stay at their
+                // "O"/"D3" defaults either.
+                OpenFolder = r.Next(3) == 0 ? "" : Key(), CustomZoom = r.Next(3) == 0 ? "" : Key(),
+                ToggleCaptureMember = r.Next(3) == 0 ? "" : Key(),
             },
             Actions = [],
         };

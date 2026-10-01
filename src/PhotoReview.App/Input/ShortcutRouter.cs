@@ -34,6 +34,7 @@ public sealed class ShortcutRouter
     private Key? _toggleKeepZoomKey;
     private Key? _openFolderKey;
     private Key? _customZoomKey;
+    private Key? _toggleCaptureMemberKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -75,6 +76,7 @@ public sealed class ShortcutRouter
         _toggleKeepZoomKey = ParseKey(settings.Shortcuts.ToggleKeepZoom);
         _openFolderKey = ParseKey(settings.Shortcuts.OpenFolder);
         _customZoomKey = ParseKey(settings.Shortcuts.CustomZoom);
+        _toggleCaptureMemberKey = ParseKey(settings.Shortcuts.ToggleCaptureMember);
 
         _actionKeys.Clear();
         for (var i = 0; i < settings.Actions.Count; i++)
@@ -97,7 +99,8 @@ public sealed class ShortcutRouter
         bool isFullscreen,
         bool hasImage,
         bool hasComparePair = true,
-        bool isCompareVisible = false)
+        bool isCompareVisible = false,
+        bool hasCapturePair = false)
     {
         var pressedKey = key == Key.System ? systemKey : key;
 
@@ -177,6 +180,11 @@ public sealed class ShortcutRouter
                 return null;
             }
             return ReviewCommand.ToggleCompare;
+        }
+
+        if (_toggleCaptureMemberKey.HasValue && key == _toggleCaptureMemberKey.Value && hasCapturePair && !isCompareVisible)
+        {
+            return ReviewCommand.ToggleCaptureMember;
         }
 
         // 8. Custom Actions

@@ -6,6 +6,20 @@ namespace PhotoReview.Integration.Tests;
 /// <summary>Argument edge cases of the benchmark CLI (free-form lists, culture, empty and negative values).</summary>
 public sealed class BenchmarkCliArgumentsTests
 {
+    [Theory(DisplayName = "--decoder-bench --raw accepts only bounded, positive iteration arguments")]
+    [InlineData("--decoder-bench|--raw|C:/raw|C:/out", 3)]
+    [InlineData("--decoder-bench|--raw|C:/raw|C:/out|5", 5)]
+    public void RawDecoderBenchmark_IterationsValid(string rawArgs, int expected) =>
+        Assert.Equal(expected, RawDecoderBenchmark.ParseIterations(rawArgs.Split('|')));
+
+    [Theory(DisplayName = "--decoder-bench --raw rejects invalid iteration counts and arity")]
+    [InlineData("--decoder-bench|--raw|C:/raw|C:/out|0")]
+    [InlineData("--decoder-bench|--raw|C:/raw|C:/out|-1")]
+    [InlineData("--decoder-bench|--raw|C:/raw|C:/out|1.5")]
+    [InlineData("--decoder-bench|--raw|C:/raw")]
+    public void RawDecoderBenchmark_IterationsInvalid(string rawArgs) =>
+        Assert.Throws<ArgumentException>(() => RawDecoderBenchmark.ParseIterations(rawArgs.Split('|')));
+
     [Fact(DisplayName = "--benchmark without a profile list defaults to recommended-auto")]
     public void Benchmark_DefaultsToRecommendedAuto()
     {

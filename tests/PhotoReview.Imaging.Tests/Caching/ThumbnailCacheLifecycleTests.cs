@@ -76,4 +76,24 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
         Assert.NotNull(image);
         Assert.Equal(2, calls);
     }
+
+    [Theory(DisplayName = "A RAW file never reaches the embedded-thumbnail reader (no second open of the file the preview decode already reads)")]
+    [InlineData("a.cr2")]
+    [InlineData("a.DNG")]
+    [InlineData("a.raf")]
+    public async Task RawSource_SkipsTheEmbeddedThumbnailReader(string name)
+    {
+        var source = _root.File(name, [0x49, 0x49, 0x2A, 0x00]);
+        var calls = 0;
+        using var cache = new ThumbnailCache(_root.Dir("disk-raw"), persistNewThumbnails: false, embeddedThumbnailReader: (path, token) =>
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
+        });
+
+        var image = await cache.GetAsync(source);
+
+        Assert.Null(image);
+        Assert.Equal(0, calls);
+    }
 }

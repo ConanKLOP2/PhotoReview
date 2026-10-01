@@ -430,6 +430,56 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
     }
 
     [Fact]
+    public async Task ShowSettings_WhenRawSupportTurnedOff_ReloadsTheFolderSoNoRawEntryStaysListed()
+    {
+        var folder = Path.Combine(_tempDir, "raw_toggle_folder");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "1.png", ValidPngBytes);
+        File.WriteAllBytes(Path.Combine(folder, "2.cr2"), new byte[64]);
+        _settings.RawSupportEnabled = true;
+
+        var (vm, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        await vm.FolderLoadTask;
+        Assert.Equal(2, vm.TotalFiles);
+
+        _dialogService.SettingsResponse = true;
+        _dialogService.OnShowSettings = () =>
+        {
+            _settings.RawSupportEnabled = false;
+            _settingsStore.Save(_settings);
+        };
+
+        vm.ShowSettings();
+        await vm.FolderLoadTask;
+
+        Assert.Equal(1, vm.TotalFiles); // reloaded with RAW hidden; without the reload the RAW entry would stay listed
+        Assert.True(_preloadController.CancelCalled);
+    }
+
+    [Fact]
+    public async Task ShowSettings_WhenRawSupportUnchanged_DoesNotReloadTheFolder()
+    {
+        var folder = Path.Combine(_tempDir, "raw_same_folder");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "1.png", ValidPngBytes);
+        File.WriteAllBytes(Path.Combine(folder, "2.cr2"), new byte[64]);
+        _settings.RawSupportEnabled = true;
+
+        var (vm, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        await vm.FolderLoadTask;
+        var loadBefore = vm.FolderLoadTask;
+
+        _dialogService.SettingsResponse = true;
+        _dialogService.OnShowSettings = () => _settingsStore.Save(_settings);
+
+        vm.ShowSettings();
+
+        Assert.Same(loadBefore, vm.FolderLoadTask);
+    }
+
+    [Fact]
     public async Task PickAndOpenFolderAsync_WhenFolderSelected_OpensFolder()
     {
         var folder = Path.Combine(_tempDir, "picked_folder");
@@ -602,11 +652,15 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
     {
         public List<string> RecycledPaths { get; } = [];
 
+        /// <summary>When set, SendToRecycleBin blocks until it completes (an action that is "in flight").</summary>
+        public Task? SendGate { get; set; }
+
         /// <summary>Paths whose recycling fails with an I/O error (a locked file), to exercise partial batch failure.</summary>
         public HashSet<string> FailingPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public void SendToRecycleBin(string path)
         {
+            SendGate?.GetAwaiter().GetResult();
             if (FailingPaths.Contains(path)) throw new IOException("locked by another process");
             RecycledPaths.Add(path);
             if (File.Exists(path)) File.Delete(path);

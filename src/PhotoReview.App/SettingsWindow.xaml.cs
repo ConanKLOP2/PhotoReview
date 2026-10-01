@@ -56,14 +56,10 @@ public partial class SettingsWindow : Window
 
         InitializePages();
 
-        var allShortcutBoxes = new[]
-        {
-            NextText, PreviousText, FirstImageText, LastImageText, NextFolderText, PreviousFolderText,
-            ZoomInText, ZoomOutText, ZoomActualSizeText, ToggleFitText, FullscreenText, ToggleInfoOverlayText,
-            SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText, ClickZoomText,
-            FitWidthText, FitHeightText, ToggleKeepZoomText, OpenFolderText, CustomZoomText,
-        };
-        foreach (var textBox in allShortcutBoxes)
+        // Single source of truth for the shortcut boxes: input capture, duplicate warning and the "must parse" checks in
+        // Save_Click all derive from this list, so a box missing here cannot silently miss one of them.
+        ShortcutBoxes = BuildShortcutBoxes();
+        foreach (var (_, textBox) in ShortcutBoxes)
         {
             textBox.PreviewKeyDown += ShortcutText_PreviewKeyDown;
             textBox.TextChanged += Shortcut_TextChanged;
@@ -74,6 +70,25 @@ public partial class SettingsWindow : Window
         LoadLanguages();
         Localizer.CurrentChanged += OnLanguageChanged;
     }
+
+    /// <summary>Every shortcut text box with the <see cref="ShortcutMappings"/> property it edits (test seam).</summary>
+    internal IReadOnlyList<(string Property, System.Windows.Controls.TextBox Box)> ShortcutBoxes { get; }
+
+    private (string Property, System.Windows.Controls.TextBox Box)[] BuildShortcutBoxes() =>
+    [
+        (nameof(ShortcutMappings.Next), NextText), (nameof(ShortcutMappings.Previous), PreviousText),
+        (nameof(ShortcutMappings.FirstImage), FirstImageText), (nameof(ShortcutMappings.LastImage), LastImageText),
+        (nameof(ShortcutMappings.NextFolder), NextFolderText), (nameof(ShortcutMappings.PreviousFolder), PreviousFolderText),
+        (nameof(ShortcutMappings.ZoomIn), ZoomInText), (nameof(ShortcutMappings.ZoomOut), ZoomOutText),
+        (nameof(ShortcutMappings.ZoomActualSize), ZoomActualSizeText), (nameof(ShortcutMappings.ToggleFit), ToggleFitText),
+        (nameof(ShortcutMappings.Fullscreen), FullscreenText), (nameof(ShortcutMappings.ToggleInfoOverlay), ToggleInfoOverlayText),
+        (nameof(ShortcutMappings.Skip), SkipText), (nameof(ShortcutMappings.Undo), UndoText), (nameof(ShortcutMappings.Compare), CompareText),
+        (nameof(ShortcutMappings.MoveToFolder), MoveToFolderText), (nameof(ShortcutMappings.CopyToFolder), CopyToFolderText),
+        (nameof(ShortcutMappings.SendToRecycleBin), RecycleText), (nameof(ShortcutMappings.ClickZoom), ClickZoomText),
+        (nameof(ShortcutMappings.FitWidth), FitWidthText), (nameof(ShortcutMappings.FitHeight), FitHeightText),
+        (nameof(ShortcutMappings.ToggleKeepZoom), ToggleKeepZoomText), (nameof(ShortcutMappings.OpenFolder), OpenFolderText),
+        (nameof(ShortcutMappings.CustomZoom), CustomZoomText), (nameof(ShortcutMappings.ToggleCaptureMember), ToggleCaptureMemberText),
+    ];
 
     // ---- Left navigation: page list, remembers the last page for this process only (DR02) ----
 
@@ -332,6 +347,7 @@ public partial class SettingsWindow : Window
         ClickZoomText.Text = Settings.Shortcuts.ClickZoom;
         FitWidthText.Text = Settings.Shortcuts.FitWidth; FitHeightText.Text = Settings.Shortcuts.FitHeight; ToggleKeepZoomText.Text = Settings.Shortcuts.ToggleKeepZoom;
         OpenFolderText.Text = Settings.Shortcuts.OpenFolder; CustomZoomText.Text = Settings.Shortcuts.CustomZoom;
+        ToggleCaptureMemberText.Text = Settings.Shortcuts.ToggleCaptureMember;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         // PR-B: Percent400 was removed from the combo; SettingsNormalizer migrates a loaded value to Percent200 before
         // this window ever sees it, but a stray Percent400 (e.g. this window built directly on an unnormalized
@@ -354,6 +370,14 @@ public partial class SettingsWindow : Window
         InstanceModeCombo.SelectedIndex = Settings.InstanceMode == InstanceMode.PerFolder ? 1 : 0;
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
+        RawSupportEnabledCheck.IsChecked = Settings.RawSupportEnabled;
+        RawFullDecodeCombo.SelectedIndex = Settings.RawFullDecode == RawFullDecode.OnZoom ? 1 : 0;
+        RawPairModeCombo.SelectedIndex = Settings.RawPairMode switch
+        {
+            RawPairMode.PreferJpeg => 1,
+            RawPairMode.PreferRaw => 2,
+            _ => 0
+        };
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
         AllowPermanentDeleteCheck.IsChecked = Settings.AllowPermanentDeleteWithoutRecycleBin;
         ConfirmBeforeDeleteCheck.IsChecked = Settings.ConfirmBeforeDelete;
@@ -506,6 +530,7 @@ public partial class SettingsWindow : Window
     private void ClearToggleKeepZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleKeepZoomText);
     private void ClearOpenFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(OpenFolderText);
     private void ClearCustomZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(CustomZoomText);
+    private void ClearToggleCaptureMember_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleCaptureMemberText);
 
     private static void ClearShortcut(System.Windows.Controls.TextBox textBox) => textBox.Text = string.Empty;
 
@@ -533,7 +558,7 @@ public partial class SettingsWindow : Window
     private List<ReviewAction> _cachedProbeActions = [];
 
     /// <summary>
-    /// Shortcut_TextChanged fires <see cref="BuildProbeSettings"/> on every keystroke in any of the 24 shortcut
+    /// Shortcut_TextChanged fires <see cref="BuildProbeSettings"/> on every keystroke in any of the 25 shortcut
     /// boxes, which used to re-parse the (unrelated, unchanged) Actions JSON every time too. ActionsText only
     /// actually changes when the user types there or the Action Profiles editor rewrites it, so cache the parse
     /// keyed on the exact text and skip re-parsing while it's unchanged.
@@ -549,7 +574,7 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// Reads all 24 shortcut text boxes into a <see cref="ShortcutMappings"/>, exactly as typed (not canonicalized).
+    /// Reads all 25 shortcut text boxes into a <see cref="ShortcutMappings"/>, exactly as typed (not canonicalized).
     /// The single place both <see cref="Save_Click"/> and <see cref="BuildProbeSettings"/> read the shortcut
     /// controls from, so the field list only has to be kept in sync with the XAML controls once, not twice.
     /// </summary>
@@ -563,7 +588,7 @@ public partial class SettingsWindow : Window
         MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
         ClickZoom = ClickZoomText.Text,
         FitWidth = FitWidthText.Text, FitHeight = FitHeightText.Text, ToggleKeepZoom = ToggleKeepZoomText.Text,
-        OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text,
+        OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text, ToggleCaptureMember = ToggleCaptureMemberText.Text,
     };
 
     /// <summary>
@@ -586,7 +611,7 @@ public partial class SettingsWindow : Window
         SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(raw.SendToRecycleBin), ClickZoom = ShortcutKeyCanonical.Canonicalize(raw.ClickZoom),
         FitWidth = ShortcutKeyCanonical.Canonicalize(raw.FitWidth), FitHeight = ShortcutKeyCanonical.Canonicalize(raw.FitHeight),
         ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(raw.ToggleKeepZoom), OpenFolder = ShortcutKeyCanonical.Canonicalize(raw.OpenFolder),
-        CustomZoom = ShortcutKeyCanonical.Canonicalize(raw.CustomZoom),
+        CustomZoom = ShortcutKeyCanonical.Canonicalize(raw.CustomZoom), ToggleCaptureMember = ShortcutKeyCanonical.Canonicalize(raw.ToggleCaptureMember),
         MoveToFolder2 = existing.MoveToFolder2,
     };
 
@@ -700,6 +725,9 @@ public partial class SettingsWindow : Window
         Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs; Settings.InfoOverlayAutoHide = new AppSettings().InfoOverlayAutoHide; Settings.InfoOverlayAutoHideDelayMs = AppSettings.DefaultInfoOverlayAutoHideDelayMs; Settings.ToolbarOpacityPercent = AppSettings.DefaultToolbarOpacityPercent;
         Settings.InfoOverlayFontSize = AppSettings.DefaultInfoOverlayFontSize;
         Settings.TitleBarFields = TitleBarFields.Default;
+        Settings.RawSupportEnabled = new AppSettings().RawSupportEnabled;
+        Settings.RawFullDecode = new AppSettings().RawFullDecode;
+        Settings.RawPairMode = new AppSettings().RawPairMode;
         LoadFields();
     }
 
@@ -716,14 +744,14 @@ public partial class SettingsWindow : Window
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         AppLog.Info("Settings save requested");
-        var values = new[] { NextText.Text, PreviousText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
+        var values = ShortcutBoxes.Where(b => !ShortcutMappings.IsOptional(b.Property)).Select(b => b.Box.Text).ToArray();
         if (values.Any(v => !ShortcutKeyName.TryParse(v, out _)) || values.Select(ShortcutKeyCanonical.Canonicalize).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
         }
         // Optional shortcuts (ShortcutMappings.OptionalNames) may be empty (= feature disabled); non-empty ones still
         // have to be a real key name. Cross-duplicate checking against everything else happens in SettingsValidator below.
-        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text, ClickZoomText.Text, FitWidthText.Text, FitHeightText.Text, ToggleKeepZoomText.Text, OpenFolderText.Text, CustomZoomText.Text };
+        var optionalValues = ShortcutBoxes.Where(b => ShortcutMappings.IsOptional(b.Property)).Select(b => b.Box.Text);
         if (optionalValues.Any(v => !string.IsNullOrWhiteSpace(v) && !ShortcutKeyName.TryParse(v, out _)))
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
@@ -746,6 +774,14 @@ public partial class SettingsWindow : Window
         Settings.InstanceMode = InstanceModeCombo.SelectedIndex == 1 ? InstanceMode.PerFolder : InstanceMode.SingleWindow;
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
+        Settings.RawSupportEnabled = RawSupportEnabledCheck.IsChecked == true;
+        Settings.RawFullDecode = RawFullDecodeCombo.SelectedIndex == 1 ? RawFullDecode.OnZoom : RawFullDecode.Never;
+        Settings.RawPairMode = RawPairModeCombo.SelectedIndex switch
+        {
+            1 => RawPairMode.PreferJpeg,
+            2 => RawPairMode.PreferRaw,
+            _ => RawPairMode.Separate
+        };
         Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
         Settings.AllowPermanentDeleteWithoutRecycleBin = AllowPermanentDeleteCheck.IsChecked == true;
         Settings.ConfirmBeforeDelete = ConfirmBeforeDeleteCheck.IsChecked == true;

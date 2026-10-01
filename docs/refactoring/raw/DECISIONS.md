@@ -28,9 +28,13 @@ past the preview. **Decided (2026-09-28, user):** B.
 | C. Both: WIC when its codec is present, LibRaw otherwise | Best coverage | Two full-decode paths to test and keep consistent; more code |
 | D. None (Q-RAW-01 = A) | Simplest | Zoom beyond preview stays blurry |
 
-**Recommendation: A (LibRaw)**, behind `RawFullDecode = OnZoom`, with RAW-30 still probing WIC so the survey
-can show whether B is good enough on the user's own machine (if WIC decodes every format of the user's cameras
-fast enough, switching to B removes the native dependency). **Decided (2026-09-28, user):** A (LibRaw), RAW-30 still probes WIC; revisit only if the survey shows WIC covers every format fast enough.
+**Recommendation: A (LibRaw)**, behind `RawFullDecode = OnZoom`, with RAW-30 probing WIC so the survey
+can show whether B is good enough on the user's own machine. **Decided (2026-09-28, user):** A (LibRaw); RAW-30 probes WIC; revisit only if the survey shows WIC covers every format fast enough.
+**Outcome (2026-09-29/30):** the RAW-30 probe ran once ([SURVEY.md](SURVEY.md) section 4: WIC fully decoded 2 of 23 corpus
+files on the survey machine, 1 more was preview-only, 20 were unavailable), so A stands. The WIC RAW full decoder and codec registry built
+on that probe were removed as unused (`54a1b1c6`; `git grep WicRawFullDecoder` finds only docs). The WIC comparison is survey history
+only; the app has no WIC RAW full-decode path. LibRaw decodes are serialised process-wide by a single-slot gate
+(`LibRawDecoder.s_fullDecodeGate`).
 
 ## Q-RAW-03 — What is "100 %" zoom for a RAW? (ADR 0008 says 100 % = 1 source pixel)
 
@@ -40,7 +44,7 @@ fast enough, switching to B removes the native dependency). **Decided (2026-09-2
 | B. Embedded preview size | 100 % is always sharp from the preview | Zoom % changes meaning when the full decode arrives; dimensions shown in the info overlay would not match the camera's specs |
 
 **Recommendation: A.** `OriginalWidth/Height` = sensor visible size (DNG `DefaultCropSize`, CR3/CR2/NEF
-visible area); the info overlay shows the preview size separately ("RAW · preview 1620×1080"). **Decided (2026-09-28, user):** A.
+visible area); the info line shows the preview size separately (`overlay.rawPreview`, "RAW preview 1620×1080"; hidden after the full decode and absent for a cache-restored image). **Decided (2026-09-28, user):** A.
 
 ## Q-RAW-04 — JPG+RAW pairs shot together (`IMG_0001.JPG` + `IMG_0001.CR3`)
 
@@ -50,12 +54,12 @@ visible area); the info overlay shows the preview size separately ("RAW · previ
 | **B. Group, show the JPG, actions apply to the whole pair (+ `.xmp` sidecar)** | One decision per shot (the common culling workflow); JPG shows fastest | Needs multi-file journal transactions (RAW-41, data-safety critical); Undo must restore both; a partial failure must be visible |
 | C. Group, show the RAW | Same as B, shows RAW data | RAW preview may be smaller than the JPG; slower |
 
-**Recommendation: B, delivered as setting `RawPairMode`** with default `Separate` until RAW-41 has passed
-its crash/undo tests and the real-machine check, then default `PreferJpeg` in RAW-70. A key toggles which
-member of the pair is shown. **Decided (2026-09-28, user):** pair handling is a user-facing option in the
-Settings window (`RawPairMode`: Separate / Group–show JPG / Group–show RAW), not a fixed behaviour; default
-per the recommendation above. Pairing rule (as proposed, accepted): same folder + same base name
-(case-insensitive), exactly one JPEG + one RAW; a same-name `.xmp` follows the pair in every file action;
+**Recommendation: B, delivered as setting `RawPairMode`**; keep default `Separate` until RAW-41's crash/undo
+tests and RAW-62 real-machine check pass. The user waived RAW-62 on 2026-09-29, so the shipped/default value
+remains `Separate`; no real-machine acceptance is claimed. A key toggles which member of the pair is shown.
+**Decided (2026-09-28, user):** pair handling is a user-facing option in the Settings window (`RawPairMode`:
+Separate / Group–show JPG / Group–show RAW), not a fixed behaviour. Pairing rule (as proposed, accepted): same folder + same base name
+(case-insensitive), exactly one JPEG + one RAW; a same-name `.xmp` follows the pair in every file action (only when it is unambiguous: exactly one `<base>.xmp`, else exactly one `<file>.<ext>.xmp`; with competing candidates the pair still groups but no sidecar is claimed, `CaptureGroupBuilder`);
 a RAW without a JPEG is shown on its own.
 
 ## Q-RAW-05 — Which formats in the first release?
@@ -82,10 +86,14 @@ a RAW without a JPEG is shown on its own.
 
 | Option | Pros | Cons |
 |---|---|---|
-| **A. `tools/fetch-raw-samples.ps1` downloads a pinned list (URL + SHA-256) from raw.pixls.us (files published there as CC0) into a git-ignored folder; real-file tests are `Category=Native` (skip when absent)** | No large binaries in git; reproducible; licence-clean | Needs network once per machine; CI does not run them (like other Native tests) |
+| **A. `tools/fetch-raw-samples.ps1` downloads a pinned list (URL + SHA-256) from raw.pixls.us (files published there as CC0) into a git-ignored folder; real-file tests are `Category=Native` (skip when absent)** | No large binaries in git; reproducible; licence-clean | Needs network once per machine; The regular CI does not run them (like other Native tests); the manual workflow `raw-corpus.yml` does, in strict mode (see [TESTING.md](../../TESTING.md)) |
 | B. Commit small samples into the repo | Always available, CI can run them | RAW files are 10–60 MB each; bloats the repo; licence tracking per file |
 | C. Synthetic containers only | Tiny, deterministic, CI-friendly | Cannot prove real cameras' quirks |
 
 **Recommendation: A for real files + C for unit tests** (synthetic TIFF/BMFF/RAF containers wrapping a
 FixtureGenerator JPEG, built in memory — these run in CI). The fetch script must verify the CC0 statement on
 the source page for each file and record it next to its hash. **Decided (2026-09-28, user):** A + C.
+
+## RAW-70 upgrade behaviour (2026-09-30)
+
+`RawSupportEnabled` defaults to `true` (owner's intended RAW-70 default, not changed). An old `config.json` without the field therefore starts listing RAW files on the first launch after upgrading. No in-app one-time notice was added: the repo has no persisted "notice already shown" state, and the existing startup dialog (`SettingsStore.LastLoadRepairs`) is for repaired invalid values ; the repaired settings are written back once, so it does not repeat (except for a config written by a newer build, which is not rewritten). The behaviour is documented in the README upgrade note instead; the switch is Settings > Enable Camera RAW support.

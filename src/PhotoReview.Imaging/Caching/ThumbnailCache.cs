@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Imaging.Decoding;
 
@@ -190,6 +191,9 @@ public sealed class ThumbnailCache : IDisposable
         // thumbnail (APP1); if the source has none (or isn't a JPEG), return null and let the
         // preview decode that ImagePresenter already started concurrently supply the image.
         var generationBeforeDecode = Volatile.Read(ref _cacheGeneration);
+        // A RAW has no EXIF-thumbnail APP1 to read here; opening it through WIC would re-read the file the preview decode already
+        // reads by byte ranges (and a codec thumbnail carries the sensor size, not the preview size). The preview is the first frame.
+        if (ImageFileTypes.IsRawPath(sourcePath)) return null;
         var embedded = await _embeddedThumbnailReader(sourcePath, cancellationToken).ConfigureAwait(false);
         // Includes a failed disk-cache attempt, if any; excludes persisting the new thumbnail.
         if (perf) PhotoReviewPerf.Log.ThumbEnd(perfNav, perfPathId, embedded is not null ? "embedded" : "none", PhotoReviewPerf.Ms(perfT0));

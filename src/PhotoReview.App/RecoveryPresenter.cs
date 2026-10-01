@@ -51,7 +51,8 @@ internal static class RecoveryPresenter
     {
         RecoveryVerdict.CanRetry => Good,
         RecoveryVerdict.AlreadyDone => Info,
-        RecoveryVerdict.Conflict or RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged or RecoveryVerdict.NotRecycled => Warn,
+        RecoveryVerdict.Conflict or RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged or RecoveryVerdict.NotRecycled
+            or RecoveryVerdict.PartiallyPermanentlyDeleted => Warn,
         RecoveryVerdict.PermanentlyDeleted or RecoveryVerdict.Lost => Bad,
         _ => Neutral,
     };
@@ -67,6 +68,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryVerdictRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryVerdictNotRecycled,
         RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryVerdictPermanentlyDeleted,
+        RecoveryVerdict.PartiallyPermanentlyDeleted => Tr.RecoveryVerdictPartiallyPermanentlyDeleted,
         _ => Tr.RecoveryVerdictUnknown,
     };
 
@@ -81,6 +83,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryExplainRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryExplainNotRecycled,
         RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryExplainPermanentlyDeleted,
+        RecoveryVerdict.PartiallyPermanentlyDeleted => Tr.RecoveryExplainPartiallyPermanentlyDeleted,
         _ => Tr.RecoveryExplainUnknown,
     };
 
@@ -95,6 +98,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryActionRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryActionNotRecycled,
         RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryActionPermanentlyDeleted,
+        RecoveryVerdict.PartiallyPermanentlyDeleted => Tr.RecoveryActionPartiallyPermanentlyDeleted,
         _ => Tr.RecoveryActionUnknown,
     };
 
@@ -116,7 +120,9 @@ internal static class RecoveryPresenter
 
     /// <summary>Only the retry verdict enables Retry; RecoveryRetryService still re-checks everything itself.</summary>
     public static bool AllowsRetry(RecoveryCheckResult? result) =>
-        result is { Verdict: RecoveryVerdict.CanRetry, Entry.Type: FileOperationType.Move or FileOperationType.Copy };
+        result is { Verdict: RecoveryVerdict.CanRetry }
+        && (result.Entry.Type is FileOperationType.Move or FileOperationType.Copy
+            || (result.IsGroup && result.Entry.Type == FileOperationType.Recycle));
 
     public static bool Matches(RecoveryFilter filter, RecoveryVerdict? verdict) => filter switch
     {
@@ -145,6 +151,71 @@ internal static class RecoveryPresenter
     public static RecoveryPathView PathView(string title, RecoveryPathCheck check, JournalEntry entry, bool folderMissingNote) =>
         new(title, check.Path, Tr.RecoveryDetailStatus(PathStatusText(check.Status)), PathStatusBrush(check.Status),
             NowText(check), JournalText(entry), folderMissingNote ? Tr.RecoveryDetailFolderMissing : null);
+
+    /// <summary>Status line of one capture-group member in the details panel.</summary>
+    public static string GroupStatusText(RecoveryVerdict verdict, JournalGroupMember member,
+        RecoveryPathCheck source, RecoveryPathCheck? destination)
+    {
+        var state = verdict switch
+        {
+            RecoveryVerdict.AlreadyDone => Tr.RecoveryGroupExists,
+            RecoveryVerdict.CanRetry => Tr.RecoveryGroupSourceStatus,
+            // The file is still at its original path (the delete never reached it) - not "missing".
+            RecoveryVerdict.NotRecycled => Tr.RecoveryGroupOnDisk,
+            RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryGroupMissing,
+            RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged => Tr.RecoveryGroupChanged,
+            RecoveryVerdict.Conflict => Tr.RecoveryGroupConflict,
+            RecoveryVerdict.Lost => Tr.RecoveryGroupLost,
+            RecoveryVerdict.Unknown => Tr.RecoveryGroupUnreadable,
+            _ => VerdictText(verdict),
+        };
+        if (member.Destination is null) return state;
+        return $"{state} · {Tr.RecoveryDetailSource}: {PathStatusText(source.Status)}"
+            + $" · {Tr.RecoveryDetailDestination}: {PathStatusText(destination?.Status ?? RecoveryPathStatus.Missing)}";
+    }
+
+    /// <summary>
+    /// Confirmation text of the Retry button. A group Delete retry that will delete members PERMANENTLY (journaled Permanent, on
+    /// a drive without a Recycle Bin, allowed by the current setting) says so explicitly, like the first-run confirmation
+    /// does; a retried Undo of a Delete restores from the Recycle Bin and is worded that way.
+    /// </summary>
+    public static string RetryConfirmText(JournalEntry entry, RecoveryCheckResult? check, bool allowPermanentDelete)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        // The user cancelled this operation: a retry finishes it, so say exactly that (the retry service refuses otherwise).
+        if (string.Equals(entry.ErrorCode, JournalErrors.CancelledByUser, StringComparison.Ordinal))
+        {
+            var cancelledCount = entry.GroupMembers is { Count: > 0 } cancelled ? cancelled.Count : 1;
+            // A cancelled group Delete can still retry members journaled Permanent: the warning must not be lost.
+            var cancelledPermanent = entry.GroupMembers is { Count: > 0 } cancelledMembers
+                && entry.Type == FileOperationType.Recycle && entry.Undo != true && allowPermanentDelete
+                ? PendingPermanentCount(cancelledMembers, check)
+                : 0;
+            return cancelledPermanent > 0
+                ? Tr.RecoveryRetryConfirmCancelledPermanent(OperationText(entry.Type), cancelledCount, cancelledPermanent)
+                : Tr.RecoveryRetryConfirmCancelled(OperationText(entry.Type), cancelledCount);
+        }
+        if (entry.GroupMembers is not { Count: > 0 } members)
+            return Tr.DialogConfirmRetryMessage(OperationText(entry.Type), Path.GetFileName(entry.Source));
+        if (entry.Type == FileOperationType.Recycle && entry.Undo == true)
+            return Tr.RecoveryGroupRetryConfirmRestore(members.Count);
+        if (entry.Type == FileOperationType.Recycle && allowPermanentDelete)
+        {
+            var permanent = PendingPermanentCount(members, check);
+            if (permanent > 0)
+                return Tr.RecoveryGroupRetryConfirmPermanent(OperationText(entry.Type), members.Count, permanent);
+        }
+        return Tr.RecoveryGroupRetryConfirm(OperationText(entry.Type), members.Count);
+    }
+
+    /// <summary>Members a Delete retry deletes permanently: the ones still on disk (NotRecycled); without a check result all count.</summary>
+    private static int PendingPermanentCount(IReadOnlyList<JournalGroupMember> members, RecoveryCheckResult? check)
+    {
+        var pending = check?.GroupMembers is { } checks
+            ? checks.Where(item => item.Verdict == RecoveryVerdict.NotRecycled).Select(item => item.Member)
+            : members;
+        return pending.Count(member => member.Permanent);
+    }
 
     public static string OperationText(FileOperationType type) => type switch
     {

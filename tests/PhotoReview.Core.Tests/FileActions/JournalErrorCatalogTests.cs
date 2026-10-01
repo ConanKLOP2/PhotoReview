@@ -61,12 +61,22 @@ public sealed class JournalErrorCatalogTests : IDisposable
         Assert.Equal(JournalErrors.LocalizedText(code), ex.Message);
     }
 
-    [Fact(DisplayName = "Cancellation, and OS errors are journaled with their own message and no code")]
+    [Fact(DisplayName = "A user cancellation is journaled with the stable CancelledByUser code and invariant English text")]
+    public void Cancellation_IsJournaledWithTheCancelledByUserCode()
+    {
+        foreach (var ex in new Exception[] { new OperationCanceledException("cancelled"), new TaskCanceledException("cancelled") })
+        {
+            var (code, text) = JournalErrors.ForJournal(ex);
+            Assert.Equal(JournalErrors.CancelledByUser, code);
+            Assert.Equal(JournalErrors.EnglishText(JournalErrors.CancelledByUser), text);
+        }
+    }
+
+    [Fact(DisplayName = "OS errors are journaled with their own message and no code")]
     public void NonCodedFailures_KeepTheirMessage_WithoutCode()
     {
         foreach (var ex in new Exception[]
                  {
-                     new OperationCanceledException("cancelled"),
                      new IOException("There is not enough space on the disk."),
                      new UnauthorizedAccessException("Access to the path is denied."),
                  })

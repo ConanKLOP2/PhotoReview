@@ -135,7 +135,9 @@ public partial class BenchmarkWindow : Window, IDisposable
     /// <see cref="Directory.EnumerateFiles(string, string, System.IO.SearchOption)"/> has no cancellation overload,
     /// so <paramref name="cancellationToken"/> is polled every <see cref="EnumerationCancellationCheckInterval"/>
     /// entries instead -- Cancel/Close can interrupt a slow scan instead of only the profile run that used to
-    /// follow it. A test seam for the actual production logic.
+    /// follow it. A test seam for the actual production logic. Camera RAW files are never listed even with RAW support on:
+    /// the benchmark executor builds its <c>PreviewImageService</c> without the RAW-routed decoder, so a RAW would fail or
+    /// measure the WIC fallback instead of the real RAW path.
     /// </summary>
     internal static (string[] Files, long TotalSourceBytes) EnumerateAndStat(string folder, int imageLimit, CancellationToken cancellationToken = default)
     {
@@ -145,7 +147,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         foreach (var path in Directory.EnumerateFiles(folder, "*.*", System.IO.SearchOption.TopDirectoryOnly))
         {
             if (++seen % EnumerationCancellationCheckInterval == 0) cancellationToken.ThrowIfCancellationRequested();
-            if (ImageFileTypes.IsSupported(path)) supported.Add(path);
+            if (ImageFileTypes.IsSupported(path, rawEnabled: false)) supported.Add(path);
         }
         cancellationToken.ThrowIfCancellationRequested();
         // perf(bench-window): cap to the first N files in the same (enumeration) order as before this change,

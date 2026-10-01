@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
@@ -10,8 +10,8 @@ namespace PhotoReview.Imaging.Caching;
 public sealed class SourceBytesCache
 {
     private readonly ISourceReader _sourceReader;
-    private readonly BoundedLruCache<Key, byte[]> _cache;
-    private readonly ConcurrentDictionary<Key, Lazy<byte[]>> _inFlight = new();
+    private readonly BoundedLruCache<RangeKey, byte[]> _cache;
+    private readonly ConcurrentDictionary<RangeKey, Lazy<byte[]>> _inFlight = new();
     private int _generation;
     // Makes "version still current -> Set" atomic against Evict/Clear's "bump -> remove", so a read that finishes
     // after an eviction can never republish the evicted bytes. Held only around in-memory work, never a disk read.
@@ -35,7 +35,7 @@ public sealed class SourceBytesCache
         CapacityBytes = PhotoReview.Imaging.Preload.RamBudgetPolicy.ClampSourceBytesToPhysicalMemory(
             capacityBytes, PhotoReview.Imaging.Preload.RamBudgetPolicy.GetPhysicalMemoryBytes());
         capacityBytes = CapacityBytes;
-        _cache = new BoundedLruCache<Key, byte[]>(capacityBytes, bytes => bytes.LongLength);
+        _cache = new BoundedLruCache<RangeKey, byte[]>(capacityBytes, bytes => bytes.LongLength);
     }
 
     /// <summary>Effective (post-clamp) capacity in bytes.</summary>
@@ -83,13 +83,47 @@ public sealed class SourceBytesCache
         GetOrRead(CreateKey(path, length, lastWriteUtcTicks), priority);
 
     /// <summary>
+    /// Returns only the requested byte range and caches it under the source identity plus its offset and length.
+    /// Used for embedded previews so a small range of a large RAW file never causes the whole file to be read or cached.
+    /// </summary>
+    public byte[] GetOrReadRange(string path, long length, long lastWriteUtcTicks, long offset, int count,
+        SourceReadPriority priority = SourceReadPriority.Viewer)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        if (offset < 0 || count < 0 || offset > length || count > length - offset)
+            throw new ArgumentOutOfRangeException(nameof(offset), "Requested byte range is outside the source file.");
+        // Past the .NET array limit no read can succeed. Checked here, not only in GetOrRead(RangeKey): the uncacheable-range
+        // bypass below skips that method and would otherwise reach the allocation and fail with OutOfMemory/Overflow.
+        if (count > Array.MaxLength)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "The requested range is larger than a .NET array can hold; stream it instead.");
+        var key = CreateRangeKey(path, length, lastWriteUtcTicks, offset, count);
+        if (count == 0) return [];
+        // A range the cache could never keep is read straight through: no in-flight entry and no publish attempt, so it
+        // can never displace the ranges the viewer relies on (the LRU would drop it anyway, after the bookkeeping).
+        if (!CanCacheRange(count)) return ReadAndCache(key, generation: 0, pathVersion: 0, priority, publish: false);
+        return GetOrRead(key, priority);
+    }
+
+    /// <summary>
+    /// Returns the cached bytes of this exact range without reading anything; false when the range is not (or no longer)
+    /// cached. Lets a caller tell a cache hit (0 source bytes read) from a real read when accounting source I/O.
+    /// </summary>
+    public bool TryGetRange(string path, long length, long lastWriteUtcTicks, long offset, int count, out byte[] bytes)
+    {
+        bytes = [];
+        if (offset < 0 || count <= 0 || offset > length || count > length - offset) return false;
+        return _cache.TryGet(CreateRangeKey(path, length, lastWriteUtcTicks, offset, count), out bytes!);
+    }
+
+    /// <summary>
     /// Read-ahead entry point: caches the file's bytes unless this cache could never keep them (see <see cref="CanCache"/>),
     /// in which case nothing is read at all. Returns whether the file is (now) cached. Same threading rules as <see cref="GetOrRead(string)"/>.
     /// </summary>
     public bool TryPrefetch(string path)
     {
         var key = CreateKey(path);
-        if (!CanCache(key.Length)) return false;
+        if (!CanCache(key.SourceLength)) return false;
         GetOrRead(key, SourceReadPriority.Preload);
         return true;
     }
@@ -107,8 +141,11 @@ public sealed class SourceBytesCache
         return true;
     }
 
-    private byte[] GetOrRead(Key key, SourceReadPriority priority)
+    private byte[] GetOrRead(RangeKey key, SourceReadPriority priority)
     {
+        // Past the .NET array limit no read can succeed; fail cleanly instead of an OverflowException from the cast below.
+        if (key.Count > Array.MaxLength)
+            throw new ArgumentOutOfRangeException(nameof(key), key.Count, "The requested source is larger than a .NET array can hold; stream it instead (see CanCache).");
         if (_cache.TryGet(key, out var cached)) return cached;
         System.Diagnostics.Debug.Assert(SynchronizationContext.Current is null,
             "SourceBytesCache.GetOrRead must never be called from a UI (or other SynchronizationContext-bound) thread -- it reads synchronously.");
@@ -128,7 +165,7 @@ public sealed class SourceBytesCache
         var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<byte[]>(
             () => ReadAndCache(key, generation, pathVersion, priority), LazyThreadSafetyMode.ExecutionAndPublication));
         try { return lazy.Value; }
-        finally { _inFlight.TryRemove(new KeyValuePair<Key, Lazy<byte[]>>(key, lazy)); }
+        finally { _inFlight.TryRemove(new KeyValuePair<RangeKey, Lazy<byte[]>>(key, lazy)); }
     }
 
     /// <summary>
@@ -137,6 +174,9 @@ public sealed class SourceBytesCache
     /// <see cref="OverflowException"/>).
     /// </summary>
     public bool CanCache(long length) => length <= CapacityBytes && length <= Array.MaxLength;
+
+    /// <summary>Whether the byte cache can retain this range without exceeding its capacity.</summary>
+    public bool CanCacheRange(long count) => count >= 0 && count <= CapacityBytes && count <= Array.MaxLength;
 
     public void Clear()
     {
@@ -159,11 +199,14 @@ public sealed class SourceBytesCache
         }
     }
 
-    private byte[] ReadAndCache(Key key, int generation, int pathVersion, SourceReadPriority priority)
+    private byte[] ReadAndCache(RangeKey key, int generation, int pathVersion, SourceReadPriority priority, bool publish = true)
     {
         LastReadManagedThreadId = Environment.CurrentManagedThreadId;
         using var stream = _sourceReader.OpenSource(key.Path, priority);
-        var bytes = GC.AllocateUninitializedArray<byte>(checked((int)stream.Length));
+        if (stream.Length != key.SourceLength)
+            throw UserFacingError.Localized(new IOException($"File changed while reading: {key.Path}"), () => Tr.ErrIoFileChangedWhileReading(key.Path));
+        var bytes = GC.AllocateUninitializedArray<byte>(checked((int)key.Count));
+        stream.Seek(key.Offset, SeekOrigin.Begin);
         var offset = 0;
         while (offset < bytes.Length)
         {
@@ -173,8 +216,9 @@ public sealed class SourceBytesCache
         }
         AfterReadForTests?.Invoke();
         var current = new FileInfo(key.Path);
-        if (current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks)
+        if (current.Length != key.SourceLength || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks)
             throw UserFacingError.Localized(new IOException($"File changed while reading: {key.Path}"), () => Tr.ErrIoFileChangedWhileReading(key.Path));
+        if (!publish) return bytes;
         lock (_publishGate)
         {
             if (generation == Volatile.Read(ref _generation) && pathVersion == _pathVersions.GetValueOrDefault(key.Path))
@@ -186,22 +230,25 @@ public sealed class SourceBytesCache
         return bytes;
     }
 
-    private static Key CreateKey(string path)
+    private static RangeKey CreateKey(string path)
     {
         var full = Path.GetFullPath(path);
         var info = new FileInfo(full);
-        return new Key(full, info.Length, info.LastWriteTimeUtc.Ticks);
+        return new RangeKey(full, info.Length, info.LastWriteTimeUtc.Ticks, 0, info.Length);
     }
 
     /// <summary>
     /// Q-R29 option C-2 overload: builds a cache key from pre-computed file stats.
     /// Avoids allocating a new <see cref="FileInfo"/> when the caller already has Length and LastWriteUtcTicks.
     /// </summary>
-    private static Key CreateKey(string path, long length, long lastWriteUtcTicks)
+    private static RangeKey CreateKey(string path, long length, long lastWriteUtcTicks)
     {
         var full = Path.GetFullPath(path);
-        return new Key(full, length, lastWriteUtcTicks);
+        return new RangeKey(full, length, lastWriteUtcTicks, 0, length);
     }
 
-    private readonly record struct Key(string Path, long Length, long LastWriteUtcTicks);
+    private static RangeKey CreateRangeKey(string path, long length, long lastWriteUtcTicks, long offset, int count) =>
+        new(Path.GetFullPath(path), length, lastWriteUtcTicks, offset, count);
+
+    private readonly record struct RangeKey(string Path, long SourceLength, long LastWriteUtcTicks, long Offset, long Count);
 }

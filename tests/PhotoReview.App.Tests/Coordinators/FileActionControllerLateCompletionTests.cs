@@ -231,6 +231,34 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         Assert.Equal(0, _bin.RestoreCalls);
     }
 
+    [Theory(DisplayName = "APP-03: a capture Recycle finishing after a folder switch names exactly which members were deleted permanently")]
+    [InlineData(false, false, "Recycle")]
+    [InlineData(true, true, "Permanent")]
+    [InlineData(true, false, "Partly")]
+    public async Task GroupRecycle_FinishingAfterFolderSwitch_ReportsPermanentMembersAccurately(bool rawPermanent, bool jpegPermanent, string expected)
+    {
+        var jpeg = Make(_folderA, "p.jpg");
+        var raw = Make(_folderA, "p.cr2");
+        _catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg);
+        var bFile = Make(_folderB, "x.jpg");
+        if (rawPermanent) _bin.NoBinExtensions.Add(".cr2");
+        if (jpegPermanent) _bin.NoBinExtensions.Add(".jpg");
+        var (controller, _) = NewController(new AppSettings { AllowPermanentDeleteWithoutRecycleBin = true, ConfirmBeforeDelete = false }, new ConfirmingDialog());
+        SwitchToBDuringIo([bFile]);
+
+        await controller.RecycleAsync(null, jpeg);
+
+        var late = Assert.Single(_sink.Calls, c => IsCall(c, "Late"));
+        var text = late["Late:".Length..];
+        var wanted = expected switch
+        {
+            "Recycle" => Tr.StatusLateRecycleUndoable("p.jpg"),
+            "Permanent" => Tr.StatusLateDeletedPermanently("p.jpg"),
+            _ => Tr.StatusLateDeletedPartlyPermanently("p.jpg", "p.cr2"),
+        };
+        Assert.Equal(wanted, text);
+    }
+
     [Fact(DisplayName = "APP-03: a Copy finishing after a folder switch has no undo (Copy is never undoable), stays silent and leaves the new folder untouched")]
     public async Task Copy_FinishingAfterFolderSwitch_HasNoUndo_AndLeavesNewFolderUntouched()
     {
@@ -281,6 +309,57 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         Assert.DoesNotContain(_sink.Calls, c => IsCall(c, "Session"));
     }
 
+    [Fact(DisplayName = "APP-03: a folder switch while an undone Move is being presented writes neither session path nor status into the new folder")]
+    public async Task UndoMove_FolderSwitchDuringPresent_DoesNotWriteSessionOrStatus()
+    {
+        var (moved, _) = OpenAWithTwoFiles();
+        await _controller.RunActionAsync(0, null, moved);
+        var bFile = Make(_folderB, "x.jpg");
+        _sink.OnPresent = () => { _clock.NextFolder(); _catalog.Reset([bFile]); _sink.Calls.Clear(); };
+
+        var result = await _controller.UndoLastAsync(_folderA);
+
+        Assert.True(result!.Succeeded);
+        Assert.DoesNotContain(_sink.Calls, c => IsCall(c, "Session") || IsCall(c, "Status"));
+    }
+
+    [Fact(DisplayName = "APP-03: a FAILED undo finishing after a folder switch does not write its error into the new folder status line")]
+    public async Task FailedUndo_FolderSwitchDuringUndo_DoesNotWriteStatus()
+    {
+        var (moved, _) = OpenAWithTwoFiles();
+        await _controller.RecycleAsync(null, moved);
+        var bFile = Make(_folderB, "x.jpg");
+        _bin.RestoreOverride = () =>
+        {
+            _clock.NextFolder();
+            _catalog.Reset([bFile]);
+            _sink.Calls.Clear();
+            return false; // the Recycle Bin no longer has the file
+        };
+
+        var result = await _controller.UndoLastAsync(_folderA);
+
+        Assert.False(result!.Succeeded);
+        Assert.DoesNotContain(_sink.Calls, c => IsCall(c, "Status"));
+    }
+
+    [Fact(DisplayName = "APP-03: a capture Recycle that fails part-way after a folder switch tells the user how many files were already processed")]
+    public async Task GroupRecycle_FailingPartWayAfterFolderSwitch_ReportsTheProcessedMembers()
+    {
+        var jpeg = Make(_folderA, "p.jpg");
+        var raw = Make(_folderA, "p.cr2");
+        _catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg);
+        var bFile = Make(_folderB, "x.jpg");
+        _bin.FailSendFor = raw;
+        SwitchToBDuringIo([bFile]);
+
+        await _controller.RecycleAsync(null, jpeg);
+
+        Assert.Equal([jpeg], _bin.Recycled);
+        Assert.Contains($"Late:{Tr.StatusLateGroupPartiallyProcessed("p.jpg", 1, 2)}", _sink.Calls);
+        Assert.Equal([bFile], _catalog.Paths);
+    }
+
     [Fact(DisplayName = "APP-03: two late Moves stack: Ctrl+Z undoes the latest first")]
     public async Task TwoLateMoves_UndoInLifoOrder()
     {
@@ -328,12 +407,17 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         public bool NoBin { get; set; }
         public int RestoreCalls { get; private set; }
         public Action? OnMutation { get; set; }
+        public string? FailSendFor { get; set; }
+        public Func<bool>? RestoreOverride { get; set; }
 
-        public bool CanRecycle(string path) => !NoBin;
+        public HashSet<string> NoBinExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool CanRecycle(string path) => !NoBin && !NoBinExtensions.Contains(Path.GetExtension(path));
 
         public void SendToRecycleBin(string path)
         {
-            if (NoBin) throw new IOException("no bin");
+            if (!CanRecycle(path)) throw new IOException("no bin");
+            if (string.Equals(path, FailSendFor, StringComparison.OrdinalIgnoreCase)) throw new IOException("simulated recycle failure");
             OnMutation?.Invoke();
             Recycled.Add(path);
             File.Delete(path);
@@ -349,6 +433,7 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
         {
             RestoreCalls++;
+            if (RestoreOverride is { } over && !over()) return false;
             File.WriteAllBytes(originalPath, [1, 2, 3, 4]);
             return true;
         }
@@ -375,9 +460,13 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         public void ShowLateActionStatus(string status) => Calls.Add("Late:" + status);
         public void OnCatalogChanged(string? removedPath) => Calls.Add("Catalog:" + removedPath);
 
+        /// <summary>Runs while a present is "in flight" (the folder can switch meanwhile).</summary>
+        public Action? OnPresent { get; set; }
+
         public Task PresentAsync(int index)
         {
             Calls.Add("Present:" + index);
+            OnPresent?.Invoke();
             return Task.CompletedTask;
         }
 

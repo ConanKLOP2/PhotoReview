@@ -86,7 +86,9 @@ public static class SettingsNormalizer
         if (!Enum.IsDefined(settings.LoadingMode)) { settings.LoadingMode = LoadingMode.Preview; fixedNames.Add(nameof(AppSettings.LoadingMode)); }
         if (!Enum.IsDefined(settings.ImageSortMode)) { settings.ImageSortMode = ImageSortMode.Default; fixedNames.Add(nameof(AppSettings.ImageSortMode)); }
         if (!Enum.IsDefined(settings.ScalingQuality)) { settings.ScalingQuality = ScalingQuality.HighQuality; fixedNames.Add(nameof(AppSettings.ScalingQuality)); }
-        if (!Enum.IsDefined(settings.DecoderBackend)) { settings.DecoderBackend = DecoderBackend.WicDirect; fixedNames.Add(nameof(AppSettings.DecoderBackend)); }
+        // DecoderBackend.LibRaw is registered internally for RAW files only (never a user choice): persisted, the Settings
+        // combo would show "WPF" while the runtime decoded every JPEG through LibRaw, so it is repaired like an undefined value.
+        if (!Enum.IsDefined(settings.DecoderBackend) || settings.DecoderBackend == DecoderBackend.LibRaw) { settings.DecoderBackend = DecoderBackend.WicDirect; fixedNames.Add(nameof(AppSettings.DecoderBackend)); }
         if (!Enum.IsDefined(settings.JournalDurability)) { settings.JournalDurability = JournalDurability.Fast; fixedNames.Add(nameof(AppSettings.JournalDurability)); }
         if (!Enum.IsDefined(settings.InstanceMode)) { settings.InstanceMode = InstanceMode.SingleWindow; fixedNames.Add(nameof(AppSettings.InstanceMode)); }
         if (!Enum.IsDefined(settings.FitWidthAnchor)) { settings.FitWidthAnchor = FitWidthAnchor.Centre; fixedNames.Add(nameof(AppSettings.FitWidthAnchor)); }
@@ -129,6 +131,7 @@ public static class SettingsNormalizer
             shortcuts.LastImage = shortcuts.LastImage?.Trim() ?? "";
             shortcuts.ZoomActualSize = shortcuts.ZoomActualSize?.Trim() ?? "";
             shortcuts.ToggleInfoOverlay = shortcuts.ToggleInfoOverlay?.Trim() ?? "";
+            shortcuts.ToggleCaptureMember = shortcuts.ToggleCaptureMember?.Trim() ?? "";
             shortcuts.ClickZoom = shortcuts.ClickZoom?.Trim() ?? "";
             shortcuts.FitWidth = shortcuts.FitWidth?.Trim() ?? "";
             shortcuts.FitHeight = shortcuts.FitHeight?.Trim() ?? "";
@@ -187,6 +190,11 @@ public static class SettingsNormalizer
             settings.ImageTransitionMs = imageTransitionMs;
             fixedNames.Add(nameof(AppSettings.ImageTransitionMs));
         }
+
+        // feat/raw-support-integration
+        if (!Enum.IsDefined(settings.RawFullDecode)) { settings.RawFullDecode = new AppSettings().RawFullDecode; fixedNames.Add(nameof(AppSettings.RawFullDecode)); }
+        if (!Enum.IsDefined(settings.RawPairMode)) { settings.RawPairMode = new AppSettings().RawPairMode; fixedNames.Add(nameof(AppSettings.RawPairMode)); }
+
         return fixedNames;
     }
 
@@ -224,15 +232,14 @@ public static class SettingsNormalizer
             }
             return key;
         }
-        shortcuts.LastImage = Resolve(nameof(ShortcutMappings.LastImage), shortcuts.LastImage);
-        shortcuts.ZoomActualSize = Resolve(nameof(ShortcutMappings.ZoomActualSize), shortcuts.ZoomActualSize);
-        shortcuts.ToggleInfoOverlay = Resolve(nameof(ShortcutMappings.ToggleInfoOverlay), shortcuts.ToggleInfoOverlay);
-        shortcuts.MoveToFolder = Resolve(nameof(ShortcutMappings.MoveToFolder), shortcuts.MoveToFolder);
-        shortcuts.CopyToFolder = Resolve(nameof(ShortcutMappings.CopyToFolder), shortcuts.CopyToFolder);
-        shortcuts.ClickZoom = Resolve(nameof(ShortcutMappings.ClickZoom), shortcuts.ClickZoom);
-        shortcuts.FitWidth = Resolve(nameof(ShortcutMappings.FitWidth), shortcuts.FitWidth);
-        shortcuts.FitHeight = Resolve(nameof(ShortcutMappings.FitHeight), shortcuts.FitHeight);
-        shortcuts.ToggleKeepZoom = Resolve(nameof(ShortcutMappings.ToggleKeepZoom), shortcuts.ToggleKeepZoom);
+        // Every optional shortcut, derived from the one list (OptionalNames): a hand-kept list silently missed OpenFolder and CustomZoom,
+        // so a saved value that conflicted with another shortcut stayed and then failed SettingsValidator.
+        foreach (var name in ShortcutMappings.OptionalNames)
+        {
+            var property = typeof(ShortcutMappings).GetProperty(name)
+                ?? throw new InvalidOperationException($"ShortcutMappings.OptionalNames lists '{name}', which is not a property.");
+            property.SetValue(shortcuts, Resolve(name, (string?)property.GetValue(shortcuts)));
+        }
         return disabled;
     }
 }

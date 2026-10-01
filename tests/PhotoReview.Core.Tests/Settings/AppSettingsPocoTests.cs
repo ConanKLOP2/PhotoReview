@@ -21,6 +21,9 @@ public sealed class AppSettingsPocoTests
         Assert.True(s.CompareSizeEnabled);
         Assert.NotEmpty(s.Actions);
         Assert.NotNull(s.Shortcuts);
+        Assert.True(s.RawSupportEnabled);
+        Assert.Equal(RawFullDecode.Never, s.RawFullDecode);
+        Assert.Equal(RawPairMode.Separate, s.RawPairMode);
     }
 
     [Fact(DisplayName = "Core AppSettings deserializes with enum aliases and case-insensitivity")]
@@ -37,5 +40,7 @@ public sealed class AppSettingsPocoTests
         Assert.Equal(LoadingMode.Fast, s.LoadingMode);
         Assert.Equal(ImageSortMode.SizeDescending, s.ImageSortMode);
         Assert.Equal(InitialViewMode.Percent100, s.InitialViewMode);
+        Assert.True(s.RawSupportEnabled); // Legacy configs omit the new RAW switch.
+        Assert.Equal(RawPairMode.Separate, s.RawPairMode);
     }
 }

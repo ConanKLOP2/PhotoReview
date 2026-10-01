@@ -26,15 +26,21 @@ public sealed class FileActionControllerOrderingTests : IDisposable
     private readonly CountingPreload _preload = new();
     private readonly UndoService _undo;
     private readonly FileActionController _controller;
+    private readonly OperationJournal _journal;
 
     public FileActionControllerOrderingTests()
     {
         Directory.CreateDirectory(_root);
         var fs = new PhysicalFileSystem();
         var bin = new NoBin();
-        var journal = new OperationJournal(new AppPaths(_root), fs, new SystemClock());
-        var fileActions = new FileActionService(journal, fs, new SystemClock(), bin);
-        _undo = new UndoService(journal, fs, bin, fileActions);
+        _journal = new OperationJournal(new AppPaths(_root), fs, new SystemClock());
+        var fileActions = new FileActionService(_journal, fs, new SystemClock(), bin, (source, destination) =>
+        {
+            if (source.EndsWith("pair.cr2", StringComparison.OrdinalIgnoreCase)) throw new IOException("simulated RAW move failure");
+            File.Move(source, destination);
+            return Task.CompletedTask;
+        });
+        _undo = new UndoService(_journal, fs, bin, fileActions);
         var settings = new AppSettings
         {
             Actions =
@@ -136,6 +142,29 @@ public sealed class FileActionControllerOrderingTests : IDisposable
         await _controller.UndoLastAsync(_root);
 
         Assert.Equal([z, a], _catalog.Paths);
+    }
+
+    [Fact]
+    public async Task GroupMovePartialFailure_RollsBackAndRestoresTheWholeGroupWithoutARecoveryEntry()
+    {
+        var jpeg = Make("pair.jpg");
+        var raw = Make("pair.cr2");
+        _catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg);
+        Assert.NotNull(_catalog.Find(jpeg)?.CaptureGroup);
+
+        await _controller.RunActionAsync(0, null, jpeg);
+
+        // The RAW move failed after the JPEG had moved: the JPEG was put back, so the pair is whole on disk and in the catalog.
+        Assert.True(File.Exists(jpeg));
+        Assert.True(File.Exists(raw));
+        Assert.Single(_catalog.Paths);
+        Assert.Equal(jpeg, _catalog.PathAt(0));
+        Assert.NotNull(_catalog.Find(jpeg)?.CaptureGroup);
+        // Fully rolled back: the disk is unchanged, so nothing is left to retry (terminal Dismissed record, no Recovery item).
+        Assert.Empty(_journal.ReadFailedOperations());
+        Assert.Empty(_journal.ReadPendingOperations());
+        Assert.Equal(0, _catalog.IndexOf(jpeg));
+        Assert.Equal(0, _catalog.IndexOf(raw));
     }
 
     private sealed class GatedSink : IFileActionSink

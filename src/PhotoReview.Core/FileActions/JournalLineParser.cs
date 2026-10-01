@@ -62,8 +62,14 @@ internal static class JournalLineParser
 
     private static JournalEntry? Accept(JournalEntry? entry) =>
         entry is not null && t_type == 1 && t_state == 1 && !string.IsNullOrEmpty(entry.Id) && entry.Source is not null
+            && HasValidGroupMembers(entry)
             ? entry
             : null;
+
+    // A group member without a usable Source (JSON null element, missing or blank Source) would make every later file check
+    // throw ArgumentException out of reconcile/Recovery, so such a line is dropped like any other malformed line.
+    private static bool HasValidGroupMembers(JournalEntry entry) =>
+        entry.GroupMembers is null || entry.GroupMembers.All(member => member is not null && !string.IsNullOrWhiteSpace(member.Source));
 
     private static bool IsKnown<T>(ref Utf8JsonReader reader, string? alias) where T : struct, Enum => reader.TokenType switch
     {

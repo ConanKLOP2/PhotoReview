@@ -87,6 +87,74 @@ public sealed class UndoServiceTests
         Assert.False(_service.CanUndoMove);
     }
 
+    [Fact]
+    public async Task UndoLastAsync_GroupMoveRestoresEveryMemberAsOneJournaledUndo()
+    {
+        var stamp = _clock.UtcNow.AddMinutes(-1);
+        var members = new[]
+        {
+            new JournalGroupMember(@"C:\photos\a.jpg", @"C:\photos\selected\a.jpg", 4, stamp),
+            new JournalGroupMember(@"C:\photos\a.cr2", @"C:\photos\selected\a.cr2", 8, stamp),
+        };
+        _fs.AddFile(members[0].Destination!, "jpeg", stamp);
+        _fs.AddFile(members[1].Destination!, "raw data", stamp);
+        var entry = new JournalEntry("group", FileOperationType.Move, JournalState.Committed,
+            members[0].Source, members[0].Destination, members[0].Size, stamp, _clock.UtcNow,
+            GroupId: "group", GroupMembers: members);
+        _service.RegisterGroup(new CaptureGroupActionResult(true, false, FileOperationType.Move, "group", entry,
+            members.Select(member => new CaptureGroupMemberResult(member, true, false)).ToArray(), null));
+
+        var result = await _service.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.Equal(members.Select(member => member.Source), result.RestoredPaths);
+        Assert.True(_fs.FileExists(members[0].Source));
+        Assert.True(_fs.FileExists(members[1].Source));
+        var undo = Assert.Single(_journal.ReadCommittedMoves(), item => item.Undo == true);
+        Assert.Equal(2, undo.GroupMembers!.Count);
+        Assert.True(undo.GroupMembers.All(member => _fs.FileExists(member.Destination!)));
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_GroupRecyclePartialRestore_RemainsRecoverableAndUndoable()
+    {
+        var stamp = _clock.UtcNow.AddMinutes(-1);
+        var members = new[]
+        {
+            new JournalGroupMember(@"C:\photos\a.jpg", null, 4, stamp),
+            new JournalGroupMember(@"C:\photos\a.cr2", null, 8, stamp),
+        };
+        var entry = new JournalEntry("recycled-group", FileOperationType.Recycle, JournalState.Committed,
+            members[0].Source, null, members[0].Size, stamp, _clock.UtcNow,
+            GroupId: "recycled-group", GroupMembers: members);
+        var bin = new PartialRestoreRecycleBin(_fs, members[0].Source);
+        var undo = new UndoService(_journal, _fs, bin, _fileActionService);
+        undo.RegisterGroup(new CaptureGroupActionResult(true, false, FileOperationType.Recycle, "recycled-group", entry,
+            members.Select(member => new CaptureGroupMemberResult(member, true, false)).ToArray(), null));
+
+        var result = await undo.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(members[0].Source));
+        Assert.False(_fs.FileExists(members[1].Source));
+        Assert.True(undo.HasLastAction);
+        var failed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.True(failed.Undo);
+        Assert.Equal(2, failed.GroupMembers!.Count);
+        Assert.Equal(members.Select(member => member.Source), failed.GroupMembers.Select(member => member.Source));
+    }
+
+    private sealed class PartialRestoreRecycleBin(InMemoryFileSystem fileSystem, string successfulPath) : IRecycleBin
+    {
+        public void SendToRecycleBin(string path) => throw new NotSupportedException();
+        public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
+        {
+            if (!string.Equals(originalPath, successfulPath, StringComparison.OrdinalIgnoreCase)) return false;
+            fileSystem.AddFile(originalPath, new string('x', checked((int)expectedSize)), expectedLastWriteUtc);
+            return true;
+        }
+    }
+
     [Fact(DisplayName = "Q-R small-findings #2: _moveFingerprints does not grow across register+undo cycles (successful undo drops its entry)")]
     public async Task UndoMoveAsync_RepeatedRegisterAndUndo_DoesNotLeakFingerprints()
     {

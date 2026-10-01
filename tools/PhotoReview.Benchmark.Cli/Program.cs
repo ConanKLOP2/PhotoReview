@@ -171,6 +171,17 @@ if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
     return;
 }
 
+if (args.Length >= 2 && args[0] == "--decoder-bench" && args[1] == "--raw")
+{
+    try { Environment.ExitCode = await RawDecoderBenchmark.RunAsync(args); }
+    catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or InvalidOperationException or IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException or FormatException)
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+    }
+    return;
+}
+
 if (args.Length is >= 3 and <= 6 && args[0] == "--decoder-bench")
 {
     try { Environment.ExitCode = await DecoderBenchmark.RunAsync(args); }
@@ -192,12 +203,18 @@ if (args.Length == 2 && args[0] == "--explorer-probe")
     return;
 }
 
+if (args.Length >= 2 && args[0] == "--raw-survey")
+{
+    Environment.ExitCode = await RawSurvey.RunAsync(args);
+    return;
+}
+
 Console.Error.WriteLine("PhotoReview.Benchmark.Cli: unknown or missing mode. Supported modes:");
 foreach (var mode in new[]
 {
     "--benchmark-list-profiles", "--benchmark <folder> <profile,...>", "--benchmark-all <folder> [output]", "--benchmark-actions <folder> [output]",
     "--ui-next-probe <folder> [--cache-dir DIR]", "--perf-session ...", "--preload-bench <folder> [n]", "--perf-analyze <dir> [--rules <file>]",
-    "--io-decode-split ...", "--decoder-bench ...", "--explorer-probe <folder>",
+    "--io-decode-split ...", "--decoder-bench ...", "--decoder-bench --raw <folder> <outDir> [iterations=3]", "--explorer-probe <folder>", "--raw-survey <dir> [--markdown <out.md>]",
 })
     Console.Error.WriteLine("  " + mode);
 Environment.ExitCode = 2;

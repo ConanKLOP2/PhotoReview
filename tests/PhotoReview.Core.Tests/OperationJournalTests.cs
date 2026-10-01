@@ -569,12 +569,7 @@ public sealed class OperationJournalUnitTests
             }
 
             var fileLength = new FileInfo(path).Length;
-            // Timed on the plain file system (the counting wrapper scans every byte itself); bytes counted in a second read.
-            var timedJournal = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
-            _ = timedJournal.ReadCommittedMoves(); // warm-up: JIT + OS file cache, as in a real second launch
-            var watch = Stopwatch.StartNew();
-            var entries = timedJournal.ReadCommittedMoves();
-            watch.Stop();
+            var entries = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock).ReadCommittedMoves();
 
             var boundedFileSystem = new BoundedReadFileSystem(new PhysicalFileSystem());
             var journal = new OperationJournal(new FakeAppPaths(path), boundedFileSystem, _clock);
@@ -587,8 +582,86 @@ public sealed class OperationJournalUnitTests
             // Doubling windows that each re-read the tail would read ~2x the file; reading only the new prefix reads it once.
             Assert.True(boundedFileSystem.TotalBytesRead <= fileLength + 8 * 1024,
                 $"Read {boundedFileSystem.TotalBytesRead} bytes of a {fileLength}-byte journal (each byte must be read once).");
-            Assert.True(watch.ElapsedMilliseconds < 100,
-                $"Move-sparse tail read took {watch.ElapsedMilliseconds} ms (ADR 0003 budget: 100 ms).");
+            // The ADR 0003 wall-clock budget (100 ms) is reported by LargeMoveSparseJournal_ReadCommittedMoves_TimingReport
+            // (Manual): a timing assert flakes in a full parallel run (docs/TESTING.md > Timing tests).
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact(DisplayName = "Move-sparse journal just over the full-scan threshold: reverse reader reads each byte at most once (CORE-08, ADR 0003; CI-sized)")]
+    public void SmallMoveSparseJournal_ReadCommittedMoves_ReadsEachByteOnce()
+    {
+        // In memory and ~1.3 MB: over the 1 MB threshold (so the reverse reader runs) yet sparse enough (10 Moves < the
+        // 200-entry limit) that its window doubles from 256 KB until it reaches the file start. A reader that re-read the
+        // tail on every doubling would read ~2x the file; one that reads only the new prefix reads it once.
+        const string path = @"C:\data\operations.jsonl";
+        var fs = new InMemoryFileSystem();
+        var tsText = _clock.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+        var text = new StringBuilder();
+        for (var i = 0; i < 9_500; i++)
+        {
+            var isMove = i % 1_000 == 0;
+            text.Append("{\"Id\":\"e-").Append(i.ToString(CultureInfo.InvariantCulture)).Append("\",\"Type\":\"").Append(isMove ? "Move" : "Recycle")
+                .Append("\",\"State\":\"Committed\",\"Source\":\"C:\\\\photos\\\\source-").Append(i.ToString(CultureInfo.InvariantCulture))
+                .Append(".jpg\",\"Destination\":").Append(isMove ? "\"C:\\\\photos\\\\dest-" + i.ToString(CultureInfo.InvariantCulture) + ".jpg\"" : "null")
+                .Append(",\"Size\":").Append(i.ToString(CultureInfo.InvariantCulture)).Append(",\"LastWriteUtc\":\"").Append(tsText)
+                .Append("\",\"TimestampUtc\":\"").Append(tsText).Append("\",\"Error\":null}\n");
+        }
+        fs.AddFile(path, text.ToString());
+        var fileLength = fs.GetFileStat(path)!.Length;
+        Assert.True(fileLength > 1024 * 1024, $"fixture must exceed the full-scan threshold (is {fileLength} bytes)");
+        var counting = new BoundedReadFileSystem(fs);
+
+        var moves = new OperationJournal(new FakeAppPaths(path), counting, _clock).ReadCommittedMoves();
+
+        Assert.Equal(10, moves.Count);
+        Assert.Equal("e-0", moves[0].Id);
+        Assert.Equal("e-9000", moves[^1].Id);
+        Assert.True(counting.TotalBytesRead > 0);
+        Assert.True(counting.TotalBytesRead <= fileLength * 1.05,
+            $"Read {counting.TotalBytesRead} bytes of a {fileLength}-byte journal (each byte must be read once).");
+    }
+
+    [Fact(DisplayName = "Move-sparse large journal: tail read timing report (CORE-08, ADR 0003 budget 100 ms; no assertion)")]
+    [Trait("Category", "Manual")]
+    public void LargeMoveSparseJournal_ReadCommittedMoves_TimingReport()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "PhotoReview-C08-t-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "operations.jsonl");
+        try
+        {
+            var tsText = _clock.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            using (var writer = new StreamWriter(path, false, new UTF8Encoding(false), 256 * 1024))
+            {
+                for (var i = 0; i < 100_000; i++)
+                {
+                    var isMove = i % 1_000 == 0;
+                    writer.Write(
+                        "{\"Id\":\"e-" + i + "\",\"Type\":\"" + (isMove ? "Move" : "Recycle") +
+                        "\",\"State\":\"Committed\",\"Source\":\"C:\\\\photos\\\\source-" + i +
+                        ".jpg\",\"Destination\":" + (isMove ? "\"C:\\\\photos\\\\dest-" + i + ".jpg\"" : "null") +
+                        ",\"Size\":" + i + ",\"LastWriteUtc\":\"" + tsText + "\",\"TimestampUtc\":\"" + tsText +
+                        "\",\"Error\":null}\n");
+                }
+            }
+
+            var journal = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
+            _ = journal.ReadCommittedMoves(); // warm-up: JIT + OS file cache, as in a real second launch
+            var samples = new List<double>();
+            for (var i = 0; i < 5; i++)
+            {
+                var watch = Stopwatch.StartNew();
+                _ = journal.ReadCommittedMoves();
+                samples.Add(watch.Elapsed.TotalMilliseconds);
+            }
+
+            samples.Sort();
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"Move-sparse 100k-line tail read: min {samples[0]:F1} ms, median {samples[2]:F1} ms, max {samples[^1]:F1} ms (ADR 0003 budget: 100 ms)."));
         }
         finally
         {

@@ -1,0 +1,49 @@
+PhotoReview uses the unmodified LibRaw 0.22.2 library as libraw.dll, loaded dynamically at runtime.
+
+LibRaw is distributed under the terms of either the GNU Lesser General Public License version 2.1 or the Common Development and Distribution License version 1.0. Copies of both license texts accompany this application as LibRaw-LICENSE.LGPL and LibRaw-LICENSE.CDDL.
+
+The corresponding official LibRaw 0.22.2 Windows x64 package, including the complete source code and build files, accompanies this application as LibRaw-SOURCE.zip. A compatible modified libraw.dll may be placed beside PhotoReview.App.exe and loaded in place of the bundled library.
+
+LibRaw: Raw images processing library
+Copyright (C) 2008-2025 LibRaw LLC (http://www.libraw.org, info@libraw.org)
+
+LibRaw uses code from dcraw.c -- Dave Coffin's raw photo decoder, dcraw.c is copyright 1997-2018 by Dave Coffin, dcoffin a cybercom o net. LibRaw do not use RESTRICTED code from dcraw.c
+
+LibRaw uses DCB demosaic and FBDD denoise licensed under BSD-like 3-clause license. DCB and FBDD are Copyright (C) 2010, Jacek Gozdz (cuniek@kft.umcs.lublin.pl)
+
+LibRaw uses X3F library to unpack Foveon Files, licensed BSD-style license. Copyright (c) 2010, Roland Karlsson (roland@proxel.se). All rights reserved.
+
+LibRaw uses pieces of code from Adobe DNG SDK 1.4, Copyright (c) 2005 Adobe Systems Incorporated, licensed under MIT license.
+
+The notices above are reproduced from the COPYRIGHT file of the LibRaw 0.22.2 package (LibRaw-SOURCE.zip).
+
+----------------------------------------------------------------
+Full licence text of the X3F library (BSD-style), reproduced verbatim from internal/x3f_tools.h of the LibRaw 0.22.2 package.
+The COPYRIGHT file of that package only summarises the DCB/FBDD and Adobe DNG SDK licences and the package ships no separate
+text for them, so no further licence text can be reproduced here for those two.
+----------------------------------------------------------------
+
+* Copyright (c) 2010, Roland Karlsson (roland@proxel.se)
+* All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*     * Redistributions of source code must retain the above copyright
+*       notice, this list of conditions and the following disclaimer.
+*     * Redistributions in binary form must reproduce the above copyright
+*       notice, this list of conditions and the following disclaimer in the
+*       documentation and/or other materials provided with the distribution.
+*     * Neither the name of the organization nor the
+*       names of its contributors may be used to endorse or promote products
+*       derived from this software without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY ROLAND KARLSSON ''AS IS'' AND ANY
+* EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL ROLAND KARLSSON BE LIABLE FOR ANY
+* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

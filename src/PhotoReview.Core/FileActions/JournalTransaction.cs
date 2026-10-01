@@ -79,14 +79,14 @@ internal sealed class JournalTransaction : IDisposable
         bool appended;
         try
         {
-            if (_retryOf is null)
+            if (_retryOf is not null)
             {
-                _journal.Append(_prepared);
-                appended = true;
+                appended = _journal.AppendIfUnchangedSince(_retryOf, [], _prepared);
             }
             else
             {
-                appended = _journal.AppendIfUnchangedSince(_retryOf, [], _prepared);
+                _journal.Append(_prepared);
+                appended = true;
             }
         }
         catch
@@ -161,10 +161,25 @@ internal sealed class JournalTransaction : IDisposable
 
     /// <summary>
     /// Appends Failed for <paramref name="failure"/> when Prepared was written (or, for a retry, always). Returns the record
-    /// (null when none was due, or when a retry's append was skipped as <see cref="Superseded"/>) and the journal error
-    /// message if the append itself failed.
+    /// that was written; null when none was due, when a retry's append was skipped as <see cref="Superseded"/>, or when the
+    /// append itself failed (then <paramref name="journalError"/> carries the message and the Prepared line stays for reconcile).
     /// </summary>
     public JournalEntry? Fail(Exception failure, out string? journalError)
+    {
+        var (errorCode, errorText) = JournalErrors.ForJournal(failure);
+        return AppendFailureOutcome(state: JournalState.Failed, errorText, errorCode, out journalError);
+    }
+
+    /// <summary>
+    /// The operation failed but its compensation restored the original disk state completely (a cancelled or failed group
+    /// Move/Copy that was fully rolled back): there is nothing left to retry or recover, so the outcome is a terminal
+    /// <see cref="JournalState.Dismissed"/> record instead of a retryable Failed one. An older build reads Dismissed as
+    /// "cleared", never as an unfinished operation. Same contract as <see cref="Fail"/>.
+    /// </summary>
+    public JournalEntry? DismissRolledBack(out string? journalError) =>
+        AppendFailureOutcome(state: JournalState.Dismissed, errorText: null, errorCode: null, out journalError);
+
+    private JournalEntry? AppendFailureOutcome(JournalState state, string? errorText, string? errorCode, out string? journalError)
     {
         journalError = null;
         if (!IsPrepared && _retryOf is null)
@@ -172,21 +187,17 @@ internal sealed class JournalTransaction : IDisposable
             ReleaseLiveMarker();
             return null;
         }
-        var (errorCode, errorText) = JournalErrors.ForJournal(failure);
-        var failed = _prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
+        var failed = _prepared with { State = state, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
         try
         {
-            if (_retryOf is null)
+            if (_retryOf is not null)
+            {
+                if (!_journal.AppendIfUnchangedSince(_retryOf, IsPrepared ? [_prepared] : [], failed))
+                    Superseded = true;
+            }
+            else
             {
                 _journal.Append(failed);
-            }
-            else if (!_journal.AppendIfUnchangedSince(_retryOf, IsPrepared ? [_prepared] : [], failed))
-            {
-                // P02: another process retried the same entry concurrently and already appended its own outcome (typically
-                // Committed -- our mutation failed because it had already moved the file). A Failed record now would win
-                // latest-entry resolution and durably misdescribe a completed operation, so nothing is appended.
-                Superseded = true;
-                return null;
             }
         }
         catch (Exception journalException)
@@ -197,6 +208,8 @@ internal sealed class JournalTransaction : IDisposable
         {
             ReleaseLiveMarker(); // only after the outcome line (see Commit)
         }
-        return failed;
+        // Documented contract: a record is returned only when its line really reached the journal; a skipped (superseded) or
+        // failed append yields none (the failure is in journalError), so callers never treat an unwritten line as journaled.
+        return Superseded || journalError is not null ? null : failed;
     }
 }

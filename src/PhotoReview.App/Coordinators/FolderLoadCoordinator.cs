@@ -125,13 +125,23 @@ public sealed class FolderLoadCoordinator : IDisposable
             // IO05 (ADR 0007 s3): unreadable files are skipped and counted, never dropped silently.
             // AR16: the listing does not open each file; the readability probe runs in the background
             // after the first frame (StartReadabilityProbe) and removes + reports unreadable files then.
-            var (scannedFiles, entries) = await Task.Run(() =>
+            // Snapshot once per load: the scan below runs on a background thread and the catalog is filled on the UI thread later;
+            // reading the live settings in both places lets a Settings change in between list RAW files but never pair them
+            // (or the reverse).
+            var rawEnabled = _settingsStore.Current.RawSupportEnabled;
+            var rawPairMode = rawEnabled ? _settingsStore.Current.RawPairMode : RawPairMode.Separate;
+            var (scannedFiles, entries, sidecarPaths) = await Task.Run(() =>
             {
                 // The scan gets Length/LastWriteUtc from the same directory entry used to list the
                 // file (see PhysicalFileSystem), so this needs no separate GetFileStat() syscall per
                 // file. A listing interrupted part-way goes to `skipped` (this delegate runs on this
                 // one background task, so the list needs no lock).
-                var scanned = _fileSystem.EnumerateFilesWithStat(folder, ImageFileTypes.IsSupported, skipped.Add)
+                var allScanned = _fileSystem.EnumerateFilesWithStat(folder,
+                    path => ImageFileTypes.IsSupported(path, rawEnabled) || (rawEnabled && string.Equals(Path.GetExtension(path), ".xmp", StringComparison.OrdinalIgnoreCase)), skipped.Add)
+                    .ToList();
+                var sidecars = allScanned.Where(file => string.Equals(Path.GetExtension(file.Path), ".xmp", StringComparison.OrdinalIgnoreCase))
+                    .Select(file => file.Path).ToArray();
+                var scanned = allScanned.Where(file => ImageFileTypes.IsSupported(file.Path, rawEnabled))
                     .Select(f => f.Stat is null
                         ? new CatalogEntry(f.Path)
                         : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })
@@ -151,7 +161,7 @@ public sealed class FolderLoadCoordinator : IDisposable
 
                 var result = sorted.Select(entry => firstByPath[entry.Path]).ToList();
                 perf.Mark("sorted");
-                return (scanned.Select(e => e.Path).ToArray(), result);
+                return (scanned.Select(e => e.Path).ToArray(), result, sidecars);
             }, loadToken);
             perf.Mark("sortResumed");
 
@@ -175,7 +185,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             _sink.ResetCaches();
             _sessionWriter?.Flush(); // a pending write for this folder must be visible to Load
             var session = _sessionStore.Load(folder);
-            _catalog.Reset(entries);
+            _catalog.Reset(entries, rawPairMode, sidecarPaths);
             _sink.OnCatalogReady(folder, _catalog.Count, session);
             if (skipped.Count > 0)
             {
@@ -410,7 +420,12 @@ public sealed class FolderLoadCoordinator : IDisposable
         if (unreadable.Count == 0) return;
 
         var currentPath = _catalog.Current?.Path;
-        var removed = _catalog.RemovePaths(unreadable.Select(s => s.Path));
+        var unreadableSet = new HashSet<string>(unreadable.Select(s => s.Path), StringComparer.OrdinalIgnoreCase);
+
+        // A capture (JPEG+RAW) with ONE unreadable image member keeps its readable partner: RemovePaths degrades the entry
+        // to the survivor as a standalone entry at the same position and reports only the unreadable member. When both
+        // image members are unreadable the whole capture goes and both are reported.
+        var removed = _catalog.RemovePaths(unreadableSet);
         if (removed.Count == 0) return; // already gone (deleted/moved by the user meanwhile)
 
         var removedSet = new HashSet<string>(removed, StringComparer.OrdinalIgnoreCase);

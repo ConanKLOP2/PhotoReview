@@ -23,6 +23,12 @@ public interface IFileActionSink
     /// </summary>
     void OnCatalogChanged(string? removedPath);
 
+    /// <summary>
+    /// The other members (JPEG/RAW partner) of a capture that just left the catalog together with the path passed to
+    /// <see cref="OnCatalogChanged"/>: their cached previews / preloaded keys must go too, like the removed file's.
+    /// </summary>
+    void EvictCachedPaths(IReadOnlyList<string> paths) { }
+
     /// <summary>Yêu cầu hiển thị ảnh tại vị trí chỉ định.</summary>
     Task PresentAsync(int index);
 

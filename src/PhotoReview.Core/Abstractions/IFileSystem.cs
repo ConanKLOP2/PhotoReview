@@ -25,6 +25,20 @@ public interface IFileSystem
     /// <summary>Sao chép tệp tin.</summary>
     void Copy(string source, string destination);
 
+    /// <summary>
+    /// Sao chép KHÔNG ghi đè, với ngữ nghĩa "tạo mới": trả false (không đụng tới gì) khi <paramref name="destination"/>
+    /// đã tồn tại tại thời điểm tạo; trả true khi lần gọi này đã tạo ra đích; mọi lỗi khác là ngoại lệ và có thể để lại
+    /// đích dở dang DO LẦN GỌI NÀY tạo ra. Nhờ vậy caller chứng minh được một file đích là của mình (không xóa nhầm file lạ
+    /// xuất hiện giữa lúc kiểm tra và lúc copy). Mặc định (wrapper/fake): kiểm tra tồn tại rồi <see cref="Copy"/> — không
+    /// nguyên tử; <see cref="PhotoReview.Core.IO.PhysicalFileSystem"/> ghi đè bằng File.Copy nguyên tử (fail-if-exists).
+    /// </summary>
+    bool TryCopyNew(string source, string destination)
+    {
+        if (FileExists(destination)) return false;
+        Copy(source, destination);
+        return true;
+    }
+
     /// <summary>Xóa vĩnh viễn tệp tin.</summary>
     void Delete(string path);
 

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
@@ -15,7 +16,8 @@ namespace PhotoReview.App.Coordinators;
 /// so a non-Fit zoom -- which is relative to original pixels, see <c>ViewerState</c> -- would otherwise
 /// just magnify the preview. The preview stays on screen (already at the right original-relative size)
 /// while the original decodes off the UI thread; the original then replaces it without any layout
-/// change, because the element size comes from the original dimensions, not from the bitmap.
+/// change for ordinary photos (the decoded size equals the preview's original size). A RAW's decode can differ by a few
+/// pixels: the original is then shown with its own pixel size and the viewer keeps the view anchored (ADR 0008 amendment).
 /// </summary>
 /// <remarks>
 /// <para>At most one original is held (the current image's) and it is released as soon as the
@@ -23,7 +25,8 @@ namespace PhotoReview.App.Coordinators;
 /// preview RAM/disk caches for the same reason (<see cref="PreviewImageService.DecodeOriginalAsync"/>).</para>
 /// <para>Fit keeps showing the preview; the held original is re-shown without a new decode if the
 /// user zooms again on the same image. Previews that are already full size (Original loading mode,
-/// or a source smaller than the decode box) never trigger a decode.</para>
+/// or a source smaller than the decode box) never trigger a decode -- except a RAW in Original mode, whose
+/// embedded JPEG is still below sensor size when the RAW full decode is enabled.</para>
 /// <para>ADR 0005: UI-affine like the rest of the App layer -- no <c>ConfigureAwait(false)</c>; the
 /// continuation after the decode runs on the UI thread and re-checks the navigation token.</para>
 /// </remarks>
@@ -32,6 +35,7 @@ public sealed class ZoomDetailLoader
     private readonly PreviewImageService _previewService;
     private readonly GenerationClock _clock;
     private readonly Action<object, int, int> _show;
+    private readonly IUiScheduler? _uiScheduler;
 
     private Target? _target;
     private IDecodedImage? _original;
@@ -40,14 +44,20 @@ public sealed class ZoomDetailLoader
     private CancellationTokenSource? _cts;
     private long _failedToken = -1; // navigation token whose full-resolution decode failed: do not retry on every zoom step
     private Task? _pendingLoad;
+    private CancellationTokenSource? _indicatorCts;
+    private volatile bool _isRawDecodeIndicatorVisible;
 
     /// <param name="show">Displays a platform image with the given original dimensions (the presenter's
-    /// current-image update); always called with the preview's recorded original dimensions.</param>
-    public ZoomDetailLoader(PreviewImageService previewService, GenerationClock clock, Action<object, int, int> show)
+    /// current-image update). ADR 0008 amendment (R4): one Original size per displayed bitmap -- the preview
+    /// is shown with the preview's recorded original size, the held original with ITS OWN pixel size (a RAW's
+    /// LibRaw decode differs from the camera-visible size by a few pixels), so 100 % is exactly 1 shown pixel.</param>
+    public ZoomDetailLoader(PreviewImageService previewService, GenerationClock clock, Action<object, int, int> show,
+        IUiScheduler? uiScheduler = null)
     {
         _previewService = previewService ?? throw new ArgumentNullException(nameof(previewService));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _show = show ?? throw new ArgumentNullException(nameof(show));
+        _uiScheduler = uiScheduler;
     }
 
     /// <summary>The full-resolution decode currently held for the current image (null when none).</summary>
@@ -62,11 +72,22 @@ public sealed class ZoomDetailLoader
     /// <summary>Raised on the UI thread right after the original replaced the preview (measure seam).</summary>
     public event Action<string>? OriginalShown;
 
+    /// <summary>Raised when a RAW full decode has remained in progress for 300 ms or when its indicator clears.</summary>
+    public event Action<bool>? RawDecodeIndicatorChanged;
+
+    /// <summary>How long a RAW decode runs before its indicator shows. Test seam: a test replaces it with a gate it releases itself,
+    /// so no wall-clock time is involved.</summary>
+    internal Func<TimeSpan, CancellationToken, Task> IndicatorDelay { get; set; } = static (delay, token) => Task.Delay(delay, token);
+
+    /// <summary>True after the delayed RAW decoding indicator becomes visible.</summary>
+    public bool IsRawDecodeIndicatorVisible => _isRawDecodeIndicatorVisible;
+
     /// <summary>Navigation started or the presentation was cleared: drop the target, cancel a
     /// not-yet-started decode and release the held original.</summary>
     public void Reset()
     {
         CancelPending();
+        StopRawDecodeIndicator();
         _target = null;
         _original = null;
         _showingOriginal = false;
@@ -86,7 +107,17 @@ public sealed class ZoomDetailLoader
     {
         ArgumentNullException.ThrowIfNull(preview);
         Reset();
-        if (key.IsOriginal || !preview.Downscaled) return; // already full resolution
+        if (!preview.Downscaled) return; // already full resolution
+        // A RAW's shown image is only its embedded JPEG (Downscaled while smaller than the sensor). The only thing that can
+        // serve more pixels is the RAW full decoder: when it is not in use (RawFullDecode = Never, or RAW disabled) never arm
+        // a target in ANY loading mode -- the ordinary decoder would just re-decode the same embedded JPEG (wasted work) and
+        // report its own smaller size, shrinking the layout at the same zoom percent. RAW zoom then magnifies the shown image.
+        if (!_previewService.IsRawFullDecodeRequest(path))
+        {
+            if (ImageFileTypes.RawExtensions.Contains(System.IO.Path.GetExtension(path))) return;
+            // Original-mode key of an ordinary image is already full resolution.
+            if (key.IsOriginal) return;
+        }
         _target = new Target(token, path, key, preview.PlatformImage, preview.PixelWidth, preview.OriginalWidth, preview.OriginalHeight);
         Update();
     }
@@ -110,7 +141,7 @@ public sealed class ZoomDetailLoader
         {
             if (!_showingOriginal)
             {
-                _show(_original.PlatformImage, target.OriginalWidth, target.OriginalHeight);
+                _show(_original.PlatformImage, _original.PixelWidth, _original.PixelHeight);
                 _showingOriginal = true;
                 OriginalShown?.Invoke(target.Path);
             }
@@ -124,6 +155,7 @@ public sealed class ZoomDetailLoader
 
         var cts = new CancellationTokenSource();
         _cts = cts;
+        if (_previewService.IsRawFullDecodeRequest(target.Path)) StartRawDecodeIndicator(cts.Token);
         var load = LoadAsync(target, cts);
         // Only an in-flight load is kept (a completed task's state machine would pin the original).
         if (!load.IsCompleted) _pendingLoad = load;
@@ -154,8 +186,11 @@ public sealed class ZoomDetailLoader
         }
         finally
         {
+            // Only the load that still owns the slot may touch the shared state. A superseded load (Reset already
+            // stopped its indicator and dropped _cts) finishing late must not kill the newer load's RAW indicator.
             if (ReferenceEquals(_cts, cts))
             {
+                StopRawDecodeIndicator();
                 _cts = null;
                 _pendingLoad = null;
             }
@@ -172,6 +207,49 @@ public sealed class ZoomDetailLoader
         // Cancelling only drops a decode that has not started yet; LoadAsync's finally disposes it.
         try { cts?.Cancel(); }
         catch (ObjectDisposedException) { /* the load already finished and disposed it */ }
+    }
+
+    private void StartRawDecodeIndicator(CancellationToken loadToken)
+    {
+        StopRawDecodeIndicator();
+        var indicatorCts = CancellationTokenSource.CreateLinkedTokenSource(loadToken);
+        _indicatorCts = indicatorCts;
+        _ = ShowIndicatorAfterDelayAsync(indicatorCts);
+    }
+
+    /// <summary>Hides the indicator and cancels and disposes its delay source (idempotent).</summary>
+    private void StopRawDecodeIndicator()
+    {
+        var indicatorCts = _indicatorCts;
+        _indicatorCts = null;
+        SetRawDecodeIndicatorVisible(false);
+        if (indicatorCts is null) return;
+        try { indicatorCts.Cancel(); }
+        catch (ObjectDisposedException) { /* already disposed */ }
+        indicatorCts.Dispose();
+    }
+
+    private async Task ShowIndicatorAfterDelayAsync(CancellationTokenSource indicatorCts)
+    {
+        try
+        {
+            await IndicatorDelay(TimeSpan.FromMilliseconds(300), indicatorCts.Token);
+            void ShowIfCurrent()
+            {
+                if (ReferenceEquals(_indicatorCts, indicatorCts) && !indicatorCts.IsCancellationRequested)
+                    SetRawDecodeIndicatorVisible(true);
+            }
+            if (_uiScheduler is null) ShowIfCurrent();
+            else _uiScheduler.Post(ShowIfCurrent);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void SetRawDecodeIndicatorVisible(bool visible)
+    {
+        if (_isRawDecodeIndicatorVisible == visible) return;
+        _isRawDecodeIndicatorVisible = visible;
+        RawDecodeIndicatorChanged?.Invoke(visible);
     }
 
     private sealed record Target(long Token, string Path, ImageCacheKey Key, object Preview, int PreviewPixelWidth, int OriginalWidth, int OriginalHeight);

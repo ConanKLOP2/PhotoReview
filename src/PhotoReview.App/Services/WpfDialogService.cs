@@ -77,8 +77,9 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         if (journal is null) return;
 
         var entries = journal.ReadPendingAndFailedOperations().ToList(); // R2-F-17: one journal pass
-        Func<JournalEntry, Task<RecoveryRetryResult>>? retry = retryService is not null ? entry => retryService.RetryMoveOrCopyAsync(entry) : null;
-        var window = new RecoveryWindow(entries, retry, dismissed => journal.Dismiss(dismissed), serviceProvider.GetService<IFileSystem>())
+        Func<JournalEntry, Task<RecoveryRetryResult>>? retry = retryService is not null ? entry => retryService.RetryMoveOrCopyAsync(entry, confirmedFinishCancelled: true) : null; // the window confirms a cancelled entry explicitly first
+        var window = new RecoveryWindow(entries, retry, dismissed => journal.Dismiss(dismissed), serviceProvider.GetService<IFileSystem>(),
+            () => serviceProvider.GetService<SettingsStore>()?.Current.AllowPermanentDeleteWithoutRecycleBin == true)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
@@ -111,6 +112,7 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
 
     public void ShowBenchmark(string? folder = null)
     {
+        // RAW files are not benchmarked (the executor has no RAW-routed decoder), whatever RawSupportEnabled says.
         var window = new BenchmarkWindow(folder)
         {
             Owner = System.Windows.Application.Current?.MainWindow

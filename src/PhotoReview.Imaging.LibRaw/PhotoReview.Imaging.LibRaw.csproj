@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Platforms>AnyCPU;x64</Platforms>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>PhotoReview.Imaging.LibRaw</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoReview.Imaging.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\native\x64\libraw.dll" Link="libraw.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\native\libraw\LICENSE.LGPL" Link="LibRaw-LICENSE.LGPL">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\native\libraw\LICENSE.CDDL" Link="LibRaw-LICENSE.CDDL">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\native\libraw\LibRaw-0.22.2-Win64.zip" Link="LibRaw-SOURCE.zip">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\native\libraw\NOTICE.txt" Link="LibRaw-NOTICE.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="EnsureLibRawBinary" BeforeTargets="BeforeBuild;AssignTargetPaths">
+    <PropertyGroup>
+      <LibRawDllPath>$(MSBuildThisFileDirectory)..\..\native\x64\libraw.dll</LibRawDllPath>
+      <FetchLibRawScriptPath>$(MSBuildThisFileDirectory)..\..\tools\fetch-libraw.ps1</FetchLibRawScriptPath>
+    </PropertyGroup>
+    <!-- Always run the script: it hashes libraw.dll and the source package against native/*.sha256 (about 5 MB, fast), does nothing when
+         every pin matches (no network), and re-fetches when the DLL is missing, stale or wrong. A named mutex inside the script
+         serializes the AnyCPU and x64 configurations that MSBuild may build concurrently. -->
+    <!-- The Exec is unconditional so a stale DLL is caught, but a failed run (offline, source package not present in this
+         checkout) must not break a build whose DLL is still usable: it is a warning here; LibRawAvailability and
+         tools/verify-release.ps1 still fail closed on a missing or wrong DLL. -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(FetchLibRawScriptPath)&quot;"
+          ContinueOnError="WarnAndContinue" Condition="!Exists('$(LibRawDllPath)') or '$(LibRawFetchOnEveryBuild)' != 'false'" />
+  </Target>
+
+</Project>

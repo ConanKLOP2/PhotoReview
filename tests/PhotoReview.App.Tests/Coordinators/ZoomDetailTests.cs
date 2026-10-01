@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -292,6 +293,312 @@ public sealed class ZoomDetailTests : IDisposable
         Assert.Equal(0, decoder.OriginalDecodes);
     }
 
+    /// <summary>
+    /// Replaces the loader's indicator delay with one gate per RAW load that the test completes itself (cancelled with the
+    /// load's token like the real delay), so the "300 ms" never depends on the clock.
+    /// </summary>
+    private static List<TaskCompletionSource> GateIndicatorDelays(ImagePresenter presenter)
+    {
+        var delays = new List<TaskCompletionSource>();
+        presenter.ZoomDetail.IndicatorDelay = (_, token) =>
+        {
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            token.Register(() => gate.TrySetCanceled(token));
+            lock (delays) delays.Add(gate);
+            return gate.Task;
+        };
+        return delays;
+    }
+
+    [Fact]
+    public async Task RawOnZoom_ShowsDelayedIndicatorAndUsesRawFullDecoder()
+    {
+        var rawPath = Path.Combine(_tempDir, "zoom.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var previewDecoder = new SizedDecoder();
+        var rawDecoder = new SizedDecoder { OriginalGate = new SemaphoreSlim(0) };
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: previewDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            var delays = GateIndicatorDelays(presenter);
+            var indicatorShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            presenter.ZoomDetail.RawDecodeIndicatorChanged += visible =>
+            {
+                if (visible) indicatorShown.TrySetResult();
+            };
+            await presenter.PresentAsync(0);
+            _viewer.SetZoom(1.0);
+            var load = presenter.ZoomDetail.PendingLoad;
+            Assert.NotNull(load);
+            Assert.False(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+            delays.Single().TrySetResult(); // the 300 ms have "elapsed"
+            await indicatorShown.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+
+            rawDecoder.OriginalGate.Release();
+            await load!;
+
+            Assert.False(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+            Assert.Equal(1, rawDecoder.OriginalDecodes);
+            Assert.Equal(0, previewDecoder.OriginalDecodes);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RawOriginalMode_EmbeddedJpegBelowSensorSize_OffersTheFullDecodeOnZoom()
+    {
+        var rawPath = Path.Combine(_tempDir, "original-mode.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var embeddedJpegDecoder = new EmbeddedRawDecoder();
+        var rawDecoder = new SizedDecoder();
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: embeddedJpegDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+
+            Assert.Equal(1, rawDecoder.OriginalDecodes);
+            Assert.Equal(6000, presenter.ZoomDetail.HeldOriginal!.PixelWidth);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact(DisplayName = "Q-RAW-03: the RAW preview size is in the photo info while the preview shows, gone while the full decode shows, back on zoom-out")]
+    public async Task RawPreviewSize_FollowsWhichImageIsDisplayed()
+    {
+        var rawPath = Path.Combine(_tempDir, "info.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: new SizedDecoder(), isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+            Assert.Equal((2000, 1333), (presenter.CurrentPhotoInfo!.RawPreviewWidth, presenter.CurrentPhotoInfo.RawPreviewHeight));
+            Assert.Equal((6000, 4000), (presenter.CurrentPhotoInfo.Width, presenter.CurrentPhotoInfo.Height)); // sensor size stays
+
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+            Assert.Equal((0, 0), (presenter.CurrentPhotoInfo!.RawPreviewWidth, presenter.CurrentPhotoInfo.RawPreviewHeight));
+            Assert.Equal((6000, 4000), (presenter.CurrentPhotoInfo.Width, presenter.CurrentPhotoInfo.Height));
+
+            _viewer.ResetFit(1280, 720);
+            Assert.False(presenter.ZoomDetail.IsShowingOriginal);
+            Assert.Equal((2000, 1333), (presenter.CurrentPhotoInfo!.RawPreviewWidth, presenter.CurrentPhotoInfo.RawPreviewHeight));
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RawPreviewSize_WhenTheHeldOriginalIsStillTheEmbeddedJpeg_StaysInThePhotoInfo()
+    {
+        var rawPath = Path.Combine(_tempDir, "info-embedded.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        // The "full" decoder fell back to the embedded JPEG: the held original still is the RAW preview.
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: new EmbeddedRawDecoder(), isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+
+            Assert.True(presenter.ZoomDetail.IsShowingOriginal);
+            Assert.Equal((2000, 1333), (presenter.CurrentPhotoInfo!.RawPreviewWidth, presenter.CurrentPhotoInfo.RawPreviewHeight));
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RawPreviewInfo_OfAnEarlierPhoto_IsNeverShownForTheNextPhotoWhoseFullDecodeFellBackToTheEmbeddedJpeg()
+    {
+        var pathA = Path.Combine(_tempDir, "a.cr2");
+        var pathB = Path.Combine(_tempDir, "b.cr2");
+        File.WriteAllBytes(pathA, [0x49, 0x49, 0x2A, 0x00]);
+        File.WriteAllBytes(pathB, [0x49, 0x49, 0x2A, 0x00]);
+        // A gets a true full decode; B's "full" decode falls back to its embedded JPEG (still a RAW preview).
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: new FullForNamesDecoder("a.cr2"), isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [pathA, pathB]);
+            await presenter.PresentAsync(0);
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+            Assert.Equal("a.cr2", presenter.CurrentPhotoInfo!.FileName);
+            Assert.Equal(0, presenter.CurrentPhotoInfo.RawPreviewWidth); // the full decode of A is on screen
+
+            await presenter.PresentAsync(1);
+            _viewer.ResetFit(1280, 720);
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter); // B's held original is the embedded JPEG
+
+            Assert.Equal("b.cr2", presenter.CurrentPhotoInfo!.FileName);
+            Assert.Equal(2000, presenter.CurrentPhotoInfo.RawPreviewWidth);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact(DisplayName = "Q-RAW-03: a non-RAW photo never gets a preview size, and a stale one is not restored after a zoom swap")]
+    public async Task NonRawPhoto_NeverHasARawPreviewSize()
+    {
+        var decoder = new SizedDecoder();
+        var (presenter, _) = Create(decoder, "a.jpg");
+        await presenter.PresentAsync(0);
+        Assert.Equal(0, presenter.CurrentPhotoInfo!.RawPreviewWidth);
+
+        _viewer.SetZoom(2.0);
+        await WhenOriginalShownAsync(presenter);
+        Assert.Equal(0, presenter.CurrentPhotoInfo!.RawPreviewWidth);
+        _viewer.ResetFit(1280, 720);
+        Assert.Equal(0, presenter.CurrentPhotoInfo!.RawPreviewWidth);
+    }
+
+    [Fact]
+    public async Task RawOriginalMode_FullDecodeDisabled_NeverDecodesAgain()
+    {
+        var rawPath = Path.Combine(_tempDir, "original-mode-off.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var embeddedJpegDecoder = new EmbeddedRawDecoder();
+        var rawDecoder = new SizedDecoder();
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: embeddedJpegDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => false);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+
+            _viewer.SetZoom(1.0);
+
+            Assert.Null(presenter.ZoomDetail.PendingLoad);
+            Assert.Equal(0, rawDecoder.OriginalDecodes);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RawOriginalMode_ImageAlreadyAtSensorSize_NeverDecodesAgain()
+    {
+        var rawPath = Path.Combine(_tempDir, "original-mode-full.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var fullSizeDecoder = new EmbeddedRawDecoder(downscaled: false);
+        var rawDecoder = new SizedDecoder();
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: fullSizeDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+
+            _viewer.SetZoom(1.0);
+
+            Assert.Null(presenter.ZoomDetail.PendingLoad);
+            Assert.Equal(0, rawDecoder.OriginalDecodes);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RawOnZoom_SupersededLoadFinishingLate_DoesNotClearTheNewerLoadsIndicator()
+    {
+        var pathA = Path.Combine(_tempDir, "a.cr2");
+        var pathB = Path.Combine(_tempDir, "b.cr2");
+        File.WriteAllBytes(pathA, [0x49, 0x49, 0x2A, 0x00]);
+        File.WriteAllBytes(pathB, [0x49, 0x49, 0x2A, 0x00]);
+        using var gateA = new SemaphoreSlim(0);
+        using var gateB = new SemaphoreSlim(0);
+        var rawDecoder = new SizedDecoder();
+        rawDecoder.GateByName["a.cr2"] = gateA;
+        rawDecoder.GateByName["b.cr2"] = gateB;
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: new SizedDecoder(), currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [pathA, pathB]);
+            var delays = GateIndicatorDelays(presenter);
+            var indicatorShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            presenter.ZoomDetail.RawDecodeIndicatorChanged += visible =>
+            {
+                if (visible) indicatorShown.TrySetResult();
+            };
+            _sink.OnApplyInitialViewMode = () => _viewer.ApplyInitialViewMode(InitialViewMode.Percent200, 1280, 720);
+            await presenter.PresentAsync(0);
+            var loadA = presenter.ZoomDetail.PendingLoad;
+            Assert.NotNull(loadA);
+
+            await presenter.PresentAsync(1); // supersedes A while its RAW decode is still running
+            var loadB = presenter.ZoomDetail.PendingLoad;
+            Assert.NotNull(loadB);
+            Assert.NotSame(loadA, loadB);
+            Assert.Equal(2, delays.Count);
+            Assert.True(delays[0].Task.IsCanceled); // A's indicator was stopped when B superseded it
+            delays[1].TrySetResult(); // B's indicator delay elapses while A's decode is still blocked on its gate
+            await indicatorShown.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+
+            gateA.Release(); // the superseded load finishes late
+            await loadA!;
+
+            Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+
+            gateB.Release();
+            await loadB!;
+            Assert.False(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+        }
+        finally
+        {
+            gateA.Release();
+            gateB.Release();
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
     [Fact]
     public async Task NavigatingAway_IgnoresTheInFlightOriginal_AndFetchesTheNextImagesOriginal()
     {
@@ -394,6 +701,219 @@ public sealed class ZoomDetailTests : IDisposable
         Assert.Equal(600, _viewer.ImageHeight, 6);
     }
 
+    // ---- R4: the decoded original is shown with ITS OWN size (ADR 0008 amendment) ----------------------
+
+    // Reader (camera-visible) 6720x4480 vs LibRaw 6744x4502 (larger) and Canon R6 style 1 px smaller.
+    [Theory]
+    [InlineData(6744, 4502, 1.0, 1.0)]
+    [InlineData(6744, 4502, 2.0, 1.25)]
+    [InlineData(6744, 4502, 0.5, 1.5)]
+    [InlineData(6719, 4479, 1.0, 1.0)]
+    [InlineData(6719, 4479, 3.0, 1.25)]
+    public async Task OriginalSwap_ShowsDecodedSizeTimesZoomOverDpi_NotThePreviewsSize(int decodedWidth, int decodedHeight, double zoom, double dpi)
+    {
+        var decoder = new SizedDecoder
+        {
+            OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = decodedWidth, DecodedHeight = decodedHeight,
+            OriginalGate = new SemaphoreSlim(0),
+        };
+        var (presenter, _) = Create(decoder, "a.jpg");
+        _viewer.DpiScale = dpi;
+        await presenter.PresentAsync(0);
+        Assert.Equal((6720, 4480), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
+
+        _viewer.SetZoom(zoom);
+        Assert.Equal(6720 * zoom / dpi, _viewer.ImageWidth, 6); // preview on screen: its own original size
+        var load = presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+        decoder.OriginalGate.Release();
+        await load!;
+
+        Assert.Equal((decodedWidth, decodedHeight), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
+        Assert.Equal(decodedWidth * zoom / dpi, _viewer.ImageWidth, 6);
+        Assert.Equal(decodedHeight * zoom / dpi, _viewer.ImageHeight, 6);
+        Assert.Equal(zoom, _viewer.Zoom, 9); // the user's percent is kept, only the original dimensions change
+        Assert.Equal((int)Math.Round(zoom * 100), _viewer.DisplayZoomPercent);
+        var held = presenter.ZoomDetail.HeldOriginal!;
+        Assert.Equal((decodedWidth, decodedHeight), (held.PixelWidth, held.PixelHeight));
+    }
+
+    [Fact]
+    public async Task BackToFit_RevertsToThePreviewsOriginalSize_AndZoomingAgainReusesTheDecodedSize()
+    {
+        var decoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = 6744, DecodedHeight = 4502 };
+        var (presenter, _) = Create(decoder, "a.jpg");
+        await presenter.PresentAsync(0);
+        var preview = _sink.Current;
+        _viewer.SetZoom(1.0);
+        await WhenOriginalShownAsync(presenter);
+        Assert.Equal(6744, presenter.CurrentOriginalWidth);
+
+        _viewer.ResetFit(1500, 1000);
+
+        Assert.Same(preview, _sink.Current);
+        Assert.Equal((6720, 4480), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
+        Assert.Equal((6720, 4480), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+        Assert.Equal(1500.0 / 6720, _viewer.FitZoom, 9); // Fit is laid out from the preview's size, as before the swap
+
+        _viewer.SetZoom(1.0);
+
+        Assert.True(presenter.ZoomDetail.IsShowingOriginal);
+        Assert.Equal(1, decoder.OriginalDecodes); // held original re-shown, no second decode
+        Assert.Equal((6744, 4502), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+        Assert.Equal(6744, _viewer.ImageWidth, 6);
+    }
+
+    [Fact]
+    public async Task OriginalSwap_OfAnOriginalWithThePreviewsSize_RaisesNoSizeSwapAndNoLayoutChange()
+    {
+        var decoder = new SizedDecoder { OriginalGate = new SemaphoreSlim(0) };
+        var (presenter, _) = Create(decoder, "a.jpg");
+        await presenter.PresentAsync(0);
+        _viewer.SetZoom(2.0);
+        var swapping = 0;
+        _viewer.SourceSizeSwapping += (_, _) => swapping++;
+        var load = presenter.ZoomDetail.PendingLoad;
+        decoder.OriginalGate.Release();
+        await load!;
+
+        Assert.True(presenter.ZoomDetail.IsShowingOriginal);
+        Assert.Equal(0, swapping);
+        Assert.Equal(12000, _viewer.ImageWidth, 6);
+    }
+
+    [Fact]
+    public async Task SupersededOriginalFinishingLate_DoesNotChangeTheCurrentImagesSize()
+    {
+        var decoder = new SizedDecoder { DecodedWidth = 6032, DecodedHeight = 4032 };
+        using var gateA = new SemaphoreSlim(0);
+        decoder.GateByName["a.jpg"] = gateA;
+        var (presenter, _) = Create(decoder, "a.jpg", "b.jpg");
+        await presenter.PresentAsync(0);
+        _viewer.SetZoom(1.0);
+        var load = presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+
+        _viewer.ResetFit(1500, 1000); // back to Fit, then on to the next image while a's decode is still running
+        await presenter.PresentAsync(1);
+        var currentBefore = _sink.Current;
+        gateA.Release();
+        await load!;
+
+        Assert.Same(currentBefore, _sink.Current);
+        Assert.Equal((6000, 4000), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
+        Assert.Equal((6000, 4000), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+        Assert.Null(presenter.ZoomDetail.HeldOriginal);
+    }
+
+    [Fact]
+    public async Task RawFullDecode_NeverChangesThePreviewsRecordedDimensions()
+    {
+        var rawPath = Path.Combine(_tempDir, "dims.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var previewDecoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480 };
+        var rawDecoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = 6744, DecodedHeight = 4502 };
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: previewDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+            Assert.Equal(6744, presenter.CurrentOriginalWidth);
+
+            var key = service.GetCurrentCacheKey(rawPath);
+            Assert.True(service.TryGetKnownOriginalDimensions(key, out var known));
+            Assert.Equal((6720, 4480), known);
+            Assert.Equal((6720, 4480), await service.GetOriginalDimensionsAsync(rawPath, key));
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    // ---- ViewerState.SwapSourceSize -------------------------------------------------------------------
+
+    [Fact]
+    public void SwapSourceSize_KeepsTheZoomPercent_AndRaisesSwappingBeforeTheSizeChanges()
+    {
+        var viewer = new ViewerState();
+        viewer.SetSourceSize(6720, 4480);
+        viewer.SetZoom(2.0);
+        int? widthSeenBySwapping = null;
+        viewer.SourceSizeSwapping += (_, _) => widthSeenBySwapping = viewer.SourcePixelWidth;
+
+        viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(6720, widthSeenBySwapping);
+        Assert.Equal(2.0, viewer.Zoom, 9);
+        Assert.Equal(6744 * 2.0, viewer.ImageWidth, 6);
+    }
+
+    [Fact]
+    public void SwapSourceSize_InFit_ChangesSizeSilently()
+    {
+        var viewer = new ViewerState();
+        viewer.SetSourceSize(6720, 4480);
+        viewer.ResetFit(1500, 1000);
+        var swapping = 0;
+        viewer.SourceSizeSwapping += (_, _) => swapping++;
+
+        viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(0, swapping);
+        Assert.Equal(6744, viewer.SourcePixelWidth);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SwapSourceSize_AfterFitWidthOrHeight_KeepsTheFittedDimensionFillingTheViewport(bool width)
+    {
+        var viewer = new ViewerState { DpiScale = 1.25 };
+        viewer.SetSourceSize(6720, 4480);
+        viewer.UpdateViewport(1500, 1000, force: true);
+        if (width) viewer.ZoomToFitWidth(); else viewer.ZoomToFitHeight();
+        Assert.Equal(width ? 1500 : 1000, width ? viewer.ImageWidth : viewer.ImageHeight, 6);
+
+        viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(width ? 1500 : 1000, width ? viewer.ImageWidth : viewer.ImageHeight, 6);
+    }
+
+    [Fact]
+    public void SwapSourceSize_AfterAFitWidthThenAnExplicitZoom_KeepsThatZoomPercent()
+    {
+        var viewer = new ViewerState();
+        viewer.SetSourceSize(6720, 4480);
+        viewer.UpdateViewport(1500, 1000, force: true);
+        viewer.ZoomToFitWidth();
+        viewer.SetZoom(0.5); // the user moved on: no longer a Fit-width zoom
+
+        viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(0.5, viewer.Zoom, 9);
+        Assert.Equal(6744 * 0.5, viewer.ImageWidth, 6);
+    }
+
+    [Fact]
+    public void SetSourceSize_ForANewImage_NeverRaisesSwapping()
+    {
+        var viewer = new ViewerState();
+        viewer.SetSourceSize(6720, 4480);
+        viewer.SetZoom(2.0);
+        var swapping = 0;
+        viewer.SourceSizeSwapping += (_, _) => swapping++;
+
+        viewer.SetSourceSize(4000, 6000);
+
+        Assert.Equal(0, swapping);
+    }
+
     // ---- helpers --------------------------------------------------------------------------------
 
     /// <summary>
@@ -449,7 +969,11 @@ public sealed class ZoomDetailTests : IDisposable
             _catalog, _clock, service, _thumbnailCache, new NullPreload(), _compare, new FileHashService(),
             _metrics, () => _settings, _sessionStore, _sink);
         // Mirrors MainViewModel + MainViewModelCompositionRoot wiring.
-        _sink.OnImageChanged = () => _viewer.SetSourceSize(presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight);
+        _sink.OnImageChanged = () =>
+        {
+            if (presenter.IsSameSourceSwap) _viewer.SwapSourceSize(presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight);
+            else _viewer.SetSourceSize(presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight);
+        };
         _viewer.ZoomModeChanged += (_, _) => presenter.SetViewerZoom(_viewer.EffectiveZoom);
         return presenter;
     }
@@ -475,6 +999,9 @@ public sealed class ZoomDetailTests : IDisposable
         public int OriginalWidth { get; init; } = 6000;
         public int OriginalHeight { get; init; } = 4000;
         public int PreviewWidth { get; init; } = 600;
+        /// <summary>Size of the full decode when it differs from the reader's size (RAW: LibRaw sensor area); 0 = same.</summary>
+        public int DecodedWidth { get; init; }
+        public int DecodedHeight { get; init; }
         public SemaphoreSlim? OriginalGate { get; init; }
         public bool FailOriginal { get; init; }
         public Dictionary<string, SemaphoreSlim> GateByName { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -487,7 +1014,9 @@ public sealed class ZoomDetailTests : IDisposable
                 Interlocked.Increment(ref _originalDecodes);
                 (GateByName.TryGetValue(Path.GetFileName(request.Path), out var gate) ? gate : OriginalGate)?.Wait();
                 if (FailOriginal) throw new InvalidOperationException("original decode failed");
-                return new SizedImage(OriginalWidth, OriginalHeight, OriginalWidth, OriginalHeight, downscaled: false);
+                var w = DecodedWidth > 0 ? DecodedWidth : OriginalWidth;
+                var h = DecodedHeight > 0 ? DecodedHeight : OriginalHeight;
+                return new SizedImage(w, h, w, h, downscaled: false);
             }
             return new SizedImage(PreviewWidth, PreviewWidth * OriginalHeight / OriginalWidth, OriginalWidth, OriginalHeight, downscaled: true);
         }
@@ -495,8 +1024,31 @@ public sealed class ZoomDetailTests : IDisposable
         public ImageInfo ReadInfo(string path) => new(OriginalWidth, OriginalHeight);
     }
 
-    private sealed class SizedImage(int width, int height, int originalWidth, int originalHeight, bool downscaled) : IDecodedImage
+    /// <summary>A RAW's regular decode: the embedded JPEG (2000 px wide) of a 6000x4000 sensor, whatever the box.</summary>
+    private sealed class EmbeddedRawDecoder(bool downscaled = true) : IImageDecoder
     {
+        public IDecodedImage Decode(DecodeRequest request) => downscaled
+            ? new SizedImage(2000, 1333, 6000, 4000, downscaled: true, embeddedPreviewWidth: 2000, embeddedPreviewHeight: 1333)
+            : new SizedImage(6000, 4000, 6000, 4000, downscaled: false);
+
+        public ImageInfo ReadInfo(string path) => new(6000, 4000);
+    }
+
+    private sealed class FullForNamesDecoder(params string[] fullNames) : IImageDecoder
+    {
+        public IDecodedImage Decode(DecodeRequest request) =>
+            fullNames.Contains(Path.GetFileName(request.Path), StringComparer.OrdinalIgnoreCase)
+                ? new SizedImage(6000, 4000, 6000, 4000, downscaled: false)
+                : new SizedImage(6000, 4000, 6000, 4000, downscaled: false, embeddedPreviewWidth: 2000, embeddedPreviewHeight: 1333);
+
+        public ImageInfo ReadInfo(string path) => new(6000, 4000);
+    }
+
+    private sealed class SizedImage(int width, int height, int originalWidth, int originalHeight, bool downscaled,
+        int embeddedPreviewWidth = 0, int embeddedPreviewHeight = 0) : IDecodedImage, IRawPreviewInfo
+    {
+        public int EmbeddedPreviewWidth => embeddedPreviewWidth;
+        public int EmbeddedPreviewHeight => embeddedPreviewHeight;
         public int PixelWidth => width;
         public int PixelHeight => height;
         public bool Downscaled => downscaled;

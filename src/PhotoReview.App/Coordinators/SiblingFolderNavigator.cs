@@ -23,19 +23,22 @@ public sealed class SiblingFolderNavigator
     private readonly IFileSystem _fileSystem;
     private readonly ISiblingNavigatorSink _sink;
     private readonly Func<SessionState?> _getCurrentSession;
+    private readonly Func<bool>? _getRawEnabled;
 
     public SiblingFolderNavigator(
         GenerationClock clock,
         ReviewCatalog catalog,
         IFileSystem fileSystem,
         ISiblingNavigatorSink sink,
-        Func<SessionState?> getCurrentSession)
+        Func<SessionState?> getCurrentSession,
+        Func<bool>? getRawEnabled = null)
     {
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
         _getCurrentSession = getCurrentSession ?? throw new ArgumentNullException(nameof(getCurrentSession));
+        _getRawEnabled = getRawEnabled;
     }
 
     public async Task NavigateSiblingFolderAsync(int direction)
@@ -106,13 +109,14 @@ public sealed class SiblingFolderNavigator
 
     private string? FindImageFolder(IReadOnlyList<string> folders, int index, int direction, CancellationToken cancellationToken)
     {
+        var rawEnabled = _getRawEnabled?.Invoke() ?? false;
         for (var i = index + direction; i >= 0 && i < folders.Count; i += direction)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var candidates = _fileSystem.EnumerateFiles(folders[i], "*")
-                    .Where(ImageFileTypes.IsSupported);
+                    .Where(path => ImageFileTypes.IsSupported(path, rawEnabled));
                 if (candidates.Any()) return folders[i];
             }
             catch (IOException) { }

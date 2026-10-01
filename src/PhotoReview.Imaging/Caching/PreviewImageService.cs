@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.Core.Catalog;
@@ -61,6 +61,8 @@ public sealed class PreviewImageService : IPreloadTarget
     private readonly bool _disableDiskCache;
     private readonly SourceBytesCache? _sourceBytesCache;
     private readonly ISourceReader _sourceReader;
+    private readonly IImageDecoder? _rawFullDecoder;
+    private readonly Func<bool> _isRawFullDecodeEnabled;
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
@@ -97,10 +99,12 @@ public sealed class PreviewImageService : IPreloadTarget
         int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
         int? cacheRamPercent = null,
         PreloadWindow? preloadWindow = null,
-        ISourceReader? sourceReader = null)
+        ISourceReader? sourceReader = null,
+        IImageDecoder? rawFullDecoder = null,
+        Func<bool>? isRawFullDecodeEnabled = null)
         : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
             diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache,
-            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader)
+            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader, rawFullDecoder, isRawFullDecodeEnabled)
     {
     }
 
@@ -130,9 +134,13 @@ public sealed class PreviewImageService : IPreloadTarget
         int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
         int? cacheRamPercent = null,
         PreloadWindow? preloadWindow = null,
-        ISourceReader? sourceReader = null)
+        ISourceReader? sourceReader = null,
+        IImageDecoder? rawFullDecoder = null,
+        Func<bool>? isRawFullDecodeEnabled = null)
     {
         _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
+        _rawFullDecoder = rawFullDecoder;
+        _isRawFullDecodeEnabled = isRawFullDecodeEnabled ?? (() => false);
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
         _targetDecodeBox = targetDecodeBox ?? throw new ArgumentNullException(nameof(targetDecodeBox));
@@ -302,16 +310,24 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public bool IsOriginalLoadingMode() => _isOriginalLoadingMode();
 
+    /// <summary>The <see cref="ImageSourceKind"/> a key for <paramref name="path"/> carries: RAW containers decode through their embedded preview.</summary>
+    private static byte SourceKindFor(string path) =>
+        ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path)) ? ImageSourceKind.RawPreview : ImageSourceKind.Standard;
+
     public ImageCacheKey GetCurrentCacheKey(string path)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
+        var sourceKind = SourceKindFor(path);
+        return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(),
+            orientationApplied: true, backend: _currentBackend(), sourceKind: sourceKind);
     }
 
     public ImageCacheKey GetCurrentCacheKey(CatalogEntry entry)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(entry, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
+        var sourceKind = SourceKindFor(entry.Path);
+        return ImageCacheKey.Create(entry, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(),
+            orientationApplied: true, backend: _currentBackend(), sourceKind: sourceKind);
     }
 
     public Task<IDecodedImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
@@ -404,6 +420,15 @@ public sealed class PreviewImageService : IPreloadTarget
         {
             return null;
         }
+        // The creator of a Preload-priority decode that the RAW full-decode gate refused (DecoderBusyException) failed
+        // only for ITS priority. A joiner (often the viewer, which must never show an error for a file that decodes
+        // fine) retries with its own decode: the finally below removes the failed Lazy first, so the retry either
+        // creates its own (viewer priority waits in the gate instead of failing fast) or joins a fresh one.
+        // The creator itself still surfaces the busy signal (PreloadScheduler handles it).
+        catch (DecoderBusyException) when (!ReferenceEquals(lazy, candidate))
+        {
+            return null;
+        }
         finally
         {
             _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<IDecodedImage>>>(loadKey, lazy));
@@ -457,6 +482,11 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private IDecodedImage DecodeAndCache(string path, ImageCacheKey key, DecodeBox targetBox, long cacheEpoch, SourceReadPriority priority)
     {
+        // Invariant (a runtime guard, not a Debug.Assert: Release must enforce it too): this path decodes previews
+        // (Standard / RawPreview keys). RawFullDecode keys are only created by DecodeOriginalAsync, which records its own
+        // (EWMA-excluded) sample, so every read recorded below belongs in the decode EWMA.
+        if (key.SourceKind == ImageSourceKind.RawFullDecode)
+            throw new InvalidOperationException("DecodeAndCache never handles RawFullDecode keys; use DecodeOriginalAsync.");
         var perf = PhotoReviewPerf.Log.IsEnabled();
         var perfNav = perf ? PhotoReviewPerf.NavContext : 0;
         var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
@@ -522,8 +552,12 @@ public sealed class PreviewImageService : IPreloadTarget
         if (perf) perfT0 = Stopwatch.GetTimestamp();
         if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
         if (perf) PhotoReviewPerf.Log.Verify(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0));
-        lock (_cacheLifecycleGate)
-            if (cacheEpoch == _cacheEpoch) _cache.Set(key, decodedImage);
+        // A degraded fallback (a next-best RAW preview accepted after a larger one failed) is returned to the caller but
+        // never cached in RAM or on disk, so the next view retries the better source.
+        bool degraded = decodedImage.IsDegradedFallback;
+        if (!degraded)
+            lock (_cacheLifecycleGate)
+                if (cacheEpoch == _cacheEpoch) _cache.Set(key, decodedImage);
 
         // Perf: every decode through this method (viewer-triggered or preload-triggered -- both
         // share this same path, see IPreloadTarget.PreloadAsync) already knows the source's
@@ -548,13 +582,14 @@ public sealed class PreviewImageService : IPreloadTarget
         // records which backend actually produced the pixels (PreviewCacheFile.ReadResult.ActualBackend
         // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
         // decode would have.
-        if (cachePath is not null && sourceRead &&
+        if (cachePath is not null && sourceRead && !degraded &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight, decodedImage.Exif);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
-        if (sourceRead) _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
+        if (sourceRead)
+            _metrics.RecordSourceRead(GetSourceBytesRead(decodedImage, key), stopwatch.ElapsedMilliseconds);
         return decodedImage;
     }
 
@@ -650,11 +685,12 @@ public sealed class PreviewImageService : IPreloadTarget
         // A file the byte cache cannot hold is not pre-read here (the WPF/WIC decoders stream it; TurboJpeg still reads it whole
         // itself, which needs the full buffer anyway): pre-reading it would allocate the whole file (LOH, and
         // several at once under preload) only to drop it again.
-        if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(sourceLength))
+        var isRawSource = ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path));
+        if (!isRawSource && _sourceBytesCache is not null && _sourceBytesCache.CanCache(sourceLength))
         {
             preReadBytes = _sourceBytesCache.GetOrRead(path, priority);
         }
-        else if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
+        else if (!isRawSource && Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
         {
             long readStart = perf ? Stopwatch.GetTimestamp() : 0;
             byte[] bytes;
@@ -677,12 +713,19 @@ public sealed class PreviewImageService : IPreloadTarget
         return decoded;
     }
 
+    private static long GetSourceBytesRead(IDecodedImage image, ImageCacheKey key) =>
+        image is ISourceReadMetrics metrics ? metrics.SourceBytesRead : key.Length;
+
     /// <summary>
     /// Original (post-orientation) dimensions already known for <paramref name="currentKey"/>'s source
     /// -- seeded by any earlier decode, viewer or preload -- without touching the file.
     /// </summary>
     public bool TryGetKnownOriginalDimensions(ImageCacheKey currentKey, out (int Width, int Height) dimensions) =>
         _originalDimensions.TryGet(ImageCacheKey.CreateOriginal(currentKey), out dimensions);
+
+    /// <summary>Whether an original request for this path will use the configured RAW full decoder now.</summary>
+    public bool IsRawFullDecodeRequest(string path) => _rawFullDecoder is not null && _isRawFullDecodeEnabled()
+        && ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path));
 
     /// <summary>
     /// feat(zoom) (option A for #43): full-resolution decode of one source for the zoomed viewer.
@@ -700,7 +743,8 @@ public sealed class PreviewImageService : IPreloadTarget
     public async Task<IDecodedImage> DecodeOriginalAsync(string path, ImageCacheKey sourceKey, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var key = ImageCacheKey.CreateOriginal(sourceKey);
+        var useRawFullDecoder = IsRawFullDecodeRequest(path);
+        var key = ImageCacheKey.CreateOriginal(sourceKey, useRawFullDecoder ? ImageSourceKind.RawFullDecode : sourceKey.SourceKind);
         if (_cache.TryGet(key, out var cached)) return cached;
         // R2-F-13: at most one full-resolution decode (24-100 MP, ~100+ MB each) runs at a time. Paging quickly at
         // 100 % used to start one dedicated thread per image; now superseded requests wait here and are dropped on
@@ -709,12 +753,14 @@ public sealed class PreviewImageService : IPreloadTarget
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return await DecodeOriginalOnDedicatedThreadAsync(path, key, cancellationToken).ConfigureAwait(false);
+            return await DecodeOriginalOnDedicatedThreadAsync(path, key,
+                useRawFullDecoder ? _rawFullDecoder : null, cancellationToken).ConfigureAwait(false);
         }
         finally { _originalDecodeGate.Writer.TryWrite(0); }
     }
 
-    private Task<IDecodedImage> DecodeOriginalOnDedicatedThreadAsync(string path, ImageCacheKey key, CancellationToken cancellationToken)
+    private Task<IDecodedImage> DecodeOriginalOnDedicatedThreadAsync(string path, ImageCacheKey key,
+        IImageDecoder? decoderOverride, CancellationToken cancellationToken)
     {
         return Task.Factory.StartNew(() =>
         {
@@ -723,11 +769,16 @@ public sealed class PreviewImageService : IPreloadTarget
             Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
             var perf = PhotoReviewPerf.Log.IsEnabled();
             var stopwatch = Stopwatch.StartNew();
-            var decoded = DecodeFromSource(path, key.Length, key.Backend, DecodeBox.Unbounded, perf,
-                perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "");
+            var decoded = decoderOverride is null
+                ? DecodeFromSource(path, key.Length, key.Backend, DecodeBox.Unbounded, perf,
+                    perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "")
+                : decoderOverride is ICancellableImageDecoder cancellableDecoder
+                    ? cancellableDecoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded), cancellationToken)
+                    : decoderOverride.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
             if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
             _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
-            _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
+            _metrics.RecordSourceRead(GetSourceBytesRead(decoded, key), stopwatch.ElapsedMilliseconds,
+                includeInDecodeEwma: key.SourceKind != ImageSourceKind.RawFullDecode);
             return decoded;
             // RunContinuationsAsynchronously: the dedicated thread exits right after the decode
             // instead of running the awaiting caller's continuation on its own (above-normal) stack.
@@ -737,7 +788,7 @@ public sealed class PreviewImageService : IPreloadTarget
     }
 
     public Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path) =>
-        GetOriginalDimensionsAsync(path, ImageCacheKey.Create(path, true, 0, orientationApplied: true, backend: _currentBackend()));
+        GetOriginalDimensionsAsync(path, ImageCacheKey.Create(path, true, 0, orientationApplied: true, backend: _currentBackend(), sourceKind: SourceKindFor(path)));
 
     /// <summary>Reuses a key the caller already built for this navigation instead of stat-ing the path again.</summary>
     public async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path, ImageCacheKey currentKey)
@@ -769,9 +820,13 @@ public sealed class PreviewImageService : IPreloadTarget
         // the key prefix past both means every pre-merge entry (box or non-box, v4 or v5 header)
         // misses on lookup by construction instead of taking the slower throw/catch/delete path;
         // ScheduleLegacyCacheCleanup/ClearDisk sweep the orphaned ".pv4" files themselves.
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
-            string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"preview-v5-box|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}x{key.TargetHeight}|{key.OrientationApplied}|{key.Backend}"))));
+        var identity = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"preview-v5-box|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}x{key.TargetHeight}|{key.OrientationApplied}|{key.Backend}");
+        // The source kind is part of the identity only for non-standard sources (RAW previews), so every existing
+        // standard-image entry keeps its hash instead of being orphaned by this change.
+        if (key.SourceKind != ImageSourceKind.Standard)
+            identity = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{identity}|kind{key.SourceKind}");
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(identity)));
         return Path.Combine(_diskCacheDirectory, hash + ".pv4");
     }
 

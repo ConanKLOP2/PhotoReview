@@ -62,8 +62,14 @@ public sealed class ImagePresenter
     // transition once) apart from "this PresentAsync is upgrading the SAME file's bitmap" (thumbnail -> preview
     // -> original within one navigation must stay an instant, seamless replacement). Null before the first image.
     private string? _presentedFilePath;
+    private string? _currentNavigationPath;
 
     private readonly IUiScheduler? _uiScheduler;
+
+    // Waits before the single retry of a compare decode the LibRaw gate refused (DecoderBusyException). Injectable so tests
+    // never depend on wall-clock time.
+    private readonly Func<TimeSpan, CancellationToken, Task> _busyRetryDelay;
+    private static readonly TimeSpan BusyRetryDelay = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
     /// PR-B: lets <c>MainWindow</c> hook <c>WpfPresentationSink.ApplyInitialViewModeOverride</c> to
@@ -88,8 +94,10 @@ public sealed class ImagePresenter
         Func<SessionState?>? getSession = null,
         Action<string>? onPresentedHook = null,
         SessionWriter? sessionWriter = null,
-        IUiScheduler? uiScheduler = null)
+        IUiScheduler? uiScheduler = null,
+        Func<TimeSpan, CancellationToken, Task>? busyRetryDelay = null)
     {
+        _busyRetryDelay = busyRetryDelay ?? Task.Delay;
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _previewService = previewService ?? throw new ArgumentNullException(nameof(previewService));
@@ -108,21 +116,64 @@ public sealed class ImagePresenter
         _sessionWriter = sessionWriter;
         // feat/image-crossfade: ZoomDetailLoader upgrades the SAME image's bitmap (zoom-triggered full-resolution
         // decode) -- never a file change, so no path is passed (UpdateCurrentImage's isFileChange stays false).
-        _zoomDetail = new ZoomDetailLoader(_previewService, _clock, (image, w, h) => UpdateCurrentImage(image, w, h));
+        _zoomDetail = new ZoomDetailLoader(_previewService, _clock,
+            ShowZoomDetailImage, _uiScheduler);
     }
 
     private readonly ZoomDetailLoader _zoomDetail;
+    private PhotoInfo? _infoWhileOriginalShown; // the preview's PhotoInfo, kept while the full decode replaces it
+
+    /// <summary>
+    /// ZoomDetailLoader swapped the displayed bitmap. Q-RAW-03: while the full-resolution original is shown the
+    /// info line must not say "RAW preview"; swapping back to the preview restores it.
+    /// </summary>
+    private void ShowZoomDetailImage(object image, int w, int h)
+    {
+        IsSameSourceSwap = true; // read synchronously by the sink's image-changed callback (ViewerState.SwapSourceSize)
+        try { ShowZoomDetailImageCore(image, w, h); }
+        finally { IsSameSourceSwap = false; }
+    }
+
+    private void ShowZoomDetailImageCore(object image, int w, int h)
+    {
+        // Decided from the shown bitmap itself, not from "the held original is shown": a held original that is still the
+        // embedded JPEG (a full decode that fell back to it) is still a RAW preview and keeps its info line.
+        var showingOriginal = _zoomDetail.HeldOriginal is { } held && ReferenceEquals(held.PlatformImage, image)
+            && held is not PhotoReview.Imaging.Decoding.IRawPreviewInfo { EmbeddedPreviewWidth: > 0 };
+        if (showingOriginal)
+        {
+            // Always reassigned (null for a non-RAW photo) so a value left by an earlier photo can never be restored.
+            _infoWhileOriginalShown = CurrentPhotoInfo is { RawPreviewWidth: > 0 } current ? current : null;
+            if (_infoWhileOriginalShown is not null)
+                CurrentPhotoInfo = _infoWhileOriginalShown with { RawPreviewWidth = 0, RawPreviewHeight = 0 };
+        }
+        else if (_infoWhileOriginalShown is { } preview)
+        {
+            if (CurrentPhotoInfo is not null) CurrentPhotoInfo = preview;
+            _infoWhileOriginalShown = null;
+        }
+        UpdateCurrentImage(image, w, h);
+    }
 
     public ReviewCatalog Catalog => _catalog;
     public GenerationClock Clock => _clock;
     public CompareViewModel Compare => _compareViewModel;
     public object? CurrentImage { get; private set; }
+    public string? CurrentPresentedPath => _currentNavigationPath;
 
     /// <summary>
     /// Full-resolution (post-orientation) size of the source behind <see cref="CurrentImage"/>, whatever
-    /// bitmap (thumbnail, preview, full decode) is displayed; 0 when unknown or nothing is shown.
+    /// bitmap (thumbnail, preview, full decode) is displayed; 0 when unknown or nothing is shown. One size per displayed
+    /// bitmap: a full decode reports its own pixel size (ADR 0008 amendment).
     /// </summary>
     public int CurrentOriginalWidth { get; private set; }
+
+    /// <summary>
+    /// True only while the sink is told about a zoom-detail swap (preview <-> full decode of the SAME image): the new
+    /// <see cref="CurrentOriginalWidth"/>/<see cref="CurrentOriginalHeight"/> are the new bitmap's own size, which may
+    /// differ slightly from the previous one (RAW). The viewer then keeps its view anchored instead of treating it as a new image.
+    /// </summary>
+    public bool IsSameSourceSwap { get; private set; }
 
     /// <summary>See <see cref="CurrentOriginalWidth"/>.</summary>
     public int CurrentOriginalHeight { get; private set; }
@@ -149,7 +200,9 @@ public sealed class ImagePresenter
     /// <summary>Clears the displayed frame when the catalog has no images.</summary>
     public void ClearPresentation()
     {
+        _currentNavigationPath = null;
         CurrentPhotoInfo = null;
+        _infoWhileOriginalShown = null;
         _zoomDetail.Reset();
         UpdateCurrentImage(null);
         _compareViewModel.Clear();
@@ -166,9 +219,23 @@ public sealed class ImagePresenter
     /// <summary>
     /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
     /// </summary>
-    public async Task PresentAsync(int index, bool allowCompare = true)
+    public Task PresentAsync(int index, bool allowCompare = true, string? pathOverride = null, bool includeCaptureGroupInCompare = false) =>
+        PresentCoreAsync(index, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetries: 0, originalPreviousNavigationPath: null);
+
+    /// <summary>Re-presents after a stale FileNotFound are bounded: the file system is re-checked each time and a file that exists is kept.</summary>
+    private const int MaxStaleNotFoundRetries = 3;
+
+    /// <param name="staleNotFoundRetries">How many re-presents already followed a FileNotFound the file system contradicts (see the catch in this method); at most <see cref="MaxStaleNotFoundRetries"/>.</param>
+    /// <param name="originalPreviousNavigationPath">Only for that retry: the path that was really on screen before the FIRST attempt,
+    /// so a later generic failure restores the member that is shown instead of the retried (failed) member's own path.</param>
+    private async Task PresentCoreAsync(int index, bool allowCompare, string? pathOverride, bool includeCaptureGroupInCompare, int staleNotFoundRetries,
+        string? originalPreviousNavigationPath)
     {
         if (index < 0 || index >= _catalog.Count) return;
+        if (pathOverride is not null && _catalog.IndexOf(pathOverride) != index)
+        {
+            throw new ArgumentException("The presentation path must belong to the selected catalog entry.", nameof(pathOverride));
+        }
         LastPresentStartedFromRam = false;
 
         var perf = PhotoReviewPerf.Log.IsEnabled();
@@ -177,12 +244,15 @@ public sealed class ImagePresenter
         // 1. Tăng Navigation generation
         var token = _clock.NextNavigation();
         _catalog.SetCurrent(index);
-        var path = _catalog.PathAt(index);
+        var path = pathOverride ?? _catalog.PathAt(index);
+        var previousNavigationPath = staleNotFoundRetries > 0 ? originalPreviousNavigationPath : _currentNavigationPath;
+        _currentNavigationPath = path;
 
         // perf(preload): this navigation supersedes the previous one -- drop its viewer decode if it
         // has not started yet (a started one finishes and stays cached), and let preload re-center and
         // track direction/key rate now rather than only after this image is presented.
         var viewerDecodeCts = new CancellationTokenSource();
+        var viewerDecodeToken = viewerDecodeCts.Token; // read now: a later navigation disposes the source
         var supersededCts = Interlocked.Exchange(ref _viewerDecodeCts, viewerDecodeCts);
         if (supersededCts is not null)
         {
@@ -206,6 +276,7 @@ public sealed class ImagePresenter
         // Q-R29 option C: the stat below is awaited off the UI thread, so this navigation is "in progress" from here on:
         // the photo information line must not keep describing the previous image meanwhile (it is set again below).
         CurrentPhotoInfo = null;
+        _infoWhileOriginalShown = null; // the previous photo's preview info must never be restored onto this one
 
         if (AppLog.Enabled)
             AppLog.Info($"ShowImage start index={index} count={_catalog.Count} token={token} path={path}");
@@ -259,7 +330,7 @@ public sealed class ImagePresenter
         // and are never served; the disk LRU prunes them).
         var initialStat = initial.Stat!;
         var initialEntry = _catalog.Find(path);
-        if (initialEntry is not null && !initialEntry.Matches(initialStat))
+        if (pathOverride is null && initialEntry is not null && !initialEntry.Matches(initialStat))
         {
             if (initialEntry.Length is not null && initialEntry.LastWriteUtc is not null)
                 EvictCachedPath(path);
@@ -269,8 +340,9 @@ public sealed class ImagePresenter
         var initialSize = initialStat.Length;
         // Q-R29 option C: both keys come from the stat just taken (no second stat on the UI thread): an entry that
         // left the catalog meanwhile gets a key built from that stat, not from a fresh FileInfo.
-        var currentKey = _previewService.GetCurrentCacheKey(
-            initialEntry ?? new CatalogEntry(path).WithMetadata(initialStat.Length, initialStat.LastWriteUtc));
+        var currentKey = _previewService.GetCurrentCacheKey(pathOverride is not null
+            ? new CatalogEntry(path).WithMetadata(initialStat.Length, initialStat.LastWriteUtc)
+            : initialEntry ?? new CatalogEntry(path).WithMetadata(initialStat.Length, initialStat.LastWriteUtc));
         if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
@@ -396,9 +468,11 @@ public sealed class ImagePresenter
             if (!_clock.IsNavigationCurrent(token)) return;
             // AR16: the background readability probe may have removed other files while this image decoded.
             // It keeps the current entry by path (as ReplaceOrder does), so re-read its index for preload/status.
-            if (_catalog.Current is { } stillCurrent && string.Equals(stillCurrent.Path, path, StringComparison.OrdinalIgnoreCase))
+            // Both sides are -1 when the entry itself left the catalog meanwhile: that is not "still current".
+            var currentIndexNow = _catalog.CurrentIndex;
+            if (currentIndexNow >= 0 && currentIndexNow == _catalog.IndexOf(path))
             {
-                index = _catalog.CurrentIndex;
+                index = currentIndexNow;
             }
 
             long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
@@ -423,7 +497,9 @@ public sealed class ImagePresenter
 
             // 6. Compare (qua CompareViewModel) hoặc lấy dimension (Original thì lấy từ ảnh)
             long perfCompare = perf ? Stopwatch.GetTimestamp() : 0;
-            var pair = GetComparePair(path);
+            // While compare is open every presentation (Next/Previous/undo, not only the toggle) compares the capture pair,
+            // otherwise navigation drops the pair yet leaves compare visible.
+            var pair = GetComparePair(path, includeCaptureGroupInCompare || _compareViewModel.IsVisible);
 
             if (perf)
             {
@@ -442,11 +518,7 @@ public sealed class ImagePresenter
                         pair.Value,
                         token,
                         t => _clock.IsNavigationCurrent(t),
-                        async p =>
-                        {
-                            var prev = await _previewService.GetPreviewAsync(p);
-                            return prev.PlatformImage;
-                        },
+                        p => LoadComparePreviewAsync(p, viewerDecodeToken),
                         p => _hashService.GetAsync(p),
                         compareSizeEnabled: settings.CompareSizeEnabled,
                         compareHashEnabled: settings.CompareHashEnabled,
@@ -498,9 +570,9 @@ public sealed class ImagePresenter
                 long perfDims = perf && settings.LoadingMode != LoadingMode.Original ? Stopwatch.GetTimestamp() : 0;
                 if (perfDims != 0) PhotoReviewPerf.Log.PostStart(token, "dims");
 
-                var original = settings.LoadingMode == LoadingMode.Original
-                    ? (Width: image.PixelWidth, Height: image.PixelHeight)
-                    : await _previewService.GetOriginalDimensionsAsync(path, currentKey);
+                (int Width, int Height)? original = settings.LoadingMode == LoadingMode.Original
+                    ? (image.PixelWidth, image.PixelHeight)
+                    : await TryGetOriginalDimensionsAsync(path, currentKey);
 
                 if (perfDims != 0) PhotoReviewPerf.Log.PostEnd(token, "dims", PhotoReviewPerf.Ms(perfDims));
 
@@ -511,12 +583,17 @@ public sealed class ImagePresenter
                 if (!_clock.IsNavigationCurrent(token)) return;
                 if (current.Outcome != StatOutcome.Found) return;
                 var currentInfo = current.Stat!;
-                if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
+                // A capture-group member shown via pathOverride is a different file from the entry's representative:
+                // its stat must not overwrite the representative's Length/LastWriteUtc (that evicted the cache each toggle).
+                if (pathOverride is null && initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
                 {
                     _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
                 }
 
-                UpdateStatus(StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, original.Width, original.Height, Path.GetFileName(path)));
+                // Unknown dimensions (the lookup failed for a file that is shown fine): the status line just omits them.
+                UpdateStatus(original is { } size
+                    ? StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, size.Width, size.Height, Path.GetFileName(path))
+                    : StatusFormatter.Ready(index, _catalog.Count, currentInfo.Length, Path.GetFileName(path)));
             }
 
             // 7. Cập nhật status, lưu session, ghi metric Presented
@@ -545,12 +622,48 @@ public sealed class ImagePresenter
         }
         catch (Exception ex) when (_clock.IsNavigationCurrent(token) && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
         {
+            // A decode that is still in flight is shared by every request for the same key (path + length + mtime), so this
+            // FileNotFound may belong to an EARLIER state of the path: the file was moved away while that decode opened it and
+            // has come back since (Undo of the Move keeps length and mtime). Trust the file system, not the joined failure: a
+            // file that is on disk again is presented once more (the failed shared decode is gone by now, so this starts a
+            // fresh one) instead of being dropped from the catalog.
+            {
+                var recheck = await StatOffUiThreadAsync(path, CancellationToken.None);
+                if (!_clock.IsNavigationCurrent(token)) return;
+                if (recheck.Outcome == StatOutcome.Found && staleNotFoundRetries >= MaxStaleNotFoundRetries)
+                {
+                    // Under load the retry can join yet another failure from before the file came back. A file that is on disk is
+                    // never dropped from the catalog: report it like an unreadable file and let the user present it again.
+                    AppLog.Error($"ShowImage stale-file failures persisted while the file exists token={token} path={path}", ex);
+                    CurrentPhotoInfo = null;
+                    UpdateCurrentImage(null);
+                    _compareViewModel.Clear();
+                    UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(ex)), needsAttention: true);
+                    return;
+                }
+                if (recheck.Outcome == StatOutcome.Found)
+                {
+                    if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file failure ignored (file exists again) token={token} path={path}");
+                    var retryIndex = _catalog.IndexOf(path);
+                    if (retryIndex >= 0) await PresentCoreAsync(retryIndex, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetries: staleNotFoundRetries + 1,
+                        originalPreviousNavigationPath: previousNavigationPath);
+                    return;
+                }
+            }
+
             if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file token={token} path={path}");
             await RemoveMissingCatalogItemAsync(path, index, token);
         }
         catch (Exception ex) when (_clock.IsNavigationCurrent(token))
         {
             AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex);
+            // A failed member switch (e.g. the RAW of a JPG+RAW capture) leaves the previous member on screen: keep the
+            // presented path (badge, file actions) on what is really shown. A different entry keeps the new path.
+            if (previousNavigationPath is not null && !string.Equals(previousNavigationPath, path, StringComparison.OrdinalIgnoreCase)
+                && _catalog.IndexOf(previousNavigationPath) == index)
+            {
+                _currentNavigationPath = previousNavigationPath;
+            }
             CurrentPhotoInfo = null;
             UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(ex)), needsAttention: true);
         }
@@ -558,6 +671,24 @@ public sealed class ImagePresenter
         {
             AppLog.Error($"ShowImage failed (stale token={token}, current={_clock.CurrentNavigation}) index={index} path={path}", ex);
         }
+    }
+
+    /// <summary>
+    /// Removes a missing file from the catalog. A missing member of a JPEG+RAW capture group must not hide its
+    /// surviving partner: the entry degrades to the other member as a standalone (group-less) entry at the same
+    /// position and is selected. Returns the new current index (as <see cref="ReviewCatalog.Remove"/> does).
+    /// </summary>
+    private int RemoveOrDegrade(string path)
+    {
+        var index = _catalog.IndexOf(path);
+        var group = index >= 0 ? _catalog.Find(path)?.CaptureGroup : null;
+        var survivor = group?.ImagePaths.FirstOrDefault(p => !string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        if (survivor is null) return _catalog.Remove(path);
+
+        _catalog.Remove(path);
+        _catalog.Restore(survivor, index);
+        _catalog.SetCurrent(index);
+        return index;
     }
 
     /// <summary>
@@ -572,10 +703,11 @@ public sealed class ImagePresenter
         {
             if (!_clock.IsNavigationCurrent(token)) return;
 
-            var nextIndex = _catalog.Remove(path);
+            var nextIndex = RemoveOrDegrade(path);
             if (_catalog.Count == 0)
             {
                 CurrentPhotoInfo = null;
+                _infoWhileOriginalShown = null;
                 _zoomDetail.Reset();
                 UpdateCurrentImage(null);
                 _compareViewModel.Clear();
@@ -602,8 +734,13 @@ public sealed class ImagePresenter
     /// <summary>True when <paramref name="path"/> belongs to a numbered compare pair (lets the compare key open compare while it is closed).</summary>
     public bool HasComparePair(string path) => GetComparePair(path) is not null;
 
-    private (string Left, string Right)? GetComparePair(string path)
+    private (string Left, string Right)? GetComparePair(string path, bool includeCaptureGroup = true)
     {
+        if (includeCaptureGroup && _catalog.Find(path)?.CaptureGroup is { } group)
+        {
+            return (group.JpegPath, group.RawPath);
+        }
+
         lock (_compareIndexGate)
         {
             if (_compareIndexVersion != _catalog.StructuralVersion)
@@ -664,6 +801,48 @@ public sealed class ImagePresenter
     private readonly record struct StatResult(StatOutcome Outcome, FileStat? Stat, Exception? Error);
 
     /// <summary>
+    /// The original dimensions for the status line, or null when the lookup fails (e.g. a RAW whose header sizes are all
+    /// unknown): the image is already on screen, so a failed lookup must not turn into an error status for a viewable file.
+    /// </summary>
+    private async Task<(int Width, int Height)?> TryGetOriginalDimensionsAsync(string path, ImageCacheKey currentKey)
+    {
+        try
+        {
+            return await _previewService.GetOriginalDimensionsAsync(path, currentKey);
+        }
+        // The expected header-read failures only (I/O, unsupported/corrupt/undecodable file, busy decoder); a bug such as a
+        // NullReferenceException must surface instead of being turned into "dimensions unknown".
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FormatException
+            or InvalidOperationException or InvalidDataException or System.Runtime.InteropServices.ExternalException
+            or PhotoReview.Imaging.Decoding.DecoderBusyException)
+        {
+            if (AppLog.Enabled) AppLog.Info($"ShowImage original dimensions unknown path={path}: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A compare member's preview at viewer priority (the pair is on screen, so it must not fail-fast like a preload does). A
+    /// <see cref="PhotoReview.Imaging.Decoding.DecoderBusyException"/> (possibly inherited from a preload decode this request
+    /// joined) is retried once after a short, cancellable pause; a second one propagates.
+    /// </summary>
+    private async Task<object?> LoadComparePreviewAsync(string path, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                var preview = await _previewService.GetViewerPreviewAsync(path, _previewService.GetCurrentCacheKey(path), cancellationToken);
+                return preview.PlatformImage;
+            }
+            catch (PhotoReview.Imaging.Decoding.DecoderBusyException) when (attempt == 0)
+            {
+                await _busyRetryDelay(BusyRetryDelay, cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
     /// Q-R29 option C: <see cref="StatNow"/> on <see cref="StatWorker"/>, never on the calling (UI)
     /// thread. Cancelled without touching the disk when <paramref name="cancellationToken"/> fires before the stat
     /// starts (the navigation was superseded while it waited). The caller resumes on its own context and must
@@ -713,11 +892,17 @@ public sealed class ImagePresenter
 }
 
 /// <summary>Input of the photo information line (see <see cref="ImagePresenter.CurrentPhotoInfo"/>).</summary>
-public sealed record PhotoInfo(string FileName, int Width, int Height, PhotoReview.Imaging.Metadata.ExifSummary? Exif)
+/// <param name="RawPreviewWidth">Q-RAW-03: pixel width of the embedded RAW JPEG preview while THAT is the displayed image; 0 = none
+/// (non-RAW, a cache-restored image that cannot tell, or the full decode is shown).</param>
+/// <param name="RawPreviewHeight">See <paramref name="RawPreviewWidth"/>.</param>
+public sealed record PhotoInfo(string FileName, int Width, int Height, PhotoReview.Imaging.Metadata.ExifSummary? Exif,
+    int RawPreviewWidth = 0, int RawPreviewHeight = 0)
 {
     public static PhotoInfo From(string path, PhotoReview.Imaging.Decoding.IDecodedImage image)
     {
         ArgumentNullException.ThrowIfNull(image);
-        return new PhotoInfo(Path.GetFileName(path), image.OriginalWidth, image.OriginalHeight, image.Exif);
+        var preview = image as PhotoReview.Imaging.Decoding.IRawPreviewInfo;
+        return new PhotoInfo(Path.GetFileName(path), image.OriginalWidth, image.OriginalHeight, image.Exif,
+            preview?.EmbeddedPreviewWidth ?? 0, preview?.EmbeddedPreviewHeight ?? 0);
     }
 }

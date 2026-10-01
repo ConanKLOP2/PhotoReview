@@ -10,5 +10,6 @@ public enum DecoderBackend
 {
     Wpf = 0,
     WicDirect = 1,
-    TurboJpeg = 2
+    TurboJpeg = 2,
+    LibRaw = 3
 }

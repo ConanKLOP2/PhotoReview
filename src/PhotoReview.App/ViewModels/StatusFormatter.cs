@@ -47,6 +47,8 @@ public static class StatusFormatter
     public static string LoadingFullRes(int index, int count, long initialSize) =>
         Tr.StatusLoadingFullRes(index + 1, count, FormatFileSize(initialSize));
 
+    public static string DecodingRaw() => Tr.StatusDecodingRaw;
+
     public static string Ready(int index, int count, long size, string fileName) =>
         Tr.StatusReady(index + 1, count, FormatFileSize(size), fileName);
 
