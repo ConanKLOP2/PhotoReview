@@ -55,12 +55,18 @@ Line numbers at `151f4964`.
 ## PR 7 `fix/rv-app-coordinators` (sonnet; A05/A06 reviewed by strong) — RV-A03..A10
 
 ### RV-A03 — Plain-key shortcuts ignore modifiers · MED · PLAUSIBLE · needs RV-D3
-- **Where:** `Input/ShortcutRouter.cs:191-229` (`TryResolve`). Only Undo, OpenFolder, Move/CopyToFolder check Ctrl.
-- **Step 1** (`Input/ShortcutRouterTests.cs`): theory over destructive commands (Recycle, permanent delete if bound,
-  each user action, MoveToFolder/CopyToFolder plain variants) × modifiers {Ctrl, Alt, Ctrl+Shift} → `TryResolve`
-  returns no command (option A). Plus pin the unchanged ones: Next/Previous/zoom keys with Shift still resolve.
-- **Step 2:** add a `RequiresExactModifiers(command)` set; for those, resolve only when `modifiers` equals the bound
-  shortcut's modifiers (bindings without modifiers → `ModifierKeys.None`). Keep Undo/OpenFolder logic.
+- **Where:** `Input/ShortcutRouter.cs:191-229` (`TryResolve`). Only Undo (`:146`), OpenFolder (`:164`) and
+  Move/CopyToFolder (`:265`) look at `modifiers`. Shortcut settings store a bare key (no modifier syntax), so "bound
+  modifiers" is always None. Alt combos never match today: WPF reports them as `Key.System` and only the Fullscreen
+  check uses `systemKey` (`:105-111`), so Alt+F4 does not trigger the default F4 action.
+- **Today (defaults):** Ctrl+Delete / Shift+Delete → Recycle; Ctrl+Enter → action "Group-2" (Move); Ctrl+F3/F4 → Move
+  actions; Ctrl+F5 → Backup (Copy); Ctrl+Space → Skip; Ctrl+C → Compare; Ctrl+F → ToggleFit; Ctrl+W/H → FitWidth/Height;
+  Ctrl+Add/Subtract → zoom; Ctrl+Right/Left → Next/Previous (arrow pan runs only with no modifier, `MainWindow.xaml.cs:538`).
+- **Step 1** (`Input/ShortcutRouterTests.cs`, option A): theory over Recycle and each default action key ×
+  {Ctrl, Shift, Ctrl+Shift} → `TryResolve` returns null. Pin the unchanged ones: with Ctrl, Next/Previous/ZoomIn/ZoomOut/
+  ToggleFit still resolve; Shift+M → MoveToFolder(forcePicker: true); Ctrl+M → null; Alt+F4 (`Key.System`, systemKey F4) → null.
+- **Step 2:** for Recycle and the action loop (`:191-203`) require `modifiers == ModifierKeys.None`. Keep Undo/OpenFolder
+  and the Move/Copy-to-folder block unchanged.
 - **Step 3:** add the missing router tests from the review: same key bound to two commands (priority order),
   `hasImage=false` for each group, Compare key when `!isCompareVisible && !hasComparePair` (no fall-through).
 
@@ -130,7 +136,7 @@ Line numbers at `151f4964`.
 - **Problem:** already `Maximized` → setting `WindowStyle=None` and `WindowState=Maximized` again is a no-op for WPF's
   work-area sizing; the borderless window may keep the work-area size (taskbar visible).
 - **Step 1 — real-machine check FIRST** (Claude runs it on the user's PC, AGENTS.md "Real-machine checks"; screenshot
-  with computer-use): Release build, maximize, press the fullscreen key, check whether the taskbar is covered. If it is
+  with computer-use): Release build, maximize, press the fullscreen key (default F11; F is ToggleFit), check whether the taskbar is covered. If it is
   covered → close as NOT-A-BUG and add only the window test below.
 - **Step 2 (if reproduced):** when entering fullscreen from `Maximized`: set `WindowState = Normal` first, then apply
   style, then `Maximized`. Exit path restores `_stateBeforeFullscreen` (unchanged).

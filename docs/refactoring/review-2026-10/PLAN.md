@@ -1,6 +1,6 @@
 # Whole-code review 2026-10-01: fix plan
 
-**Base:** `origin/master` `151f4964` Â· **Created:** 2026-10-01 Â· **Status:** PLANNED (nothing implemented yet)
+**Base:** `origin/master` `151f4964` · **Created:** 2026-10-01 · **Status:** PLANNED (nothing implemented yet)
 
 Source: a read-only, function-by-function review of all of `src/` (8 parallel reviewers, ~40k lines, ~1,100 methods),
 with every MED finding re-read by the lead against the code. No HIGH finding. This directory is the single plan for
@@ -42,11 +42,11 @@ that implements it. Recommended option first.
 
 | ID | Blocks | Question | Options (recommended first) |
 |---|---|---|---|
-| RV-D1 | RV-C01 | How should Move-undo decide "destination unchanged" when the destination volume rounds mtime (FAT 2 s, exFAT 10 ms)? | **A** size equal and \|mtime delta\| <= 2 s Â· B re-stat destination right after the move and fingerprint that stamp (in-session only; journal-restored undo still needs A) Â· C size only (same as the 2026-09-30 group-Copy decision) |
-| RV-D2 | RV-S01 | An unknown/garbage enum value in `config.json` loads as the enum's zero member, not the `AppSettings` default (6 settings affected). Contract? | **A** reset to the `AppSettings` default and list it in `LastLoadRepairs` (startup dialog) Â· B same reset, silent Â· C keep zero member, document it |
-| RV-D3 | RV-A03 | Plain-key shortcuts ignore Ctrl/Alt/Shift (Ctrl+Delete recycles). Rule? | **A** destructive commands (Recycle, Delete-permanent, action keys, Move/Copy) fire only with the exact bound modifiers; navigation/zoom unchanged Â· B every plain-key command requires no Ctrl/Alt Â· C keep as is, pin with tests |
-| RV-D4 | RV-A12 | Changing "Image order" in Settings does not re-sort the open folder. | **A** reload the open folder on change (same path as RawSupport/RawPairMode) Â· B keep, change the hint text to "applies to the next folder you open" |
-| RV-D5 | RV-A10 | Duplicate batch-recycle finishing after the user opened another folder returns silently and is not undoable. | **A** report it through the late-completion status sink (like `FileActionController.ReportLateCompletion`), stay non-undoable, document Â· B also register a group Undo for the batch |
+| RV-D1 | RV-C01 | How should Move-undo decide "destination unchanged" when the destination volume rounds mtime (FAT 2 s, exFAT 10 ms)? | **A** size equal and \|mtime delta\| <= 2 s · B re-stat destination right after the move and fingerprint that stamp (in-session only; journal-restored undo still needs A) · C size only (same as the 2026-09-30 group-Copy decision) |
+| RV-D2 | RV-S01 | An unknown/garbage enum value in `config.json` loads as the enum's zero member, not the `AppSettings` default (6 settings affected). Contract? | **A** reset to the `AppSettings` default and list it in `LastLoadRepairs` (startup dialog) · B same reset, silent · C keep zero member, document it |
+| RV-D3 | RV-A03 | Plain-key shortcuts ignore Ctrl/Shift (Ctrl+Delete recycles, Ctrl+Enter / Ctrl+F5 run actions; Alt combos already never match because WPF reports them as `Key.System`). Rule? | **A** file-changing commands (Recycle, every user Action) fire only with NO modifier; Move/Copy-to-folder keep "no Ctrl, Shift = picker"; navigation/zoom/toggles unchanged · B every plain-key command rejects Ctrl (Shift still allowed); only Undo/OpenFolder use Ctrl · C keep as is, pin with tests |
+| RV-D4 | RV-A12 | Changing "Image order" in Settings does not re-sort the open folder. | **A** reload the open folder on change (same path as RawSupport/RawPairMode) · B keep, change the hint text to "applies to the next folder you open" |
+| RV-D5 | RV-A10 | Duplicate batch-recycle finishing after the user opened another folder returns silently and is not undoable. | **A** report it through the late-completion status sink (like `FileActionController.ReportLateCompletion`), stay non-undoable, document · B also register a group Undo for the batch |
 
 ## 3. PR waves (each PR based on `origin/master`, no stacking)
 
@@ -58,7 +58,7 @@ Files were assigned so that PRs of the same wave touch disjoint files and can ru
 |---|---|---|---|
 | 0 | `docs/review-2026-10-plan` | this plan | - |
 
-### Wave 1 â€” MED findings and their neighbours (parallel)
+### Wave 1 — MED findings and their neighbours (parallel)
 | PR | Branch | Tasks | Main files | Model |
 |---|---|---|---|---|
 | 1 | `fix/rv-fileactions-undo` | RV-C01, C02, C03, C06, C07, C08 | `UndoService.cs`, `FileActionService.cs`, `RecoveryRetryService.cs` | **[strong]** |
@@ -68,7 +68,7 @@ Files were assigned so that PRs of the same wave touch disjoint files and can ru
 | 5 | `fix/rv-fileaction-gate` | RV-A01 | `FileActionGate.cs` | **[strong]** |
 | 6 | `fix/rv-cache-preload` | RV-I02, I09, I10, I11, I12, I13, I14, I15, I16 | `ThumbnailCache.cs`, `NavigationPace.cs`, `PreloadScheduler.cs`, `SourceBytesCache.cs` | **[strong]** |
 
-### Wave 2 â€” remaining LOW findings (parallel; start after wave 1 merges to avoid test-file conflicts)
+### Wave 2 — remaining LOW findings (parallel; start after wave 1 merges to avoid test-file conflicts)
 | PR | Branch | Tasks | Main files | Model |
 |---|---|---|---|---|
 | 7 | `fix/rv-app-coordinators` | RV-A03, A04, A05, A06, A07, A08, A09, A10 | `ShortcutRouter.cs`, `ImagePresenter.cs`, `FolderLoadCoordinator.cs`, `SiblingFolderNavigator.cs`, `FileActionController.cs`, `DuplicateCleanupController.cs` | sonnet (A05/A06 reviewed by strong) |
@@ -76,7 +76,7 @@ Files were assigned so that PRs of the same wave touch disjoint files and can ru
 | 9 | `fix/rv-core-misc` | RV-C04, C05, C09, S02, S05, S06, S07 | `OperationJournal.cs`, `SessionStore.cs`, `ReviewCatalog.cs`, `DiagOptions.cs`, `ForwardedPathProtocol.cs`, `PhysicalFileSystem.cs`, `ImmediateUiScheduler.cs` | sonnet (C04 **[strong]**) |
 | 10 | `fix/rv-platform` | RV-P01..P08 | `Platform.Windows/*`, `TrGenerator.cs` | sonnet (P08 haiku) |
 
-### Wave 3 â€” test-only gaps (parallel, one PR per test project)
+### Wave 3 — test-only gaps (parallel, one PR per test project)
 | PR | Branch | Tasks |
 |---|---|---|
 | 11 | `test/rv-core-gaps` | RV-T01..T12 (Core.Tests) |
@@ -84,18 +84,18 @@ Files were assigned so that PRs of the same wave touch disjoint files and can ru
 | 13 | `test/rv-imaging-gaps` | RV-T40..T58 (Imaging.Tests) |
 | 14 | `test/rv-integration-gaps` | RV-T60..T67 (Integration.Tests, UI/Native) |
 
-### Wave 4 â€” close-out
+### Wave 4 — close-out
 | PR | Branch | Content |
 |---|---|---|
 | 15 | `docs/rv-close` | HISTORY line, delete this directory, docs-sync `ACTIVE-TASKS.md`/`task_on_progress.md`, real-machine check results |
 
 ## 4. Gates (every PR, before push)
 
-1. `dotnet build PhotoReview.slnx -c Release` â†’ 0 warnings, 0 errors.
+1. `dotnet build PhotoReview.slnx -c Release` → 0 warnings, 0 errors.
 2. `tools/verify-all.ps1 -Parallel -Hidden` (never exclude `Category=UI`; bounded by `tests/test.runsettings`).
    A single project while iterating: `tools/run-tests-hidden.ps1 tests/<Project>/<Project>.csproj --filter "FullyQualifiedName~<Class>"`.
 3. Each new test was seen failing on the unfixed code and failing again under the mutation check (record the
-   mutation in the PR description: "mutated X â†’ test Y failed").
+   mutation in the PR description: "mutated X → test Y failed").
 4. `tools/i18n-check.ps1` if any UI text changed; `tools/check-doc-links.ps1` and `tools/docs-budget.ps1 -Check` if docs changed;
    `tools/check-open-decisions.ps1` if a `decisions/` file was added.
 5. PR 3 only: if the local RAW corpus exists (`tools/fetch-raw-samples.ps1`), run `Imaging.Tests` with
@@ -105,7 +105,7 @@ Files were assigned so that PRs of the same wave touch disjoint files and can ru
 
 ## 5. Tracker
 
-Status values: TODO Â· DECISION (waiting for RV-D*) Â· IN-PR (#n) Â· DONE Â· NOT-A-BUG.
+Status values: TODO · DECISION (waiting for RV-D*) · IN-PR (#n) · DONE · NOT-A-BUG.
 
 | ID | Sev | Ev | Title | PR | Status |
 |---|---|---|---|---|---|
@@ -133,7 +133,7 @@ Status values: TODO Â· DECISION (waiting for RV-D*) Â· IN-PR (#n) Â· DONE 
 | RV-A06 | LOW | CONF | Superseded load overwrites `ReadabilityProbe` | 7 | TODO |
 | RV-A07 | LOW | PLAU | Folder scan ignores cancellation | 7 | TODO |
 | RV-A08 | LOW | PLAU | Sibling navigation spins forever on direction 0 | 7 | TODO |
-| RV-A09 | LOW | PLAU | "Moved toâ€¦" status raced by the next present | 7 | TODO |
+| RV-A09 | LOW | PLAU | "Moved to…" status raced by the next present | 7 | TODO |
 | RV-A10 | LOW | PLAU | Duplicate batch silent when the folder changed | 7 | DECISION (D5) |
 | RV-A11 | LOW | CONF | `ViewerState._fitAxisViewport` goes stale | 8 | TODO |
 | RV-A12 | LOW | PLAU | Changing sort mode does not re-sort the open folder | 8 | DECISION (D4) |
