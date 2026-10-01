@@ -1,5 +1,7 @@
 # RAW progress 04 - In progress and how to resume
 
+> **Merged 2026-10-01:** PR #239 is in `master` (`2f2bf342`). Wording below such as "before merge" or "OPEN" describes the state while the PR was open; items still open after the merge: the never-run `raw-corpus.yml` workflow, the waived RAW-62 real-machine check, machine leftovers.
+
 State as of 2026-09-30 (sections 1 and 2 are refreshed for 2026-10-01 where marked), checked with `git` and read-only `gh` at the time of writing. Where the session fact sheet and git
 disagreed, git is used and the difference is stated.
 

@@ -1,5 +1,7 @@
 # Whole-project code review and optimization candidates
 
+**Update 2026-10-01:** the "screened-static" rows mentioned below have since been manually reviewed (#223, ten batch files under [`decisions/ledger-batches/`](decisions/ledger-batches/)): the TSV now holds 8,159 `reviewed-static`, 400 `no-change`, 19 `proposal`, 6 `needs-runtime`, `issue-L01`, `issue-L02` and no `screened-static`. The `3ef2bb5` line numbers are still stale.
+
 **Ledger status note (2026-09-27, docs-sync):** [`FUNCTION-BODY-AUDIT-2026-09-27.tsv`](FUNCTION-BODY-AUDIT-2026-09-27.tsv)
 is a snapshot of source base `3ef2bb5`; `origin/master` has moved 60 commits / 69 changed files under
 `src`/`tools`/`tests` since (including whole new files such as `NavigationStatWorker.cs`,

@@ -1,5 +1,7 @@
 # RAW integration: decisions and open items
 
+> **Merged 2026-10-01:** PR #239 is in `master` (`2f2bf342`). Wording below such as "before merge" or "OPEN" describes the state while the PR was open; items still open after the merge: the never-run `raw-corpus.yml` workflow, the waived RAW-62 real-machine check, machine leftovers.
+
 Status record for PR https://github.com/ConanKLOP2/PhotoReview/pull/239 (`feat/raw-support-integration` -> `master`).
 Written 2026-09-30 from the working session plus git history; where they disagreed, git was trusted.
 
@@ -66,6 +68,7 @@ Written 2026-09-30 from the working session plus git history; where they disagre
 
 ## Docs to update
 
+- 2026-10-01 status: DECISIONS Q-RAW-02 already records the WIC-removal outcome and SURVEY.md carries a pre-fix banner (the two items below are done); ADR 0003 already covers the blank-Source quarantine and the Committed-with-missing-member rule (the ADR bullet below is done); `task_on_progress.md`/`ACTIVE-TASKS.md` were refreshed by the post-merge docs sync.
 - 2026-10-01: the RAW-70 repair-dialog sentence in DECISIONS.md and the Vietnamese README are corrected (see file 05).
 - [DECISIONS.md](../DECISIONS.md) Q-RAW-02: still says RAW-30 probes WIC for the survey; the WIC full decoder was removed
   (`54a1b1c6`), so the WIC comparison is survey history only.

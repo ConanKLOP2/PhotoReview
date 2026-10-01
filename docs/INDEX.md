@@ -18,6 +18,7 @@ Find a document by purpose. Read tiers: **T0** (every session, â‰¤18 KB total) Â
 | [`refactoring/FUNCTION-BODY-AUDIT-2026-09-27.tsv`](refactoring/FUNCTION-BODY-AUDIT-2026-09-27.tsv) | Per-body ledger for source, tools and tests; query selected rows by ID/file | Reference artifact, query on demand |
 | [`refactoring/HISTORY.md`](refactoring/HISTORY.md) | One line per finished group; how to recover removed plans from git | T1, "what was done before" |
 | [`refactoring/I18N-PLAN.md`](refactoring/I18N-PLAN.md) | Multi-language design (L00-L12, done) | T1, UI text |
+| [`refactoring/raw/`](refactoring/raw/PROGRESS.md) | Camera RAW (ADR 0009) record, merged in #239: `DECISIONS.md` (Q-RAW), `SURVEY.md` (pre-fix snapshot), `AGENT-PROTOCOL.md`, `progress/01..05` (review waves, tests/CI, open items, resume, 2026-10-01 review). Start at `PROGRESS.md` | T1, RAW work |
 | `refactoring/arch-review/AR02, AR04, AR11` | Kept plans referenced by ADR 0005 and code comments | T2 |
 | [`../README.md`](../README.md) | Overview, setup, build, settings | T1, first-time setup |
 | [`../tests/Fixtures/README.md`](../tests/Fixtures/README.md) | Test fixtures and env vars | T1, tests |

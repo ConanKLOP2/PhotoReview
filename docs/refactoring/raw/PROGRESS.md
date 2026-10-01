@@ -1,6 +1,6 @@
 # Camera RAW support: progress record (PR #239)
 
-State of the work on the RAW integration branch (`feat/raw-support-integration`, PR https://github.com/ConanKLOP2/PhotoReview/pull/239), written for handover. Facts come from git; anything not checked is marked NOT VERIFIED inside each file.
+State of the work on the RAW integration branch (`feat/raw-support-integration`, PR https://github.com/ConanKLOP2/PhotoReview/pull/239, merged 2026-10-01), written for handover. Facts come from git; anything not checked is marked NOT VERIFIED inside each file.
 
 | File | What it records |
 |---|---|
@@ -10,4 +10,4 @@ State of the work on the RAW integration branch (`feat/raw-support-integration`,
 | `progress/05-multi-agent-review-2026-10-01.md` | Second review of the whole PR (10 area reviewers, 2 skeptics per finding): 18 confirmed and fixed, 4 split, 5 rejected with reasons, what was verified |
 | `progress/04-in-progress-and-resume.md` | Exact current state, unfinished work (OC14 flake investigation stopped manually, manual corpus workflow never run), resume checklist for another machine, cleanup list |
 
-Status 2026-10-01: PR #239 is OPEN and mergeable, CI green at `7a5109fe`, master has no commits the branch lacks. Start with file 04 to resume, or file 03 to decide what is left.
+Status 2026-10-01: PR #239 is MERGED into `master` (squash `2f2bf342`, tag `v2.0.240` is the latest). The files below were written while it was open; each carries a merge note. What is left after the merge: the never-run `raw-corpus.yml` workflow, the waived RAW-62 real-machine check, and machine cleanup (file 04 sections 2.2, 2.3, 4).

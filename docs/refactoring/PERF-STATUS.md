@@ -1,6 +1,6 @@
 # Performance status and baselines
 
-**Updated:** 2026-09-27. Older detail (D-series tasks, AR04 interleaved gate tables, per-PR perf-night notes, benchmark speed-up step tables,
+**Updated:** 2026-10-01. Older detail (D-series tasks, AR04 interleaved gate tables, per-PR perf-night notes, benchmark speed-up step tables,
 kinetic-pan harness tables): `git show 1de561c:docs/refactoring/PERF-STATUS.md`.
 Fixture F4 = a real folder of portrait 20-30 MP JPEGs (1841-2058 files, 13-19 GB, grows over time); paths are machine-specific (`CLAUDE.local.md`).
 Harness: `tools/diag/run-matrix.ps1 -Profile quick|gate|full` (`--perf-session` on the production graph via `AppHost`). Compare only within
