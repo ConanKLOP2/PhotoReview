@@ -18,7 +18,7 @@ and perf measurements go in new fragment files under `docs/refactoring/decisions
 - **RAW, still unverified:** the manual workflow `.github/workflows/raw-corpus.yml` has never run (GitHub offers "Run workflow"
   only on a default-branch file; until then RAW corpus tests skip in CI). The user waived the RAW-62 real-machine check, so RAW on
   a running app (zoom white balance, RAF size, RAM estimate) has no human acceptance. Machine leftovers (agent worktrees, scratch
-  branches): [raw/progress/04](docs/refactoring/raw/progress/04-in-progress-and-resume.md) section 4.
+  branches): [raw/PROGRESS](docs/refactoring/raw/PROGRESS.md).
 - **Kinetic pan:** the 2026-09-27 manual check failed (jerky arrow-key glide); #221 damped only the mouse-release glide. No manual
   re-check of arrow-key panning is on record.
 - **Ledger:** the TSV is a `3ef2bb5` snapshot (line numbers stale, note atop the

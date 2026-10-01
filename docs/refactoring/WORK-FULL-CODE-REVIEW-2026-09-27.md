@@ -1,20 +1,6 @@
 # Whole-project code review and optimization candidates
 
-**Update 2026-10-01:** the "screened-static" rows mentioned below have since been manually reviewed (#223, ten batch files under [`decisions/ledger-batches/`](decisions/ledger-batches/)): the TSV now holds 8,159 `reviewed-static`, 400 `no-change`, 19 `proposal`, 6 `needs-runtime`, `issue-L01`, `issue-L02` and no `screened-static`. The `3ef2bb5` line numbers are still stale.
-
-**Ledger status note (2026-09-27, docs-sync):** [`FUNCTION-BODY-AUDIT-2026-09-27.tsv`](FUNCTION-BODY-AUDIT-2026-09-27.tsv)
-is a snapshot of source base `3ef2bb5`; `origin/master` has moved 60 commits / 69 changed files under
-`src`/`tools`/`tests` since (including whole new files such as `NavigationStatWorker.cs`,
-`SlowLinkFileSystem.cs`), so line numbers and file lists in the ledger do not reflect current source.
-No re-inventory against current `HEAD` was attempted in this docs-only pass. Later reviews that go deeper
-than this snapshot live in [`decisions/LEDGER-DEEP-REVIEW.md`](decisions/LEDGER-DEEP-REVIEW.md) (the 289
-`needs-deep-review` rows) and [`decisions/POST-LEDGER-REVIEW.md`](decisions/POST-LEDGER-REVIEW.md) (master
-changes since `3ef2bb5` plus screened-static hot-path rows) — read those for what is current, not the raw
-ledger below. Current `Status` column distribution (8,586 rows): 8,096 `screened-static`, 268
-`reviewed-static`, 195 `no-change`, 19 `proposal`, 6 `needs-runtime`, 1 `issue-L01`, 1 `issue-L02` — i.e. the
-289-row deep-review batch's outcomes are already reflected in the TSV; the remaining `screened-static` rows
-are still only automated-screened, and a separate, ongoing manual semantic re-review pass across the whole
-ledger (outside this PR's scope) is what would move more of them to `reviewed-static`/`no-change`.
+**Ledger removed 2026-10-01:** the per-body ledger (`FUNCTION-BODY-AUDIT-2026-09-27.tsv`, 8,586 rows at source base `3ef2bb5`), its ten batch reports and the L/P review reports were deleted once every row had a review status (#200, #201, #223; outcomes: L01/L02 fixed, P01-P03 in `decisions/`, everything else no issue). Recover with `git log --follow -- <path>` (last copy: `2f2bf342`). Ledger IDs and line numbers below refer to that snapshot.
 
 **Date:** 2026-09-27. **Initial review baseline:** `origin/master` `13e33df` (`v2.0.187`); #183 merged as `f82084d` while review ran. **Source base reviewed:** `3ef2bb5` (#188 fixes two test fixtures). **Status:** PR #185 merged into master as `1c167cd`; static review, no production changes. The #183 context-menu/settings diff was checked separately; no concrete issue found in that delta. GUI behavior still needs real-desktop verification.
 
@@ -26,7 +12,7 @@ The per-body ledger is a snapshot of source base `3ef2bb5`, not a current-tree i
 
 Three read-only subagents covered App/WPF, Core, and Windows/platform/build/tooling; the lead covered Imaging/TurboJPEG. The lead checked cross-project call paths and evidence for reported findings. Reviewed project references, architecture contracts, selected tests and the complete `src` file inventory. Detailed function tracing covered navigation, compare, cache, decode, preload, file-system, file actions, journal/recovery/session, instance forwarding, settings/localization/diagnostics, standalone windows, input/glide, startup/shutdown, benchmark and platform/tool functions. Static XAML checks covered handler names, key bindings and theme resources.
 
-The follow-up inventory records **8,586 callable bodies in 604 C# files**, including constructors, accessors, local functions, test methods, helpers and lambdas, in [FUNCTION-BODY-AUDIT-2026-09-27.tsv](FUNCTION-BODY-AUDIT-2026-09-27.tsv). Each row has a stable ID within this baseline, location, symbol, status, review method and assessment. The row list is exhaustive for callable bodies parsed from `src/`, `tools/` and `tests/`, excluding generated `bin/obj`; files without bodies are absent. The two new #188 fixture lambdas were checked directly, and old IDs were remapped by ordered file/kind/symbol/parent identity. **Coverage of inventory is not semantic review of every body:** 8,096 rows have only automated static screening, and 289 are marked for deeper review. The direct source/helper review and proposals cover 201 rows; six rows need runtime evidence. In tests, 6,139 bodies are listed, including helpers/lambdas; 5,876 were screened only. Static test-oracle scans cannot establish that a test fails when guarded code breaks. No mutation campaign was run. A build and the standard filtered test suite verify integration, but cannot establish that every function is optimal or prove NAS/GUI performance.
+The follow-up inventory records **8,586 callable bodies in 604 C# files**, including constructors, accessors, local functions, test methods, helpers and lambdas, in the (since removed) ledger TSV. Each row has a stable ID within this baseline, location, symbol, status, review method and assessment. The row list is exhaustive for callable bodies parsed from `src/`, `tools/` and `tests/`, excluding generated `bin/obj`; files without bodies are absent. The two new #188 fixture lambdas were checked directly, and old IDs were remapped by ordered file/kind/symbol/parent identity. **Coverage of inventory is not semantic review of every body:** 8,096 rows have only automated static screening, and 289 are marked for deeper review. The direct source/helper review and proposals cover 201 rows; six rows need runtime evidence. In tests, 6,139 bodies are listed, including helpers/lambdas; 5,876 were screened only. Static test-oracle scans cannot establish that a test fails when guarded code breaks. No mutation campaign was run. A build and the standard filtered test suite verify integration, but cannot establish that every function is optimal or prove NAS/GUI performance.
 
 The review did not use a new benchmark run or a real NAS fixture. A source-level blocking call is confirmed; its frequency and user-visible latency on a given machine are measurement questions. Do not label the proposals below as measured speedups.
 
