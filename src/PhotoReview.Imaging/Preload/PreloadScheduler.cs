@@ -326,7 +326,9 @@ public sealed class PreloadScheduler : IDisposable
     /// RV-I12: the exit decision of run <paramref name="runId"/>, taken under the same gate <see cref="PreloadAroundAsync"/>
     /// joins a running loop under. False when a navigation bumped the priority version since <paramref name="seenVersion"/>
     /// (take another pass). True marks the run as exiting, so any later <see cref="PreloadAroundAsync"/> starts a new run
-    /// instead of returning this one, whose loop will not read the version again.
+    /// instead of returning this one, whose loop will not read the version again. A run paused for memory may still be
+    /// draining started workers after this: the new run then shares <see cref="_preloadSlots"/> with them (concurrency
+    /// stays bounded) and may queue a path one of them still holds; the target's in-flight dedup joins that decode.
     /// </summary>
     private bool TryExitRun(long runId, long seenVersion, bool paused, CancellationToken cancellationToken)
     {
@@ -693,6 +695,8 @@ public sealed class PreloadScheduler : IDisposable
                     lock (_preloadedKeysGate)
                     {
                         // RV-I15: a new box (window resized) makes every key of the old box unmatchable: drop them.
+                        // The set only feeds the preload-hit metric (TryConsumePreloadedKey), never the queue logic,
+                        // so a box flip back and forth can at worst under-count hits; it can no longer grow unbounded.
                         if (freshKey.TargetBox != _preloadedKeysBox)
                         {
                             _preloadedKeys.Clear();
@@ -735,6 +739,7 @@ public sealed class PreloadScheduler : IDisposable
             {
                 // RV-I14: cancelled by someone else's token (not this lifetime): only this item failed. Letting it escape
                 // would reach the scheduler loop as an unexpected exception and end preload for the whole lifetime.
+                // Failed (not retried this lifetime) on purpose: a source that keeps cancelling must not be re-read every pass.
                 _log.Warn($"Preload cancelled by another source: {path} ({ex.Message})");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
