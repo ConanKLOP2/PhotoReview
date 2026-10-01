@@ -26,7 +26,7 @@ public sealed class UpdateCheckerGapTests
         Assert.Equal(UpdateCheckStatus.Failed, result.Status);
     }
 
-    [Fact(Skip = "RV defect: UpdateChecker.CheckAsync lets a non-HttpRequestException (InvalidOperationException) escape instead of returning Failed; only SettingsWindow's catch-all hides it. See report.")]
+    [Fact]
     public async Task CheckAsync_HandlerThrowsInvalidOperationException_ReturnsFailedWithoutThrowing()
     {
         var result = await Check(new Handler(_ => throw new InvalidOperationException("handler broke")));

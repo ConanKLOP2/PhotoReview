@@ -49,6 +49,12 @@ public sealed class UpdateChecker : IUpdateChecker
         {
             return UpdateCheckResult.Failed(UpdateFailure.Offline);
         }
+        // Anything else from the handler/stack (e.g. InvalidOperationException) is a failed check, never a crash;
+        // a user cancel (OperationCanceledException) still propagates.
+        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
+        {
+            return UpdateCheckResult.Failed(UpdateFailure.BadResponse);
+        }
     }
 
     private static UpdateCheckResult Interpret(string body, AppVersion current)

@@ -116,7 +116,10 @@ public sealed class SourceBytesCache
     {
         bytes = [];
         if (offset < 0 || count <= 0 || offset > length || count > length - offset) return false;
-        return _cache.TryGet(CreateRangeKey(path, length, lastWriteUtcTicks, offset, count), out bytes!);
+        // Read into a local: TryGet nulls its out value on a miss, which must not leak into the non-null `bytes`.
+        if (!_cache.TryGet(CreateRangeKey(path, length, lastWriteUtcTicks, offset, count), out var found)) return false;
+        bytes = found;
+        return true;
     }
 
     /// <summary>

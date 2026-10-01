@@ -46,6 +46,18 @@ public sealed class SourceBytesCacheGapTests : IDisposable
         Assert.Equal(1, cache.Count);
     }
 
+    [Fact(DisplayName = "TryGetRange leaves the non-null empty array in the out value on a cache miss")]
+    public void TryGetRange_CacheMiss_OutValueIsEmptyNotNull()
+    {
+        var f = Fixture("raw.dng");
+        var cache = new SourceBytesCache(1024 * 1024);
+
+        Assert.False(cache.TryGetRange(f.Path, f.Length, f.Ticks, 0, 128, out var bytes));
+
+        Assert.NotNull(bytes);
+        Assert.Empty(bytes);
+    }
+
     [Theory(DisplayName = "TryGetRange rejects non-positive counts and ranges outside the source")]
     [InlineData(0, 0)]
     [InlineData(0, -1)]
