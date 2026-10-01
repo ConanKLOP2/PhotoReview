@@ -99,9 +99,14 @@ public sealed class ZoomDetailLoaderGapTests : IDisposable
         Assert.Null(_loader.PendingLoad);
         Assert.Equal(1, _decoder.OriginalDecodes("a.jpg")); // no retry on this navigation
 
+        // Hold c.jpg's decode behind a gate: an ungated decode can finish (and clear PendingLoad) before this thread
+        // reads it, which made the test fail on fast machines.
+        using var gateC = new SemaphoreSlim(0);
+        _decoder.GateByName["c.jpg"] = gateC;
         Present("c.jpg"); // next navigation (new token): the failure latch no longer applies
         var next = _loader.PendingLoad;
         Assert.NotNull(next);
+        gateC.Release();
         await next!;
         Assert.Equal(1, _decoder.OriginalDecodes("c.jpg"));
         Assert.True(_loader.IsShowingOriginal);
