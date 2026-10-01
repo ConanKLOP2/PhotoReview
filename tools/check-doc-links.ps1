@@ -1,10 +1,10 @@
 ﻿#!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  AR07 §3: link-check gate for non-archive Markdown docs, plus a stale-doc-reference
+  AR07 §3: link-check gate for Markdown docs, plus a stale-doc-reference
   scan over source comments (R12).
 
-  Part 1 scans every non-archive *.md file for:
+  Part 1 scans every *.md file for:
     - Markdown links: [text](path)
     - Back-ticked doc paths: `docs/.../something.md`
   and verifies each local (non-http/mailto/#anchor) target resolves relative
@@ -27,14 +27,10 @@ param()
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 
-# Directories to exclude entirely: docs/archive and docs/refactoring/archive
-# are historical/unmaintained, docs/refactoring/arch-review holds planning
-# documents that intentionally quote past-broken and glob-style example
-# paths as a historical record (not live links); the rest is build output /
-# vendor / vcs / worktree noise. Matched against a path RELATIVE to the
-# repo root, never the absolute path (the repo itself may live under a
-# .claude/worktrees/* checkout).
-$ExcludeDirPattern = '(^|[\\/])(docs[\\/]archive|docs[\\/]refactoring[\\/]archive|docs[\\/]refactoring[\\/]arch-review|bin|obj|\.git|node_modules|\.claude[\\/]worktrees)([\\/]|$)'
+# Directories to exclude entirely: build output / vendor / vcs / worktree noise.
+# Matched against a path RELATIVE to the repo root, never the absolute path
+# (the repo itself may live under a .claude/worktrees/* checkout).
+$ExcludeDirPattern = '(^|[\\/])(bin|obj|\.git|node_modules|\.claude[\\/]worktrees)([\\/]|$)'
 
 function Test-Excluded([string]$RelativePath) {
     return $RelativePath -match $ExcludeDirPattern
@@ -88,7 +84,7 @@ function Resolve-DocLink([string]$FileDir, [string]$Target) {
     return $false
 }
 
-# Collect all non-archive markdown files.
+# Collect all markdown files.
 $mdFiles = Get-ChildItem -LiteralPath $root -Recurse -Filter '*.md' -File |
     Where-Object {
         $rel = $_.FullName.Substring($root.Length + 1) -replace '\\', '/'
@@ -144,7 +140,7 @@ foreach ($file in $mdFiles) {
 $allDocFiles = Get-ChildItem -LiteralPath $root -Recurse -Filter '*.md' -File |
     Where-Object {
         $rel = $_.FullName.Substring($root.Length + 1) -replace '\\', '/'
-        -not (Test-Excluded $rel) -or $rel -match '^docs[\\/]archive' -or $rel -match '^docs[\\/]refactoring[\\/](archive|arch-review)'
+        -not (Test-Excluded $rel)
     } |
     ForEach-Object { $_.Name }
 $knownExact = [System.Collections.Generic.HashSet[string]]::new([string[]]($allDocFiles | ForEach-Object { $_.ToLowerInvariant() }))
