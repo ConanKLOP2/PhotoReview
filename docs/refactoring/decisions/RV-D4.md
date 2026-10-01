@@ -1,6 +1,6 @@
 ---
 id: RV-D4
-order: 47
+order: 54
 summary: |-
   Changing "Image order" in Settings reloads the open folder at the current image (the same path as RawSupport/RawPairMode), so the new order applies immediately instead of at the next folder (option A, 2026-10-01).
 ---
