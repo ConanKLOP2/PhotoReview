@@ -70,6 +70,10 @@ public sealed class ConvertersTests
             var forNull = Assert.IsAssignableFrom<SolidColorBrush>(converter.Convert(null!, typeof(Brush), null!, CultureInfo.InvariantCulture));
             var forText = Assert.IsAssignableFrom<SolidColorBrush>(converter.Convert("true", typeof(Brush), null!, CultureInfo.InvariantCulture));
 
+            // The brushes are process-wide statics: they must be frozen, or only the thread that first touched the
+            // converter type may read them (the test run order then decides whether this test can read `.Color`).
+            Assert.True(selected.IsFrozen);
+            Assert.True(unselected.IsFrozen);
             Assert.Equal(Colors.LimeGreen, selected.Color);
             Assert.Equal(Color.FromRgb(0x55, 0x55, 0x55), unselected.Color);
             Assert.Same(unselected, forNull);
