@@ -302,7 +302,7 @@ public sealed class MainWindowExplorerOrderTests
     /// Presses the configured "Next" key on the window's real PreviewKeyDown route — the same entry
     /// point a physical keystroke takes (MainWindow.xaml wires PreviewKeyDown="Window_KeyDown").
     /// Nothing is injected at OS level: SendInput/SendKeys/SetForegroundWindow are forbidden in this
-    /// repo (rule 4 of PERF-DIAGNOSIS-TASKS.md) after a simulated keystroke escaped to another window.
+    /// repo (rule 4 of PERF-DIAGNOSIS-TASKS (removed doc, see git history)) after a simulated keystroke escaped to another window.
     /// </summary>
     private static void PressNext(MainWindow window)
     {

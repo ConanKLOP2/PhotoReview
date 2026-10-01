@@ -26,3 +26,7 @@ was already fixed in another session before this triage.
 | Q-R52 | New format support (WebP/HEIC/JXL/PSD/AVIF) and RAW (CR2/CR3/ARW/...) | DECLINED for now — needs a separate architecture decision (library choice, licensing, per-format test plan) before any implementation | — |
 
 Implementation of the DO items tracked on branch `claude/outstanding-issues-959307`.
+
+**Update 2026-09-28/10-01:** Q-R52's RAW half was superseded: the architecture decision it asked for was made in
+[`Q-RAW.md`](Q-RAW.md) and [ADR 0009](../../adr/0009-camera-raw-support.md), and camera RAW shipped in #239. The WebP/HEIC/JXL/PSD/AVIF
+half stays declined.

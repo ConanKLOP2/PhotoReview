@@ -71,7 +71,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
     {
         // A real decode of the 1x1 fixture PNG completes far faster than any poll loop could
         // reliably sample mid-flight, so sampling SemaphoreSlim.CurrentCount during a preload
-        // run would be flaky (the exact failure mode PERF-DIAGNOSIS-TASKS.md D10 warns about).
+        // run would be flaky (the exact failure mode PERF-DIAGNOSIS-TASKS (removed doc, see git history) D10 warns about).
         // Checking the semaphore's configured capacity right after construction proves the same
         // thing deterministically: SemaphoreSlim itself guarantees WaitAsync never admits more
         // than that many concurrent holders, so "capacity == 2" is equivalent to "at most 2

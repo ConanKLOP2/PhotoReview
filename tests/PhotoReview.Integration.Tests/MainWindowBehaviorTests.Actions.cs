@@ -21,7 +21,7 @@ namespace PhotoReview.Integration.Tests;
 /// The action is triggered the way the app triggers it: a <c>PreviewKeyDown</c> raised through
 /// WPF's own routed-event system, which runs the real <c>Window_KeyDown</c> handler and from
 /// there the real <c>ExecuteActionAsync</c>. No OS-level input is simulated (repo rule 4 in
-/// <c>PERF-DIAGNOSIS-TASKS.md</c>: never <c>SendInput</c>/<c>SendKeys</c>/<c>SetForegroundWindow</c>);
+/// <c>PERF-DIAGNOSIS-TASKS (removed doc, see git history)</c>: never <c>SendInput</c>/<c>SendKeys</c>/<c>SetForegroundWindow</c>);
 /// <c>RaiseEvent</c> never leaves the process and cannot land in another window.
 /// </para>
 /// <para>

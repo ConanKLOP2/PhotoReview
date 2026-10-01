@@ -12,11 +12,10 @@ function Get-DocTier {
     param([string]$Path)
     $p = $Path -replace '\\', '/'
     if ($p -match '^(AGENTS|task_on_progress|docs/INDEX)\.md$') { return 'T0' }
-    if ($p -match '^docs/(archive|refactoring/archive)/') { return 'T2' }
     if ($p -match '^README\.md$' -or
         $p -match '^docs/[^/]+\.md$' -or
         $p -match '^docs/adr/[^/]+\.md$' -or
-        $p -match '^docs/refactoring/([^/]+|arch-review/[^/]+)\.md$') { return 'T1' }
+        $p -match '^docs/refactoring/[^/]+\.md$') { return 'T1' }
     return 'Other'
 }
 

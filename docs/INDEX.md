@@ -1,6 +1,6 @@
 # Documentation Index
 
-Find a document by purpose. Read tiers: **T0** (every session, ≤18 KB total) · **T1** (one per task, ≤24 KB per file) · **T2** (history only). Checked by `tools/docs-budget.ps1 -Check`; links by `tools/check-doc-links.ps1`.
+Find a document by purpose. Read tiers: **T0** (every session, ≤18 KB total) · **T1** (one per task, ≤24 KB per file) · **T2** (history only: git log). Checked by `tools/docs-budget.ps1 -Check`; links by `tools/check-doc-links.ps1`.
 
 | File | Purpose | Tier |
 |------|---------|------|
@@ -14,13 +14,10 @@ Find a document by purpose. Read tiers: **T0** (every session, ≤18 KB total) �
 | [`TESTING.md`](TESTING.md) | Test categories, filters, local runners, hang guard | T1 |
 | [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md) + [`decisions/`](refactoring/decisions/) | Q-* index + one file per decision | T1, decision lookup |
 | [`refactoring/PERF-STATUS.md`](refactoring/PERF-STATUS.md) + [`perf/`](refactoring/perf/) | Methodology + one file per measurement | T1, perf work |
-| [`refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md`](refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md) | Current whole-project review, function-level candidates and coverage | T1, review work |
-| [`refactoring/FUNCTION-BODY-AUDIT-2026-09-27.tsv`](refactoring/FUNCTION-BODY-AUDIT-2026-09-27.tsv) | Per-body ledger for source, tools and tests; query selected rows by ID/file | Reference artifact, query on demand |
 | [`refactoring/HISTORY.md`](refactoring/HISTORY.md) | One line per finished group; how to recover removed plans from git | T1, "what was done before" |
 | [`refactoring/I18N-PLAN.md`](refactoring/I18N-PLAN.md) | Multi-language design (L00-L12, done) | T1, UI text |
-| `refactoring/arch-review/AR02, AR04, AR11` | Kept plans referenced by ADR 0005 and code comments | T2 |
+| [`refactoring/raw/`](refactoring/raw/PROGRESS.md) | Camera RAW (ADR 0009, merged in #239): `PROGRESS.md` (post-merge status, open items), `DECISIONS.md` (Q-RAW) | T1, RAW work |
 | [`../README.md`](../README.md) | Overview, setup, build, settings | T1, first-time setup |
 | [`../tests/Fixtures/README.md`](../tests/Fixtures/README.md) | Test fixtures and env vars | T1, tests |
-| `archive/evidence/` (`decoder-bench`, `D-diagnosis-REPORT`, `T66-final`), `archive/historical/` (`PERF-DIAGNOSIS-TASKS`, `test-parity`), `refactoring/archive/STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md` | Evidence for ADR 0001/0002 and files cited by code comments | T2, do not read unless referenced |
 
-Everything else that was finished (plans, review reports, per-task tables) was deleted on 2026-09-27; use `git log --follow -- <path>` or `git show 1de561c:<path>`.
+Everything else that was finished (plans, review reports, per-task tables, ADR evidence, the review ledger) was deleted on 2026-09-27 and 2026-10-01 (last copy of the 10-01 set: `2f2bf342`); use `git log --follow -- <path>` or `git show 1de561c:<path>`.

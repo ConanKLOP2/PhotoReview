@@ -65,7 +65,7 @@ public partial class MainWindow : Window
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         ArgumentNullException.ThrowIfNull(viewport);
         PlacementFile = (appPaths ?? PhotoReview.Core.AppPaths.FromEnvironment()).WindowPlacementFile;
-        // AR02b finding (see AR02-single-composition-root.md AR02d step 1, applied a step early
+        // AR02b finding (see AR02 plan (removed 2026-10-01, see git history) AR02d step 1, applied a step early
         // here because AR02b's migrated integration tests need it to observe real behaviour):
         // this used to call _settingsStore.Load() again, which re-reads/deserializes config.json
         // into a *new* AppSettings instance distinct from the one MainViewModelCompositionRoot

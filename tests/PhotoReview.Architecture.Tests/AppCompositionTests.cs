@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace PhotoReview.Architecture.Tests;
 
 /// <summary>
-/// AR02d: locks the single-composition-root outcome (AR02-single-composition-root.md, AR02d
+/// AR02d: locks the single-composition-root outcome (AR02 plan, removed 2026-10-01, see git history, AR02d
 /// step 3) so a future change cannot silently reintroduce a second, non-DI way to build
 /// <see cref="PhotoReview.App.MainWindow"/> or <see cref="PhotoReview.App.ViewModels.MainViewModel"/>.
 /// </summary>

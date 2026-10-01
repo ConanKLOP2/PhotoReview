@@ -8,7 +8,7 @@ using System.Threading;
 namespace PhotoReview.Core.Diagnostics;
 
 /// <summary>
-/// Perf diagnostics EventSource for PhotoReview (D03/D04, see docs/archive/historical/PERF-DIAGNOSIS-TASKS.md).
+/// Perf diagnostics EventSource for PhotoReview (D03/D04, see PERF-DIAGNOSIS-TASKS (removed doc, see git history)).
 /// Declares one event per instrumentation point added during that pass. Event ids are part of the wire
 /// contract for external tools (dotnet-trace, PerfView, WPR) and for <see cref="PerfCsvListener"/>:
 /// once assigned, an id must never be reused or reassigned to a different event.

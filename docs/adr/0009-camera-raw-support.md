@@ -2,7 +2,7 @@
 
 - **Status:** Accepted, 2026-09-29; implementation PR #239.
 - **Decision:** Enable Camera RAW support by default after completing the integration and quality gates.
-- **Related decisions:** [Q-RAW-01..07](../refactoring/decisions/Q-RAW.md); [sample survey](../refactoring/raw/SURVEY.md).
+- **Related decisions:** [Q-RAW-01..07](../refactoring/decisions/Q-RAW.md); sample survey (removed 2026-10-01, `git show 2f2bf342:docs/refactoring/raw/SURVEY.md`).
 
 ## Context
 
