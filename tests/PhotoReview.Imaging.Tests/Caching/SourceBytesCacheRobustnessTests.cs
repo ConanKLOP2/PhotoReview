@@ -79,6 +79,35 @@ public sealed class SourceBytesCacheRobustnessTests : IDisposable
         }
     }
 
+    [Fact(DisplayName = "RV-I16: Clear drops the per-path eviction versions; a read started before Clear is still not cached")]
+    public void Clear_PrunesPathVersions_AndStillInvalidatesInFlightRead()
+    {
+        var paths = Enumerable.Range(0, 3).Select(i => _root.File($"evicted{i}.bin", new byte[16])).ToArray();
+        var cache = new SourceBytesCache(1024 * 1024);
+        foreach (var path in paths) cache.Evict(path);
+        Assert.Equal(3, cache.PathVersionCountForTests);
+
+        var racing = _root.File("inflight.bin", new byte[32]);
+        using var readDone = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        cache.AfterReadForTests = () => { readDone.Set(); release.Wait(RaceTimeout); };
+        var reader = new Thread(() => cache.GetOrRead(racing));
+        reader.Start();
+        try
+        {
+            Assert.True(readDone.Wait(RaceTimeout), "Reader never finished its read.");
+            cache.Clear();
+        }
+        finally { release.Set(); }
+        Assert.True(reader.Join(RaceTimeout), "Reader thread did not finish after release.");
+
+        Assert.Equal(0, cache.PathVersionCountForTests);
+        Assert.Equal(0, cache.Count);
+        cache.AfterReadForTests = null;
+        Assert.Equal(16, cache.GetOrRead(paths[0]).Length); // evicted paths are cacheable again after Clear
+        Assert.Equal(1, cache.Count);
+    }
+
     [Fact(DisplayName = "A file larger than the whole capacity is returned but never cached, and does not push out smaller entries")]
     public void OversizedFile_IsReturnedButNotCached()
     {

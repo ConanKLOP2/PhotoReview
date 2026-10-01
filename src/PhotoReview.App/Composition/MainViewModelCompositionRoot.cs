@@ -42,7 +42,7 @@ internal static class MainViewModelCompositionRoot
         var thumbs = sp.GetRequiredService<ThumbnailCache>();
         var natural = sp.GetRequiredService<INaturalComparer>();
         var explorerOrder = sp.GetRequiredService<IExplorerOrderProvider>();
-        var schedulerFactory = sp.GetRequiredService<System.Func<System.Func<CatalogEntry[]>, System.Func<long>, PreloadScheduler>>();
+        var schedulerFactory = sp.GetRequiredService<System.Func<System.Func<CatalogEntry[]>, System.Func<long>, System.Func<int>, PreloadScheduler>>();
         var viewport = sp.GetRequiredService<ViewportSizeSource>();
         var observer = sp.GetRequiredService<IPresentationObserver>();
 
@@ -63,7 +63,8 @@ internal static class MainViewModelCompositionRoot
                     sourceSizeTracker.Observe(snapshot);
                     return snapshot;
                 },
-                sourceSizeTracker.GetTotal);
+                sourceSizeTracker.GetTotal,
+                () => catalog.StructuralVersion);
             preloadController = new PreloadControllerAdapter(() => preloadScheduler);
         }
 
