@@ -123,7 +123,7 @@ public sealed class FileActionControllerOrderingTests : IDisposable
 
             _sink.ReleasePresenter(); // the presenter finishes and writes its own status
             pump.RunUntil(() => run.IsCompleted && _sink.LastPresent!.IsCompleted, TimeSpan.FromSeconds(30));
-            run.GetAwaiter().GetResult();
+            Assert.True(run.IsCompletedSuccessfully);
         }
         finally
         {
