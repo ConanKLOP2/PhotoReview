@@ -74,6 +74,39 @@ public sealed class ForwardingCoreTests
         Assert.Equal("paths", ex.ParamName);
     }
 
+    // Lone surrogates are built at run time (not [InlineData]) so test discovery never has to serialize invalid UTF-16.
+    private static string LoneSurrogatePath(char surrogate) => @"C:\fwd\a" + surrogate + "b.jpg";
+
+    [Fact(DisplayName = "RV-S05: Encode rejects a path with a lone surrogate through the shared SEC-02 contract (ArgumentException for 'paths')")]
+    public void Encode_PathWithLoneSurrogate_ThrowsArgumentException()
+    {
+        foreach (var surrogate in new[] { '\uD800', '\uDC00' })
+        {
+            // Unchanged code threw the strict encoder's EncoderFallbackException (no ParamName) from GetBytes instead.
+            var ex = Assert.Throws<ArgumentException>(() => ForwardedPathProtocol.Encode([LoneSurrogatePath(surrogate)]));
+            Assert.Equal("paths", ex.ParamName);
+        }
+    }
+
+    [Fact(DisplayName = "RV-S05: TryDecode rejects the WTF-8 bytes of a lone surrogate")]
+    public void TryDecode_BytesOfLoneSurrogate_ReturnsFalse()
+    {
+        // U+D800 encoded the way a lenient (WTF-8/CESU-8) writer would: ED A0 80.
+        var bytes = Raw("PHOTOREVIEW-OPEN 1\nC:\\fwd\\a").Concat(new byte[] { 0xED, 0xA0, 0x80 }).Concat(Raw("b.jpg\n\n")).ToArray();
+
+        Assert.False(ForwardedPathProtocol.TryDecode(bytes, _ => true, out var paths));
+        Assert.Empty(paths);
+    }
+
+    [Fact(DisplayName = "RV-S05: a valid surrogate pair (non-BMP character) still round-trips")]
+    public void Encode_ValidSurrogatePair_RoundTrips()
+    {
+        var path = @"C:\fwd\a" + char.ConvertFromUtf32(0x1F600) + "b.jpg";
+
+        Assert.True(ForwardedPathProtocol.TryDecode(ForwardedPathProtocol.Encode([path]), _ => true, out var paths));
+        Assert.Equal([path], paths);
+    }
+
     [Theory(DisplayName = "SEC-02: every path Encode accepts, TryDecode also accepts (round-trip property)")]
     [InlineData(@"C:\a.jpg")]
     [InlineData(@"C:\folder with spaces\a.jpg")]

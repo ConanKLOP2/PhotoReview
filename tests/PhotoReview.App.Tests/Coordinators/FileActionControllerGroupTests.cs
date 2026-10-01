@@ -520,8 +520,12 @@ public sealed class FileActionControllerGroupTests : IDisposable
     public async Task UndoGroupRecycle_FailingMidWay_WhileAnotherPhotoIsShown_KeepsItDisplayed()
     {
         var (_, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        // The recycled capture is the displayed photo (as in the app); its removal then shows the next one, "after"
+        // (RV-C09: removing a NON-current entry no longer moves the current photo).
+        Assert.True(_catalog.SetCurrent(_catalog.IndexOf(jpeg)));
         var controller = NewController();
         await controller.RecycleAsync(null, jpeg);
+        Assert.Equal(after, _catalog.Current!.Path);
         var presentsBefore = _sink.Presented.Count;
         _bin.FailRestoreFor = raw;
 

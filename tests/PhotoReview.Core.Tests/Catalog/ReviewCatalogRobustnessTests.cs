@@ -161,7 +161,10 @@ public sealed class ReviewCatalogRobustnessTests
             var i = IndexOf(p);
             if (i < 0) return;
             Paths.RemoveAt(i);
-            Current = Paths.Count == 0 ? -1 : Math.Min(i, Paths.Count - 1);
+            // RV-C09: removing another entry keeps the current photo; removing the current one selects its successor.
+            if (Paths.Count == 0) Current = -1;
+            else if (Current >= 0 && i < Current) Current--;
+            else if (Current < 0 || i == Current) Current = Math.Min(i, Paths.Count - 1);
         }
 
         public void Restore(string p, int index)

@@ -84,6 +84,27 @@ public sealed class OperationJournalTests : IDisposable
         Assert.Contains(freshJournal.ReadPendingOperations(), e => e.Id == id);
     }
 
+    [Fact(DisplayName = "RV-C04: an append after another writer left a torn tail starts on its own line, even after this process appended")]
+    public void Append_AfterOtherWriterLeftTornTail_StartsOnNewLine()
+    {
+        // The constructor already appended through _journal, so this process has seen a clean tail once. Another
+        // PhotoReview process (InstanceMode.PerFolder) then dies mid-append and leaves a line without a newline.
+        using (var other = new FileStream(JournalFile, FileMode.Append, FileAccess.Write, FileShare.Read))
+        {
+            var torn = Encoding.UTF8.GetBytes("{\"partial");
+            other.Write(torn, 0, torn.Length);
+        }
+        var id = Guid.NewGuid().ToString("N");
+
+        _journal.Append(new JournalEntry(id, FileOperationType.Move, JournalState.Prepared, _source, _destination,
+            _info.Length, _info.LastWriteTimeUtc, DateTime.UtcNow));
+
+        var lines = File.ReadAllLines(JournalFile);
+        Assert.Contains("{\"partial", lines); // the fragment is isolated on its own line
+        Assert.Contains(_journal.ReadPendingOperations(), e => e.Id == id);
+        Assert.Contains(_journal.ReadCommittedMoves(), e => e.Id == _operationId);
+    }
+
     [Fact(DisplayName = "Journal entries are durably written as JSONL")]
     [Trait("Category", "Integration")]
     public void JournalEntriesAreDurablyWrittenAsJsonl()

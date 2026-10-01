@@ -68,8 +68,18 @@ public static class ActionDestinationPolicy
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationFolderOrPath);
         ArgumentNullException.ThrowIfNull(fileSystem);
 
-        var realSource = Path.TrimEndingDirectorySeparator(fileSystem.ResolveRealPath(sourceFolder));
-        var realDestination = Path.TrimEndingDirectorySeparator(fileSystem.ResolveRealPath(destinationFolderOrPath));
+        string realSource, realDestination;
+        try
+        {
+            realSource = Path.TrimEndingDirectorySeparator(fileSystem.ResolveRealPath(sourceFolder));
+            realDestination = Path.TrimEndingDirectorySeparator(fileSystem.ResolveRealPath(destinationFolderOrPath));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // RV-S06: a reparse point that cannot be resolved (a link loop a -> b -> a, a target the user may not read)
+            // means containment cannot be proven. SEC-01 fails CLOSED: treat it as an escape, never as "inside".
+            return ActionDestinationCheck.EscapesSourceFolder;
+        }
 
         if (string.Equals(realDestination, realSource, StringComparison.OrdinalIgnoreCase))
             return ActionDestinationCheck.Ok;

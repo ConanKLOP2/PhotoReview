@@ -260,6 +260,34 @@ public class ReviewCatalogTests
         Assert.Equal(1, catalog.Count);
     }
 
+    [Fact(DisplayName = "RV-C09: removing an entry before the current one keeps the same current photo (index shifts down)")]
+    public void Remove_EntryBeforeCurrent_KeepsSameCurrentPath()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset(["img1.jpg", "img2.jpg", "img3.jpg", "img4.jpg"]);
+        catalog.SetCurrent(2); // img3.jpg
+
+        var next = catalog.Remove("img1.jpg");
+
+        Assert.Equal(1, next);
+        Assert.Equal(1, catalog.CurrentIndex);
+        Assert.Equal("img3.jpg", catalog.Current?.Path);
+    }
+
+    [Fact(DisplayName = "RV-C09: removing an entry after the current one leaves the current photo and index unchanged")]
+    public void Remove_EntryAfterCurrent_KeepsSameCurrentPath()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset(["img1.jpg", "img2.jpg", "img3.jpg", "img4.jpg"]);
+        catalog.SetCurrent(1); // img2.jpg
+
+        var next = catalog.Remove("img4.jpg");
+
+        Assert.Equal(1, next);
+        Assert.Equal(1, catalog.CurrentIndex);
+        Assert.Equal("img2.jpg", catalog.Current?.Path);
+    }
+
     [Fact]
     public void Restore_ClampsIndexAndPreventsDuplicates()
     {

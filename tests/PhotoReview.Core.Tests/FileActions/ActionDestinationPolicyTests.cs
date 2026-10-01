@@ -44,6 +44,25 @@ public sealed class ActionDestinationPolicyTests
         Assert.Equal(ActionDestinationCheck.EscapesSourceFolder, result);
     }
 
+    [Theory(DisplayName = "RV-S06: a destination whose reparse points cannot be resolved is rejected (fail closed), not thrown")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ValidateNoEscapeViaReparsePoint_UnresolvableLink_FailsClosed(bool accessDenied)
+    {
+        var fs = new InMemoryFileSystem();
+        // What PhysicalFileSystem.ResolveRealPath throws for a link loop (ERROR_CANT_RESOLVE_FILENAME) or an unreadable link.
+        fs.ResolveRealPathHook = path => path.StartsWith(@"C:\photos\loop", StringComparison.OrdinalIgnoreCase)
+            ? (accessDenied ? new UnauthorizedAccessException("denied") : new IOException("The name of the file cannot be resolved by the system."))
+            : null;
+
+        ActionDestinationCheck result = ActionDestinationCheck.Ok;
+        var ex = Record.Exception(() =>
+            result = ActionDestinationPolicy.ValidateNoEscapeViaReparsePoint(@"C:\photos", @"C:\photos\loop\processed\a.jpg", fs));
+
+        Assert.Null(ex);
+        Assert.Equal(ActionDestinationCheck.EscapesSourceFolder, result);
+    }
+
     [Fact(DisplayName = "SEC-01: a junction that resolves back inside the source folder is still allowed")]
     public void ValidateNoEscapeViaReparsePoint_JunctionStaysInsideFolder_Allowed()
     {

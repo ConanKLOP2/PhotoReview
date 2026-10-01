@@ -65,6 +65,36 @@ public sealed class JournalAppendRobustnessTests : IDisposable
         Assert.Equal("a", Assert.Single(journal.ReadPendingOperations()).Id);
     }
 
+    [Fact(DisplayName = "RV-C04: a torn tail left by the writer this append waited for is repaired (tail checked under the append handle)")]
+    public void Append_OtherWriterTearsTailWhileThisAppendWaits_StartsOnNewLine()
+    {
+        var paths = new AppPaths(_root.Path);
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.JournalFile)!);
+        File.WriteAllText(paths.JournalFile, "{\"Id\":\"clean\"}\r\n"); // the tail is clean when this append starts
+        // Another PhotoReview process holds the journal mid-append (same open mode as PhysicalFileSystem.OpenAppend) ...
+        var other = new FileStream(paths.JournalFile, FileMode.Append, FileAccess.Write, FileShare.Read);
+        var journal = new OperationJournal(paths, new PhysicalFileSystem(), new SystemClock(), appendRetryDelay: _ =>
+        {
+            if (!other.CanWrite) return;
+            // ... and dies half-way through its record while this append is backing off.
+            var torn = System.Text.Encoding.UTF8.GetBytes("{\"partial");
+            other.Write(torn, 0, torn.Length);
+            other.Dispose();
+        });
+
+        try
+        {
+            journal.Append(Entry("a"));
+        }
+        finally
+        {
+            other.Dispose();
+        }
+
+        Assert.Contains("{\"partial", File.ReadAllLines(paths.JournalFile));
+        Assert.Equal("a", Assert.Single(journal.ReadPendingOperations()).Id);
+    }
+
     [Fact(DisplayName = "Append gives up after a bounded number of sharing-violation retries")]
     public void Append_SharingViolationNeverReleased_ThrowsAfterBoundedAttempts()
     {

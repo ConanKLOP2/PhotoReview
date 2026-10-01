@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace PhotoReview.Core.Diagnostics;
 
@@ -63,7 +64,7 @@ public static class DiagOptions
         var snapshot = _snapshot.Value;
         var parts = new List<string>();
         if (snapshot.PreRead) parts.Add("PREREAD=1");
-        if (snapshot.PreloadWorkers.HasValue) parts.Add($"PRELOAD_WORKERS={snapshot.PreloadWorkers.Value}");
+        if (snapshot.PreloadWorkers.HasValue) parts.Add(string.Create(CultureInfo.InvariantCulture, $"PRELOAD_WORKERS={snapshot.PreloadWorkers.Value}"));
         if (snapshot.DisableDiskCache) parts.Add("DISABLE_DISKCACHE=1");
         if (snapshot.ForceLog) parts.Add("FORCE_LOG=1");
         if (snapshot.InstanceLabel is { } label) parts.Add($"INSTANCE_LABEL={label}");
@@ -83,7 +84,8 @@ public static class DiagOptions
         var forceLog = Environment.GetEnvironmentVariable(ForceLogVar) == "1";
         int? workers = null;
         var workersRaw = Environment.GetEnvironmentVariable(PreloadWorkersVar);
-        if (int.TryParse(workersRaw, out var parsed) && parsed is >= 0 and <= 16) workers = parsed;
+        // RV-S02: a diagnostic value is machine text, never parsed with the user's culture (CA1305 / AGENTS.md rule 4).
+        if (int.TryParse(workersRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed is >= 0 and <= 16) workers = parsed;
         var instanceLabelRaw = Environment.GetEnvironmentVariable(InstanceLabelVar);
         var instanceLabel = string.IsNullOrWhiteSpace(instanceLabelRaw) ? null : instanceLabelRaw;
         return new Snapshot(preRead, workers, disableDiskCache, forceLog, instanceLabel);

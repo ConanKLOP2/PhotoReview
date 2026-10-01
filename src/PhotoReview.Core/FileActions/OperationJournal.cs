@@ -208,8 +208,14 @@ public sealed class OperationJournal
         return new DismissOutcome(toDismiss, skipped);
     }
 
-    private bool _tailChecked; // every append ends with a newline, so the file tail only needs checking before this process's first append
-
+    /// <summary>
+    /// RV-C04: true when the journal's last byte is not '\n' (a partial line left by a writer that died mid-append, a
+    /// disk-full write, or the zero-filled tail of a power loss). Checked on EVERY append, after this process holds the
+    /// append handle: that handle denies other writers (FileShare.Read), so the tail cannot change between this check
+    /// and the write. A per-process "already checked" flag is not enough: in InstanceMode.PerFolder another process can
+    /// tear the tail after this process's last append, and the next record would be glued onto the fragment (both lost).
+    /// Cost: one shared read handle + a 1-byte read of a cached page per append (appends are per user action).
+    /// </summary>
     private bool TailLacksNewline()
     {
         if (!_fileSystem.FileExists(_path)) return false;
@@ -232,12 +238,11 @@ public sealed class OperationJournal
             foreach (var entry in entries)
                 text.Append(JsonSerializer.Serialize(entry)).Append(Environment.NewLine);
             var durable = _durability() == JournalDurability.PowerLossSafe;
-            // A crash can leave a partial last line; appending straight after it would glue two records together and lose both.
-            if (!_tailChecked && TailLacksNewline()) text.Insert(0, Environment.NewLine);
-            // Disarm until this write is known to have completed: a write that fails half-way (disk full) leaves a partial
-            // line, and the next append must repair it even though an earlier append of this process succeeded.
-            _tailChecked = false;
             using var stream = OpenAppendWithRetry(durable);
+            // A crash (of any process sharing this journal) can leave a partial last line; appending straight after it
+            // would glue two records together and lose both. The new record then starts on its own line and the fragment
+            // stays an isolated malformed line every reader skips. Checked under the append handle (see TailLacksNewline).
+            if (TailLacksNewline()) text.Insert(0, Environment.NewLine);
             var bytes = Encoding.UTF8.GetBytes(text.ToString());
             stream.Write(bytes, 0, bytes.Length);
             // Fast: plain Flush() hands the bytes to the OS before the file operation starts (survives a process crash).
@@ -249,9 +254,6 @@ public sealed class OperationJournal
             {
                 stream.Flush();
             }
-            // Only now does the file end with a newline written by this process; a failed open/write/flush keeps the
-            // check for the next append, which must still repair a partial tail left by a crash (review r7).
-            _tailChecked = true;
         }
     }
 

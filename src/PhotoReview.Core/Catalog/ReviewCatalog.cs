@@ -247,10 +247,11 @@ public sealed class ReviewCatalog
     }
 
     /// <summary>
-    /// Removes the entry with the specified path.
-    /// Calculates nextIndex using the same formula as AdvanceBeforeFileActionAsync:
-    /// Math.Min(Math.Max(removedIndex, 0), Count - 1), or -1 if the catalog becomes empty.
-    /// Returns the new <see cref="CurrentIndex"/>.
+    /// Removes the entry with the specified path and returns the new <see cref="CurrentIndex"/> (-1 once the catalog is empty).
+    /// Removing the CURRENT entry (or any entry while there is no current one) selects the entry that took its place:
+    /// Math.Min(removedIndex, Count - 1), the same formula as AdvanceBeforeFileActionAsync. Removing another entry keeps
+    /// the same current photo (RV-C09): an entry before it shifts <see cref="CurrentIndex"/> down by one, an entry after it
+    /// leaves the index unchanged.
     /// </summary>
     public int Remove(string path)
     {
@@ -278,6 +279,14 @@ public sealed class ReviewCatalog
             CurrentIndex = -1;
             return -1;
         }
+
+        var current = CurrentIndex;
+        if (current >= 0 && removedIndex < current)
+        {
+            CurrentIndex = current - 1;
+            return CurrentIndex;
+        }
+        if (current >= 0 && removedIndex > current) return current;
 
         var nextIndex = Math.Min(Math.Max(removedIndex, 0), _entries.Count - 1);
         CurrentIndex = nextIndex;

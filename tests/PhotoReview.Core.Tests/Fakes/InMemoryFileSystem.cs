@@ -441,12 +441,17 @@ public sealed class InMemoryFileSystem : IFileSystem
         }
     }
 
+    /// <summary>RV-S06 test seam: an exception to throw from <see cref="ResolveRealPath"/> for a path (null = resolve normally),
+    /// like <c>PhysicalFileSystem</c> does for a reparse-point loop it cannot resolve.</summary>
+    public Func<string, Exception?>? ResolveRealPathHook { get; set; }
+
     /// <summary>SEC-01: walks <paramref name="path"/> segment by segment, substituting any segment registered via
     /// <see cref="AddReparsePoint"/> with its simulated target — mirrors what <c>PhysicalFileSystem.ResolveRealPath</c>
     /// does for a real symlink/junction, so tests can exercise the escape check without touching the real OS.</summary>
     public string ResolveRealPath(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (ResolveRealPathHook?.Invoke(path) is { } ex) throw ex;
         var full = Path.GetFullPath(path);
         var root = Path.GetPathRoot(full) ?? string.Empty;
         if (string.IsNullOrEmpty(root)) return full;
