@@ -45,6 +45,9 @@ public sealed class ThumbnailCache : IDisposable
     /// <summary>Test seam (RV-I02): replaces the PNG persist write of a new thumbnail; null uses <see cref="DiskCacheStore"/>.</summary>
     internal Func<BitmapSource, string, CancellationToken, Task>? PersistForTests { get; set; }
 
+    /// <summary>Test seam (RV-I10): receives the shared (Lazy) load task each caller waits on.</summary>
+    internal Action<Task>? SharedLoadForTests { get; set; }
+
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskDirectory;
 
@@ -136,6 +139,7 @@ public sealed class ThumbnailCache : IDisposable
     {
         var generation = Volatile.Read(ref _cacheGeneration);
         var underlyingTask = lazy.Value;
+        SharedLoadForTests?.Invoke(underlyingTask);
         _ = underlyingTask.ContinueWith(
             t =>
             {
