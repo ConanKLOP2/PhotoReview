@@ -254,6 +254,39 @@ public sealed class FileActionGateTests
         Assert.False(gate.IsHeld);
     }
 
+    [ThreadStatic] private static bool t_insideFirstActionCompletion;
+
+    [Fact(DisplayName = "RV-A01: the next queued action never starts inline on the finishing action's stack (no SynchronizationContext)")]
+    public async Task RunQueuedAsync_PreviousActionCompletes_NextActionDoesNotRunInlineOnItsStack()
+    {
+        var gate = new FileActionGate();
+        bool? secondRanInline = null;
+
+        await Task.Run(async () =>
+        {
+            Assert.Null(SynchronizationContext.Current); // plain pool thread: no context to post continuations to
+            // Synchronous continuations on purpose: completing it runs A's remainder (and the gate's finally) right
+            // inside SetResult on THIS thread, so anything the gate chains inline would run inside it too.
+            var releaseA = new TaskCompletionSource();
+            var first = gate.RunQueuedAsync(async () => await releaseA.Task);
+            var second = gate.RunQueuedAsync(() =>
+            {
+                secondRanInline = t_insideFirstActionCompletion;
+                return Task.CompletedTask;
+            });
+
+            t_insideFirstActionCompletion = true;
+            try { releaseA.SetResult(); }
+            finally { t_insideFirstActionCompletion = false; }
+
+            Assert.True(await first.WaitAsync(Wait.DefaultTimeout));
+            Assert.True(await second.WaitAsync(Wait.DefaultTimeout));
+        });
+
+        Assert.False(secondRanInline);
+        Assert.False(gate.IsHeld);
+    }
+
     [Fact(DisplayName = "Q-T1: a failing queued action faults only its own task; the next one still runs")]
     public async Task RunQueuedAsync_FirstActionThrows_OnlyItsTaskFaultsAndNextRuns()
     {
