@@ -44,4 +44,24 @@ public sealed class WindowPlacementServiceTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    [Fact(DisplayName = "RV-A15: a failed temp write leaves no temp file behind")]
+    public void WriteAtomically_TempWriteFailsMidway_LeavesNoTempFile()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "pr-placement-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "placement.json");
+
+            Assert.Throws<IOException>(() => WindowPlacementService.WriteAtomically(path, "{}", (temp, _) =>
+            {
+                File.WriteAllText(temp, "partial");   // a real partial file, then the disk fails
+                throw new IOException("disk full");
+            }));
+
+            Assert.Empty(Directory.GetFiles(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
 }

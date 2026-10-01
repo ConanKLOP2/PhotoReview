@@ -175,7 +175,7 @@ public sealed class DuplicateCleanupController
             // R7-4: the review dialog runs a nested dispatcher loop; a forwarded open can switch the folder meanwhile.
             var dialogFolderGeneration = _clock.CurrentFolder;
             var confirmed = false;
-            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove));
+            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove.Select(path => new BatchReviewItem(path, _catalog.Find(path)?.Length)).ToList()));
             if (!confirmed)
             {
                 _sink.SetStatusText(StatusFormatter.BatchCanceled());

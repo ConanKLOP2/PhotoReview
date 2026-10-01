@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private readonly ShortcutRouter _shortcutRouter;
     private readonly SettingsStore _settingsStore;
+    private readonly EventHandler<AppSettings> _onSettingsChanged;
     private AppSettings _settings;
     private double? _cachedDpiScale;
     private readonly ViewportSizeSource? _viewport;
@@ -83,7 +84,8 @@ public partial class MainWindow : Window
         _shortcutRouter = new ShortcutRouter(_settings);
         // R2-F-27: the router/VM are refreshed here (settings change), not on every key press.
         _viewModel.Settings = _settings;
-        _settingsStore.Changed += (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); ApplyToolbarVisibility(); NoteInfoActivity(); };
+        _onSettingsChanged = (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); ApplyToolbarVisibility(); NoteInfoActivity(); };
+        _settingsStore.Changed += _onSettingsChanged; // RV-A16: removed in Window_Closed (the store outlives the window)
         PhotoReviewPerf.StartupMark("mainWindowCtor");
         // I18N: a live language switch re-renders the texts the ViewModel builds in code (ADR 0006).
         Localizer.CurrentChanged += OnLanguageChanged;
@@ -177,9 +179,16 @@ public partial class MainWindow : Window
 
     private void ApplyFullscreenState(bool isFullscreen)
     {
+        if (isFullscreen)
+        {
+            _stateBeforeFullscreen = WindowState == WindowState.Minimized ? WindowState.Normal : WindowState;
+            // RV-A02: a window that is already Maximized keeps its work-area size when only the style changes (setting
+            // Maximized again is a no-op), which leaves the taskbar visible. Leave Maximized first so WPF re-maximizes
+            // the now borderless window over the whole monitor. Visual check on a real taskbar: see the PR description.
+            if (WindowState == WindowState.Maximized) WindowState = WindowState.Normal;
+        }
         ResizeMode = isFullscreen ? ResizeMode.NoResize : ResizeMode.CanResize;
         WindowStyle = isFullscreen ? WindowStyle.None : WindowStyle.SingleBorderWindow;
-        if (isFullscreen) _stateBeforeFullscreen = WindowState == WindowState.Minimized ? WindowState.Normal : WindowState;
         WindowState = isFullscreen ? WindowState.Maximized : _stateBeforeFullscreen;
     }
 
@@ -479,6 +488,7 @@ public partial class MainWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         Localizer.CurrentChanged -= OnLanguageChanged;
+        _settingsStore.Changed -= _onSettingsChanged;
         _pointer.OnWindowClosed(); // stops a glide (unhooks the static render-frame event that would keep this window alive), ends a pan
         _viewModel.CloseSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
