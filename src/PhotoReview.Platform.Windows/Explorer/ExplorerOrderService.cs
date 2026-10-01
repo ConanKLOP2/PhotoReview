@@ -111,11 +111,31 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     {
         // Idempotent: the window and a DI container may both dispose the singleton.
         Interlocked.Exchange(ref _disposed, 1);
-        TakePrefetch()?.Cts.Cancel();
+        TakePrefetch()?.Cancel();
         _pump.Dispose();
     }
 
-    private sealed record PrefetchedQuery(string Folder, Task<ExplorerViewSnapshot> Task, CancellationTokenSource Cts, long StartedTimestamp);
+    /// <summary>
+    /// <paramref name="Cleanup"/> disposes <paramref name="Cts"/> once the query task ends (RV-P04), so <see cref="Cancel"/> can run
+    /// after that and must tolerate a disposed source.
+    /// </summary>
+    private sealed record PrefetchedQuery(string Folder, Task<ExplorerViewSnapshot> Task, CancellationTokenSource Cts, long StartedTimestamp, Task Cleanup)
+    {
+        public void Cancel()
+        {
+            try { Cts.Cancel(); }
+            catch (ObjectDisposedException) { /* the query already finished and released its source */ }
+        }
+    }
+
+    /// <summary>Test seam: the cleanup task of the stored prefetch (completes when its token source is disposed), or null when none is stored.</summary>
+    internal Task? PendingPrefetchCleanup
+    {
+        get { lock (_prefetchGate) return _prefetch?.Cleanup; }
+    }
+
+    /// <summary>Test seam: runs in <see cref="Prefetch"/> after the query was started and before it is stored (lets a test dispose in that window).</summary>
+    internal Action? BeforePrefetchStoreHook { get; set; }
 
     /// <summary>Canonical folder, or false for text that is not a usable path (empty, embedded NUL, ...): callers report Failed instead of throwing.</summary>
     private static bool TryCanonicalize(string? folder, out string canonical)
@@ -154,13 +174,29 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         var cts = new CancellationTokenSource();
         var started = _time.GetTimestamp();
         var task = TryGetSnapshotCoreAsync(canonicalFolder, timeout, null, 16, cts.Token);
+        var cleanup = task.ContinueWith(static (_, state) => ((CancellationTokenSource)state!).Dispose(), cts,
+            CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        BeforePrefetchStoreHook?.Invoke();
         PrefetchedQuery? superseded;
+        var stored = false;
         lock (_prefetchGate)
         {
-            superseded = _prefetch;
-            _prefetch = new PrefetchedQuery(canonicalFolder, task, cts, started);
+            // RV-P04: Dispose may have run since the check above; it only cancels what is stored by then, so a late store would never be cancelled.
+            if (Volatile.Read(ref _disposed) == 0)
+            {
+                superseded = _prefetch;
+                _prefetch = new PrefetchedQuery(canonicalFolder, task, cts, started, cleanup);
+                stored = true;
+            }
+            else superseded = null;
         }
-        superseded?.Cts.Cancel();
+        superseded?.Cancel();
+        if (!stored)
+        {
+            try { cts.Cancel(); }
+            catch (ObjectDisposedException) { /* already finished */ }
+            return;
+        }
         _log.Info($"Explorer prefetch-start: folder={canonicalFolder}");
     }
 
@@ -178,7 +214,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                 && ExplorerSnapshotValidator.SamePath(prefetched.Folder, canonical)
                 && _time.GetElapsedTime(prefetched.StartedTimestamp) <= _prefetchMaxAge)
                 return JoinPrefetchAsync(prefetched, timeout, cancellationToken);
-            prefetched.Cts.Cancel();
+            prefetched.Cancel();
         }
         return TryGetSnapshotCoreAsync(folder, timeout, progress, batchSize, cancellationToken);
     }
@@ -196,12 +232,12 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         }
         catch (TimeoutException)
         {
-            prefetched.Cts.Cancel();
+            prefetched.Cancel();
             return Unavailable(prefetched.Folder, ExplorerOrderStatus.TimedOut, ExplorerReason.Timeout);
         }
         catch (OperationCanceledException)
         {
-            prefetched.Cts.Cancel();
+            prefetched.Cancel();
             return Unavailable(prefetched.Folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
         }
     }

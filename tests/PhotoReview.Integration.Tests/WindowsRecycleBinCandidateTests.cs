@@ -1,3 +1,4 @@
+using System.IO;
 using PhotoReview.Platform.Windows;
 
 namespace PhotoReview.Integration.Tests;
@@ -104,5 +105,45 @@ public sealed class WindowsRecycleBinCandidateTests
         Assert.True(RecycleItemFailure.IsPerItem(new Microsoft.CSharp.RuntimeBinder.RuntimeBinderException("no member")));
         Assert.False(RecycleItemFailure.IsPerItem(new InvalidOperationException()));
         Assert.False(RecycleItemFailure.IsPerItem(new ArgumentNullException("x")));
+    }
+
+    [Fact(DisplayName = "RV-P02: TryRestore refuses a file already at the original path without any shell call (no modal replace prompt)")]
+    public void TryRestore_FileExistsAtOriginalPath_ReturnsFalseWithoutShellCall()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "PhotoReviewRestore_" + Guid.NewGuid().ToString("N") + ".jpg");
+        File.WriteAllBytes(path, [1]);
+        try
+        {
+            var shellCalls = 0;
+            var bin = new WindowsRecycleBin(null, new NoSettings(), shellRestore: (_, _, _) => { shellCalls++; return true; });
+
+            var restored = bin.TryRestore(path, 1, File.GetLastWriteTimeUtc(path));
+
+            Assert.False(restored);
+            Assert.Equal(0, shellCalls);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact(DisplayName = "RV-P02: TryRestore with a free original path delegates to the shell restore")]
+    public void TryRestore_PathFree_DelegatesToShellRestore()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "PhotoReviewRestore_" + Guid.NewGuid().ToString("N") + ".jpg");
+        var stamp = new DateTime(2026, 9, 25, 1, 2, 3, DateTimeKind.Utc);
+        (string Path, long Size, DateTime Stamp)? seen = null;
+        var bin = new WindowsRecycleBin(null, new NoSettings(), shellRestore: (p, size, t) => { seen = (p, size, t); return true; });
+
+        Assert.True(bin.TryRestore(path, 7, stamp));
+        Assert.Equal(path, seen!.Value.Path);
+        Assert.Equal(7L, seen.Value.Size);
+        Assert.Equal(stamp, seen.Value.Stamp);
+    }
+
+    private sealed class NoSettings : IRecycleBinSettingsSource
+    {
+        public RecycleBinPolicy ReadPolicy() => throw new InvalidOperationException("not used by TryRestore");
+        public string? GetVolumeGuid(string path) => throw new InvalidOperationException("not used by TryRestore");
+        public RecycleBinVolumeSettings ReadVolume(string volumeGuid) => throw new InvalidOperationException("not used by TryRestore");
+        public long? GetUserQuotaBytes(string path) => throw new InvalidOperationException("not used by TryRestore");
     }
 }

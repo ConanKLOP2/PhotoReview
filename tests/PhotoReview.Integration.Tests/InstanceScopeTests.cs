@@ -206,6 +206,21 @@ public sealed class InstanceScopeTests : IDisposable
         Assert.False(scope.Holds(y));
     }
 
+    [Fact(DisplayName = "RV-P05: a malformed folder path (embedded NUL) held elsewhere yields OwnedByOtherInstance instead of throwing")]
+    public async Task BeforeOpenAsync_FolderWithNulWhileOwnedElsewhere_ReturnsDecision()
+    {
+        var bad = Path.Combine(_root, "bad\u0000folder");
+        using var stuck = new Mutex(false, InstanceKeys.For(InstanceMode.PerFolder, bad, _prefix).MutexName, out var created);
+        Assert.True(created);
+        var scope = NewScope(InstanceMode.PerFolder, clientFactory: _ => new FixedClient(ForwardOutcome.Delivered));
+        Assert.True(scope.TryAcquire(Folder("x")));
+
+        var decision = await scope.BeforeOpenAsync(bad, null);
+
+        Assert.Equal(FolderOpenDecision.OwnedByOtherInstance, decision);
+        Assert.False(scope.Holds(bad));
+    }
+
     [Fact(DisplayName = "PerFolder race: the owner leaves the folder while the request is in flight, so the switch proceeds here")]
     public async Task PerFolder_OwnerLeavesDuringForward_ClaimsAndProceeds()
     {

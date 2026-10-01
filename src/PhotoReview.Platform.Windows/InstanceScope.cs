@@ -100,7 +100,14 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
         }
         if (claimed != InstanceClaimResult.OwnedElsewhere) return FolderOpenDecision.Proceed;
 
-        var target = Path.GetFullPath(initialPath ?? folder);
+        string target;
+        try { target = Path.GetFullPath(initialPath ?? folder); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // RV-P05: not a usable path (embedded NUL, ...): nothing can be forwarded, so it is the normal "cannot open" outcome, not a throw.
+            _log.Warn($"Folder switch refused: another instance owns the folder and the path is not forwardable ({ex.GetType().Name})");
+            return FolderOpenDecision.OwnedByOtherInstance;
+        }
         var forwarded = await SecondInstanceHandoff.TryForwardAsync(
             _clientFactory(keys.PipeName), [target], _forwardTimeout, _log, cancellationToken).ConfigureAwait(false);
         if (forwarded) return FolderOpenDecision.ForwardedToOtherInstance;

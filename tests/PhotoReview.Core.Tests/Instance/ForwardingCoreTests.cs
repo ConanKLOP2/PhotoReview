@@ -147,6 +147,24 @@ public sealed class ForwardingCoreTests
         lock (opens) Assert.Equal([Photo, (string?)null], opens);
     }
 
+    [Fact(DisplayName = "RV-P01 pin: the forward handler (Submit) never runs or waits for the open callback, so the pipe loop cannot be held up by the UI thread")]
+    public void Coalescer_Submit_DoesNotRunOrWaitForTheOpenCallback()
+    {
+        using var openStarted = new ManualResetEventSlim();
+        using var releaseOpen = new ManualResetEventSlim();
+        var gate = new TaskCompletionSource();
+        using var coalescer = new ForwardedOpenCoalescer(
+            _ => { openStarted.Set(); releaseOpen.Wait(); }, TimeSpan.FromSeconds(1), delay: (_, ct) => gate.Task.WaitAsync(ct));
+
+        coalescer.Submit([Photo]); // returns although the open callback would block forever
+        Assert.False(openStarted.IsSet);
+
+        gate.SetResult();
+        Assert.True(openStarted.Wait(TimeSpan.FromSeconds(10)));
+        coalescer.Submit([Photo2]); // while the callback is blocked: still returns at once
+        releaseOpen.Set();
+    }
+
     [Fact(DisplayName = "Disposing the coalescer cancels a pending open")]
     public async Task Coalescer_Dispose_CancelsPendingOpen()
     {

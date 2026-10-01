@@ -44,7 +44,7 @@ public sealed class WindowsMemoryProbe : IMemoryProbe
     public static bool EvaluateHeadroom(MemorySnapshot? snapshot, double maximumLoad, long reserveBytes)
     {
         if (snapshot is null) return false;
-        return snapshot.Value.LoadPercent < maximumLoad * 100 && snapshot.Value.AvailableBytes >= (ulong)reserveBytes;
+        return snapshot.Value.LoadPercent < maximumLoad * 100 && snapshot.Value.AvailableBytes >= (ulong)Math.Max(0, reserveBytes); // RV-P06: a negative reserve means none (a cast would wrap to ~2^64 and disable preload)
     }
 
     public MemorySnapshot? GetSnapshot()

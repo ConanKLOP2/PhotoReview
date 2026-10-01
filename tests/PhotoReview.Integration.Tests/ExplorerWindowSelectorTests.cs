@@ -237,6 +237,37 @@ public sealed class ExplorerWindowSelectorTests
         Assert.Equal(string.Empty, folder);
     }
 
+    [Fact(DisplayName = "RV-P03: a COM failure in the enumerator's MoveNext keeps the snapshots found so far instead of aborting the query")]
+    public void EnumeratorMoveNextFailure_AfterWindowOnFolder_KeepsFirstFailureAndReleasesWindow()
+    {
+        var first = Showing("file:///C:/photos/", () => Unavailable("view-not-ready"));
+        var log = new ListLog();
+
+        var snapshot = Select(ThenThrow(first, new FakeComException("window vanished", unchecked((int)0x80010108))), log);
+
+        Assert.Equal(ExplorerOrderStatus.NativeViewUnavailable, snapshot.Status);
+        Assert.Equal("view-not-ready", snapshot.Reason);
+        Assert.Equal(1, first.Released);
+        Assert.Single(log.Errors);
+    }
+
+    [Fact(DisplayName = "RV-P03: a MoveNext failure before any matching window reports NoMatchingWindow, not an exception")]
+    public void EnumeratorMoveNextFailure_NoMatch_ReportsNoMatchingWindow()
+    {
+        var other = new FakeWindow("file:///C:/other/");
+
+        var snapshot = Select(ThenThrow(other, new FakeComException("gone", unchecked((int)0x80010108))));
+
+        Assert.Equal(ExplorerOrderStatus.NoMatchingWindow, snapshot.Status);
+        Assert.Equal(1, other.Released);
+    }
+
+    private static IEnumerable<FakeWindow> ThenThrow(FakeWindow window, Exception error)
+    {
+        yield return window;
+        throw error;
+    }
+
     /// <summary>Enumerates lazily like the COM enumerator: windows after an early return are never produced.</summary>
     private static IEnumerable<FakeWindow> Lazy(params FakeWindow[] windows)
     {
