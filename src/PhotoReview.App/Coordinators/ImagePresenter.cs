@@ -671,12 +671,22 @@ public sealed class ImagePresenter
             AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex);
             // A failed member switch (e.g. the RAW of a JPG+RAW capture) leaves the previous member on screen: keep the
             // presented path (badge, file actions) on what is really shown. A different entry keeps the new path.
+            bool sameEntryAsShown = previousNavigationPath is not null
+                && (string.Equals(previousNavigationPath, path, StringComparison.OrdinalIgnoreCase)
+                    || _catalog.IndexOf(previousNavigationPath) == index);
             if (previousNavigationPath is not null && !string.Equals(previousNavigationPath, path, StringComparison.OrdinalIgnoreCase)
-                && _catalog.IndexOf(previousNavigationPath) == index)
+                && sameEntryAsShown)
             {
                 _currentNavigationPath = previousNavigationPath;
             }
             CurrentPhotoInfo = null;
+            if (!sameEntryAsShown)
+            {
+                // A different entry failed: the previous photo must not stay visible under this file's error status,
+                // otherwise Delete/Move would act on a file the user never saw (same as the stat-error branch above).
+                UpdateCurrentImage(null);
+                _compareViewModel.Clear();
+            }
             UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(ex)), needsAttention: true);
         }
         catch (Exception ex)

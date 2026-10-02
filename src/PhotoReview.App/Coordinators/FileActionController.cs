@@ -264,6 +264,7 @@ public sealed class FileActionController
             if (nextIndex >= 0)
             {
                 presentTask = _sink.PresentAsync(nextIndex);
+                presentTask.FireAndLog("Present after file action failed");
                 _lastPresentTask = presentTask;
             }
             else
@@ -401,6 +402,33 @@ public sealed class FileActionController
 
             if (presentTask is not null) await presentTask;
             _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, groupResult?.Error ?? singleResult!.Error));
+            return false;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The entry already left the catalog before ExecuteAsync: an unexpected throw must not leave it missing from the
+            // list although the file is (most likely) still on disk. Same restore as INV-5; if the file really is gone the
+            // presenter's RemoveOrDegrade heals the entry on the next present.
+            AppLog.Error($"File action {operation} threw: {source}", ex);
+            if (isRemove && sourceIndex >= 0 && _clock.IsFolderCurrent(folderGen))
+            {
+                if (group is null) _catalog.Restore(source, sourceIndex);
+                else
+                {
+                    _catalog.RestoreMembers(group.ImagePaths, sourceIndex, group, _getSettings().RawSupportEnabled);
+                    _sink.OnCatalogChanged(null);
+                }
+            }
+
+            if (presentTask is not null)
+            {
+                try { await presentTask; }
+                catch (Exception presentEx) when (presentEx is not OperationCanceledException)
+                {
+                    AppLog.Error("Present after failed file action threw", presentEx);
+                }
+            }
+            _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, UserFacingError.Describe(ex)));
             return false;
         }
         finally

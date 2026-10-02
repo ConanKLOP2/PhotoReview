@@ -104,7 +104,7 @@ public partial class MainWindow : Window
         if (_viewModel.Presenter.Sink is WpfPresentationSink initialViewSink)
         {
             initialViewSink.ApplyInitialViewModeOverride = () =>
-                _ = _pointer.ApplyInitialViewAsync(_settings.InitialViewMode, _settings.ClickZoomPercent);
+                _pointer.ApplyInitialViewAsync(_settings.InitialViewMode, _settings.ClickZoomPercent).FireAndLog("Initial view failed");
         }
         AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler(ReturnFocusAfterButtonClick), handledEventsToo: true);
         PhotoReviewPerf.StartupMark("xamlLoaded");
@@ -123,7 +123,7 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(initialPath)) return;
         PhotoReviewPerf.StartupMark("openPathBegin");
-        _ = _viewModel.OpenPathAsync(initialPath);
+        _viewModel.OpenPathAsync(initialPath).FireAndLog("Open initial path failed");
     }
 
     /// <summary>Q-R10: opens a path forwarded from a second launch (UI thread).</summary>
@@ -158,7 +158,7 @@ public partial class MainWindow : Window
     /// Used by integration tests via reflection. Routes to MainViewModel.UndoAsync() (gate lives in the ViewModel, OC14).
     /// </summary>
     public Task UndoLastActionAsync() => _viewModel.UndoAsync();
-    public void ResetFitView() => _ = ApplyFitViewAsync();
+    public void ResetFitView() => ApplyFitViewAsync().FireAndLog("Reset fit view failed");
     public void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
 
     /// <summary>Test seam (kinetic-pan frame measurement): drives a drag/glide through the real controller in-process.</summary>
@@ -467,7 +467,7 @@ public partial class MainWindow : Window
             if (!_closeWhenFileActionDone)
             {
                 _closeWhenFileActionDone = true;
-                _ = CloseWhenFileActionDoneAsync();
+                CloseWhenFileActionDoneAsync().FireAndLog("Close after file action failed");
             }
         }
         base.OnClosing(e);
@@ -489,9 +489,16 @@ public partial class MainWindow : Window
     {
         Localizer.CurrentChanged -= OnLanguageChanged;
         _settingsStore.Changed -= _onSettingsChanged;
-        _pointer.OnWindowClosed(); // stops a glide (unhooks the static render-frame event that would keep this window alive), ends a pan
-        _viewModel.CloseSession();
-        (_viewModel.PreloadController as IDisposable)?.Dispose();
+        try
+        {
+            _pointer.OnWindowClosed(); // stops a glide (unhooks the static render-frame event that would keep this window alive), ends a pan
+            _viewModel.CloseSession();
+        }
+        finally
+        {
+            // The preload workers must stop even when closing the session threw.
+            (_viewModel.PreloadController as IDisposable)?.Dispose();
+        }
         // The IExplorerOrderProvider singleton is owned by the service provider (App.Dispose), not by this window (APP-01).
     }
 
@@ -534,9 +541,18 @@ public partial class MainWindow : Window
 
     private async void Window_Drop(object sender, DragEventArgs e)
     {
-        if (e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
+        // async void: an exception escaping here would reach the dispatcher's unhandled-exception handler (a crash).
+        try
         {
-            await _viewModel.OpenPathAsync(files[0]);
+            if (e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
+            {
+                await _viewModel.OpenPathAsync(files[0]);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLog.Error("Drop open failed", ex);
+            _viewModel.StatusText = PhotoReview.App.ViewModels.StatusFormatter.FolderOpenFailed(PhotoReview.Core.Localization.UserFacingError.Describe(ex));
         }
     }
 
@@ -599,7 +615,7 @@ public partial class MainWindow : Window
                 break;
             case ReviewCommandType.Recycle: await _viewModel.RecycleAsync(); break;
             case ReviewCommandType.Skip: await _viewModel.SkipAsync(); break;
-            case ReviewCommandType.ToggleFit: _ = ApplyFitViewAsync(); break;
+            case ReviewCommandType.ToggleFit: ApplyFitViewAsync().FireAndLog("Toggle fit failed"); break;
             case ReviewCommandType.ZoomIn: await _pointer.ZoomInAsync(); break;
             case ReviewCommandType.ZoomOut: await _pointer.ZoomOutAsync(); break;
             case ReviewCommandType.Next: await _viewModel.NextAsync(); break;
@@ -627,7 +643,7 @@ public partial class MainWindow : Window
         {
             _settingsStore.Save(settings);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             AppLog.Error("Could not save the keep-zoom setting", ex);
         }
@@ -756,7 +772,7 @@ public partial class MainWindow : Window
         ZoomMenu.Items.Add(setCurrent);
     }
 
-    private void ClickZoomFit_Click(object sender, RoutedEventArgs e) => _ = ApplyFitViewAsync();
+    private void ClickZoomFit_Click(object sender, RoutedEventArgs e) => ApplyFitViewAsync().FireAndLog("Fit view failed");
 
     /// <summary>"Zoom to N%": zooms to the configured level (does not change it; the presets below do).</summary>
     private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent);
@@ -856,7 +872,7 @@ public partial class MainWindow : Window
         {
             _settingsStore.Save(settings);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             // The image still zooms for this session; only persisting the new level failed.
             AppLog.Error("Could not save the click zoom level setting", ex);
@@ -873,7 +889,7 @@ public partial class MainWindow : Window
         {
             _settingsStore.Save(settings);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             AppLog.Error("Could not save the 'also set as click zoom level' setting", ex);
         }
@@ -895,7 +911,7 @@ public partial class MainWindow : Window
         {
             _settingsStore.Save(settings);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             AppLog.Error("Could not save the click zoom level setting", ex);
         }

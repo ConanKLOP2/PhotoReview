@@ -635,7 +635,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         {
             _settingsStore.Save(settings);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             // The overlay still toggles for this session; only persisting failed.
             AppLog.Error("Could not save the info overlay setting", ex);
@@ -791,7 +791,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
                 _previewService?.ClearCache();
                 // R2-F-16: the directory delete must not run on the UI thread (the RAM cache above is already cleared).
                 var previewService = _previewService;
-                if (previewService is not null) _ = Task.Run(previewService.ClearDisk);
+                if (previewService is not null) Task.Run(previewService.ClearDisk).FireAndLog("Preview disk cache clear after backend change failed");
                 _preloadController?.ClearPreloadedKeys();
             }
             if (reloadFolder)
@@ -813,10 +813,18 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     private async Task RepresentCurrentAfterSettingsAsync()
     {
-        await _presenter.PresentAsync(_catalog.CurrentIndex, pathOverride: PresentedPathOfCurrentEntry(),
-            includeCaptureGroupInCompare: _compare.IsVisible);
-        // The badge names the displayed member; do not rely on the presenter's status hook to refresh it.
-        OnPropertyChanged(nameof(CapturePairBadge));
+        try
+        {
+            await _presenter.PresentAsync(_catalog.CurrentIndex, pathOverride: PresentedPathOfCurrentEntry(),
+                includeCaptureGroupInCompare: _compare.IsVisible);
+            // The badge names the displayed member; do not rely on the presenter's status hook to refresh it.
+            OnPropertyChanged(nameof(CapturePairBadge));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // SettingsRefreshTask is never awaited by production code: log here instead of leaving it unobserved.
+            AppLog.Error("Re-present after settings change failed", ex);
+        }
     }
 
     /// <summary>
@@ -1215,7 +1223,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         {
             _settingsStore.Save(settings);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             // The file operation already succeeded; only the remembered folder is lost (kept in memory for this session).
             FileLog.Default.Warn("Could not save the last Move-to/Copy-to folder: " + ex.Message);
