@@ -58,6 +58,9 @@ internal static class RgbBgraResampler
     internal static unsafe BgraBuffer ResizeToBuffer(ReadOnlySpan<byte> rgb, int sourceWidth, int sourceHeight,
         int targetWidth, int targetHeight, int channels, CancellationToken cancellationToken)
     {
+        // Cheap guard outside the inner loops: a non-positive size would otherwise reach the native allocation / divide by zero.
+        if (sourceWidth <= 0 || sourceHeight <= 0 || targetWidth <= 0 || targetHeight <= 0)
+            throw new InvalidDataException($"Invalid RAW resize dimensions {sourceWidth}x{sourceHeight} -> {targetWidth}x{targetHeight}.");
         var buffer = new BgraBuffer(targetWidth, targetHeight);
         try
         {

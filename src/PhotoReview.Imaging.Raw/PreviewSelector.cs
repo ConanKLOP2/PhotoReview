@@ -174,7 +174,7 @@ public static class PreviewSelector
         {
             resolved = TryReadJpegFrame(source, preview.Offset, preview.Length, out width, out height, out colorSpace);
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException ex) when (!RawHeaderErrors.IsIoFailure(ex))
         {
             // Exhausted header budget or unreadable range: the dimensions stay unknown instead of failing the decode.
             walked = false;
@@ -223,7 +223,7 @@ public static class PreviewSelector
         {
             WalkJpeg(source, preview.Offset, preview.Length, needFrame: false, out _, out _, out colorSpace);
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException ex) when (!RawHeaderErrors.IsIoFailure(ex))
         {
             // Exhausted header budget: the colour space stays unknown instead of failing the decode.
             return preview;
