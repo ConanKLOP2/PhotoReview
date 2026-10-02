@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Core;
@@ -71,9 +71,13 @@ public sealed class AppPaths : IAppPaths
     /// Factory là nơi DUY NHẤT trong toàn bộ ứng dụng đọc biến môi trường PHOTOREVIEW_DATA_ROOT / PHOTOREVIEW_ISOLATE_CONFIG.
     /// </summary>
     public static AppPaths FromEnvironment() => new(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        ResolveLocalAppData(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)),
         Environment.GetEnvironmentVariable(DataRootEnvironmentVariable),
         IsTruthy(Environment.GetEnvironmentVariable(IsolateConfigEnvironmentVariable)));
+
+    /// <summary>GetFolderPath returns "" when the profile has no LocalApplicationData (service accounts, stripped profiles); the temp folder keeps startup and the logger alive instead of throwing from a static initializer.</summary>
+    internal static string ResolveLocalAppData(string localAppData) =>
+        string.IsNullOrWhiteSpace(localAppData) ? Path.GetTempPath() : localAppData;
 
     private static bool IsTruthy(string? value) =>
         value is not null && (value.Trim() == "1" || value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase));

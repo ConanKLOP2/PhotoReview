@@ -1,4 +1,4 @@
-using PhotoReview.Core.Diagnostics;
+﻿using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Tests.Fakes;
 
@@ -272,5 +272,46 @@ public sealed class SessionWriterTests
 
         Assert.Equal(1, _metrics.Snapshot().SessionWriteCount);
         Assert.Equal("newest", store.Load(@"C:\a").CurrentPath);
+    }
+
+    [Fact(DisplayName = "Flush does not wait unboundedly behind a stuck write and keeps the state for the next flush")]
+    public async Task Flush_WriterBusy_ReturnsAfterBoundedWaitAndRequeues()
+    {
+        var (writer, store) = Create();
+        writer.BoundedWaitForTests = TimeSpan.FromMilliseconds(100);
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        _fs.WriteHook = _ =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+            return null;
+        };
+        writer.Update(State(@"C:\photos", @"C:\photos\one.jpg"));
+        _timer.FireAll(); // the timer thread starts a write that blocks inside the file system while holding the writer lock
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+        _fs.WriteHook = null;
+
+        writer.Update(State(@"C:\photos", @"C:\photos\two.jpg"));
+        await Task.Run(writer.Flush).WaitAsync(TimeSpan.FromSeconds(20)); // must return despite the held lock
+
+        release.Set();
+        await writer.WhenIdleAsync();
+        writer.Flush();
+
+        Assert.Equal(@"C:\photos\two.jpg", store.Load(@"C:\photos").CurrentPath);
+    }
+
+    [Fact(DisplayName = "Update accepts a state whose Skipped list is null")]
+    public void Update_NullSkipped_DoesNotThrow()
+    {
+        var (writer, store) = Create();
+        var state = State(@"C:\photos", @"C:\photos\a.jpg");
+        state.Skipped = null!;
+
+        writer.Update(state);
+        writer.Flush();
+
+        Assert.Equal(@"C:\photos\a.jpg", store.Load(@"C:\photos").CurrentPath);
     }
 }

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
@@ -118,5 +118,27 @@ public sealed class JournalAppendRobustnessTests : IDisposable
 
         Assert.Throws<IOException>(() => journal.Append(Entry("a")));
         Assert.Equal(0, delays);
+    }
+
+    [Fact(DisplayName = "Reconcile: one entry whose outcome cannot be appended does not lose the entries already reconciled")]
+    public void Reconcile_AppendFailsForOneEntry_ReturnsTheOthers()
+    {
+        var fs = new InMemoryFileSystem();
+        var paths = new AppPaths(@"C:\Users\test\AppData\Local");
+        var journal = new OperationJournal(paths, fs, new SystemClock(), appendRetryDelay: _ => { });
+        journal.Append(Entry("a"));
+        journal.Append(Entry("b"));
+        journal.Append(Entry("c"));
+
+        var appends = 0;
+        fs.OpenAppendHook = _ => ++appends == 2 ? new IOException("disk full") : null; // the 2nd outcome line hits a full disk
+
+        var reconciled = journal.ReconcilePendingOperations();
+
+        Assert.Equal(2, reconciled.Count);
+        fs.OpenAppendHook = null;
+        var leftover = Assert.Single(journal.ReadPendingOperations()); // the failed one stays Prepared for the next start
+        Assert.DoesNotContain(reconciled, entry => entry.Id == leftover.Id);
+        Assert.Single(journal.ReconcilePendingOperations());
     }
 }

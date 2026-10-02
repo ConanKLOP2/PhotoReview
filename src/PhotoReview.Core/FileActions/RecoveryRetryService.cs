@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
@@ -227,7 +227,7 @@ public sealed class RecoveryRetryService
                     }
                     else
                     {
-                        _fileSystem.Move(sourcePath, destinationPath);
+                        MoveOrRemovePartial(sourcePath, destinationPath, member.Size);
                         if (_fileSystem.FileExists(sourcePath) || _fileSystem.GetFileStat(destinationPath)?.Length != member.Size)
                             throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
                     }
@@ -264,19 +264,28 @@ public sealed class RecoveryRetryService
         }
         catch (Exception copyFailure) when (copyFailure is not OutOfMemoryException)
         {
-            try
-            {
-                if (_fileSystem.GetFileStat(destination) is { } partial && partial.Length < sourceSize)
-                    _fileSystem.Delete(destination);
-            }
-            catch (Exception cleanup) when (cleanup is not OutOfMemoryException)
-            {
-                // Left in place: Recovery shows the conflict; the original failure (rethrown below) is what gets journaled,
-                // whatever this best-effort cleanup threw.
-            }
+            PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize);
             throw;
         }
         if (!created) throw new IOException(Tr.CoreRecoveryDestinationExists);
+    }
+
+    /// <summary>
+    /// Retry Move whose destination the pre-checks proved absent: when the move fails while the source is still in place, a
+    /// strictly shorter file at the destination is its partial output and is deleted (same rule as the Copy branch).
+    /// The original failure is rethrown.
+    /// </summary>
+    private void MoveOrRemovePartial(string source, string destination, long sourceSize)
+    {
+        try
+        {
+            _fileSystem.Move(source, destination);
+        }
+        catch (Exception moveFailure) when (moveFailure is not OutOfMemoryException)
+        {
+            PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize, source, requireSourceExists: true);
+            throw;
+        }
     }
 
     private static RecoveryRetryResult AlreadyHandled() => new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);
@@ -307,7 +316,7 @@ public sealed class RecoveryRetryService
             }
             else
             {
-                _fileSystem.Move(failed.Source, destination);
+                MoveOrRemovePartial(failed.Source, destination, prepared.Size);
                 tx.VerifyMoved(_fileSystem, failed.Source, destination, JournalErrors.RetryVerifyFailed);
             }
 

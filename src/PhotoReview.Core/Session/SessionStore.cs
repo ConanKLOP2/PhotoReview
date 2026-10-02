@@ -1,4 +1,4 @@
-using PhotoReview.Core.Diagnostics;
+﻿using PhotoReview.Core.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -120,7 +120,8 @@ public sealed class SessionStore
         {
             // ADR 0007 section 2: without fsync a power loss can leave an empty/partial session file.
             // That is "no session", not an error for the user.
-            FileLog.Default.Warn($"Session file '{path}' is empty or corrupt; starting without a session.");
+            try { FileLog.Default.Warn($"Session file '{path}' is empty or corrupt; starting without a session."); }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { /* logging must never make Load throw */ }
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
@@ -131,11 +132,21 @@ public sealed class SessionStore
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Folder);
-        _fileSystem.CreateDirectory(_sessionsDir);
-        var path = GetPath(state.Folder);
-        var json = JsonSerializer.Serialize(state, Options);
-        _fileSystem.WriteAllTextAtomic(path, json, durable: false); // ADR 0007 section 2: atomic, no fsync
-        _metrics?.RecordSessionWrite();
+        try
+        {
+            _fileSystem.CreateDirectory(_sessionsDir);
+            var path = GetPath(state.Folder);
+            var json = JsonSerializer.Serialize(state, Options);
+            _fileSystem.WriteAllTextAtomic(path, json, durable: false); // ADR 0007 section 2: atomic, no fsync
+            _metrics?.RecordSessionWrite();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Session persistence is best effort (a locked or full disk must not break navigation): callers without a SessionWriter
+            // (ImagePresenter / MainViewModel fallback) do not catch.
+            try { FileLog.Default.Warn($"Session write failed for '{state.Folder}': {ex.Message}"); }
+            catch (Exception logEx) when (logEx is not OutOfMemoryException) { /* logging must never make Save throw */ }
+        }
     }
 
     public string GetPath(string folder)

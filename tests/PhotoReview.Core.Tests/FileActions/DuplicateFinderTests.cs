@@ -213,5 +213,43 @@ public sealed class DuplicateFinderTests
                 fileSystem: _fs);
         });
     }
-}
 
+    [Fact]
+    public async Task FindAsync_HashThrowsArgumentException_SkipsThatFileAndKeepsTheRest()
+    {
+        var original = @"C:\photos\img.jpg";
+        var copy = @"C:\photos\img (1).jpg";
+        var bad = @"C:\photos\bad (1).jpg";
+        _fs.WriteAllTextAtomic(original, "content");
+        _fs.WriteAllTextAtomic(copy, "content");
+        _fs.WriteAllTextAtomic(bad, "content");
+
+        var result = await DuplicateFinder.FindAsync(
+            [original, copy, bad],
+            removeNumbered: true,
+            hash: (p, ct) => p == bad ? throw new ArgumentException("invalid path") : Task.FromResult("same"),
+            fileSystem: _fs);
+
+        Assert.Equal([copy], result);
+    }
+
+    [Fact]
+    public async Task FindAsync_StatThrowsNotSupported_SkipsThatFileAndKeepsTheRest()
+    {
+        var original = @"C:\photos\img.jpg";
+        var copy = @"C:\photos\img (1).jpg";
+        var weird = @"C:\photos\weird (1).jpg";
+        _fs.WriteAllTextAtomic(original, "content");
+        _fs.WriteAllTextAtomic(copy, "content");
+        _fs.WriteAllTextAtomic(weird, "content");
+        _fs.StatHook = p => p == weird ? new NotSupportedException("path format") : null;
+
+        var result = await DuplicateFinder.FindAsync(
+            [original, copy, weird],
+            removeNumbered: true,
+            hash: (p, ct) => Task.FromResult("same"),
+            fileSystem: _fs);
+
+        Assert.Equal([copy], result);
+    }
+}

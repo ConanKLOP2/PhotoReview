@@ -1,3 +1,4 @@
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 
@@ -29,7 +30,7 @@ public sealed class LocTemplate
     public bool HasPlaceholders => _names.Length > 0;
 
     /// <summary>Parses <paramref name="text"/>; returns false for unbalanced braces or invalid placeholder names.</summary>
-    public static bool TryParse(string text, out LocTemplate template)
+    public static bool TryParse(string text, [NotNullWhen(true)] out LocTemplate? template)
     {
         ArgumentNullException.ThrowIfNull(text);
         var literals = new List<string>();
@@ -49,7 +50,7 @@ public sealed class LocTemplate
                 var end = text.IndexOf('}', i + 1);
                 if (end < 0 || !IsValidName(text.AsSpan(i + 1, end - i - 1)))
                 {
-                    template = null!;
+                    template = null;
                     return false;
                 }
                 literals.Add(current.ToString());
@@ -65,7 +66,7 @@ public sealed class LocTemplate
                     i++;
                     continue;
                 }
-                template = null!;
+                template = null;
                 return false;
             }
             else

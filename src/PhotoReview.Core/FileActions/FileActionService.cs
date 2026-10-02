@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
@@ -475,6 +475,8 @@ public sealed class FileActionService
         // RV-C03: true only while this Copy may have created its destination (raised inside the delegate right before the
         // create-new copy; a TryCopyNew that found the destination taken touched nothing and resets it).
         var copyDestinationIsOurs = false;
+        // Same for a Move: the preflight proved the destination absent, so a shorter file there after a failed Move is a partial one.
+        var moveDestinationIsOurs = false;
 
         try
         {
@@ -554,6 +556,7 @@ public sealed class FileActionService
                 }
                 else
                 {
+                    moveDestinationIsOurs = true;
                     if (_moveOverride is not null)
                     {
                         await _moveOverride(source, destinationPath).ConfigureAwait(false);
@@ -656,6 +659,8 @@ public sealed class FileActionService
             // Conflict and a retry would refuse "destination exists".
             if (copyDestinationIsOurs && destinationPath is not null)
                 RemovePartialCopy(destinationPath, sourceSize);
+            else if (moveDestinationIsOurs && destinationPath is not null && request.Operation == FileOperationType.Move)
+                PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destinationPath, sourceSize, request.Source, requireSourceExists: true);
 
             string? journalError = null;
             var mutationCompleted = tx?.MutationCompleted ?? false;
@@ -696,19 +701,8 @@ public sealed class FileActionService
     /// (strictly shorter than the source). A complete copy is left for Recovery to judge. Best effort: a file that cannot be
     /// inspected or deleted stays (Recovery then shows the conflict).
     /// </summary>
-    private void RemovePartialCopy(string destination, long sourceSize)
-    {
-        try
-        {
-            if (_fileSystem.GetFileStat(destination) is { } stat && stat.Length < sourceSize)
-                _fileSystem.Delete(destination);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // Left in place; the Failed journal line still describes the operation. Any failure of this best-effort cleanup
-            // (a filter driver, ...) must not replace the original error nor skip the journal outcome.
-        }
-    }
+    private void RemovePartialCopy(string destination, long sourceSize) =>
+        PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize);
 
     /// <summary>RV-C02: true when the source is still exactly the preflight file (same volume: exact compare) and nothing is at
     /// the destination. Any inspection error counts as "touched" (keeps the Failed Recovery line) and never escapes.</summary>

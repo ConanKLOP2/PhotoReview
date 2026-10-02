@@ -464,13 +464,13 @@ public sealed class OperationJournal
                 var allCompleted = pending.GroupMembers.All(member => IsGroupMemberCompleted(pending, member));
                 var entry = WithOutcome(pending, allCompleted ? JournalState.Committed : JournalState.Failed,
                     pending.Type == FileOperationType.Recycle ? JournalErrors.SourceStillExistsAfterRecovery : JournalErrors.PendingUnconfirmed);
-                if (AppendIfStillPending(entry)) reconciled.Add(entry);
+                if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
             }
             else if (pending.Type == FileOperationType.Recycle)
             {
                 var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
                 var entry = WithOutcome(pending, state, JournalErrors.SourceStillExistsAfterRecovery);
-                if (AppendIfStillPending(entry)) reconciled.Add(entry);
+                if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
             }
             else if (pending.Type is FileOperationType.Move or FileOperationType.Copy)
             {
@@ -484,7 +484,7 @@ public sealed class OperationJournal
                     ? (!sourceExists && destinationMatches ? JournalState.Committed : JournalState.Failed)
                     : (destinationMatches ? JournalState.Committed : JournalState.Failed);
                 var entry = WithOutcome(pending, state, JournalErrors.PendingUnconfirmed);
-                if (AppendIfStillPending(entry)) reconciled.Add(entry);
+                if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
             }
         }
         return reconciled;
@@ -528,9 +528,25 @@ public sealed class OperationJournal
                     Error = SettledByOlderBuildText,
                     ErrorCode = null,
                 };
-            if (!AppendIfLatestIs(latest, outcome)) continue;
+            if (!TryReconcileAppend(() => AppendIfLatestIs(latest, outcome), id)) continue;
             latestEntries[id] = outcome;
             if (outcome.State != restored.State) reconciled.Add(outcome);
+        }
+    }
+
+    // A journal append can fail (disk full, antivirus lock). One entry failing must not abort the whole reconcile and lose the
+    // list of entries already reconciled (their lines are on disk; the caller needs them); the failed entry stays Prepared and
+    // is retried by the next start.
+    private static bool TryReconcileAppend(Func<bool> append, string id)
+    {
+        try
+        {
+            return append();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            PhotoReview.Core.Diagnostics.FileLog.Default.Warn(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Journal reconcile: could not append outcome for {id}: {ex.Message}"));
+            return false;
         }
     }
 

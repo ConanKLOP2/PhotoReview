@@ -1,3 +1,4 @@
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace PhotoReview.Core.Localization;
@@ -58,11 +59,11 @@ public sealed class LanguageCatalog
     /// <summary>Raw key → text pairs; keys starting with <c>_</c> (comments, meta) are already removed.</summary>
     public IReadOnlyDictionary<string, string> Entries { get; }
 
-    public static bool TryParse(string json, string source, out LanguageCatalog catalog, ICollection<string> warnings)
+    public static bool TryParse(string json, string source, [NotNullWhen(true)] out LanguageCatalog? catalog, ICollection<string> warnings)
     {
         ArgumentNullException.ThrowIfNull(json);
         ArgumentNullException.ThrowIfNull(warnings);
-        catalog = null!;
+        catalog = null;
         JsonDocument doc;
         try
         {
@@ -82,14 +83,14 @@ public sealed class LanguageCatalog
         {
             // Well-formed JSON can still hold text GetString() rejects (a lone "\ud800" surrogate escape).
             warnings.Add($"{source}: unreadable text ({ex.Message})");
-            catalog = null!;
+            catalog = null;
             return false;
         }
     }
 
-    private static bool ParseDocument(JsonDocument doc, string source, ICollection<string> warnings, out LanguageCatalog catalog)
+    private static bool ParseDocument(JsonDocument doc, string source, ICollection<string> warnings, [NotNullWhen(true)] out LanguageCatalog? catalog)
     {
-        catalog = null!;
+        catalog = null;
         using (doc)
         {
             if (doc.RootElement.ValueKind != JsonValueKind.Object)

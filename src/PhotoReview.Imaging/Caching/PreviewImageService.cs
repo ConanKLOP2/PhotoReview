@@ -607,7 +607,13 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         try
         {
-            return _cache.TryGet(key, out image);
+            if (_cache.TryGet(key, out var cached))
+            {
+                image = cached;
+                return true;
+            }
+            image = default!;
+            return false;
         }
         catch (IOException) { image = default!; return false; }
         catch (UnauthorizedAccessException) { image = default!; return false; }

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Core.Tests.Diagnostics;
@@ -70,5 +70,32 @@ public sealed class FileLogRotationFailureTests : IDisposable
         var all = File.ReadAllText(log) + File.ReadAllText(Path.Combine(_dir, "app.1.log"));
         for (var i = 0; i < 20; i++) Assert.Contains("entry-" + i + "\r\n", all.Replace("\n", "\r\n", StringComparison.Ordinal).Replace("\r\r\n", "\r\n", StringComparison.Ordinal));
         Assert.Equal(2, Directory.GetFiles(_dir).Length);
+    }
+
+    [Fact(DisplayName = "Entries queued while the log file is unwritable are kept and written once it is writable again")]
+    public void UnwritableLog_EntriesAreKeptForTheNextDrain()
+    {
+        Directory.CreateDirectory(_dir);
+        var log = Path.Combine(_dir, "app.log");
+        File.WriteAllText(log, "");
+        using var file = new FileLog(log) { Enabled = true };
+
+        var holder = new FileStream(log, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        try
+        {
+            file.Info("written-while-locked");
+            file.Flush();
+        }
+        finally
+        {
+            holder.Dispose();
+        }
+
+        file.Info("written-after-unlock");
+        file.Flush();
+
+        var content = File.ReadAllText(log);
+        Assert.Contains("written-while-locked", content);
+        Assert.Contains("written-after-unlock", content);
     }
 }
