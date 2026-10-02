@@ -128,9 +128,9 @@ public static class BenchmarkWorkloadRunner
         var copied = temp + ".copy";
         void Cleanup()
         {
-            try { if (File.Exists(temp)) File.Delete(temp); } catch { /* best-effort cleanup of benchmark temp file */ }
-            try { if (File.Exists(moved)) File.Delete(moved); } catch { /* best-effort cleanup of benchmark temp file */ }
-            try { if (File.Exists(copied)) File.Delete(copied); } catch { /* best-effort cleanup of benchmark temp file */ }
+            try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* best-effort cleanup of benchmark temp file */ }
+            try { if (File.Exists(moved)) File.Delete(moved); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* best-effort cleanup of benchmark temp file */ }
+            try { if (File.Exists(copied)) File.Delete(copied); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* best-effort cleanup of benchmark temp file */ }
         }
         try
         {
@@ -154,9 +154,12 @@ public static class BenchmarkWorkloadRunner
                 // deliberately issued while that operation is in flight; awaiting the task
                 // afterwards keeps the result and failure semantics observable to the engine.
                 var decodeTask = executor.DecodeAsync(temp, ct);
+                string op;
+                try
+                {
                 // Each action profile performs the operation its name promises instead of every
                 // Move/Delete/Copy/Interleaved profile running the same move+delete regardless of Id.
-                var op = profile.Id switch
+                op = profile.Id switch
                 {
                     "action-delete" => "delete",
                     "action-copy" => "copy",
@@ -170,6 +173,15 @@ public static class BenchmarkWorkloadRunner
                     // path); tests pass a fake so the gate never touches the user's real Recycle Bin.
                     case "delete": recycleBin.SendToRecycleBin(temp); break;
                     case "copy": File.Copy(temp, copied, overwrite: true); break;
+                }
+                }
+                catch
+                {
+                    // The mutation threw: still observe the in-flight decode so it is never left running
+                    // against a file Cleanup() is about to delete (and its fault is never unobserved).
+                    try { _ = await decodeTask.ConfigureAwait(false); }
+                    catch (Exception) { /* the mutation's exception is the one that propagates */ }
+                    throw;
                 }
                 // A delete or move can legitimately win the race before the decoder opens
                 // the file.  That is the behavior this workload is measuring; consume the
@@ -187,6 +199,9 @@ public static class BenchmarkWorkloadRunner
                 catch (IOException) { }
                 // A delete/move racing the decoder's open surfaces as "access denied" while the file is pending delete.
                 catch (UnauthorizedAccessException) { }
+                // An unsupported/corrupt-format result is also what a decoder sees when the file vanishes mid-read.
+                catch (NotSupportedException) { }
+                catch (System.IO.FileFormatException) { }
                 // The correctness check must match what each operation promises: move/delete
                 // must remove the source, copy must leave it in place.
                 var sourceExistsAfter = File.Exists(temp);

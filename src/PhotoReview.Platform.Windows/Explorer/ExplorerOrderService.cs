@@ -289,7 +289,10 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 
     /// <summary>A negative timeout other than <see cref="Timeout.InfiniteTimeSpan"/> means "already expired", not an exception.</summary>
     private static TimeSpan NormalizeTimeout(TimeSpan timeout)
-        => timeout == Timeout.InfiniteTimeSpan || timeout >= TimeSpan.Zero ? timeout : TimeSpan.Zero;
+        => timeout == Timeout.InfiniteTimeSpan ? timeout
+         : timeout < TimeSpan.Zero ? TimeSpan.Zero
+         : timeout.TotalMilliseconds > uint.MaxValue - 1 ? Timeout.InfiniteTimeSpan // beyond the timer limit: WaitAsync/CancelAfter would throw
+         : timeout;
 
     private ExplorerViewSnapshot QueryShell(string folder, IProgress<ExplorerQueryProgress>? progress,
         int batchSize, CancellationToken cancellationToken)

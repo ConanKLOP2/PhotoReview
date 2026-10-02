@@ -146,7 +146,12 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
             _claims.Clear();
             _pendingOpens.Clear();
         }
-        foreach (var claim in claims) claim.Dispose();
+        foreach (var claim in claims)
+        {
+            // One failing claim must not leave the remaining claims' mutexes/pipes undisposed.
+            try { claim.Dispose(); }
+            catch (Exception ex) { _log.Warn($"Instance claim dispose failed: {ex.GetType().Name}"); }
+        }
     }
 
     private InstanceClaimResult ClaimCore(InstanceKeys keys, bool markPending)
@@ -245,17 +250,33 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
                 mutex.Dispose();
                 return null;
             }
-            var server = new InstanceForwardServer(keys.PipeName, onPaths, log);
-            server.Start();
-            return new HeldLock(keys.MutexName, mutex, server);
+            InstanceForwardServer? server = null;
+            try
+            {
+                server = new InstanceForwardServer(keys.PipeName, onPaths, log);
+                server.Start();
+                return new HeldLock(keys.MutexName, mutex, server);
+            }
+            catch
+            {
+                // Never leak the just-created mutex name if the pipe server could not start.
+                try { server?.Dispose(); } finally { mutex.Dispose(); }
+                throw;
+            }
         }
 
         public void StopListening() => _server.Dispose();
 
         public void Dispose()
         {
-            _server.Dispose(); // idempotent; before the name is freed so a new owner can create the pipe
-            _mutex.Dispose();
+            try
+            {
+                _server.Dispose(); // idempotent; before the name is freed so a new owner can create the pipe
+            }
+            finally
+            {
+                _mutex.Dispose();
+            }
         }
     }
 }
