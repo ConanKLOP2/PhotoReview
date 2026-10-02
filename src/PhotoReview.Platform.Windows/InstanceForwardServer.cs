@@ -73,6 +73,7 @@ public sealed class InstanceForwardServer : IInstanceForwardServer
 
     private async Task RunAsync(CancellationToken ct)
     {
+        var failures = 0;
         while (!ct.IsCancellationRequested)
         {
             try
@@ -83,6 +84,7 @@ public sealed class InstanceForwardServer : IInstanceForwardServer
                 await using (pipe.ConfigureAwait(false))
                 {
                     await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
+                    failures = 0;
                     await HandleAsync(pipe, ct).ConfigureAwait(false);
                 }
             }
@@ -93,8 +95,11 @@ public sealed class InstanceForwardServer : IInstanceForwardServer
             catch (Exception ex)
             {
                 // Pipe creation can fail (name squatted, resource exhaustion) and a client can vanish mid-request.
-                _log.Warn($"Instance forward listener error: {ex.GetType().Name}");
-                try { await Task.Delay(RetryDelay, ct).ConfigureAwait(false); }
+                // Back off while the failure repeats (capped at 30 s) and log only the 1st, 2nd, 4th, 8th ... consecutive one.
+                failures++;
+                if ((failures & (failures - 1)) == 0) _log.Warn($"Instance forward listener error: {ex.GetType().Name} (consecutive failures: {failures})");
+                var delay = TimeSpan.FromMilliseconds(Math.Min(30_000.0, RetryDelay.TotalMilliseconds * Math.Pow(2, Math.Min(failures - 1, 7))));
+                try { await Task.Delay(delay, ct).ConfigureAwait(false); }
                 catch (OperationCanceledException) { break; }
             }
         }
@@ -147,8 +152,11 @@ public sealed class InstanceForwardServer : IInstanceForwardServer
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _cts.Cancel();
-        try { _loop?.Wait(TimeSpan.FromSeconds(2)); }
+        var settled = true;
+        try { settled = _loop?.Wait(TimeSpan.FromSeconds(2)) ?? true; }
         catch (AggregateException) { /* loop faults are already logged */ }
-        _cts.Dispose();
+        // A loop still running after the bound would touch a disposed token source; leave it to the GC instead.
+        if (settled) _cts.Dispose();
+        else _log.Warn("Instance forward listener did not stop in time");
     }
 }

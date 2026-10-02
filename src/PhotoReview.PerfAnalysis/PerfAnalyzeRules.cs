@@ -21,8 +21,19 @@ public sealed class RulesConfig
     public static RulesConfig Load(string path)
     {
         var json = File.ReadAllText(path);
-        var doc = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, double>>>(json)
-                  ?? new Dictionary<string, Dictionary<string, double>>();
+        Dictionary<string, Dictionary<string, double>?>? raw;
+        try
+        {
+            raw = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, double>?>>(json);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"Invalid rules file '{path}': {ex.Message}", ex);
+        }
+        var doc = new Dictionary<string, Dictionary<string, double>>();
+        if (raw is not null)
+            foreach (var (rule, section) in raw)
+                if (section is not null) doc[rule] = section; // a null section ("R-X": null) means "all defaults"
         return new RulesConfig(doc);
     }
 

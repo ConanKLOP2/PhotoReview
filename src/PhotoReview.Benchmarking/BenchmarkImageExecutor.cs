@@ -128,7 +128,8 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         _preloadScheduler.Dispose();
         // Only after every persist write has actually finished is it safe to delete the
         // scratch directory without racing a worker that's still writing into it.
-        await _previewService.ShutdownPersistWorkersAsync();
+        try { await _previewService.ShutdownPersistWorkersAsync(); }
+        catch (Exception ex) { FileLog.Default.Error("Benchmark persist workers failed to shut down cleanly", ex); }
         // perf(bench-window): ShutdownPersistWorkersAsync guarantees every write has issued its
         // SchedulePrune call, but that call is itself fire-and-forget, and the prune pass it
         // started can take up to a few seconds on a large/slow disk. The OLD code awaited that
@@ -147,14 +148,21 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         // Generous bound (not the old 5 s): this task no longer blocks anything, so there is no
         // reason to give up early. A prune that somehow never settles just means the scratch
         // directory is left for the OS temp cleaner, exactly like the old timeout path.
-        var pruneSettled = await _previewService.WaitForPruneAsync(TimeSpan.FromMinutes(2));
-        if (!pruneSettled)
+        // This task is never awaited by production code, so it must observe its own failures.
+        try
         {
-            FileLog.Default.Error($"Benchmark disk cache prune did not finish in time; leaving scratch directory: {_diskCacheDirectory}");
-            return;
+            var pruneSettled = await _previewService.WaitForPruneAsync(TimeSpan.FromMinutes(2));
+            if (!pruneSettled)
+            {
+                FileLog.Default.Error($"Benchmark disk cache prune did not finish in time; leaving scratch directory: {_diskCacheDirectory}");
+                return;
+            }
+            if (Directory.Exists(_diskCacheDirectory)) Directory.Delete(_diskCacheDirectory, recursive: true);
         }
-        try { if (Directory.Exists(_diskCacheDirectory)) Directory.Delete(_diskCacheDirectory, recursive: true); }
-        catch (IOException) { } catch (UnauthorizedAccessException) { }
+        catch (Exception ex)
+        {
+            FileLog.Default.Error($"Benchmark scratch directory could not be removed: {_diskCacheDirectory}", ex);
+        }
     }
 }
 

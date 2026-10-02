@@ -317,7 +317,7 @@ public sealed class TrGenerator : IIncrementalGenerator
         return true;
     }
 
-    /// <summary>"status.batchDone" â†’ "StatusBatchDone": split on '.', upper-case each segment's first letter.</summary>
+    /// <summary>"status.batchDone" -> "StatusBatchDone": split on '.', upper-case each segment's first letter.</summary>
     internal static string ToIdentifier(string key)
     {
         var sb = new StringBuilder(key.Length);

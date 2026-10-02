@@ -112,6 +112,19 @@ public sealed class SharedBandwidthLimiter(long bytesPerSecond)
     public void Consume(int bytes)
     {
         if (bytes <= 0) return;
+        // A request larger than one second's budget can never be satisfied at once (the bucket is capped at
+        // _bytesPerSecond), so meter it in chunks no larger than the bucket.
+        long remaining = bytes;
+        while (remaining > 0)
+        {
+            var chunk = (int)Math.Min(remaining, _bytesPerSecond);
+            ConsumeChunk(chunk);
+            remaining -= chunk;
+        }
+    }
+
+    private void ConsumeChunk(int bytes)
+    {
         while (true)
         {
             TimeSpan wait;
