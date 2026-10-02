@@ -204,6 +204,27 @@ public sealed class SettingsStoreTests
         Assert.Equal(validJson, _fileSystem.ReadAllText(_appPaths.ConfigFile));
     }
 
+    [Theory(DisplayName = "Load retries a transient read failure and keeps the real settings instead of defaults")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Load_TransientReadFailure_IsRetried(bool unauthorized)
+    {
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, "{ \"ConfigVersion\": 3, \"ClickZoomPercent\": 275 }");
+        var failuresLeft = 2;
+        _fileSystem.OpenReadHook = path =>
+        {
+            if (!path.Equals(_appPaths.ConfigFile, StringComparison.OrdinalIgnoreCase) || failuresLeft == 0) return null;
+            failuresLeft--;
+            return unauthorized ? new UnauthorizedAccessException("scan") : new IOException("locked");
+        };
+
+        var loaded = _store.Load();
+
+        Assert.Equal(275, loaded.ClickZoomPercent);
+        Assert.Equal(0, failuresLeft);
+        Assert.Empty(_startupErrors);
+    }
+
     [Fact(DisplayName = "Save writes atomic JSON and raises Changed")]
     public void Save_WritesAtomicAndRaisesChanged()
     {

@@ -140,7 +140,7 @@ public sealed class SessionStore
             _fileSystem.WriteAllTextAtomic(path, json, durable: false); // ADR 0007 section 2: atomic, no fsync
             _metrics?.RecordSessionWrite();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidOperationException)
         {
             // Session persistence is best effort (a locked or full disk must not break navigation): callers without a SessionWriter
             // (ImagePresenter / MainViewModel fallback) do not catch.

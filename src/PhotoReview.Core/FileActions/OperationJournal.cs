@@ -458,36 +458,50 @@ public sealed class OperationJournal
         foreach (var pending in latestEntries.Values.Where(entry => entry.State == JournalState.Prepared).ToList())
         {
             if (preparedBeforeUtc is { } cutoff && pending.TimestampUtc >= cutoff) continue;
-            if (IsExecuting(pending.Id)) continue; // Q-R27: skip before any (possibly slow) file check
-            if (pending.GroupMembers is { Count: > 0 })
+            try
             {
-                var allCompleted = pending.GroupMembers.All(member => IsGroupMemberCompleted(pending, member));
-                var entry = WithOutcome(pending, allCompleted ? JournalState.Committed : JournalState.Failed,
-                    pending.Type == FileOperationType.Recycle ? JournalErrors.SourceStillExistsAfterRecovery : JournalErrors.PendingUnconfirmed);
-                if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
+                ReconcileOne(pending, reconciled);
             }
-            else if (pending.Type == FileOperationType.Recycle)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
-                var entry = WithOutcome(pending, state, JournalErrors.SourceStillExistsAfterRecovery);
-                if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
-            }
-            else if (pending.Type is FileOperationType.Move or FileOperationType.Copy)
-            {
-                var sourceExists = _fileSystem.FileExists(pending.Source);
-                var destinationStat = pending.Destination is not null ? _fileSystem.GetFileStat(pending.Destination) : null;
-                var destinationMatches = destinationStat is not null && destinationStat.Length == pending.Size;
-                // Move must have removed the source to count as done; Copy is expected
-                // to leave the source in place, so requiring its absence would reconcile
-                // every genuinely-successful pending Copy as Failed.
-                var state = pending.Type == FileOperationType.Move
-                    ? (!sourceExists && destinationMatches ? JournalState.Committed : JournalState.Failed)
-                    : (destinationMatches ? JournalState.Committed : JournalState.Failed);
-                var entry = WithOutcome(pending, state, JournalErrors.PendingUnconfirmed);
-                if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
+                // One bad line (e.g. a path a file check rejects) must not stop the reconcile of the other entries nor the
+                // compaction that follows; the entry stays Prepared and is retried by the next start.
+                PhotoReview.Core.Diagnostics.FileLog.Default.Warn(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Journal reconcile: skipped {pending.Id}: {ex.Message}"));
             }
         }
         return reconciled;
+    }
+
+    private void ReconcileOne(JournalEntry pending, List<JournalEntry> reconciled)
+    {
+        if (IsExecuting(pending.Id)) return; // Q-R27: skip before any (possibly slow) file check
+        if (pending.GroupMembers is { Count: > 0 })
+        {
+            var allCompleted = pending.GroupMembers.All(member => IsGroupMemberCompleted(pending, member));
+            var entry = WithOutcome(pending, allCompleted ? JournalState.Committed : JournalState.Failed,
+                pending.Type == FileOperationType.Recycle ? JournalErrors.SourceStillExistsAfterRecovery : JournalErrors.PendingUnconfirmed);
+            if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
+        }
+        else if (pending.Type == FileOperationType.Recycle)
+        {
+            var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
+            var entry = WithOutcome(pending, state, JournalErrors.SourceStillExistsAfterRecovery);
+            if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
+        }
+        else if (pending.Type is FileOperationType.Move or FileOperationType.Copy)
+        {
+            var sourceExists = _fileSystem.FileExists(pending.Source);
+            var destinationStat = pending.Destination is not null ? _fileSystem.GetFileStat(pending.Destination) : null;
+            var destinationMatches = destinationStat is not null && destinationStat.Length == pending.Size;
+            // Move must have removed the source to count as done; Copy is expected
+            // to leave the source in place, so requiring its absence would reconcile
+            // every genuinely-successful pending Copy as Failed.
+            var state = pending.Type == FileOperationType.Move
+                ? (!sourceExists && destinationMatches ? JournalState.Committed : JournalState.Failed)
+                : (destinationMatches ? JournalState.Committed : JournalState.Failed);
+            var entry = WithOutcome(pending, state, JournalErrors.PendingUnconfirmed);
+            if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
+        }
     }
 
     /// <summary>

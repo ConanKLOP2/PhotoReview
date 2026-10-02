@@ -40,9 +40,18 @@ public sealed class CrashPointFileSystem(InMemoryFileSystem inner) : IFileSystem
         if (Crashed) throw new IOException("simulated crash");
     }
 
-    public bool FileExists(string path) { Read(); return Inner.FileExists(path); }
+    /// <summary>Paths for which <see cref="FileExists"/>/<see cref="GetFileStat"/> throw <see cref="ArgumentException"/>
+    /// (what the real file system does for a path it rejects).</summary>
+    public HashSet<string> ArgumentFaultPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    private void ArgumentFault(string path)
+    {
+        if (ArgumentFaultPaths.Contains(path)) throw new ArgumentException("simulated invalid path", nameof(path));
+    }
+
+    public bool FileExists(string path) { Read(); ArgumentFault(path); return Inner.FileExists(path); }
     public bool DirectoryExists(string path) { Read(); return Inner.DirectoryExists(path); }
-    public FileStat? GetFileStat(string path) { Read(); return Inner.GetFileStat(path); }
+    public FileStat? GetFileStat(string path) { Read(); ArgumentFault(path); return Inner.GetFileStat(path); }
     public void Move(string source, string destination) { Mutate("move", source + ">" + destination); Inner.Move(source, destination); }
     public void Copy(string source, string destination) { Mutate("copy", source + ">" + destination); Inner.Copy(source, destination); }
     public void Delete(string path) { Mutate("delete", path); Inner.Delete(path); }

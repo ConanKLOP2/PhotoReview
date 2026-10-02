@@ -11,7 +11,7 @@ namespace PhotoReview.Core.FileActions;
 /// <para>Semantics are exactly those of that two-pass reader: a line is accepted only when it is a JSON object whose
 /// <c>Type</c> and <c>State</c> are present and recognized (a string that <see cref="Enum.TryParse{TEnum}(string?, bool, out TEnum)"/>
 /// accepts as a defined member, the "Delete" alias for Type, or a defined number), whose <c>Id</c> is non-empty and whose
-/// <c>Source</c> is not null. Malformed JSON is rejected. The lenient enum converters would otherwise map an unknown or missing
+/// <c>Source</c> is not blank (a blank <c>Destination</c> is read as null). Malformed JSON is rejected. The lenient enum converters would otherwise map an unknown or missing
 /// Type/State to the first member (Move/Prepared) and invent a pending move.</para>
 /// <para>How: options-level converters (which take precedence over the enums' <c>[JsonConverter]</c> attribute) record, per
 /// thread, whether the last Type/State token they read was recognized, and delegate the value itself to
@@ -61,10 +61,17 @@ internal static class JournalLineParser
     }
 
     private static JournalEntry? Accept(JournalEntry? entry) =>
-        entry is not null && t_type == 1 && t_state == 1 && !string.IsNullOrEmpty(entry.Id) && entry.Source is not null
+        entry is not null && t_type == 1 && t_state == 1 && !string.IsNullOrEmpty(entry.Id) && IsUsablePath(entry.Source)
             && HasValidGroupMembers(entry)
-            ? entry
+            ? NormalizeDestination(entry)
             : null;
+
+    // A blank/whitespace/NUL path would make every later file check throw ArgumentException out of reconcile/Recovery.
+    private static bool IsUsablePath(string? path) => !string.IsNullOrWhiteSpace(path) && !path.Contains('\0', StringComparison.Ordinal);
+
+    // A blank Destination carries no information: it is the same as no Destination (null), as the readers already assume.
+    private static JournalEntry NormalizeDestination(JournalEntry entry) =>
+        entry.Destination is not null && !IsUsablePath(entry.Destination) ? entry with { Destination = null } : entry;
 
     // A group member without a usable Source (JSON null element, missing or blank Source) would make every later file check
     // throw ArgumentException out of reconcile/Recovery, so such a line is dropped like any other malformed line.

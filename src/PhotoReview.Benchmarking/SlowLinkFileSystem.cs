@@ -86,8 +86,14 @@ public sealed class SlowLinkFileSystem : IFileSystem
     }
 
     public IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(
-        string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
-        _inner.EnumerateReadableFilesWithStat(directory, include, onSkipped);
+        string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped)
+    {
+        foreach (var entry in _inner.EnumerateReadableFilesWithStat(directory, include, onSkipped))
+        {
+            DelayMetadata();
+            yield return entry;
+        }
+    }
 
     public IEnumerable<string> EnumerateDirectories(string directory) => _inner.EnumerateDirectories(directory);
     public void CreateDirectory(string path) => _inner.CreateDirectory(path);
