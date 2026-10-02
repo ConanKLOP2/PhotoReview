@@ -333,6 +333,11 @@ public sealed class UndoService
                 }
 
                 var restored = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc)).ConfigureAwait(false);
+                // A shell restore can report failure although the file did come back (verb timeout, a racing manual restore):
+                // when the recycled file itself is now at its original path, the undo is done (same rule as the group path).
+                if (!restored && _fileSystem.GetFileStat(action.Source) is { } back
+                    && back.Length == action.Size && back.LastWriteUtc == action.LastWriteUtc)
+                    restored = true;
                 if (!restored)
                 {
                     return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(action.Source)));

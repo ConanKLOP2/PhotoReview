@@ -248,6 +248,21 @@ public sealed class PreloadScheduler : IDisposable
 
     public Task PreloadAroundAsync(int center)
     {
+        // Not an async method: a throw of the snapshot callbacks (the catalog is being replaced while a window closes) would reach
+        // the UI-thread caller synchronously. Preload is best effort -- log and do nothing, the next navigation re-kicks it.
+        try
+        {
+            return PreloadAroundCore(center);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _log.Error("Preload kick failed; skipped", ex);
+            return Task.CompletedTask;
+        }
+    }
+
+    private Task PreloadAroundCore(int center)
+    {
         // Disposed schedulers must stay dead: without this check, a call here
         // would resurrect a new CancellationTokenSource and background loop.
         // D10: PHOTOREVIEW_DIAG_PRELOAD_WORKERS=0 means no preload at all. Returning here

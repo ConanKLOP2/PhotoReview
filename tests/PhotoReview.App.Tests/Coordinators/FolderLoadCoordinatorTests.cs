@@ -254,7 +254,13 @@ public sealed partial class FolderLoadCoordinatorTests
         public TaskCompletionSource FirstPresented { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public List<(string Folder, IReadOnlyList<SkippedEntry> Skipped)> SkippedCalls { get; } = [];
         public List<(IReadOnlyList<string> Paths, bool CurrentRemoved)> Removals { get; } = [];
-        public void OnFilesSkipped(string folder, IReadOnlyList<SkippedEntry> skipped) => SkippedCalls.Add((folder, skipped));
+        /// <summary>A1: runs first inside <see cref="OnFilesSkipped"/> (a test makes applying the probe result throw).</summary>
+        public Action? OnFilesSkippedHook { get; set; }
+        public void OnFilesSkipped(string folder, IReadOnlyList<SkippedEntry> skipped)
+        {
+            OnFilesSkippedHook?.Invoke();
+            SkippedCalls.Add((folder, skipped));
+        }
         public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved)
         {
             Removals.Add((removedPaths, currentRemoved));

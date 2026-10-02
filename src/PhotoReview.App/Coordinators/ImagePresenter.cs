@@ -492,7 +492,7 @@ public sealed class ImagePresenter
 
             long perfKick = perf ? Stopwatch.GetTimestamp() : 0;
             if (perf) PhotoReviewPerf.Log.PostStart(token, "preloadKick");
-            _ = _preloadController.PreloadAroundAsync(index);
+            TaskLogging.FireAndLog(() => _preloadController.PreloadAroundAsync(index), "Preload after present failed");
             if (perf) PhotoReviewPerf.Log.PostEnd(token, "preloadKick", PhotoReviewPerf.Ms(perfKick));
 
             // 6. Compare (qua CompareViewModel) hoặc lấy dimension (Original thì lấy từ ảnh)

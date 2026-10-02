@@ -84,14 +84,24 @@ public sealed class RecoveryRetryService
             return new(false, Tr.CoreRecoveryOnlyMoveCopy, null);
         if (string.IsNullOrWhiteSpace(failed.Destination))
             return new(false, Tr.CoreRecoveryNoDestination, null);
-        if (!_fileSystem.FileExists(failed.Source))
-            return new(false, Tr.CoreRecoverySourceMissing, null);
+        FileStat sourceStat;
+        try
+        {
+            // Same guard as the group path: a path the file system rejects (or an unreachable share) is a failed retry, not a crash.
+            if (!_fileSystem.FileExists(failed.Source))
+                return new(false, Tr.CoreRecoverySourceMissing, null);
 
-        var sourceStat = _fileSystem.GetFileStat(failed.Source);
-        if (sourceStat is null || sourceStat.Length != failed.Size || sourceStat.LastWriteUtc != failed.LastWriteUtc)
-            return new(false, Tr.CoreRecoverySourceChanged, null);
-        if (_fileSystem.FileExists(failed.Destination))
-            return new(false, Tr.CoreRecoveryDestinationExists, null);
+            var stat = _fileSystem.GetFileStat(failed.Source);
+            if (stat is null || stat.Length != failed.Size || stat.LastWriteUtc != failed.LastWriteUtc)
+                return new(false, Tr.CoreRecoverySourceChanged, null);
+            sourceStat = stat;
+            if (_fileSystem.FileExists(failed.Destination))
+                return new(false, Tr.CoreRecoveryDestinationExists, null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return new(false, ex.Message, null);
+        }
 
         // `with` keeps Undo / Permanent: dropping Undo turns a retried undo-Move into a redo on the next Ctrl+Z after a restart.
         var prepared = failed with

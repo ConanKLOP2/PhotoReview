@@ -60,6 +60,26 @@ public sealed class SettingsStore
         public bool IsValidKeyName(string keyName) => !string.IsNullOrWhiteSpace(keyName);
     }
 
+    // A transient lock (antivirus scan, a sibling instance mid-rename) must not demote the whole session to defaults: retry the
+    // read a few times with a short back-off, then let the caller degrade exactly as before.
+    private static readonly int[] ReadRetryDelaysMs = [50, 100, 200, 400];
+
+    private string ReadAllTextWithRetry(string filePath)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return _fileSystem.ReadAllText(filePath);
+            }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < ReadRetryDelaysMs.Length)
+            {
+                _log.Info(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"config.json read failed ({ex.GetType().Name}), retrying: {ex.Message}"));
+                Thread.Sleep(ReadRetryDelaysMs[attempt]);
+            }
+        }
+    }
+
     public AppSettings Load(string? path = null)
     {
         var filePath = path ?? _appPaths.ConfigFile;
@@ -70,7 +90,7 @@ public sealed class SettingsStore
         {
             if (_fileSystem.FileExists(filePath))
             {
-                var json = _fileSystem.ReadAllText(filePath);
+                var json = ReadAllTextWithRetry(filePath);
                 AppSettings loaded;
                 IReadOnlyList<string> salvagedFrom = [];
                 try

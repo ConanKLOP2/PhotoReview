@@ -1068,7 +1068,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // order is applied, so preload started around the fallback neighbours).
         // The loop still walks the pre-order snapshot: cancel it so the fresh lifetime sees the new order (R2-F-01).
         _preloadController?.Cancel();
-        if (currentKept && currentIndex >= 0) _ = _preloadController?.PreloadAroundAsync(currentIndex);
+        if (currentKept && currentIndex >= 0) TaskLogging.FireAndLog(() => _preloadController?.PreloadAroundAsync(currentIndex), "Preload after Explorer order failed");
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
     }
@@ -1109,7 +1109,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         else if (_catalog.CurrentIndex >= 0)
         {
             // The current image stays on screen; its neighbours changed, so preload re-centers on its new index.
-            _ = _preloadController?.PreloadAroundAsync(_catalog.CurrentIndex);
+            TaskLogging.FireAndLog(() => _preloadController?.PreloadAroundAsync(_catalog.CurrentIndex), "Preload after unreadable removal failed");
         }
 
         NotifyNavigationStateChanged();

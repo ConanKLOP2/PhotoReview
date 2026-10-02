@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿﻿using System.Diagnostics;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Tests.Fakes;
@@ -261,5 +261,20 @@ public sealed class SessionStoreTests
             System.Text.Encoding.UTF8.GetBytes(@"C:\PHOTOS\VACATION")));
 
         Assert.Equal(Path.Combine(_sessionsDir, expectedKey + ".json"), store.GetPath(spelling));
+    }
+
+    [Theory(DisplayName = "C4: Save swallows the best-effort write failures a file system can throw besides IO errors")]
+    [InlineData(typeof(ArgumentException))]
+    [InlineData(typeof(NotSupportedException))]
+    [InlineData(typeof(InvalidOperationException))]
+    public void Save_UnexpectedFileSystemFailure_DoesNotThrow(Type failure)
+    {
+        var store = CreateStore();
+        _fs.WriteHook = _ => (Exception)Activator.CreateInstance(failure, "rejected")!;
+
+        store.Save(new SessionState { Folder = @"C:\photos\vacation" });
+
+        _fs.WriteHook = null;
+        Assert.Null(store.Load(@"C:\photos\vacation").CurrentPath);
     }
 }

@@ -202,7 +202,18 @@ public sealed class TurboJpegDecoder : IImageDecoder
                         transform.Children.Add(ExifOrientation.CreateTransform(orientation));
                     }
 
-                    bitmap = WpfImageAdapter.Materialize(new TransformedBitmap(bitmap, transform));
+                    try
+                    {
+                        bitmap = WpfImageAdapter.Materialize(new TransformedBitmap(bitmap, transform));
+                    }
+                    catch (OutOfMemoryException)
+                    {
+                        // The transformed copy needs a second full-size surface on top of the one EnsureOutputFits sized for: the
+                        // same "too large for the available memory" verdict as that guard, not a raw allocation failure.
+                        throw UserFacingError.Localized(
+                            new InvalidDataException($"TurboJPEG output dimensions are too large for the available memory: {scaledW}x{scaledH} ({bufferLength} bytes)."),
+                            () => Tr.ErrDecoderOutputTooLarge(scaledW, scaledH, bufferLength));
+                    }
                 }
 
                 // Perf: origW/origH (tj3Get JpegWidth/JpegHeight from the header already parsed
@@ -270,6 +281,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// <summary>Most of a file <see cref="ReadInfo"/> reads while looking for the end of the header area.</summary>
     private const int HeaderReadCap = 8 * 1024 * 1024;
 
+    /// <summary>Most of a file <see cref="ExtendHeaderArea"/> reads: far beyond any real header area, far below the file-size limit,
+    /// so a hostile file with endless APPn segments cannot make a header-only read allocate gigabytes.</summary>
+    internal const int ExtendedHeaderCap = 64 * 1024 * 1024;
+
     /// <summary>Reads the start of the file: 64 KB, then doubling while the marker walk shows the header area is not finished (capped).</summary>
     private static byte[] ReadHeaderArea(string path)
     {
@@ -288,11 +303,11 @@ public sealed class TurboJpegDecoder : IImageDecoder
     }
 
     /// <summary>
-    /// Extends the initial header read using exponential growth without the cap.
+    /// Extends the initial header read using exponential growth up to <see cref="ExtendedHeaderCap"/>.
     /// This avoids re-reading the entire file when the header area exceeded the initial 8 MB cap.
     /// Reuses the buffer passed in and continues from where ReadHeaderArea left off.
     /// </summary>
-    private static byte[] ExtendHeaderArea(string path, byte[] initialBuffer)
+    internal static byte[] ExtendHeaderArea(string path, byte[] initialBuffer)
     {
         using var fs = new FileStream(
             path,
@@ -306,17 +321,18 @@ public sealed class TurboJpegDecoder : IImageDecoder
         // Skip to where the initial read ended
         fs.Seek(initialBuffer.Length, SeekOrigin.Begin);
 
-        // Continue doubling without the HeaderReadCap limit (cap: null), until we either:
+        // Continue doubling past HeaderReadCap, bounded by ExtendedHeaderCap, until we either:
         // - reach the end of the file
         // - the header marker walk says we have the full header
-        return GrowHeaderArea(fs, length, initialBuffer, cap: null);
+        // A header area that still is not finished at the cap is treated as damaged (ReadInfo then fails with InvalidDataException).
+        return GrowHeaderArea(fs, length, initialBuffer, ExtendedHeaderCap);
     }
 
     /// <summary>
     /// Shared exponential-growth loop behind <see cref="ReadHeaderArea"/> and <see cref="ExtendHeaderArea"/>:
     /// doubles <paramref name="buffer"/> (reading the new bytes from <paramref name="fs"/>, which must already be
     /// positioned right after it) while the marker walk says the header is not finished, up to <paramref name="length"/>
-    /// or, when given, <paramref name="cap"/> (null = uncapped, matching <see cref="ExtendHeaderArea"/>'s behavior).
+    /// or, when given, <paramref name="cap"/> (null = no cap beyond the file length and <see cref="MaxSourceBytes"/>).
     /// </summary>
     private static byte[] GrowHeaderArea(FileStream fs, long length, byte[] buffer, long? cap)
     {

@@ -18,6 +18,18 @@ public sealed class LibRawAvailabilityTests
         Assert.True(exports.Count >= 19, "expected all DllImport entry points, found " + exports.Count);
     }
 
+    [Fact(DisplayName = "I1: the LibRaw assembly restricts native loads to its own folder (no PATH / working-directory search)")]
+    public void LibRawAssembly_DefaultDllImportSearchPath_IsAssemblyDirectoryOnly()
+    {
+        var attribute = typeof(LibRawAvailability).Assembly
+            .GetCustomAttributes(typeof(DefaultDllImportSearchPathsAttribute), inherit: false)
+            .Cast<DefaultDllImportSearchPathsAttribute>()
+            .SingleOrDefault();
+
+        Assert.NotNull(attribute);
+        Assert.Equal(DllImportSearchPath.AssemblyDirectory, attribute!.Paths);
+    }
+
     [Theory]
     [InlineData("0.22.2", true, 0, 22)]
     [InlineData("0.21.4-Release", true, 0, 21)]

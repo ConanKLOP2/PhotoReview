@@ -60,10 +60,21 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
-    internal static InvalidDataException AsInvalidData(ArgumentException ex)
+    /// <summary>WIC reports sizes as <c>uint</c>; everything downstream is <c>int</c>. A size beyond <see cref="int.MaxValue"/> is a damaged
+    /// (or hostile) header, refused as data fault instead of wrapping to a negative size or an OverflowException.</summary>
+    internal static (int Width, int Height) ToIntSize(uint width, uint height)
+    {
+        if (width > int.MaxValue || height > int.MaxValue)
+            throw UserFacingError.Localized(
+                new InvalidDataException($"WIC reported image dimensions beyond the supported range: {width}x{height}"),
+                () => Tr.ErrDecoderInvalidDimensions(width, height));
+        return ((int)width, (int)height);
+    }
+
+    internal static InvalidDataException AsInvalidData(ArgumentException ex, string decoder = "WicDirect")
     {
         var detail = ex.Message;
-        return UserFacingError.Localized(new InvalidDataException("WicDirect rejected the image data: " + detail, ex),
+        return UserFacingError.Localized(new InvalidDataException(decoder + " rejected the image data: " + detail, ex),
             () => Tr.ErrDecoderDecompressFailed(detail));
     }
 
@@ -102,9 +113,10 @@ public sealed class WicDirectDecoder : IImageDecoder
             // Dimensions and orientation do not depend on the color profile, so profiled files
             // no longer need to fall back to WPF here.
             frame.GetSize(out uint origW, out uint origH);
+            var (width, height) = ToIntSize(origW, origH);
             int orientation = ReadExifOrientation(frame);
 
-            return new ImageInfo((int)origW, (int)origH, orientation);
+            return new ImageInfo(width, height, orientation);
         }
         finally
         {
@@ -139,6 +151,7 @@ public sealed class WicDirectDecoder : IImageDecoder
 
             decoder.GetFrame(0, out frame);
             frame.GetSize(out uint origW, out uint origH);
+            _ = ToIntSize(origW, origH); // every later computation is int-based: refuse a size the casts below would wrap
 
             // Orientation and the photo-information EXIF fields come from one query reader over the metadata
             // this decode parses anyway (no extra read of the stream).
@@ -230,6 +243,7 @@ public sealed class WicDirectDecoder : IImageDecoder
             }
 
             currentSource.GetSize(out uint finalW, out uint finalH);
+            _ = ToIntSize(finalW, finalH);
             var stride = checked((int)finalW * 4);
             var bufferSize = checked(stride * (int)finalH);
             EnsureOutputFits((int)finalW, (int)finalH, bufferSize, memoryInfo);

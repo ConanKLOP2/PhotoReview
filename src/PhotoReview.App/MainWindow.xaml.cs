@@ -471,6 +471,19 @@ public partial class MainWindow : Window
             }
         }
         base.OnClosing(e);
+        if (!e.Cancel) _isClosingOrClosed = true;
+    }
+
+    private bool _isClosingOrClosed;
+
+    /// <summary>True once the window is committed to closing (a deferred close does not count) or is closed: later requests to
+    /// use it (a forwarded launch) must not touch it.</summary>
+    internal bool IsClosingOrClosed => _isClosingOrClosed;
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _isClosingOrClosed = true;
+        base.OnClosed(e);
     }
 
     private async Task CloseWhenFileActionDoneAsync()
@@ -510,8 +523,33 @@ public partial class MainWindow : Window
     {
         e.Handled = true;
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-        await _pointer.OnWheelAsync(e.Delta, ctrl, e.GetPosition(ImageScroll));
+        var delta = e.Delta;
+        var position = e.GetPosition(ImageScroll);
+        await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.OnWheelAsync(delta, ctrl, position));
     }
+
+    /// <summary>
+    /// A4: an <c>async void</c> handler that lets an exception escape reaches the dispatcher's unhandled-exception handler
+    /// (a crash). Runs <paramref name="action"/>, and on failure logs it and shows the same "action failed" status text the
+    /// file-action pipeline uses; cancellation is not a failure.
+    /// </summary>
+    private async Task RunGuardedAsync(string actionName, Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            AppLog.Error($"{actionName} failed", ex);
+            _viewModel.StatusText = PhotoReview.App.ViewModels.StatusFormatter.ActionFailed(actionName, PhotoReview.Core.Localization.UserFacingError.Describe(ex));
+        }
+    }
+
+    private static string TrimEllipsis(string text) => text.TrimEnd('…', '.', ' ');
 
     /// <summary>Tunnels before the image's handler: any press stops a glide (remembered so that press is not a click).</summary>
     private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => _pointer.OnWindowPreviewMouseDown();
@@ -601,8 +639,8 @@ public partial class MainWindow : Window
             case ReviewCommandType.Fullscreen: _viewModel.ToggleFullscreen(); break;
             case ReviewCommandType.ExitFullscreen: _viewModel.ExitFullscreen(); break;
             case ReviewCommandType.Close: Close(); break;
-            case ReviewCommandType.NextFolder: await _viewModel.NavigateSiblingFolderAsync(1); break;
-            case ReviewCommandType.PreviousFolder: await _viewModel.NavigateSiblingFolderAsync(-1); break;
+            case ReviewCommandType.NextFolder: await RunGuardedAsync(Tr.MainMenuNextFolder, () => _viewModel.NavigateSiblingFolderAsync(1)); break;
+            case ReviewCommandType.PreviousFolder: await RunGuardedAsync(Tr.MainMenuPreviousFolder, () => _viewModel.NavigateSiblingFolderAsync(-1)); break;
             case ReviewCommandType.FirstImage: await _viewModel.FirstImageAsync(); break;
             case ReviewCommandType.LastImage: await _viewModel.LastImageAsync(); break;
             case ReviewCommandType.ToggleInfoOverlay: _viewModel.ToggleInfoOverlay(); break;
@@ -611,7 +649,10 @@ public partial class MainWindow : Window
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
             case ReviewCommandType.ToggleCaptureMember: await _viewModel.ToggleCaptureGroupMemberAsync(); break;
             case ReviewCommandType.RunAction:
-                await _viewModel.RunActionAsync(cmd.Value.ActionIndex);
+                var actionIndex = cmd.Value.ActionIndex;
+                var profiles = _settings.Actions;
+                await RunGuardedAsync(actionIndex >= 0 && actionIndex < profiles.Count ? profiles[actionIndex].Name : string.Empty,
+                    () => _viewModel.RunActionAsync(actionIndex));
                 break;
             case ReviewCommandType.Recycle: await _viewModel.RecycleAsync(); break;
             case ReviewCommandType.Skip: await _viewModel.SkipAsync(); break;
@@ -620,14 +661,14 @@ public partial class MainWindow : Window
             case ReviewCommandType.ZoomOut: await _pointer.ZoomOutAsync(); break;
             case ReviewCommandType.Next: await _viewModel.NextAsync(); break;
             case ReviewCommandType.Previous: await _viewModel.PreviousAsync(); break;
-            case ReviewCommandType.MoveToFolder: await _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker); break;
-            case ReviewCommandType.CopyToFolder: await _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker); break;
+            case ReviewCommandType.MoveToFolder: await RunGuardedAsync(Tr.ActionMoveToFolderName, () => _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker)); break;
+            case ReviewCommandType.CopyToFolder: await RunGuardedAsync(Tr.ActionCopyToFolderName, () => _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker)); break;
             case ReviewCommandType.ClickZoom: await _pointer.ToggleClickZoomAsync(); break;
             case ReviewCommandType.FitWidth: await _pointer.FitWidthAsync(); break;
             case ReviewCommandType.FitHeight: await _pointer.FitHeightAsync(); break;
             case ReviewCommandType.ToggleKeepZoom: ToggleKeepZoomAcrossImages(); break;
-            case ReviewCommandType.OpenFolder: await _viewModel.PickAndOpenFolderAsync(); break;
-            case ReviewCommandType.CustomZoom: await OpenClickZoomCustomDialogAsync(); break;
+            case ReviewCommandType.OpenFolder: await RunGuardedAsync(TrimEllipsis(Tr.MainMenuOpenFolder), () => _viewModel.PickAndOpenFolderAsync()); break;
+            case ReviewCommandType.CustomZoom: await RunGuardedAsync(Tr.MainMenuZoom, OpenClickZoomCustomDialogAsync); break;
         }
     }
 
@@ -673,7 +714,7 @@ public partial class MainWindow : Window
     private void CompareLeft_KeyDown(object sender, KeyEventArgs e) { if (e.Key is Key.Enter or Key.Space) { _viewModel.Compare.SelectLeft(); e.Handled = true; } }
     private void CompareRight_KeyDown(object sender, KeyEventArgs e) { if (e.Key is Key.Enter or Key.Space) { _viewModel.Compare.SelectRight(); e.Handled = true; } }
 
-    private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.PickAndOpenFolderAsync();
+    private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(TrimEllipsis(Tr.MainMenuOpenFolder), () => _viewModel.PickAndOpenFolderAsync());
     private void OpenInExternalEditor_Click(object sender, RoutedEventArgs e) => _viewModel.OpenInExternalEditor();
     private void Settings_Click(object sender, RoutedEventArgs e) => _viewModel.ShowSettings();
     private async void FitImage_Click(object sender, RoutedEventArgs e) => await ApplyFitViewAsync();
@@ -775,19 +816,19 @@ public partial class MainWindow : Window
     private void ClickZoomFit_Click(object sender, RoutedEventArgs e) => ApplyFitViewAsync().FireAndLog("Fit view failed");
 
     /// <summary>"Zoom to N%": zooms to the configured level (does not change it; the presets below do).</summary>
-    private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent);
+    private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent));
 
     /// <summary>"Zoom" submenu: Fit width, anchored at the mouse when it is over the viewport (same rule as the shortcut).</summary>
-    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await _pointer.FitWidthAsync();
+    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.FitWidthAsync());
 
     /// <summary>"Zoom" submenu: Fit height (always centred).</summary>
-    private async void ZoomFitHeight_Click(object sender, RoutedEventArgs e) => await _pointer.FitHeightAsync();
+    private async void ZoomFitHeight_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.FitHeightAsync());
 
     /// <summary>Folder group: NavigateSiblingFolderAsync(+1), the same command PageDown runs.</summary>
-    private async void NextFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateSiblingFolderAsync(1);
+    private async void NextFolder_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuNextFolder, () => _viewModel.NavigateSiblingFolderAsync(1));
 
     /// <summary>Folder group: NavigateSiblingFolderAsync(-1), the same command PageUp runs.</summary>
-    private async void PreviousFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateSiblingFolderAsync(-1);
+    private async void PreviousFolder_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuPreviousFolder, () => _viewModel.NavigateSiblingFolderAsync(-1));
 
     /// <summary>
     /// Refreshes the top-level items on every open: the level in "Zoom to N%", each item's shortcut (as configured,
@@ -830,10 +871,10 @@ public partial class MainWindow : Window
     private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.MenuItem { Tag: int percent }) return;
-        await ApplyZoomMenuSelectionAsync(percent);
+        await RunGuardedAsync(Tr.MainMenuZoom, () => ApplyZoomMenuSelectionAsync(percent));
     }
 
-    private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e) => await OpenClickZoomCustomDialogAsync();
+    private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, OpenClickZoomCustomDialogAsync);
 
     /// <summary>Q-R43: shared by the "Custom…" menu item and the CustomZoom keyboard shortcut.</summary>
     private async Task OpenClickZoomCustomDialogAsync()

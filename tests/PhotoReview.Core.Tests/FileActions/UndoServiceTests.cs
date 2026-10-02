@@ -1,4 +1,4 @@
-﻿using System.IO;
+﻿﻿using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
@@ -34,12 +34,14 @@ public sealed class UndoServiceTests
         public List<string> RecycledPaths { get; } = [];
         public bool TryRestoreResult { get; set; } = true;
         public string? LastRestoredPath { get; private set; }
+        public Action? OnTryRestore { get; set; }
 
         public void SendToRecycleBin(string path) => RecycledPaths.Add(path);
 
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
         {
             LastRestoredPath = originalPath;
+            OnTryRestore?.Invoke();
             return TryRestoreResult;
         }
     }
@@ -426,6 +428,21 @@ public sealed class UndoServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Contains("Không thể khôi phục từ Thùng rác", result.ErrorMessage);
+    }
+
+    [Fact(DisplayName = "C5: Undo of a Recycle whose restore reported failure but whose file is back at the source counts as success")]
+    public async Task UndoLastAsync_Recycle_RestoreReportsFailureButFileIsBack_Succeeds()
+    {
+        var source = @"C:\photos\deleted.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _recycleBin.TryRestoreResult = false;
+        _recycleBin.OnTryRestore = () => _fs.AddFile(source, new string('x', 100), writeTime);
+        _service.Register(new FileActionResult(true, FileOperationType.Recycle, source, null, 100, writeTime, null));
+
+        var result = await _service.UndoLastAsync();
+
+        Assert.True(result.Succeeded);
+        Assert.False(_service.HasLastAction);
     }
 
     [Fact(DisplayName = "Undo of a Recycle refuses to restore over a newer file at the original path and keeps the action")]
