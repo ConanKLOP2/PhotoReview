@@ -208,7 +208,18 @@ public sealed class DuplicateCleanupController
             // ADR 0005: ExecuteAsync stats + fsyncs its journal entry before its first await; run it
             // on the pool so a batch of N files does not do N synchronous fsyncs on the UI thread.
             // The continuation (counters, final status/dialog) still returns to the UI thread.
-            var result = await Task.Run(() => _fileActionService.ExecuteAsync(request));
+            FileActionResult result;
+            try
+            {
+                result = await Task.Run(() => _fileActionService.ExecuteAsync(request));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // One unexpected throw must not abort the batch (the rest of the files, the reload and the summary).
+                AppLog.Error($"Duplicate cleanup recycle threw: {path}", ex);
+                failures.Add($"{Path.GetFileName(path)}: {UserFacingError.Describe(ex)}");
+                continue;
+            }
             if (result.Succeeded)
             {
                 succeeded++;
@@ -268,11 +279,22 @@ public sealed class DuplicateCleanupController
         _previewService?.ClearSourceBytesCache();
         _preloadController?.ClearPreloadedKeys();
         // ... then the directory deletes (up to the multi-GB disk quota, thousands of files) off the UI thread.
-        await Task.Run(() =>
+        try
         {
-            _thumbnailCache?.ClearDisk();
-            _previewService?.ClearDisk();
-        });
+            await Task.Run(() =>
+            {
+                _thumbnailCache?.ClearDisk();
+                _previewService?.ClearDisk();
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The caches already log and swallow IO/permission failures themselves (so a partial clear still reports
+            // "cleared": that needs a Core/Imaging API change); anything else must not escape as an unobserved exception.
+            AppLog.Error("Clear cache failed", ex);
+            _sink.SetStatusText(StatusFormatter.ActionFailed(Tr.DialogClearCacheTitle, UserFacingError.Describe(ex)));
+            return;
+        }
         _sink.SetStatusText(StatusFormatter.CacheCleared());
     }
 }

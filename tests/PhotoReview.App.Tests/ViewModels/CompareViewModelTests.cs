@@ -180,6 +180,34 @@ public sealed class CompareViewModelTests
     }
 
     [Fact]
+    public async Task LoadAsync_WithCompareSizeAndNoInjectedSizes_StatsTheFiles()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "PhotoReview_CmpSize_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var left = Path.Combine(dir, "a.jpg");
+            File.WriteAllBytes(left, new byte[1234]);
+            var vm = new CompareViewModel();
+
+            var success = await vm.LoadAsync(
+                (left, Path.Combine(dir, "missing.jpg")),
+                token: 1,
+                isTokenCurrent: _ => true,
+                loadImageAsync: _ => Task.FromResult<object?>(new object()),
+                compareSizeEnabled: true);
+
+            Assert.True(success);
+            Assert.Equal(" (1,234 byte)", vm.LeftSizeText);
+            Assert.Equal(string.Empty, vm.RightSizeText); // a missing partner only loses the cosmetic suffix
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
     public async Task LoadAsync_WithCompareHash_MatchingHashes_SetsTrung()
     {
         var vm = new CompareViewModel();

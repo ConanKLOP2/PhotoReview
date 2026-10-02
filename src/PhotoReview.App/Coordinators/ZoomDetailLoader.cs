@@ -196,7 +196,15 @@ public sealed class ZoomDetailLoader
             }
             cts.Dispose();
         }
-        Update();
+        try
+        {
+            Update();
+        }
+        catch (Exception ex)
+        {
+            // LoadAsync is fire-and-forget (Update does not await it): a throw from showing the original must not go unobserved.
+            AppLog.Error($"ZoomDetail update after original decode failed token={target.Token} path={target.Path}", ex);
+        }
     }
 
     private void CancelPending()
@@ -214,7 +222,7 @@ public sealed class ZoomDetailLoader
         StopRawDecodeIndicator();
         var indicatorCts = CancellationTokenSource.CreateLinkedTokenSource(loadToken);
         _indicatorCts = indicatorCts;
-        _ = ShowIndicatorAfterDelayAsync(indicatorCts);
+        ShowIndicatorAfterDelayAsync(indicatorCts).FireAndLog("RAW decode indicator failed");
     }
 
     /// <summary>Hides the indicator and cancels and disposes its delay source (idempotent).</summary>

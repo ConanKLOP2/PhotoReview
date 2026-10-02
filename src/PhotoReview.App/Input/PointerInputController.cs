@@ -325,7 +325,7 @@ internal sealed class PointerInputController
         if (changedButton == MouseButton.Left && PointerGestures.IsFitDoubleClick(clickCount))
         {
             CancelPan();
-            _ = _commands.ApplyFitAsync();
+            _commands.ApplyFitAsync().FireAndLog("Fit on double-click failed");
             return true;
         }
 
@@ -409,7 +409,7 @@ internal sealed class PointerInputController
         switch (action)
         {
             case PointerReleaseAction.ClickZoom:
-                _ = ClickZoomAsync(point);
+                ClickZoomAsync(point).FireAndLog("Click-to-zoom failed");
                 handled = true;
                 break;
             case PointerReleaseAction.StartKinetic:

@@ -154,7 +154,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         // same idea as the CLI's --benchmark-all Take(64) -- a large real folder no longer forces every run
         // (including "Quick check") to decode thousands of images just to compare configurations. 0 = all.
         var files = ApplyImageLimit(supported, imageLimit);
-        var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
+        var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppLog.Error($"Benchmark could not stat {path}", ex); return 0L; } });
         return (files, totalSourceBytes);
     }
 
@@ -171,7 +171,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         // Captured once: Dispose() (window closed mid-run) nulls _cts, and re-reading it per profile threw an NRE that
         // was reported as a bogus Fail row. A cancelled token instead ends the run through the normal cancel path.
         var runToken = _cts.Token;
-        RunButton.IsEnabled = false; QuickCheckButton.IsEnabled = false; CancelButton.IsEnabled = true; BrowseButton.IsEnabled = false; ProfilesList.IsEnabled = false; ImageLimitText.IsEnabled = false;
+        RunButton.IsEnabled = false; QuickCheckButton.IsEnabled = false; CancelButton.IsEnabled = true; BrowseButton.IsEnabled = false; ProfilesList.IsEnabled = false; ImageLimitText.IsEnabled = false; FolderText.IsEnabled = false;
         _rows.Clear();
         RunProgress.Value = 0;
         var sessionReports = new List<BenchmarkReport>();
@@ -214,7 +214,7 @@ public partial class BenchmarkWindow : Window, IDisposable
                     // preload warm-up) lives in BenchmarkWorkloadRunner and is shared with the
                     // CLI runner (PhotoReview.Benchmark.Cli/Program.cs) so both front ends exercise the
                     // same real behavior instead of the CLI running a decode-only stand-in.
-                    var report = await BenchmarkEngine.RunPreparedAsync(FolderText.Text, profile,
+                    var report = await BenchmarkEngine.RunPreparedAsync(folder, profile,
                         (_, workload, iteration, ct) => BenchmarkWorkloadRunner.PrepareIterationAsync(executor, files, profile, workload, iteration, random, BenchmarkRecycleBin.Create(() => PhotoReview.Platform.Windows.WindowsRecycleBin.Instance), ct),
                         progress, cancellationToken: runToken);
                     sessionReports.Add(report);
@@ -241,7 +241,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         catch (Exception ex) { StatusText.Text = Tr.BenchStatusFailed(BenchmarkText.Describe(ex)); }
         finally
         {
-            RunButton.IsEnabled = true; QuickCheckButton.IsEnabled = true; CancelButton.IsEnabled = false; BrowseButton.IsEnabled = true; ProfilesList.IsEnabled = true; ImageLimitText.IsEnabled = true;
+            RunButton.IsEnabled = true; QuickCheckButton.IsEnabled = true; CancelButton.IsEnabled = false; BrowseButton.IsEnabled = true; ProfilesList.IsEnabled = true; ImageLimitText.IsEnabled = true; FolderText.IsEnabled = true;
             Dispose();
         }
     }

@@ -216,7 +216,7 @@ public partial class SettingsWindow : Window
         {
             path = _localization.ExportTodo(language);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogExportTranslationFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -937,7 +937,7 @@ public partial class SettingsWindow : Window
             // (the in-memory clone above) already reflects everything Save just validated and assigned.
             _store?.Save(Settings);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             // Keep the dialog open so the edits are not lost; the user sees why nothing was saved.
             AppLog.Error("Settings save failed", ex);

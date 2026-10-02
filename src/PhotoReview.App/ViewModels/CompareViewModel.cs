@@ -206,8 +206,19 @@ public sealed partial class CompareViewModel : ObservableObject
         var rightSize = string.Empty;
         if (compareSizeEnabled)
         {
-            var leftBytes = getFileSize != null ? getFileSize(pair.Left) : TryGetFileSize(pair.Left);
-            var rightBytes = getFileSize != null ? getFileSize(pair.Right) : TryGetFileSize(pair.Right);
+            long? leftBytes, rightBytes;
+            if (getFileSize != null)
+            {
+                leftBytes = getFileSize(pair.Left);
+                rightBytes = getFileSize(pair.Right);
+            }
+            else
+            {
+                // No injected sizes: stat off the UI thread (a NAS/wifi share can stall a metadata call for seconds).
+                // The catalog entry's Length describes only its representative member, not both files of a pair.
+                (leftBytes, rightBytes) = await Task.Run(() => (TryGetFileSize(pair.Left), TryGetFileSize(pair.Right)));
+                if (!isTokenCurrent(token)) return false;
+            }
 
             if (leftBytes.HasValue) leftSize = StatusFormatter.CompareSizeSuffix(leftBytes.Value);
             if (rightBytes.HasValue) rightSize = StatusFormatter.CompareSizeSuffix(rightBytes.Value);
@@ -265,8 +276,10 @@ public sealed partial class CompareViewModel : ObservableObject
             var fi = new FileInfo(path);
             return fi.Exists ? fi.Length : null;
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
+            // The size suffix is cosmetic: leave it out, but keep the reason in the log.
+            AppLog.Error($"Compare file size unavailable path={path}", ex);
             return null;
         }
     }
