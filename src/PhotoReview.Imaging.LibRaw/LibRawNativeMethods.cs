@@ -1,5 +1,10 @@
 using System.Runtime.InteropServices;
 
+// Load libraw.dll only from the application folder (same rule as turbojpeg.dll): without this Windows falls back to its default
+// search order (working directory, PATH) and a planted libraw.dll would be loaded into the process. A missing DLL simply
+// reports "unavailable".
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory)]
+
 namespace PhotoReview.Imaging.LibRaw;
 
 internal static class LibRawNativeMethods

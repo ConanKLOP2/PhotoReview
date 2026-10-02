@@ -95,6 +95,33 @@ public sealed class PreloadSchedulerReviewFixTests : IDisposable
         await first.WaitAsync(Guard);
     }
 
+    [Fact(DisplayName = "I6: a throwing snapshot-version callback is logged and PreloadAroundAsync returns a completed task instead of throwing")]
+    public async Task ThrowingSnapshotVersion_DoesNotEscapePreloadAround()
+    {
+        var entries = Entries("ver-throw", 4);
+        var log = new RecordingLog();
+        using var scheduler = Create(new ScriptedTarget(), () => entries, workers: 1, new PreloadWindow(1, 0),
+            snapshotVersion: () => throw new ObjectDisposedException("catalog"), log: log);
+
+        var task = scheduler.PreloadAroundAsync(0);
+
+        await task.WaitAsync(Guard);
+        Assert.Single(log.Errors);
+    }
+
+    [Fact(DisplayName = "I6: a throwing snapshot-entries callback is logged and PreloadAroundAsync returns a completed task instead of throwing")]
+    public async Task ThrowingSnapshotEntries_DoesNotEscapePreloadAround()
+    {
+        var log = new RecordingLog();
+        using var scheduler = Create(new ScriptedTarget(), () => throw new InvalidOperationException("catalog replaced"), workers: 1,
+            new PreloadWindow(1, 0), log: log);
+
+        var task = scheduler.PreloadAroundAsync(0);
+
+        await task.WaitAsync(Guard);
+        Assert.Single(log.Errors);
+    }
+
     [Fact(DisplayName = "RV-I14: a foreign OperationCanceledException from one item fails only that item; later items still preload")]
     public async Task ForeignCancellation_SkipsOnlyThatItem()
     {

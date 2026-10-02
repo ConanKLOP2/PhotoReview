@@ -66,7 +66,7 @@ public static class LibRawAvailability
 
     private static (bool, string?) RunProbeCore()
     {
-        if (!NativeLibrary.TryLoad(LibRawNativeMethods.LibraryName, typeof(LibRawAvailability).Assembly, null, out var libraryHandle))
+        if (!NativeLibrary.TryLoad(LibRawNativeMethods.LibraryName, typeof(LibRawAvailability).Assembly, DllImportSearchPath.AssemblyDirectory, out var libraryHandle))
         {
             return (false, $"Could not load {LibRawNativeMethods.LibraryName} (missing, incompatible architecture, or dependent runtime unavailable).");
         }

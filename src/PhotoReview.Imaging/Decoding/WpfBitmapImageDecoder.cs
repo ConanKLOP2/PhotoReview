@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Decoding;
@@ -26,13 +27,23 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using var stream = _sourceReader.OpenSource(path, SourceReadPriority.Viewer, 1024 * 1024);
-        // PixelWidth/Height and orientation only need the image header. DelayCreation prevents decoding pixel data.
-        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-        if (decoder.Frames.Count == 0)
+        BitmapFrame frame;
+        try
         {
-            throw new InvalidDataException($"Image has no frames: {path}");
+            // PixelWidth/Height and orientation only need the image header. DelayCreation prevents decoding pixel data.
+            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+            if (decoder.Frames.Count == 0)
+            {
+                throw new InvalidDataException($"Image has no frames: {path}");
+            }
+            frame = decoder.Frames[0];
         }
-        var frame = decoder.Frames[0];
+        catch (ArgumentException ex)
+        {
+            // WIC maps E_INVALIDARG (damaged header) to ArgumentException, which callers treat as a caller bug. The argument
+            // checks of this method ran before the try, so this is a data fault.
+            throw WicDirectDecoder.AsInvalidData(ex, "WPF");
+        }
         int orientation;
         try
         {
@@ -72,13 +83,23 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
     /// </summary>
     private static WpfDecodedImage DecodeWithoutProfileFallback(DecodeRequest request, ISourceReader? sourceReader)
     {
+        // A caller bug (no path and no bytes) stays an ArgumentException: only WIC's own rejection is converted to a data fault below.
+        if (!request.Bytes.HasValue) ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
         try
         {
             return DecodeImage(request, ignoreColorProfile: false, sourceReader);
         }
         catch (ArgumentException)
         {
-            return DecodeImage(request, ignoreColorProfile: true, sourceReader);
+            try
+            {
+                return DecodeImage(request, ignoreColorProfile: true, sourceReader);
+            }
+            catch (ArgumentException ex)
+            {
+                // Still rejected without the colour profile: the data itself is damaged, not the caller's arguments.
+                throw WicDirectDecoder.AsInvalidData(ex, "WPF");
+            }
         }
     }
 
