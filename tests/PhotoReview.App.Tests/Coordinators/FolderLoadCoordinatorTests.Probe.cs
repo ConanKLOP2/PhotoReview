@@ -69,6 +69,20 @@ public sealed partial class FolderLoadCoordinatorTests
         Assert.Empty(_sink.Failures);
     }
 
+    [Fact(DisplayName = "A1: a sink that throws while the probe result is applied is logged, the probe task does not fault")]
+    public async Task Probe_SinkThrowsWhileApplyingResult_ProbeTaskDoesNotFault()
+    {
+        var (_, b, _) = CreateThreeImages(@"C:\photos");
+        _fs.Unreadable[b] = "locked";
+        _sink.OnFilesSkippedHook = () => throw new InvalidOperationException("sink bug");
+        using var coordinator = CreateCoordinator();
+
+        await coordinator.LoadAsync(@"C:\photos");
+        await coordinator.ReadabilityProbe.WithTimeout(Wait.DefaultTimeout, "readability probe");
+
+        Assert.True(coordinator.ReadabilityProbe.IsCompletedSuccessfully);
+    }
+
     private async Task<FolderLoadCoordinator> LoadPairFolderAsync(RawPairMode mode, params string[] unreadableFiles)
     {
         const string folder = @"C:\photos";

@@ -411,10 +411,19 @@ public partial class App : System.Windows.Application, IDisposable
     /// <summary>Runs on the UI thread (posted through <see cref="IUiScheduler"/>). No path means "just bring to front".</summary>
     private void OpenForwarded(string? path)
     {
-        if (MainWindow is not MainWindow window) return;
-        // R7-5: SC_RESTORE brings back the pre-minimize state (Maximized / fullscreen), unlike forcing Normal.
-        if (window.WindowState == WindowState.Minimized) SystemCommands.RestoreWindow(window);
-        window.Activate();
+        if (MainWindow is not MainWindow window || window.IsClosingOrClosed) return; // a request that raced the shutdown
+        try
+        {
+            // R7-5: SC_RESTORE brings back the pre-minimize state (Maximized / fullscreen), unlike forcing Normal.
+            if (window.WindowState == WindowState.Minimized) SystemCommands.RestoreWindow(window);
+            window.Activate();
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The window went away between the check and the call: nothing to bring to front, nothing to open into.
+            AppLog.Warn($"Forwarded launch: could not activate the main window: {ex.Message}");
+            return;
+        }
         if (path is null) return;
         var open = window.OpenPathAsync(path);
         open.ContinueWith(

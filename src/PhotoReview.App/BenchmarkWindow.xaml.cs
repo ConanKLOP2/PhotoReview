@@ -207,7 +207,7 @@ public partial class BenchmarkWindow : Window, IDisposable
                 // toggling AppLog around the run, both profiles measured identical (whatever
                 // the app's ambient setting happened to be) logging overhead.
                 // (shared with the CLI via BenchmarkProfileScope so both front ends apply the profile identically)
-                using var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled, () => AppLog.EnabledWriteCount);
+                var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled, () => AppLog.EnabledWriteCount);
                 try
                 {
                     // The per-iteration workload logic (correctness guard, file-action mapping,
@@ -229,7 +229,12 @@ public partial class BenchmarkWindow : Window, IDisposable
                     RecomputeBest();
                     StatusText.Text = Tr.BenchmarkStatusProfileFailed(BenchmarkText.ProfileName(profile), BenchmarkText.Describe(ex));
                 }
-                finally { loggingScope.Dispose(); await executor.DisposeAsync(); }
+                finally
+                {
+                    // Nested: a throwing logging restore must not skip the executor's disposal (the scope is disposed here only).
+                    try { loggingScope.Dispose(); }
+                    finally { await executor.DisposeAsync(); }
+                }
             }
             if (sessionReports.Count > 0)
             {

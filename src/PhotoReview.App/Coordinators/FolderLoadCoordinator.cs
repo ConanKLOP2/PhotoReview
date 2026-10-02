@@ -345,6 +345,11 @@ public sealed class FolderLoadCoordinator : IDisposable
                 // Runs on this (UI) context; it re-checks the load token when the probe completes.
                 _readabilityProbe = ApplyReadabilityProbeAsync(probe, folder, skipped, perf, loadToken);
             }
+            else
+            {
+                // Dropped unpublished: nobody awaits it, so a fault would only surface context-free at GC time.
+                probe?.FireAndLog("Readability probe of a superseded folder load failed");
+            }
         }
     }
 
@@ -421,44 +426,53 @@ public sealed class FolderLoadCoordinator : IDisposable
             return;
         }
 
-        // Gated by the load's own token only, NOT by the folder generation: StopForAction (any file action
-        // or duplicate cleanup) bumps that generation while the folder stays the same, and dropping the result
-        // then would leave unreadable files in the catalog unreported (ADR 0007 s3). A folder switch or Dispose
-        // cancels this token on the UI thread (LoadAsync / Dispose), and this method also runs on the UI thread,
-        // so no switch can slip in between this check and the catalog changes below.
-        if (loadToken.IsCancellationRequested)
-        {
-            perf.Mark("probeDropped");
-            return;
-        }
-
-        if (unreadable.Count == 0) return;
-
-        var currentPath = _catalog.Current?.Path;
-        var unreadableSet = new HashSet<string>(unreadable.Select(s => s.Path), StringComparer.OrdinalIgnoreCase);
-
-        // A capture (JPEG+RAW) with ONE unreadable image member keeps its readable partner: RemovePaths degrades the entry
-        // to the survivor as a standalone entry at the same position and reports only the unreadable member. When both
-        // image members are unreadable the whole capture goes and both are reported.
-        var removed = _catalog.RemovePaths(unreadableSet);
-        if (removed.Count == 0) return; // already gone (deleted/moved by the user meanwhile)
-
-        var removedSet = new HashSet<string>(removed, StringComparer.OrdinalIgnoreCase);
-        var probeSkipped = unreadable.Where(s => removedSet.Contains(s.Path)).ToList();
-        AppLog.Warn($"Readability probe skipped {probeSkipped.Count.ToString(CultureInfo.InvariantCulture)} unreadable file(s) in '{folder}': "
-            + string.Join("; ", probeSkipped.Take(20).Select(s => $"{s.Path} ({s.Reason})")));
-        // The full list replaces an earlier listing-interrupted report of this load.
-        _sink.OnFilesSkipped(folder, [.. listingSkipped, .. probeSkipped]);
-        perf.Mark("probeApplied", removed.Count);
-
-        var currentRemoved = currentPath is not null && removedSet.Contains(currentPath);
         try
         {
-            await _sink.OnUnreadableRemovedAsync(removed, currentRemoved);
+            // Gated by the load's own token only, NOT by the folder generation: StopForAction (any file action
+            // or duplicate cleanup) bumps that generation while the folder stays the same, and dropping the result
+            // then would leave unreadable files in the catalog unreported (ADR 0007 s3). A folder switch or Dispose
+            // cancels this token on the UI thread (LoadAsync / Dispose), and this method also runs on the UI thread,
+            // so no switch can slip in between this check and the catalog changes below.
+            if (loadToken.IsCancellationRequested)
+            {
+                perf.Mark("probeDropped");
+                return;
+            }
+
+            if (unreadable.Count == 0) return;
+
+            var currentPath = _catalog.Current?.Path;
+            var unreadableSet = new HashSet<string>(unreadable.Select(s => s.Path), StringComparer.OrdinalIgnoreCase);
+
+            // A capture (JPEG+RAW) with ONE unreadable image member keeps its readable partner: RemovePaths degrades the entry
+            // to the survivor as a standalone entry at the same position and reports only the unreadable member. When both
+            // image members are unreadable the whole capture goes and both are reported.
+            var removed = _catalog.RemovePaths(unreadableSet);
+            if (removed.Count == 0) return; // already gone (deleted/moved by the user meanwhile)
+
+            var removedSet = new HashSet<string>(removed, StringComparer.OrdinalIgnoreCase);
+            var probeSkipped = unreadable.Where(s => removedSet.Contains(s.Path)).ToList();
+            AppLog.Warn($"Readability probe skipped {probeSkipped.Count.ToString(CultureInfo.InvariantCulture)} unreadable file(s) in '{folder}': "
+                + string.Join("; ", probeSkipped.Take(20).Select(s => $"{s.Path} ({s.Reason})")));
+            // The full list replaces an earlier listing-interrupted report of this load.
+            _sink.OnFilesSkipped(folder, [.. listingSkipped, .. probeSkipped]);
+            perf.Mark("probeApplied", removed.Count);
+
+            var currentRemoved = currentPath is not null && removedSet.Contains(currentPath);
+            try
+            {
+                await _sink.OnUnreadableRemovedAsync(removed, currentRemoved);
+            }
+            catch (Exception ex) when (!loadToken.IsCancellationRequested)
+            {
+                _sink.OnFailed(folder, ex);
+            }
         }
         catch (Exception ex) when (!loadToken.IsCancellationRequested)
         {
-            _sink.OnFailed(folder, ex);
+            // Runs on the UI context after the probe completed: a sink/catalog failure here must not become an unobserved
+            // task fault (the probe task is fire-and-forget for the load); every listed file stays reachable.
+            AppLog.Error($"Applying the readability probe result failed in '{folder}'", ex);
         }
     }
 

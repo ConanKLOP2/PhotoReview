@@ -17,4 +17,26 @@ internal static class TaskLogging
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
     }
+
+    /// <summary>
+    /// Starts a fire-and-forget operation whose start itself may throw synchronously (a non-async method returning a task, e.g.
+    /// one that touches a scheduler disposed after the window closed): a synchronous throw is logged (cancellation silent)
+    /// instead of escaping into the caller, and the returned task is observed like <see cref="FireAndLog(Task, string)"/>.
+    /// A null task (null-conditional call on an absent collaborator) is a no-op.
+    /// </summary>
+    public static void FireAndLog(Func<Task?> start, string context)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        try
+        {
+            start()?.FireAndLog(context);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            AppLog.Error(context, ex);
+        }
+    }
 }

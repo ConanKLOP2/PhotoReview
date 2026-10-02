@@ -1026,9 +1026,23 @@ public partial class SettingsWindow : Window
             ShowInvalid(Tr.DialogImportSettingsFailed(string.Empty));
             return;
         }
-        var cloned = AppSettings.Clone(imported);
-        SettingsNormalizer.Normalize(cloned);
-        Settings = cloned;
-        LoadFields();
+        var previous = Settings;
+        try
+        {
+            // A file that deserializes but holds values the clone, the normalizer or the field loader cannot take (null members,
+            // out-of-range values) must be reported like any unreadable file, and the window keeps the settings it had.
+            var cloned = AppSettings.Clone(imported);
+            SettingsNormalizer.Normalize(cloned);
+            Settings = cloned;
+            LoadFields();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            AppLog.Error("Settings import: the file could not be applied", ex);
+            Settings = previous;
+            try { LoadFields(); }
+            catch (Exception reloadEx) when (reloadEx is not OutOfMemoryException) { AppLog.Error("Settings import: could not restore the previous fields", reloadEx); }
+            ShowInvalid(Tr.DialogImportSettingsFailed(ex.Message));
+        }
     }
 }

@@ -177,7 +177,7 @@ internal sealed class PointerInputController
         if (_zoomsAwaitingLayout > 0 || !_surface.IsLoaded || _surface.ImageActualWidth <= 0 || _surface.ImageActualHeight <= 0) return;
         var centre = ViewportCentre;
         var anchor = CaptureZoomAnchor(centre); // layout still has the old size here
-        _ = AnchorAfterSwapAsync(anchor, centre, _viewportVersion.Current);
+        AnchorAfterSwapAsync(anchor, centre, _viewportVersion.Current).FireAndLog("Re-anchor after bitmap swap failed");
     }
 
     private async Task AnchorAfterSwapAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, long version)
