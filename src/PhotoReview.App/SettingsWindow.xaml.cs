@@ -132,7 +132,7 @@ public partial class SettingsWindow : Window
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         if (Dispatcher.CheckAccess()) RefreshLocalizedTexts();
-        else Dispatcher.BeginInvoke(RefreshLocalizedTexts);
+        else _ = Dispatcher.BeginInvoke(RefreshLocalizedTexts);
     }
 
     private void RefreshLocalizedTexts()
@@ -330,7 +330,7 @@ public partial class SettingsWindow : Window
         if (NavList.SelectedItem is ListBoxItem { Tag: string key } && _pages is not null && _pages.TryGetValue(key, out var page))
             page.Scroll.ScrollToHome();
         FocusManager.SetFocusedElement(this, null);
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () =>
+        _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () =>
         {
             Keyboard.ClearFocus();
         });

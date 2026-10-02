@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
@@ -332,6 +333,7 @@ public partial class RecoveryWindow : Window
         base.OnClosing(e);
     }
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void Retry_Click(object sender, RoutedEventArgs e)
     {
         var row = SelectedRow;

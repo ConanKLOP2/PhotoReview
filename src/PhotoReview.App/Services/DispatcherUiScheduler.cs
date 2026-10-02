@@ -18,7 +18,7 @@ public sealed class DispatcherUiScheduler : IUiScheduler
     public void Post(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        _dispatcher.BeginInvoke(action);
+        _ = _dispatcher.BeginInvoke(action);
     }
 
     public Task InvokeAsync(Action action)

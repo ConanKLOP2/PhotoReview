@@ -1,5 +1,11 @@
 namespace PhotoReview.App;
 
+/// <summary>Shared justification for the scoped VSTHRD100 (async void) suppressions in the code-behind.</summary>
+internal static class AsyncVoidJustification
+{
+    public const string WpfEventHandler = "WPF event handlers (and App_Startup) must be async void; the awaited action (RunGuardedAsync or a view-model command) owns its error handling.";
+}
+
 /// <summary>Helpers for deliberately fire-and-forget tasks.</summary>
 internal static class TaskLogging
 {
@@ -29,7 +35,8 @@ internal static class TaskLogging
         ArgumentNullException.ThrowIfNull(start);
         try
         {
-            start()?.FireAndLog(context);
+            var task = start();
+            task?.FireAndLog(context);
         }
         catch (OperationCanceledException)
         {

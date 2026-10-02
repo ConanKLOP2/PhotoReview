@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using PhotoReview.Core.Localization;
 using System;
 using System.Collections.Generic;
@@ -135,7 +136,7 @@ public partial class MainWindow : Window
         _viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.CurrentImage) && _viewModel.Viewer.IsFit)
-                Dispatcher.BeginInvoke(UpdateFitSize, System.Windows.Threading.DispatcherPriority.Render);
+                _ = Dispatcher.BeginInvoke(UpdateFitSize, System.Windows.Threading.DispatcherPriority.Render);
             // feat/mouse-zoom: navigation stops a glide (a full-resolution swap of the same image does not).
             if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _pointer.OnCurrentIndexChanged(_viewModel.CurrentIndex);
             // feat/ui-dark-chrome-toolbar: no folder open forces the toolbar visible (ToolbarAutoHidePolicy).
@@ -495,7 +496,7 @@ public partial class MainWindow : Window
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         if (Dispatcher.CheckAccess()) _viewModel.RefreshLocalizedText();
-        else Dispatcher.BeginInvoke(_viewModel.RefreshLocalizedText);
+        else _ = Dispatcher.BeginInvoke(_viewModel.RefreshLocalizedText);
     }
 
     private void Window_Closed(object? sender, EventArgs e)
@@ -519,6 +520,7 @@ public partial class MainWindow : Window
     // AR13a: the state machine lives in Input/PointerInputController.cs; these handlers only forward WPF input
     // and set e.Handled from what it returns.
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         e.Handled = true;
@@ -577,6 +579,7 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void Window_Drop(object sender, DragEventArgs e)
     {
         // async void: an exception escaping here would reach the dispatcher's unhandled-exception handler (a crash).
@@ -594,6 +597,7 @@ public partial class MainWindow : Window
         }
     }
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void Window_KeyDown(object sender, KeyEventArgs e)
     {
         var pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
@@ -694,7 +698,7 @@ public partial class MainWindow : Window
     {
         if (e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase) return;
         // Deferred: a dialog opened by the click may take focus first; only reclaim it while the button still holds it.
-        Dispatcher.BeginInvoke(() =>
+        _ = Dispatcher.BeginInvoke(() =>
         {
             if (IsActive && Keyboard.FocusedElement is System.Windows.Controls.Primitives.ButtonBase) Focus();
         }, System.Windows.Threading.DispatcherPriority.Input);
@@ -714,9 +718,11 @@ public partial class MainWindow : Window
     private void CompareLeft_KeyDown(object sender, KeyEventArgs e) { if (e.Key is Key.Enter or Key.Space) { _viewModel.Compare.SelectLeft(); e.Handled = true; } }
     private void CompareRight_KeyDown(object sender, KeyEventArgs e) { if (e.Key is Key.Enter or Key.Space) { _viewModel.Compare.SelectRight(); e.Handled = true; } }
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(TrimEllipsis(Tr.MainMenuOpenFolder), () => _viewModel.PickAndOpenFolderAsync());
     private void OpenInExternalEditor_Click(object sender, RoutedEventArgs e) => _viewModel.OpenInExternalEditor();
     private void Settings_Click(object sender, RoutedEventArgs e) => _viewModel.ShowSettings();
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void FitImage_Click(object sender, RoutedEventArgs e) => await ApplyFitViewAsync();
     private Task ApplyFitViewAsync() => _fit.ApplyFitAsync(); // T89 convergence loop: Coordinators/FitViewController.cs
 
@@ -724,10 +730,15 @@ public partial class MainWindow : Window
     private void SkippedFiles_Click(object sender, RoutedEventArgs e) => _viewModel.ShowSkippedFiles();
     private void Diagnostics_Click(object sender, RoutedEventArgs e) => _viewModel.ShowDiagnostics();
     private void Benchmark_Click(object sender, RoutedEventArgs e) => _viewModel.ShowBenchmark();
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void ClearCache_Click(object sender, RoutedEventArgs e) => await _viewModel.ClearCacheAsync();
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void RemoveNumberedDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(true);
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoAsync();
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void Recycle_Click(object sender, RoutedEventArgs e) => await _viewModel.RecycleAsync();
 
     // ---- Context menu: "Zoom" submenu (Fit width/height, presets + Custom…, "also set" toggle, "set current as ----
@@ -816,18 +827,23 @@ public partial class MainWindow : Window
     private void ClickZoomFit_Click(object sender, RoutedEventArgs e) => ApplyFitViewAsync().FireAndLog("Fit view failed");
 
     /// <summary>"Zoom to N%": zooms to the configured level (does not change it; the presets below do).</summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent));
 
     /// <summary>"Zoom" submenu: Fit width, anchored at the mouse when it is over the viewport (same rule as the shortcut).</summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.FitWidthAsync());
 
     /// <summary>"Zoom" submenu: Fit height (always centred).</summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void ZoomFitHeight_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.FitHeightAsync());
 
     /// <summary>Folder group: NavigateSiblingFolderAsync(+1), the same command PageDown runs.</summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void NextFolder_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuNextFolder, () => _viewModel.NavigateSiblingFolderAsync(1));
 
     /// <summary>Folder group: NavigateSiblingFolderAsync(-1), the same command PageUp runs.</summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void PreviousFolder_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuPreviousFolder, () => _viewModel.NavigateSiblingFolderAsync(-1));
 
     /// <summary>
@@ -868,12 +884,14 @@ public partial class MainWindow : Window
         OpenInExternalEditorMenuItem.Visibility = externalEditorVisibility;
     }
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.MenuItem { Tag: int percent }) return;
         await RunGuardedAsync(Tr.MainMenuZoom, () => ApplyZoomMenuSelectionAsync(percent));
     }
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, OpenClickZoomCustomDialogAsync);
 
     /// <summary>Q-R43: shared by the "Custom…" menu item and the CustomZoom keyboard shortcut.</summary>

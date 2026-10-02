@@ -13,5 +13,6 @@
     <!-- Source generator (PhotoReview.Localization.Generator): Roslyn package version must be <= the SDK compiler (the Roslyn bundled with the SDK in global.json), else the generator fails to load. Bump only together with the SDK in global.json / CI. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="4.14.0" />
+    <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.14.15" />
   </ItemGroup>
 </Project>

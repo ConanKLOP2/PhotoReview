@@ -34,3 +34,46 @@ indent_size = 2
 # ADR 0005 rule 2: Core/Imaging/Platform never resume on a captured context (review 2026-09-25, CORE-01)
 [src/PhotoReview.{Core,Imaging,Imaging.TurboJpeg,Platform.Windows}/**.cs]
 dotnet_diagnostic.CA2007.severity = error
+
+# Error-handling infra: VSTHRD threading analyzers (src only). Only 100 (async void) and 110 (unobserved async call) are errors;
+# the rest of the package stays off so it cannot flood the build. Fire-and-forget Tasks go through TaskLogging.FireAndLog;
+# WPF event-handler async void carries a scoped [SuppressMessage] with a justification.
+# CA2012 (ValueTask misuse) has zero violations today, so it is a hard error. CA1849 (~6 hits, mostly CancellationTokenSource.Cancel)
+# and VSTHRD002 (2 hits, sync dispose drain) were evaluated and left off: noise vs. value.
+[src/**.cs]
+dotnet_diagnostic.VSTHRD100.severity = error
+dotnet_diagnostic.VSTHRD110.severity = error
+dotnet_diagnostic.CA2012.severity = error
+dotnet_diagnostic.VSTHRD001.severity = none
+dotnet_diagnostic.VSTHRD002.severity = none
+dotnet_diagnostic.VSTHRD003.severity = none
+dotnet_diagnostic.VSTHRD004.severity = none
+dotnet_diagnostic.VSTHRD010.severity = none
+dotnet_diagnostic.VSTHRD011.severity = none
+dotnet_diagnostic.VSTHRD012.severity = none
+dotnet_diagnostic.VSTHRD013.severity = none
+dotnet_diagnostic.VSTHRD014.severity = none
+dotnet_diagnostic.VSTHRD015.severity = none
+dotnet_diagnostic.VSTHRD101.severity = none
+dotnet_diagnostic.VSTHRD102.severity = none
+dotnet_diagnostic.VSTHRD103.severity = none
+dotnet_diagnostic.VSTHRD104.severity = none
+dotnet_diagnostic.VSTHRD105.severity = none
+dotnet_diagnostic.VSTHRD106.severity = none
+dotnet_diagnostic.VSTHRD107.severity = none
+dotnet_diagnostic.VSTHRD108.severity = none
+dotnet_diagnostic.VSTHRD109.severity = none
+dotnet_diagnostic.VSTHRD111.severity = none
+dotnet_diagnostic.VSTHRD112.severity = none
+dotnet_diagnostic.VSTHRD113.severity = none
+dotnet_diagnostic.VSTHRD114.severity = none
+dotnet_diagnostic.VSTHRD115.severity = none
+dotnet_diagnostic.VSTHRD200.severity = none
+dotnet_diagnostic.VSTHRD201.severity = none
+dotnet_diagnostic.VSTHRD210.severity = none
+dotnet_diagnostic.VSTHRD211.severity = none
+dotnet_diagnostic.VSTHRD230.severity = none
+dotnet_diagnostic.VSTHRD300.severity = none
+dotnet_diagnostic.VSTHRD301.severity = none
+dotnet_diagnostic.VSTHRD310.severity = none
+dotnet_diagnostic.VSTHRD320.severity = none
