@@ -61,9 +61,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
         {
             return Decode(request, bytesMemory);
         }
-        catch (Exception ex) when (!request.Bytes.HasValue)
+        catch (Exception ex) when (!request.Bytes.HasValue && FallbackImageDecoder.IsFallbackable(ex))
         {
             // Read from disk here: hand the bytes to FallbackImageDecoder so it does not read the file again.
+            // Only when the failure is fallbackable; otherwise the (possibly huge) buffer must not ride on the exception.
             DecodeFailureSourceBytes.Attach(ex, bytesMemory);
             throw;
         }
@@ -372,7 +373,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
     }
 
-    private static ReadOnlyMemory<byte> LoadBytes(DecodeRequest request)
+    private ReadOnlyMemory<byte> LoadBytes(DecodeRequest request)
     {
         if (request.Bytes.HasValue)
         {
@@ -393,15 +394,44 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
 
         // Compliant with INV-8: File handle is closed immediately after reading byte buffer
-        using var fs = new FileStream(
-            request.Path,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete,
-            bufferSize: 64 * 1024,
-            FileOptions.SequentialScan);
+        FileStream fs;
+        try
+        {
+            fs = new FileStream(
+                request.Path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete,
+                bufferSize: 64 * 1024,
+                FileOptions.SequentialScan);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // The file vanished between File.Exists and the open: same clean, localized error as the check above.
+            var vanishedPath = request.Path;
+            throw UserFacingError.Localized(new FileNotFoundException("Image file not found.", vanishedPath, ex),
+                () => Tr.ErrIoImageNotFound(vanishedPath));
+        }
 
-        return ReadAllBytes(fs);
+        using (fs)
+        {
+            EnsureSourceFits(fs.Length);
+            return ReadAllBytes(fs);
+        }
+    }
+
+    /// <summary>
+    /// The whole source is read into one array before the decode: a huge file on a RAM-starved machine is refused (the
+    /// caller's fallback, WIC, streams it) instead of surfacing as an OutOfMemoryException from the allocation.
+    /// </summary>
+    private void EnsureSourceFits(long length)
+    {
+        if (length < GuardThresholdBytes) return;
+        var (total, load) = MemoryInfo();
+        if (MemoryHeadroom.HasHeadroom(length, total, load)) return;
+        throw UserFacingError.Localized(
+            new NotSupportedException($"JPEG source is too large for the available memory: {length} bytes."),
+            () => Tr.ErrDecoderOutputTooLarge(0, 0, length));
     }
 
     /// <summary>Largest source TurboJpeg reads into one array; bigger files go to WIC, which streams (the caller's fallback).</summary>

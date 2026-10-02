@@ -154,7 +154,7 @@ public static class PreviewCacheFile
     /// </summary>
     internal static ReadResult Read(string cachePath)
     {
-        using var stream = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+        using var stream = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete,
             64 * 1024, FileOptions.SequentialScan);
 
         Span<byte> header = stackalloc byte[HeaderSize];
