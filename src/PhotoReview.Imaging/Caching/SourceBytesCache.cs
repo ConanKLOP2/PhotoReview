@@ -24,6 +24,9 @@ public sealed class SourceBytesCache
     // (a global bump would make them skip caching and re-read from disk). One small entry per evicted path.
     private readonly ConcurrentDictionary<string, int> _pathVersions = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Most per-path versions kept before <see cref="Evict"/> switches to a global generation bump.</summary>
+    internal const int MaxTrackedPathVersions = 4096;
+
     /// <summary>Test seam (RV-I16): number of per-path eviction versions still tracked.</summary>
     internal int PathVersionCountForTests => _pathVersions.Count;
 
@@ -204,7 +207,18 @@ public sealed class SourceBytesCache
         var full = Path.GetFullPath(path);
         lock (_publishGate)
         {
-            _pathVersions.AddOrUpdate(full, 1, (_, version) => version + 1);
+            if (_pathVersions.Count >= MaxTrackedPathVersions && !_pathVersions.ContainsKey(full))
+            {
+                // Bound the map (a long session evicts many distinct paths): fall back to the global invalidation Clear uses.
+                // Bumping the generation makes every in-flight read skip its publish (it only costs a re-read), exactly what the
+                // per-path versions guarantee for the evicted path, so the dropped versions are no longer needed.
+                _pathVersions.Clear();
+                Interlocked.Increment(ref _generation);
+            }
+            else
+            {
+                _pathVersions.AddOrUpdate(full, 1, (_, version) => version + 1);
+            }
             _cache.RemoveWhere(key => string.Equals(key.Path, full, StringComparison.OrdinalIgnoreCase));
         }
     }

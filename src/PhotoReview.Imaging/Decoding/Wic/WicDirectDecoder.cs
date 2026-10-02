@@ -27,6 +27,15 @@ public sealed class WicDirectDecoder : IImageDecoder
     /// </param>
     public WicDirectDecoder(ISourceReader? sourceReader = null) => _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
 
+    /// <summary>Memory seam for the output-size guard (total available, current load); tests inject a small machine.</summary>
+    internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = MemoryHeadroom.ReadGcMemoryInfo;
+
+    /// <summary>Output buffers below this never consult the memory guard (no GC info query on the common, small decode).</summary>
+    internal const long GuardThresholdBytes = 128L * 1024 * 1024;
+
+    /// <summary>Native scratch buffer plus the WPF bitmap BitmapSource.Create copies it into.</summary>
+    internal const int OutputPeakFactor = 2;
+
     public IDecodedImage Decode(DecodeRequest request)
     {
         // With pre-read bytes the path is only a label (TurboJpeg accepts any); a file is opened only without them.
@@ -38,8 +47,24 @@ public sealed class WicDirectDecoder : IImageDecoder
 
         using (stream)
         {
-            return DecodeFromStream(stream, request);
+            try
+            {
+                return DecodeFromStream(stream, request, MemoryInfo);
+            }
+            catch (ArgumentException ex)
+            {
+                // WIC maps E_INVALIDARG (damaged metadata/header) to ArgumentException, which the fallback chain treats as a
+                // caller bug and does not catch. The argument checks of this method ran before the try, so this is a data fault.
+                throw AsInvalidData(ex);
+            }
         }
+    }
+
+    internal static InvalidDataException AsInvalidData(ArgumentException ex)
+    {
+        var detail = ex.Message;
+        return UserFacingError.Localized(new InvalidDataException("WicDirect rejected the image data: " + detail, ex),
+            () => Tr.ErrDecoderDecompressFailed(detail));
     }
 
     public ImageInfo ReadInfo(string path)
@@ -48,6 +73,18 @@ public sealed class WicDirectDecoder : IImageDecoder
 
         using var stream = _sourceReader.OpenSource(path, SourceReadPriority.Viewer, 64 * 1024);
 
+        try
+        {
+            return ReadInfoCore(stream);
+        }
+        catch (ArgumentException ex)
+        {
+            throw AsInvalidData(ex);
+        }
+    }
+
+    private static ImageInfo ReadInfoCore(Stream stream)
+    {
         var factory = CreateFactory();
         using var managedStream = new ManagedIStream(stream);
 
@@ -77,7 +114,7 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
-    private static WpfDecodedImage DecodeFromStream(Stream stream, DecodeRequest request)
+    private static WpfDecodedImage DecodeFromStream(Stream stream, DecodeRequest request, Func<(long TotalAvailable, long Load)> memoryInfo)
     {
         var factory = CreateFactory();
         using var managedStream = new ManagedIStream(stream);
@@ -195,6 +232,7 @@ public sealed class WicDirectDecoder : IImageDecoder
             currentSource.GetSize(out uint finalW, out uint finalH);
             var stride = checked((int)finalW * 4);
             var bufferSize = checked(stride * (int)finalH);
+            EnsureOutputFits((int)finalW, (int)finalH, bufferSize, memoryInfo);
 
             // Native scratch buffer: BitmapSource.Create copies it into its own WIC bitmap, so a
             // managed array here would only add a large LOH allocation (GC pressure) per decode.
@@ -243,6 +281,17 @@ public sealed class WicDirectDecoder : IImageDecoder
             SafeReleaseCom(decoder);
             SafeReleaseCom(factory);
         }
+    }
+
+    /// <summary>Refuses an output buffer the machine cannot hold with a clean error instead of an OutOfMemoryException.</summary>
+    internal static void EnsureOutputFits(int width, int height, long bufferLength, Func<(long TotalAvailable, long Load)> memoryInfo)
+    {
+        if (bufferLength < GuardThresholdBytes) return;
+        var (total, load) = memoryInfo();
+        if (MemoryHeadroom.HasHeadroom(bufferLength * OutputPeakFactor, total, load)) return;
+        throw UserFacingError.Localized(
+            new InvalidDataException($"WicDirect output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
+            () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
     }
 
     private static IWICImagingFactory CreateFactory()
@@ -331,9 +380,9 @@ public sealed class WicDirectDecoder : IImageDecoder
         {
             frame.GetColorContexts(0, null, out count);
         }
-        catch (ArgumentException)
+        catch (Exception ex) when (ex is ArgumentException or COMException)
         {
-            // E_INVALIDARG: the colour metadata (e.g. a damaged EXIF TIFF header) cannot be read. The pixels are fine, so the
+            // E_INVALIDARG / a COM failure: the colour metadata (e.g. a damaged EXIF TIFF header) cannot be read. The pixels are fine, so the
             // picture is treated as untagged sRGB instead of failing the decode.
             return null;
         }
@@ -354,7 +403,7 @@ public sealed class WicDirectDecoder : IImageDecoder
             frame.GetColorContexts(count, contexts, out _);
             return contexts;
         }
-        catch (ArgumentException)
+        catch (Exception ex) when (ex is ArgumentException or COMException)
         {
             ReleaseAll(contexts);
             return null;

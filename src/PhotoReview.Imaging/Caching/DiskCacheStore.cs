@@ -302,8 +302,7 @@ public sealed class DiskCacheStore
                 if (utcNow - written > StaleTempFileAge && TryDelete(path, log)) removed++;
             }
         }
-        catch (IOException ex) { log?.Error($"Stale temp file cleanup failed: {directory}", ex); }
-        catch (UnauthorizedAccessException ex) { log?.Error($"Stale temp file cleanup failed: {directory}", ex); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { log?.Error($"Stale temp file cleanup failed: {directory}", ex); }
         return removed;
     }
 

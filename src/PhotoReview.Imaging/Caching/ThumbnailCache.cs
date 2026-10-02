@@ -100,8 +100,20 @@ public sealed class ThumbnailCache : IDisposable
             // and throw ObjectDisposedException even though the check above passed.
             disposeToken = _disposeCts.Token;
         }
-        var fullPath = Path.GetFullPath(sourcePath);
-        var key = knownStat is null ? BuildKey(fullPath) : BuildKey(fullPath, knownStat.Length, knownStat.LastWriteUtc);
+        string fullPath;
+        string key;
+        try
+        {
+            fullPath = Path.GetFullPath(sourcePath);
+            key = knownStat is null ? BuildKey(fullPath) : BuildKey(fullPath, knownStat.Length, knownStat.LastWriteUtc);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
+            or System.Security.SecurityException)
+        {
+            // A missing/unreadable source (the stat for the key) or a malformed path is a per-image failure: report it through
+            // the returned task like every other load error, not as a synchronous throw from a Task-returning method.
+            return Task.FromException<IDecodedImage?>(ex);
+        }
 
         if (_ramCache.TryGet(key, out var cached))
         {
@@ -247,8 +259,7 @@ public sealed class ThumbnailCache : IDisposable
     {
         lock (_lifecycleGate) _cacheGeneration++;
         try { _diskStore.ClearDirectory(); }
-        catch (IOException ex) { _log.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
-        catch (UnauthorizedAccessException ex) { _log.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { _log.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
     }
 
     public Task<bool> WaitForPruneAsync(TimeSpan timeout) => _diskStore.WaitForPruneAsync(timeout);

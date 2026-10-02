@@ -249,8 +249,7 @@ public sealed class PreviewImageService : IPreloadTarget
             foreach (var path in Directory.EnumerateFiles(directory, "*.png.meta").Take(LegacyCleanupMaxFiles))
                 DiskCacheStore.TryDelete(path, log);
         }
-        catch (IOException ex) { log.Error($"Legacy preview cache cleanup failed: {directory}", ex); }
-        catch (UnauthorizedAccessException ex) { log.Error($"Legacy preview cache cleanup failed: {directory}", ex); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { log.Error($"Legacy preview cache cleanup failed: {directory}", ex); }
     }
 
     /// <summary>
@@ -566,7 +565,9 @@ public sealed class PreviewImageService : IPreloadTarget
         // later GetOriginalDimensionsAsync for the same source (e.g. ImagePresenter showing
         // "WxH" in the status bar) never needs its own decoder ReadInfo call/file open, as long
         // as the image was already decoded once -- including by a background preload.
-        _originalDimensions.Set(ImageCacheKey.CreateOriginal(key), (decodedImage.OriginalWidth, decodedImage.OriginalHeight));
+        // A downscaled decode whose source size was unknown reports its own small size as "original": never seed that.
+        if (DecodedImageSize.HasKnownOriginal(decodedImage))
+            _originalDimensions.Set(ImageCacheKey.CreateOriginal(key), (decodedImage.OriginalWidth, decodedImage.OriginalHeight));
 
         // Only cache previews that actually decoded at the downscaled target width: a
         // fallback to full-resolution (see DecodeWithFallback) must never be persisted under the
@@ -667,8 +668,7 @@ public sealed class PreviewImageService : IPreloadTarget
             // ScheduleLegacyCacheCleanup's bounded, once-per-process pass.
             CleanupLegacyCacheFiles(_diskCacheDirectory, _log);
         }
-        catch (IOException ex) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
-        catch (UnauthorizedAccessException ex) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
     }
 
     public Task<bool> WaitForPruneAsync(TimeSpan timeout) => _diskStore.WaitForPruneAsync(timeout);
@@ -776,7 +776,8 @@ public sealed class PreviewImageService : IPreloadTarget
                     ? cancellableDecoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded), cancellationToken)
                     : decoderOverride.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
             if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
-            _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
+            if (DecodedImageSize.HasKnownOriginal(decoded))
+                _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
             _metrics.RecordSourceRead(GetSourceBytesRead(decoded, key), stopwatch.ElapsedMilliseconds,
                 includeInDecodeEwma: key.SourceKind != ImageSourceKind.RawFullDecode);
             return decoded;

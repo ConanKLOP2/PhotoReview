@@ -17,6 +17,9 @@ namespace PhotoReview.Imaging.Decoding;
 /// </summary>
 public static class EmbeddedThumbnailReader
 {
+    /// <summary>EXIF thumbnails are about 160x120; anything above this many pixels is treated as corrupt (4 MP = 16 MB BGRA).</summary>
+    internal const long MaxThumbnailPixels = 4L * 1024 * 1024;
+
     /// <summary>
     /// Returns the source's embedded EXIF thumbnail with orientation applied, or null if the
     /// source has none (wrong format, missing APP1 thumbnail, or any read/decode failure --
@@ -43,6 +46,8 @@ public static class EmbeddedThumbnailReader
             var width = thumbnail.PixelWidth;
             var height = thumbnail.PixelHeight;
             if (width <= 0 || height <= 0) return null;
+            // A hostile/corrupt EXIF thumbnail may claim huge dimensions: refuse before any width*height*4 allocation.
+            if ((long)width * height > MaxThumbnailPixels) return null;
 
             // Force eager pixel materialization (CopyPixels) while the stream is still open,
             // instead of relying on BitmapCacheOption.OnLoad's caching behavior alone -- this
@@ -51,8 +56,8 @@ public static class EmbeddedThumbnailReader
             var converted = thumbnail.Format == PixelFormats.Bgra32
                 ? thumbnail
                 : new FormatConvertedBitmap(thumbnail, PixelFormats.Bgra32, null, 0);
-            var stride = width * 4;
-            var buffer = new byte[stride * height];
+            var stride = checked(width * 4);
+            var buffer = new byte[checked(stride * height)];
             converted.CopyPixels(buffer, stride, 0);
 
             var materialized = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, buffer, stride);
