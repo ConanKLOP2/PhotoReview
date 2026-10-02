@@ -47,7 +47,7 @@ public sealed class SessionWriter : IDisposable
         {
             Folder = state.Folder,
             CurrentPath = state.CurrentPath,
-            Skipped = [.. state.Skipped],
+            Skipped = state.Skipped is null ? [] : [.. state.Skipped],
             UpdatedUtc = state.UpdatedUtc,
         };
         lock (_gate)
@@ -72,7 +72,7 @@ public sealed class SessionWriter : IDisposable
     }
 
     /// <summary>Writes every pending state now and cancels the scheduled write.</summary>
-    public void Flush() => Flush(bounded: false);
+    public void Flush() => Flush(bounded: true); // UI paths (folder change) must not hang behind a stuck disk write
 
     private void Flush(bool bounded)
     {
@@ -146,6 +146,9 @@ public sealed class SessionWriter : IDisposable
         WritePending(bounded: false);
     }
 
+    /// <summary>How long a bounded flush (<see cref="Flush()"/>, <see cref="Dispose"/>) waits for the writer lock; a test seam so the timeout case does not take seconds.</summary>
+    internal TimeSpan BoundedWaitForTests { get; set; } = ShutdownWait;
+
     /// <summary>Test seam: runs after a non-empty batch was drained and before the write lock is taken.</summary>
     internal Action? AfterDrainForTests { get; set; }
 
@@ -181,14 +184,29 @@ public sealed class SessionWriter : IDisposable
         }
     }
 
+    // A bounded wait that timed out must not lose the state: put it back (unless a newer snapshot arrived) so the next flush writes it.
+    private void RequeueSkipped(List<(SessionState State, long Version)> batch)
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            foreach (var (state, version) in batch)
+            {
+                var key = KeyOf(state.Folder);
+                if (_versions.TryGetValue(key, out var current) && current == version) _pending.TryAdd(key, state);
+            }
+        }
+    }
+
     private void WriteBatch(List<(SessionState State, long Version)> batch, bool bounded)
     {
         if (batch.Count == 0) return;
         if (bounded)
         {
-            if (!_writeLock.Wait(ShutdownWait))
+            if (!_writeLock.Wait(BoundedWaitForTests))
             {
-                _log?.Error("Session write skipped at shutdown: writer busy", null);
+                _log?.Error("Session write skipped: writer busy", null);
+                RequeueSkipped(batch);
                 return;
             }
         }

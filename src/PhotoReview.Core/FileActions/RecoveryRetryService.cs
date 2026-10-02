@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
@@ -264,16 +264,7 @@ public sealed class RecoveryRetryService
         }
         catch (Exception copyFailure) when (copyFailure is not OutOfMemoryException)
         {
-            try
-            {
-                if (_fileSystem.GetFileStat(destination) is { } partial && partial.Length < sourceSize)
-                    _fileSystem.Delete(destination);
-            }
-            catch (Exception cleanup) when (cleanup is not OutOfMemoryException)
-            {
-                // Left in place: Recovery shows the conflict; the original failure (rethrown below) is what gets journaled,
-                // whatever this best-effort cleanup threw.
-            }
+            PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize);
             throw;
         }
         if (!created) throw new IOException(Tr.CoreRecoveryDestinationExists);

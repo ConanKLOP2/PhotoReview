@@ -31,6 +31,7 @@ internal static class AtomicCacheFile
     /// </summary>
     internal static async Task WriteAsync(string cachePath, Action<Stream> writePayload, ILog? log, string? temporaryPathOverride, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
         var temporaryPath = temporaryPathOverride ?? cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp"; // matches DiskCacheStore.TempFilePattern
         try
@@ -42,6 +43,8 @@ internal static class AtomicCacheFile
                 writePayload(stream);
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
+            // A superseded write (e.g. Clear Cache) must not publish its file; the finally below removes the temp.
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporaryPath, cachePath, overwrite: true);
         }
         finally

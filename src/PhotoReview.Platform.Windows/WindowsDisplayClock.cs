@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Platform.Windows;
 
@@ -24,7 +26,27 @@ public sealed class WindowsDisplayClock : IDisplayClock
     private long _lastUse;            // QPC of the latest GetTiming call
     private Thread? _thread;
     private Published? _published;    // latest estimate, swapped atomically by the vblank thread
-    private IntPtr _failedMonitor;    // a monitor whose vblank wait could not be opened: use DWM for it
+    private IntPtr _failedMonitor;    // a monitor whose vblank wait could not be opened: use DWM for it (until retried)
+    private long _failedAt;           // QPC when _failedMonitor was marked; the monitor is retried after RetryFailedAfterMs
+    private readonly ILog _log;
+
+    /// <summary>A failed monitor falls back to DWM timing for this long, then the vblank wait is tried again (ms).</summary>
+    public const int RetryFailedAfterMs = 8000;
+
+    public WindowsDisplayClock(ILog? log = null)
+    {
+        _log = log ?? NullLog.Instance;
+    }
+
+    private void MarkFailed(IntPtr monitor)
+    {
+        lock (_gate)
+        {
+            _failedMonitor = monitor;
+            _failedAt = Stopwatch.GetTimestamp();
+            _thread = null;
+        }
+    }
 
     private sealed record Published(IntPtr Monitor, DisplayTiming Timing);
 
@@ -35,7 +57,12 @@ public sealed class WindowsDisplayClock : IDisplayClock
         Volatile.Write(ref _lastUse, Stopwatch.GetTimestamp());
         lock (_gate)
         {
-            if (monitor == _failedMonitor) return DwmTiming();
+            if (monitor == _failedMonitor)
+            {
+                var sinceFailMs = (Stopwatch.GetTimestamp() - _failedAt) * 1000.0 / Stopwatch.Frequency;
+                if (sinceFailMs < RetryFailedAfterMs) return DwmTiming();
+                _failedMonitor = IntPtr.Zero; // retry the vblank wait (e.g. after a display/driver reset)
+            }
             _monitor = monitor;
             if (_thread is null)
             {
@@ -51,6 +78,7 @@ public sealed class WindowsDisplayClock : IDisplayClock
     {
         var estimator = new VBlankEstimator();
         var opened = IntPtr.Zero;
+        var target = IntPtr.Zero; // the monitor last wanted: what a failure before/while opening it must blame
         var adapter = 0u;
         var source = 0u;
         try
@@ -68,6 +96,7 @@ public sealed class WindowsDisplayClock : IDisplayClock
                         return;
                     }
                     wanted = _monitor;
+                    target = wanted;
                 }
                 if (wanted != opened)
                 {
@@ -77,22 +106,14 @@ public sealed class WindowsDisplayClock : IDisplayClock
                     opened = wanted;
                     if (!TryOpen(wanted, out adapter, out source))
                     {
-                        lock (_gate)
-                        {
-                            _failedMonitor = wanted;
-                            _thread = null;
-                        }
+                        MarkFailed(wanted);
                         return;
                     }
                 }
                 var wait = new WaitForVerticalBlankEvent { Adapter = adapter, Device = 0, VidPnSourceId = source };
                 if (D3DKMTWaitForVerticalBlankEvent(ref wait) != 0)
                 {
-                    lock (_gate)
-                    {
-                        _failedMonitor = opened;
-                        _thread = null;
-                    }
+                    MarkFailed(opened);
                     return;
                 }
                 estimator.Add(Stopwatch.GetTimestamp());
@@ -101,10 +122,21 @@ public sealed class WindowsDisplayClock : IDisplayClock
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
-            lock (_gate)
+            MarkFailed(opened);
+        }
+        catch (Exception ex)
+        {
+            _log.Error("Vblank clock thread failed; falling back to DWM timing", ex);
+            var failing = opened != IntPtr.Zero ? opened : target;
+            if (failing != IntPtr.Zero)
             {
-                _failedMonitor = opened;
-                _thread = null;
+                MarkFailed(failing);
+            }
+            else
+            {
+                // No monitor was ever wanted: nothing to blame (IntPtr.Zero would poison unrelated lookups), but the dead
+                // thread must still be forgotten so the next GetTiming starts a new one.
+                lock (_gate) { _thread = null; }
             }
         }
         finally

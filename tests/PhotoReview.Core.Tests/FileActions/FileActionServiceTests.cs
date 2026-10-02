@@ -642,4 +642,45 @@ public sealed class FileActionServiceTests
         Assert.False(result.Succeeded);
         Assert.Equal("hello photo", _fs.ReadAllText(destination));
     }
+
+    [Fact]
+    public async Task ExecuteAsync_MoveFailsBecauseForeignFileAppearedAtDestination_NeverDeletesTheForeignFile()
+    {
+        var source = @"C:\photos\a.jpg";
+        var destination = @"C:\photos\sel\a.jpg";
+        _fs.AddFile(source, "original larger photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        // Another process creates a shorter file at the destination after the preflight; Move refuses to overwrite it.
+        _fs.MoveHook = (_, to) =>
+        {
+            _fs.AddFile(to, "foreign");
+            return new IOException("destination already exists");
+        };
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(source));
+        Assert.True(_fs.FileExists(destination));
+        Assert.Equal("foreign", _fs.ReadAllText(destination));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MoveFailsAfterSourceGone_KeepsTheDestination()
+    {
+        var source = @"C:\photos\a.jpg";
+        var destination = @"C:\photos\sel\a.jpg";
+        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        // The source is already gone: a shorter destination is then the only copy left and must never be deleted.
+        _fs.MoveHook = (from, to) =>
+        {
+            _fs.Delete(from);
+            _fs.AddFile(to, "hel");
+            return new IOException("simulated failure after source removal");
+        };
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(destination));
+    }
 }

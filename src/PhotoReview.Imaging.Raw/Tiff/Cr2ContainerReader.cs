@@ -70,7 +70,9 @@ public sealed class Cr2ContainerReader : IRawContainerReader
 
             if (TiffHeaderNavigator.ReadTagValue(source, entries, 0x8769, littleEndian) is { } exifOffset && exifOffset > 0)
             {
-                exifBlocks.Add(TiffHeaderNavigator.ComputeExifBlock(source, littleEndian, ifd0Offset));
+                // ComputeExifBlock always describes the TIFF header (offset 0) from IFD0, so one block covers every IFD.
+                if (exifBlocks.Count == 0)
+                    exifBlocks.Add(TiffHeaderNavigator.ComputeExifBlock(source, littleEndian, ifd0Offset));
                 if (exifWidth == 0 &&
                     TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out int pixelWidth, out int pixelHeight))
                 {

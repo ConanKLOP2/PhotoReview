@@ -174,5 +174,35 @@ public sealed class FileLogTests : IDisposable
         Assert.True(new FileInfo(_logFile).Length < 2048);
         Assert.Contains("post-rotation-entry", File.ReadAllText(_logFile));
     }
-}
 
+    [Fact(DisplayName = "Error-handling review: Drain never dequeues an unwritten entry after the producer trimmed the written head")]
+    public void DrainKeepsUnwrittenEntriesWhenTheProducerTrimsDuringTheWrite()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var log = new FileLog(_logFile);
+        var gated = 0;
+        // Wait only on the first drain: the writer thread outlives this test, so a later drain must never touch the disposed gate.
+        log.DrainHook = () =>
+        {
+            if (Thread.CurrentThread.Name == "PhotoReview.LogWriter" && Interlocked.Exchange(ref gated, 1) == 0)
+                gate.Wait(TimeSpan.FromSeconds(30));
+        };
+        var injected = 0;
+        log.AfterBatchWrittenHook = () =>
+        {
+            // Runs once, on the writer thread, while the first (full) batch is already on disk: the queue is over its bound,
+            // so the producer trims the oldest (already written) entries and the newest ones are not yet written.
+            if (Interlocked.Exchange(ref injected, 1) != 0) return;
+            for (var i = 0; i < 5; i++) log.Info("late-entry-" + i);
+        };
+        log.Enabled = true;
+        for (var i = 0; i < FileLog.MaxQueuedEntries; i++) log.Info("early-entry-" + i);
+        gate.Set();
+        log.Flush();
+
+        var content = File.ReadAllText(_logFile);
+        for (var i = 0; i < 5; i++) Assert.Contains("late-entry-" + i, content);
+        Assert.Equal(0, log.PendingCount);
+        log.Dispose();
+    }
+}

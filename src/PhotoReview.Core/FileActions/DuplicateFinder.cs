@@ -54,8 +54,9 @@ public static class DuplicateFinder
                         : (File.Exists(path) ? new FileInfo(path).Length : -1L);
                     return (Path: path, Size: size);
                 }
-                catch
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                 {
+                    // Unreadable / invalid path: skipped, same set as the hash step below. Cancellation and OOM propagate.
                     return (Path: path, Size: -1L);
                 }
             })
@@ -88,13 +89,9 @@ public static class DuplicateFinder
             {
                 throw;
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
-                // Bỏ qua nếu tệp bị lỗi I/O hoặc biến mất giữa chừng
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Bỏ qua nếu không có quyền truy cập
+                // Bỏ qua nếu tệp bị lỗi I/O, biến mất giữa chừng, không có quyền truy cập hoặc đường dẫn không hợp lệ
             }
         }
 

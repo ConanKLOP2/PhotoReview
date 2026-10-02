@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using PhotoReview.Core.Updates;
 
@@ -158,5 +158,14 @@ public sealed class UpdateCheckerTests
         Assert.NotEmpty(request.Headers.UserAgent);
         Assert.Null(request.Content);
         Assert.Empty(request.RequestUri.Query);
+    }
+
+    [Fact(DisplayName = "A response body larger than the cap is a BadResponse, not buffered")]
+    public async Task OversizedBody_ReturnsBadResponse()
+    {
+        var body = Release("v2.0.94") + new string(' ', UpdateChecker.MaxBodyBytes + 10);
+        var result = await Check(Json(HttpStatusCode.OK, body));
+        Assert.Equal(UpdateCheckStatus.Failed, result.Status);
+        Assert.Equal(UpdateFailure.BadResponse, result.Failure);
     }
 }

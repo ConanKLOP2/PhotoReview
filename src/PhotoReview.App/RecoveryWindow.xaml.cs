@@ -74,7 +74,7 @@ public partial class RecoveryWindow : Window
         EntriesList.ItemsSource = _visible;
         EntriesList.SelectionChanged += (_, _) => { UpdateDetails(); UpdateButtons(); };
         // The check starts when the window opens (Loaded), off the UI thread, and is cancelled on close.
-        Loaded += (_, _) => _ = RunChecksAsync();
+        Loaded += (_, _) => RunChecksAsync().FireAndLog("Recovery check failed");
         Closed += (_, _) => _cancelCheck?.Invoke();
         RefreshEntries();
     }
@@ -198,7 +198,7 @@ public partial class RecoveryWindow : Window
         RefreshEntries();
     }
 
-    private void Recheck_Click(object sender, RoutedEventArgs e) => _ = RunChecksAsync();
+    private void Recheck_Click(object sender, RoutedEventArgs e) => RunChecksAsync().FireAndLog("Recovery re-check failed");
 
     /// <summary>
     /// Read-only live check of every entry, on a worker thread; each result is posted back to the UI as it arrives.
@@ -245,6 +245,18 @@ public partial class RecoveryWindow : Window
         }
         catch (OperationCanceledException)
         {
+            return;
+        }
+        catch (Exception ex)
+        {
+            // A checker failure (access denied on a share, ...) must not leave Re-check disabled for good. Only the run that
+            // is still current touches the button: a newer run owns it, and a cancelled one is going away.
+            AppLog.Error("Recovery live check failed", ex);
+            if (!token.IsCancellationRequested)
+            {
+                RecheckButton.IsEnabled = true;
+                CheckStatusText.Text = string.Empty;
+            }
             return;
         }
         if (token.IsCancellationRequested) return;
@@ -347,6 +359,6 @@ public partial class RecoveryWindow : Window
         var icon = result.Succeeded && !journalWarning ? MessageBoxImage.Information : MessageBoxImage.Warning;
         System.Windows.MessageBox.Show(this, result.Message, title, MessageBoxButton.OK, icon);
         if (result.Succeeded) Close();
-        else _ = RunChecksAsync();
+        else RunChecksAsync().FireAndLog("Recovery re-check failed");
     }
 }

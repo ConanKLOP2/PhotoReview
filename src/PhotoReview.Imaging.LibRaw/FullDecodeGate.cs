@@ -65,12 +65,14 @@ internal sealed class FullDecodeGate
             waiter.Node = queue.AddLast(waiter);
         }
 
-        _waiterQueued?.Invoke(priority);
         try
         {
+            // The test seam runs inside the guarded region: if it throws, the queued waiter is removed (or a racing grant is passed on)
+            // exactly like a cancellation, so the queue entry cannot be orphaned and _busy cannot stay stuck.
+            _waiterQueued?.Invoke(priority);
             waiter.Signal.Wait(cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (Exception)
         {
             lock (_sync)
             {

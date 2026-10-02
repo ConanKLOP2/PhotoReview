@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Localization;
@@ -19,6 +19,7 @@ public sealed class LocalizationHardeningTests
         var ok = LanguageCatalog.TryParse("""{ "_meta": {"code":"xx"}, "a": "first", "a": "second", "b": "x" }""", "dup.json", out var catalog, warnings);
 
         Assert.True(ok);
+        Assert.NotNull(catalog);
         Assert.Equal("second", catalog.Entries["a"]);
         Assert.Single(warnings, w => w.Contains("dup.json", StringComparison.Ordinal) && w.Contains("'a'", StringComparison.Ordinal));
     }

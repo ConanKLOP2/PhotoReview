@@ -1,5 +1,6 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 
 namespace PhotoReview.Core.Updates;
@@ -9,6 +10,9 @@ public sealed class UpdateChecker : IUpdateChecker
 {
     public const string LatestReleaseUrl = "https://api.github.com/repos/ConanKLOP2/PhotoReview/releases/latest";
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>A release JSON is a few KB; a hostile or broken endpoint must not make the check buffer an unbounded body.</summary>
+    internal const int MaxBodyBytes = 1024 * 1024;
 
     private readonly HttpMessageHandler? _handler;
     private readonly TimeSpan _timeout;
@@ -38,8 +42,9 @@ public sealed class UpdateChecker : IUpdateChecker
             if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
                 return UpdateCheckResult.Failed(UpdateFailure.RateLimited);
             if (!response.IsSuccessStatusCode) return UpdateCheckResult.Failed(UpdateFailure.BadResponse);
-            var body = await response.Content.ReadAsStringAsync(timeoutSource.Token).ConfigureAwait(false);
-            return Interpret(body, current);
+            if (response.Content.Headers.ContentLength > MaxBodyBytes) return UpdateCheckResult.Failed(UpdateFailure.BadResponse);
+            var body = await ReadCappedAsync(response.Content, timeoutSource.Token).ConfigureAwait(false);
+            return body is null ? UpdateCheckResult.Failed(UpdateFailure.BadResponse) : Interpret(body, current);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -55,6 +60,22 @@ public sealed class UpdateChecker : IUpdateChecker
         {
             return UpdateCheckResult.Failed(UpdateFailure.BadResponse);
         }
+    }
+
+    /// <summary>Reads at most <see cref="MaxBodyBytes"/> bytes (UTF-8); null when the body is larger.</summary>
+    private static async Task<string?> ReadCappedAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var _ = stream.ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[16 * 1024];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxBodyBytes) return null;
+            buffer.Write(chunk, 0, read);
+        }
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     private static UpdateCheckResult Interpret(string body, AppVersion current)

@@ -30,6 +30,7 @@ public sealed record RunFileMeta(string Scenario, string Mode, string Cond, int?
             {
                 using var doc = JsonDocument.Parse(File.ReadAllText(sessionPath));
                 var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object) throw new JsonException("root is not an object");
                 scenario = GetString(root, "scenario") ?? GetString(root, "alias") ?? scenario;
                 // D06 writes folderAlias; keep fixtures apart so F1 and F2 runs are never pooled.
                 if (GetString(root, "folderAlias") is { Length: > 0 } folderAlias) scenario = $"{scenario}@{folderAlias}";
@@ -44,11 +45,11 @@ public sealed record RunFileMeta(string Scenario, string Mode, string Cond, int?
                         if (!root.TryGetProperty(envName, out var diagEl) || diagEl.ValueKind != JsonValueKind.Object
                             || !diagEl.TryGetProperty("PHOTOREVIEW_DIAG_PRELOAD_WORKERS", out var dw)) continue;
                         if (dw.ValueKind == JsonValueKind.Number && dw.TryGetInt32(out var dwi)) { workers = dwi; break; }
-                        if (dw.ValueKind == JsonValueKind.String && int.TryParse(dw.GetString(), out var dws)) { workers = dws; break; }
+                        if (dw.ValueKind == JsonValueKind.String && int.TryParse(dw.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var dws)) { workers = dws; break; }
                     }
                 }
             }
-            catch (JsonException) { /* tolerate a hand-edited or partial session.json */ }
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException) { /* tolerate a hand-edited, partial or unreadable session.json */ }
         }
 
         // run-matrix.ps1 lays runs out as <scenario>\<alias>-<mode>-<condition>\run-NN\; session.json
@@ -61,7 +62,7 @@ public sealed record RunFileMeta(string Scenario, string Mode, string Cond, int?
         }
 
         if (workers is null && file.DiagFlags.TryGetValue("PHOTOREVIEW_DIAG_PRELOAD_WORKERS", out var wv)
-            && int.TryParse(wv, out var wp)) workers = wp;
+            && int.TryParse(wv, NumberStyles.Integer, CultureInfo.InvariantCulture, out var wp)) workers = wp;
 
         var processPath = Path.Combine(dir, "process.json");
         if (File.Exists(processPath))
@@ -70,6 +71,7 @@ public sealed record RunFileMeta(string Scenario, string Mode, string Cond, int?
             {
                 using var doc = JsonDocument.Parse(File.ReadAllText(processPath));
                 var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object) throw new JsonException("root is not an object");
                 if (root.TryGetProperty("gcTimePercent", out var g) && g.TryGetDouble(out var gd)) gcPct = gd;
                 // D06 writes gcPauseDeltaMs + elapsedMs per iteration rather than a percentage.
                 else if (root.TryGetProperty("gcPauseDeltaMs", out var gp) && gp.TryGetDouble(out var gpd)
@@ -77,7 +79,7 @@ public sealed record RunFileMeta(string Scenario, string Mode, string Cond, int?
                     gcPct = gpd / eld * 100.0;
                 if (root.TryGetProperty("frameTimeP95Ms", out var f) && f.TryGetDouble(out var fd)) frameP95 = fd;
             }
-            catch (JsonException) { /* tolerate a hand-edited or partial process.json */ }
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException) { /* tolerate a hand-edited, partial or unreadable process.json */ }
         }
 
         return new RunFileMeta(scenario, mode, cond, workers, gcPct, frameP95);

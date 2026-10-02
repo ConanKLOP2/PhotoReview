@@ -1,3 +1,4 @@
+﻿using System.Diagnostics.CodeAnalysis;
 namespace PhotoReview.Core.Caching;
 
 /// <summary>Thread-safe, byte-bounded LRU cache.</summary>
@@ -22,7 +23,7 @@ public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
     public int Count { get { lock (_gate) return _items.Count; } }
     public long CurrentSize { get { lock (_gate) return _size; } }
 
-    public bool TryGet(TKey key, out TValue value)
+    public bool TryGet(TKey key, [MaybeNullWhen(false)] out TValue value)
     {
         lock (_gate)
         {
@@ -34,7 +35,7 @@ public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
                 return true;
             }
         }
-        value = default!;
+        value = default;
         return false;
     }
 

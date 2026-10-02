@@ -163,9 +163,9 @@ public static class TiffHeaderNavigator
             // relative to 0), it would just make RawExif read and charge up to 4 MiB of header budget for no EXIF.
             if (needed <= Math.Min(source.Length, RawContainerLimits.MaxExifBlockBytes)) length = Math.Max(length, needed);
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException ex) when (!RawHeaderErrors.IsIoFailure(ex))
         {
-            // Exhausted header budget or hostile structure: keep the default block.
+            // Exhausted header budget or hostile structure: keep the default block (an I/O failure propagates instead).
         }
 
         return new ExifBlock(0, length, IsTiffHeader: true);

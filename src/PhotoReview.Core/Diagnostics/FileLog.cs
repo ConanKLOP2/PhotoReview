@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.IO;
 using System.Text;
 using PhotoReview.Core.Abstractions;
@@ -123,6 +123,9 @@ public sealed class FileLog : ILog, IDisposable
     /// <summary>Test seam (CORE-02): invoked by the writer at the start of every drain.</summary>
     internal Action? DrainHook { get; set; }
 
+    /// <summary>Test seam: invoked by the writer after a batch was flushed, before the written entries leave the queue.</summary>
+    internal Action? AfterBatchWrittenHook { get; set; }
+
     internal bool IsWriterAlive => _writer is { IsAlive: true };
 
     internal bool WaitWriterExit(int timeoutMs) => _writer?.Join(timeoutMs) ?? true;
@@ -239,15 +242,31 @@ public sealed class FileLog : ILog, IDisposable
 
             using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 65536, FileOptions.SequentialScan);
             using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-            while (_queue.TryDequeue(out var e))
+            // Peek-then-dequeue: entries leave the queue only after they were flushed to disk, so a failed write keeps them
+            // queued (bounded by MaxQueuedEntries) for the next drain instead of losing them.
+            while (true)
             {
-                Interlocked.Decrement(ref _queuedCount);
+                var batch = _queue.ToArray();
+                if (batch.Length == 0) break;
+                foreach (var e in batch)
+                {
+                    // Machine-read log (AGENTS.md rule 4): invariant culture, else a th-TH/ar-SA/fa-IR machine writes Buddhist/Hijri years.
+                    writer.WriteLine(FormattableString.Invariant($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}") + (e.Exception is null ? "" : "\n" + e.Exception));
+                }
+
+                writer.Flush();
                 _lastDrainFailed = false;
-                // Machine-read log (AGENTS.md rule 4): invariant culture, else a th-TH/ar-SA/fa-IR machine writes Buddhist/Hijri years.
-                writer.WriteLine(FormattableString.Invariant($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}") + (e.Exception is null ? "" : "\n" + e.Exception));
+                AfterBatchWrittenHook?.Invoke();
+                foreach (var e in batch)
+                {
+                    // Write() trims the oldest entries when the queue is over MaxQueuedEntries, so the head may already be a
+                    // newer, unwritten entry: dequeue only entries that are still the written ones.
+                    if (_queue.TryPeek(out var head) && ReferenceEquals(head, e) && _queue.TryDequeue(out _))
+                        Interlocked.Decrement(ref _queuedCount);
+                }
             }
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Log file unavailable (locked, read-only, bad path): entries stay queued (bounded by MaxQueuedEntries) and are
             // retried on the next signal, but waiters must not block for the full flush timeout.

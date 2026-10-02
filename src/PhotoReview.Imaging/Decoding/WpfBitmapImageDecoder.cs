@@ -28,8 +28,22 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         using var stream = _sourceReader.OpenSource(path, SourceReadPriority.Viewer, 1024 * 1024);
         // PixelWidth/Height and orientation only need the image header. DelayCreation prevents decoding pixel data.
         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        if (decoder.Frames.Count == 0)
+        {
+            throw new InvalidDataException($"Image has no frames: {path}");
+        }
         var frame = decoder.Frames[0];
-        var orientation = ExifOrientation.Read(frame.Metadata as BitmapMetadata);
+        int orientation;
+        try
+        {
+            orientation = ExifOrientation.Read(frame.Metadata as BitmapMetadata);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException
+            or OverflowException or InvalidCastException or System.Runtime.InteropServices.COMException)
+        {
+            // Damaged metadata must not fail a header-only read: the pixel dimensions are still valid.
+            orientation = 1;
+        }
         return new ImageInfo(frame.PixelWidth, frame.PixelHeight, orientation);
     }
 
@@ -47,7 +61,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         catch (Exception ex) when (request.IsDownscaleRequested && IsDownscaleFallbackException(ex))
         {
             // Full-resolution retry: same path (and EXIF extraction) as a normal decode, just unconstrained.
-            return DecodeWithoutProfileFallback(new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes, Priority: request.Priority), sourceReader);
+            return DecodeWithoutProfileFallback(request with { TargetWidth = 0, TargetHeight = 0 }, sourceReader);
         }
     }
 

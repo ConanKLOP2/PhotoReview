@@ -67,9 +67,19 @@ public static class PerfAnalyze
 
         foreach (var path in csvFiles)
         {
-            var file = PerfCsvReader.Read(path);
-            var analysis = PerfAnalyzeNavBuilder.Build(file);
-            var meta = RunFileMeta.Load(file);
+            PerfCsvFile file;
+            PerfFileAnalysis analysis;
+            RunFileMeta meta;
+            try
+            {
+                file = PerfCsvReader.Read(path);
+                analysis = PerfAnalyzeNavBuilder.Build(file);
+                meta = RunFileMeta.Load(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException)
+            {
+                throw new InvalidDataException($"Could not analyze '{path}': {ex.Message}", ex);
+            }
 
             // Each perf-*.csv is normally one run (D06), so its mode is whichever ShowStart.mode
             // dominates its own navigations (majority vote guards against a stray/incomplete nav).

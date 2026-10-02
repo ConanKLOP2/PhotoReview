@@ -15,7 +15,16 @@ public static class LibRawAvailability
     internal const int RequiredPatch = 2;
 
     private static readonly Lazy<bool> ExactVersionResult = new(() =>
-        Probe(out _) && CheckExactVersion(LibRawNativeMethods.GetVersionString()));
+    {
+        try
+        {
+            return Probe(out _) && CheckExactVersion(LibRawNativeMethods.GetVersionString());
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false; // do not let the Lazy cache a throwing exception
+        }
+    });
 
     /// <summary>True when the loaded runtime is exactly the pinned 0.22.2 (the only version the raw struct write is allowed on).</summary>
     internal static bool IsExactPinnedVersion => ExactVersionResult.Value;
@@ -43,6 +52,19 @@ public static class LibRawAvailability
     }
 
     private static (bool, string?) RunProbe()
+    {
+        // Lazy caches a thrown exception for the process lifetime: turn any probe failure (not memory exhaustion) into a reason.
+        try
+        {
+            return RunProbeCore();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return (false, $"{LibRawNativeMethods.LibraryName} probe failed: {ex.Message}");
+        }
+    }
+
+    private static (bool, string?) RunProbeCore()
     {
         if (!NativeLibrary.TryLoad(LibRawNativeMethods.LibraryName, typeof(LibRawAvailability).Assembly, null, out var libraryHandle))
         {

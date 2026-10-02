@@ -192,10 +192,10 @@ public sealed class WindowsRecycleBin : IRecycleBin
 
     private static bool WaitForRestore(string path, DateTime expectedLastWriteUtc)
     {
-        for (var i = 0; i < 10; i++)
+        for (var i = 0; i < 30; i++) // ~1.8 s: the shell restores asynchronously and can be slow on a busy disk
         {
             if (IsExpectedFile(path, expectedLastWriteUtc)) return true;
-            Thread.Sleep(50);
+            Thread.Sleep(60);
         }
         return IsExpectedFile(path, expectedLastWriteUtc);
     }

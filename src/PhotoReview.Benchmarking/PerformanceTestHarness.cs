@@ -67,7 +67,7 @@ public static class PerformanceTestHarness
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).Take(take).ToArray();
         if (files.Length == 0) throw new InvalidOperationException("Performance folder has no supported images");
         var started = DateTimeOffset.UtcNow;
-        var totalBytes = files.Sum(p => new FileInfo(p).Length);
+        var totalBytes = files.Sum(SafeLength);
         var samples = new List<PerformanceSample>
         {
             await MeasureColdAsync(files, cancellationToken),
@@ -93,7 +93,7 @@ public static class PerformanceTestHarness
         {
             ct.ThrowIfCancellationRequested();
             var sw = Stopwatch.StartNew();
-            await Task.Run(() => { DecodeObserver?.Invoke(true, path); using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct);
+            await Task.Run(() => { DecodeObserver?.Invoke(true, path); GC.KeepAlive(DecodeFile(path)); }, ct);
             sw.Stop(); times.Add(sw.ElapsedMilliseconds); reads++;
         }
         return Sample("cold-read", times, before, CurrentWorkingSet(), reads, 0, 0, 0);
@@ -114,6 +114,8 @@ public static class PerformanceTestHarness
         // pre-queued ones. `queued`/`waits[i]` keep the same meaning as before (elapsed time from
         // "this file is next in line" to "its slot was acquired").
         var running = new List<Task>(Math.Min(files.Length, 4096));
+        try
+        {
         for (var i = 0; i < files.Length; i++)
         {
             var index = i; var path = files[i];
@@ -126,13 +128,22 @@ public static class PerformanceTestHarness
                 {
                     ParallelDecodeObserver?.Invoke(path);
                     var sw = Stopwatch.StartNew();
-                    await Task.Run(() => { using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct);
+                    await Task.Run(() => { GC.KeepAlive(DecodeFile(path)); }, ct);
                     times[index] = sw.ElapsedMilliseconds; Interlocked.Increment(ref reads);
                 }
                 finally { gate.Release(); }
             }, ct));
         }
         await Task.WhenAll(running);
+        }
+        catch
+        {
+            // Cancelled or failed mid-run: observe every already-started decode so none is left running (or
+            // unobserved) after this method has thrown; the original exception is the one that propagates.
+            try { await Task.WhenAll(running).ConfigureAwait(false); }
+            catch (Exception) { /* already being reported by the original exception */ }
+            throw;
+        }
         return Sample($"parallel-read-{workers}", times, before, CurrentWorkingSet(), reads, 0, 0, Percentile(waits, .95));
     }
 
@@ -147,6 +158,26 @@ public static class PerformanceTestHarness
     {
         var p50 = Percentile(values, .50); var p95 = Percentile(values, .95); var status = p95 <= Math.Max(1, p50) * 8 ? "PASS" : "WARN";
         return new(name, values.Count, values.Sum(), p50, p95, values.Max(), before, after, reads, hits, misses, waitP95, status);
+    }
+
+    private static long SafeLength(string path)
+    {
+        try { return new FileInfo(path).Length; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; } // vanished/locked: only the report total is affected
+    }
+
+    /// <summary>Decodes <paramref name="path"/>; a failure names the file instead of surfacing a bare codec error.</summary>
+    private static BitmapImage DecodeFile(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+            return Decode(stream, 2200);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException or ArgumentException)
+        {
+            throw new InvalidDataException($"Could not decode '{path}': {ex.Message}", ex);
+        }
     }
 
     private static BitmapImage Decode(Stream stream, int width)

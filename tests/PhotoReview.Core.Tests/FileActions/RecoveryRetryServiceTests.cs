@@ -1,4 +1,4 @@
-using PhotoReview.Core.Abstractions;
+﻿using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
@@ -470,5 +470,28 @@ public sealed class RecoveryRetryServiceTests
         Assert.Throws<ArgumentNullException>(() => new RecoveryRetryService(null!, _fs, _clock));
         Assert.Throws<ArgumentNullException>(() => new RecoveryRetryService(_journal, null!, _clock));
         Assert.Throws<ArgumentNullException>(() => new RecoveryRetryService(_journal, _fs, null!));
+    }
+
+    [Fact]
+    public async Task RetryMove_FailsBecauseForeignFileAppearedAtDestination_NeverDeletesTheForeignFile()
+    {
+        var source = @"C:\photos\a.jpg";
+        var dest = @"C:\photos\sub\a.jpg";
+        _fs.WriteAllTextAtomic(source, "original larger photo");
+        var stat = _fs.GetFileStat(source)!;
+        var failed = new JournalEntry("op-move-partial", FileOperationType.Move, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
+        _journal.Append(failed);
+        _fs.MoveHook = (_, to) =>
+        {
+            _fs.AddFile(to, "foreign");
+            return new IOException("destination already exists");
+        };
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(source));
+        Assert.Equal("foreign", _fs.ReadAllText(dest));
     }
 }

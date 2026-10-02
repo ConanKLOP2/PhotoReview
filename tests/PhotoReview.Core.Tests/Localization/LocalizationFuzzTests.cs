@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -71,7 +71,7 @@ public sealed partial class LocalizationFuzzTests
             var ok = LocTemplate.TryParse(text, out var template);
 
             Assert.True(expectedValid == ok, $"'{text}' oracle={expectedValid} parser={ok}");
-            if (!ok) continue;
+            if (!ok || template is null) continue;
             Assert.Equal(Reference(text, args), template.Render(locArgs));
             Assert.Equal(Reference(text, []), template.Render([]));
 

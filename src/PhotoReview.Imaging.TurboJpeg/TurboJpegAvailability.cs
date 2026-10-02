@@ -36,7 +36,7 @@ public static class TurboJpegAvailability
             using var decompressor = TurboJpegNative.CreateDecompressor();
             return (true, null);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or DllNotFoundException or BadImageFormatException or EntryPointNotFoundException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return (false, FormattableString.Invariant($"{TurboJpegNative.DllName} loaded but failed to initialize: {ex.Message}"));
         }
