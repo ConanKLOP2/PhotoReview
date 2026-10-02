@@ -646,8 +646,8 @@ public sealed class FileActionServiceTests
     [Fact]
     public async Task ExecuteAsync_MoveFailsBecauseForeignFileAppearedAtDestination_NeverDeletesTheForeignFile()
     {
-        var source = @"C:\photos.jpg";
-        var destination = @"C:\photos\sel.jpg";
+        var source = @"C:\photos\a.jpg";
+        var destination = @"C:\photos\sel\a.jpg";
         _fs.AddFile(source, "original larger photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
         // Another process creates a shorter file at the destination after the preflight; Move refuses to overwrite it.
         _fs.MoveHook = (_, to) =>

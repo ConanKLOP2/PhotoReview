@@ -180,7 +180,13 @@ public sealed class FileLogTests : IDisposable
     {
         using var gate = new ManualResetEventSlim(false);
         var log = new FileLog(_logFile);
-        log.DrainHook = () => { if (Thread.CurrentThread.Name == "PhotoReview.LogWriter") gate.Wait(TimeSpan.FromSeconds(30)); };
+        var gated = 0;
+        // Wait only on the first drain: the writer thread outlives this test, so a later drain must never touch the disposed gate.
+        log.DrainHook = () =>
+        {
+            if (Thread.CurrentThread.Name == "PhotoReview.LogWriter" && Interlocked.Exchange(ref gated, 1) == 0)
+                gate.Wait(TimeSpan.FromSeconds(30));
+        };
         var injected = 0;
         log.AfterBatchWrittenHook = () =>
         {
@@ -197,5 +203,6 @@ public sealed class FileLogTests : IDisposable
         var content = File.ReadAllText(_logFile);
         for (var i = 0; i < 5; i++) Assert.Contains("late-entry-" + i, content);
         Assert.Equal(0, log.PendingCount);
+        log.Dispose();
     }
 }
