@@ -57,13 +57,13 @@ public sealed class Rw2ContainerReader : IRawContainerReader
         int? embeddedJpegOrientation = null;
 
         // Tags 2/3 describe the full sensor readout including masked margins; the borders (4..7) delimit the image.
-        if (leftBorder is { } left && rightBorder is { } right && right > left && right <= int.MaxValue)
-            sensorWidth = (int)(right - left);
+        if (leftBorder is >= 0 and var left && rightBorder is { } right && right > left && right <= int.MaxValue)
+            sensorWidth = checked((int)(right - left));
         else if (sensorWidthTag is > 0 and <= int.MaxValue)
             sensorWidth = (int)sensorWidthTag.Value;
 
-        if (topBorder is { } top && bottomBorder is { } bottom && bottom > top && bottom <= int.MaxValue)
-            sensorHeight = (int)(bottom - top);
+        if (topBorder is >= 0 and var top && bottomBorder is { } bottom && bottom > top && bottom <= int.MaxValue)
+            sensorHeight = checked((int)(bottom - top));
         else if (sensorHeightTag is > 0 and <= int.MaxValue)
             sensorHeight = (int)sensorHeightTag.Value;
 

@@ -488,6 +488,7 @@ public sealed class RawDecoder : IImageDecoder
             RawContainerInfo info;
             try
             {
+                // CancellationToken.None is intentional: IImageDecoder has no cancellation token to forward.
                 info = reader.Read(headerSource, CancellationToken.None);
             }
             catch (InvalidDataException ex) when (!UserFacingError.IsLocalized(ex))
@@ -530,10 +531,13 @@ public sealed class RawDecoder : IImageDecoder
 
     private byte[] ReadPreviewRange(string path, long offset, int count, long expectedLength, SourceReadPriority priority)
     {
-        var bytes = new byte[count];
         using var stream = _sourceReader.OpenSource(path, priority);
         if (stream.Length != expectedLength)
             throw ChangedWhileReading(path); // not the file the container info (and its preview offsets) describe
+        // Validate before allocating: a corrupt/hostile range must not force a large allocation.
+        if (count < 0 || offset < 0 || offset > stream.Length - count)
+            throw new EndOfStreamException($"Embedded preview range is outside {path}");
+        var bytes = new byte[count];
         stream.Seek(offset, SeekOrigin.Begin);
         var totalRead = 0;
         while (totalRead < bytes.Length)
