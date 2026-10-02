@@ -273,6 +273,9 @@ public sealed class FileActionController
             }
         }
 
+        // Set once the service reported success: a later throw (Undo registration, presenter, ...) must not be treated as a
+        // failed action (no catalog restore, no ActionFailed) because the file operation is already real on disk.
+        var actionSucceeded = false;
         try
         {
             CaptureGroupActionResult? groupResult = null;
@@ -282,6 +285,7 @@ public sealed class FileActionController
             else
                 groupResult = await _fileActionService.ExecuteGroupAsync(new CaptureGroupActionRequest(group, operation, destination, allowPermanent));
             var succeeded = groupResult?.Succeeded ?? singleResult!.Succeeded;
+            actionSucceeded = succeeded;
             var sourceRemoved = groupResult is not null
                 ? groupResult.Members.Any(member => member.Completed && (operation is FileOperationType.Move or FileOperationType.Recycle))
                 : singleResult!.SourceRemoved;
@@ -409,6 +413,23 @@ public sealed class FileActionController
             // The entry already left the catalog before ExecuteAsync: an unexpected throw must not leave it missing from the
             // list although the file is (most likely) still on disk. Same restore as INV-5; if the file really is gone the
             // presenter's RemoveOrDegrade heals the entry on the next present.
+            if (actionSucceeded)
+            {
+                // The action itself succeeded on disk; only the bookkeeping after it threw. Restoring the entry would show a
+                // file that is gone and ActionFailed would be wrong: log it and leave the state as-is.
+                AppLog.Error($"File action {operation} succeeded but its post-processing threw: {source}", ex);
+                if (presentTask is not null)
+                {
+                    try { await presentTask; }
+                    catch (Exception presentEx) when (presentEx is not OperationCanceledException)
+                    {
+                        AppLog.Error("Present after file action threw", presentEx);
+                    }
+                }
+                _sink.SetStatusText(StatusFormatter.ActionCompleted(actionName));
+                return true;
+            }
+
             AppLog.Error($"File action {operation} threw: {source}", ex);
             if (isRemove && sourceIndex >= 0 && _clock.IsFolderCurrent(folderGen))
             {

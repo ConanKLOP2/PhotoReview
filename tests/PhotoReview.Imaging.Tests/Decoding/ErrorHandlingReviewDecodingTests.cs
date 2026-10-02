@@ -83,12 +83,18 @@ public sealed class ErrorHandlingReviewDecodingTests : IDisposable
         var path = Path.Combine(_root.Path, "huge.jpg");
         using (var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
             fs.SetLength(TurboJpegDecoder.GuardThresholdBytes + 1024);
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => (1 * Gb, 0) };
+        // Available memory SMALLER than the file: only the source-size guard can produce this rejection (the all-zero file would
+        // otherwise fail later in the decode with a different NotSupportedException).
+        var probed = 0;
+        var decoder = new TurboJpegDecoder { MemoryInfo = () => { probed++; return (TurboJpegDecoder.GuardThresholdBytes / 2, 0); } };
 
         var ex = Assert.Throws<NotSupportedException>(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
 
+        Assert.Equal(1, probed); // the memory guard was consulted (and refused) before the file was read
+        Assert.Contains("too large for the available memory", ex.ToString(), StringComparison.Ordinal);
         Assert.True(UserFacingError.IsLocalized(ex));
         Assert.True(FallbackImageDecoder.IsFallbackable(ex)); // WIC streams it
+        Assert.False(DecodeFailureSourceBytes.TryGet(ex, out _)); // nothing was read, so no source bytes ride on the exception
     }
 
     [Fact(DisplayName = "WicDirect output guard: a huge buffer on a small machine is a clean InvalidDataException; a small buffer never consults memory")]

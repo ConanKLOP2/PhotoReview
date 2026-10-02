@@ -227,7 +227,7 @@ public sealed class RecoveryRetryService
                     }
                     else
                     {
-                        MoveOrRemovePartial(sourcePath, destinationPath, member.Size);
+                        _fileSystem.Move(sourcePath, destinationPath);
                         if (_fileSystem.FileExists(sourcePath) || _fileSystem.GetFileStat(destinationPath)?.Length != member.Size)
                             throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
                     }
@@ -270,24 +270,6 @@ public sealed class RecoveryRetryService
         if (!created) throw new IOException(Tr.CoreRecoveryDestinationExists);
     }
 
-    /// <summary>
-    /// Retry Move whose destination the pre-checks proved absent: when the move fails while the source is still in place, a
-    /// strictly shorter file at the destination is its partial output and is deleted (same rule as the Copy branch).
-    /// The original failure is rethrown.
-    /// </summary>
-    private void MoveOrRemovePartial(string source, string destination, long sourceSize)
-    {
-        try
-        {
-            _fileSystem.Move(source, destination);
-        }
-        catch (Exception moveFailure) when (moveFailure is not OutOfMemoryException)
-        {
-            PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize, source, requireSourceExists: true);
-            throw;
-        }
-    }
-
     private static RecoveryRetryResult AlreadyHandled() => new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);
 
     // P02: `failed` is the Recovery window's snapshot. Another process sharing the journal (InstanceMode.PerFolder) may be
@@ -316,7 +298,7 @@ public sealed class RecoveryRetryService
             }
             else
             {
-                MoveOrRemovePartial(failed.Source, destination, prepared.Size);
+                _fileSystem.Move(failed.Source, destination);
                 tx.VerifyMoved(_fileSystem, failed.Source, destination, JournalErrors.RetryVerifyFailed);
             }
 

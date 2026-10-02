@@ -78,6 +78,7 @@ public sealed class WindowsDisplayClock : IDisplayClock
     {
         var estimator = new VBlankEstimator();
         var opened = IntPtr.Zero;
+        var target = IntPtr.Zero; // the monitor last wanted: what a failure before/while opening it must blame
         var adapter = 0u;
         var source = 0u;
         try
@@ -95,6 +96,7 @@ public sealed class WindowsDisplayClock : IDisplayClock
                         return;
                     }
                     wanted = _monitor;
+                    target = wanted;
                 }
                 if (wanted != opened)
                 {
@@ -125,7 +127,17 @@ public sealed class WindowsDisplayClock : IDisplayClock
         catch (Exception ex)
         {
             _log.Error("Vblank clock thread failed; falling back to DWM timing", ex);
-            MarkFailed(opened);
+            var failing = opened != IntPtr.Zero ? opened : target;
+            if (failing != IntPtr.Zero)
+            {
+                MarkFailed(failing);
+            }
+            else
+            {
+                // No monitor was ever wanted: nothing to blame (IntPtr.Zero would poison unrelated lookups), but the dead
+                // thread must still be forgotten so the next GetTiming starts a new one.
+                lock (_gate) { _thread = null; }
+            }
         }
         finally
         {

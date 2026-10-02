@@ -123,6 +123,9 @@ public sealed class FileLog : ILog, IDisposable
     /// <summary>Test seam (CORE-02): invoked by the writer at the start of every drain.</summary>
     internal Action? DrainHook { get; set; }
 
+    /// <summary>Test seam: invoked by the writer after a batch was flushed, before the written entries leave the queue.</summary>
+    internal Action? AfterBatchWrittenHook { get; set; }
+
     internal bool IsWriterAlive => _writer is { IsAlive: true };
 
     internal bool WaitWriterExit(int timeoutMs) => _writer?.Join(timeoutMs) ?? true;
@@ -253,9 +256,13 @@ public sealed class FileLog : ILog, IDisposable
 
                 writer.Flush();
                 _lastDrainFailed = false;
-                for (var i = 0; i < batch.Length; i++)
+                AfterBatchWrittenHook?.Invoke();
+                foreach (var e in batch)
                 {
-                    if (_queue.TryDequeue(out _)) Interlocked.Decrement(ref _queuedCount);
+                    // Write() trims the oldest entries when the queue is over MaxQueuedEntries, so the head may already be a
+                    // newer, unwritten entry: dequeue only entries that are still the written ones.
+                    if (_queue.TryPeek(out var head) && ReferenceEquals(head, e) && _queue.TryDequeue(out _))
+                        Interlocked.Decrement(ref _queuedCount);
                 }
             }
         }

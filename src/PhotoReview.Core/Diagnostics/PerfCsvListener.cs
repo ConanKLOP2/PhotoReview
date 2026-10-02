@@ -286,7 +286,7 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         _channel?.Writer.TryComplete();
-        try { _writerTask?.Wait(TimeSpan.FromSeconds(1)); } catch { /* best effort */ }
+        try { _writerTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* best effort */ }
 
         try
         {

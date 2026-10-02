@@ -89,6 +89,23 @@ public sealed class FileActionControllerOrderingTests : IDisposable
         Assert.Equal([a, b], _catalog.Paths); // INV-5: the photo is back
     }
 
+    [Fact(DisplayName = "A throw in the post-processing of a SUCCESSFUL Move does not restore the entry nor report ActionFailed")]
+    public async Task SucceededMove_PostProcessingThrows_DoesNotRestoreEntryOrReportFailure()
+    {
+        var a = Make("a.jpg");
+        var b = Make("b.jpg");
+        _catalog.Reset([a, b]);
+        _sink.OnUpdateSessionPath = () => new InvalidOperationException("bookkeeping failed after the move");
+
+        await _controller.RunActionAsync(0, null, a);
+
+        Assert.True(File.Exists(Path.Combine(_root, "Sorted", "a.jpg")));
+        Assert.False(File.Exists(a));
+        Assert.Equal([b], _catalog.Paths); // not restored: the file really left the folder
+        Assert.NotEqual(StatusFormatter.ActionFailed("MoveToSub", "bookkeeping failed after the move"), _sink.LastStatus);
+        Assert.DoesNotContain("failed", _sink.LastStatus ?? "", StringComparison.OrdinalIgnoreCase);
+    }
+
     // RV-A09: the fire-and-forget present of the next photo writes "Ready" when it finishes; the final "Moved to" must come after it.
     // Deterministic: the test body runs on a manually pumped SynchronizationContext, so every continuation of the controller
     // runs exactly when the test says (no timing, no delays).
@@ -249,7 +266,8 @@ public sealed class FileActionControllerOrderingTests : IDisposable
         public void SetStatusText(string status) => LastStatus = status;
         public void ShowLateActionStatus(string status) { }
         public void OnCatalogChanged(string? removedPath) { }
-        public void UpdateSessionPath(string currentPath) { }
+        public Func<Exception?>? OnUpdateSessionPath { get; set; }
+        public void UpdateSessionPath(string currentPath) { if (OnUpdateSessionPath?.Invoke() is { } ex) throw ex; }
         public Action? OnNavigationStateChanged { get; set; }
         public void NotifyNavigationStateChanged() => OnNavigationStateChanged?.Invoke();
 

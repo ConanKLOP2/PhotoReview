@@ -475,8 +475,6 @@ public sealed class FileActionService
         // RV-C03: true only while this Copy may have created its destination (raised inside the delegate right before the
         // create-new copy; a TryCopyNew that found the destination taken touched nothing and resets it).
         var copyDestinationIsOurs = false;
-        // Same for a Move: the preflight proved the destination absent, so a shorter file there after a failed Move is a partial one.
-        var moveDestinationIsOurs = false;
 
         try
         {
@@ -556,7 +554,6 @@ public sealed class FileActionService
                 }
                 else
                 {
-                    moveDestinationIsOurs = true;
                     if (_moveOverride is not null)
                     {
                         await _moveOverride(source, destinationPath).ConfigureAwait(false);
@@ -659,8 +656,6 @@ public sealed class FileActionService
             // Conflict and a retry would refuse "destination exists".
             if (copyDestinationIsOurs && destinationPath is not null)
                 RemovePartialCopy(destinationPath, sourceSize);
-            else if (moveDestinationIsOurs && destinationPath is not null && request.Operation == FileOperationType.Move)
-                PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destinationPath, sourceSize, request.Source, requireSourceExists: true);
 
             string? journalError = null;
             var mutationCompleted = tx?.MutationCompleted ?? false;

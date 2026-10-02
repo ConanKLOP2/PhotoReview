@@ -473,25 +473,25 @@ public sealed class RecoveryRetryServiceTests
     }
 
     [Fact]
-    public async Task RetryMove_FailsLeavingPartialDestination_RemovesItAndKeepsSource()
+    public async Task RetryMove_FailsBecauseForeignFileAppearedAtDestination_NeverDeletesTheForeignFile()
     {
         var source = @"C:\photos\a.jpg";
         var dest = @"C:\photos\sub\a.jpg";
-        _fs.WriteAllTextAtomic(source, "12345");
+        _fs.WriteAllTextAtomic(source, "original larger photo");
         var stat = _fs.GetFileStat(source)!;
         var failed = new JournalEntry("op-move-partial", FileOperationType.Move, JournalState.Failed,
             source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
         _journal.Append(failed);
         _fs.MoveHook = (_, to) =>
         {
-            _fs.AddFile(to, "12");
-            return new IOException("simulated disk full during move");
+            _fs.AddFile(to, "foreign");
+            return new IOException("destination already exists");
         };
 
         var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
         Assert.True(_fs.FileExists(source));
-        Assert.False(_fs.FileExists(dest));
+        Assert.Equal("foreign", _fs.ReadAllText(dest));
     }
 }
