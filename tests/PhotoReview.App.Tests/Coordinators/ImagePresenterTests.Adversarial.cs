@@ -205,7 +205,7 @@ public sealed partial class ImagePresenterTests
         var staleToken = _clock.NextNavigation();
         _clock.NextNavigation();
 
-        await presenter.RemoveMissingCatalogItemAsync(f1, 0, staleToken);
+        await presenter.RemoveMissingCatalogItemAsync(f1, staleToken);
 
         Assert.Equal([f1, f2], _catalog.Paths);
     }

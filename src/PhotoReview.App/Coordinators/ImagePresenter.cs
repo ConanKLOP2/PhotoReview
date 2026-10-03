@@ -301,7 +301,7 @@ public sealed class ImagePresenter
             if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
             if (initialOutcome == StatOutcome.Missing)
             {
-                await RemoveMissingCatalogItemAsync(path, index, token);
+                await RemoveMissingCatalogItemAsync(path, token);
             }
             else
             {
@@ -661,7 +661,7 @@ public sealed class ImagePresenter
             }
 
             if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file token={token} path={path}");
-            await RemoveMissingCatalogItemAsync(path, index, token);
+            await RemoveMissingCatalogItemAsync(path, token);
         }
         catch (Exception ex) when (_clock.IsNavigationCurrent(token))
         {
@@ -713,7 +713,7 @@ public sealed class ImagePresenter
     /// <summary>
     /// Xóa tệp không tồn tại khỏi danh mục và tự động chuyển đến ảnh kế tiếp.
     /// </summary>
-    public async Task RemoveMissingCatalogItemAsync(string path, int index, long token)
+    public async Task RemoveMissingCatalogItemAsync(string path, long token)
     {
         // R2-F-07: iterative. Each missing file used to call PresentAsync, which found the next one missing and
         // recursed; every call completes synchronously, so N consecutive missing files (an ejected card or a dropped
