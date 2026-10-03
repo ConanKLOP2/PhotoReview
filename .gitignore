@@ -393,3 +393,5 @@ FodyWeavers.xsd
 # Camera RAW test corpus (fetched by tools/fetch-raw-samples.ps1, CC0 samples)
 tests/Fixtures/raw-corpus/
 
+# Stryker.NET mutation-testing output (see docs/MUTATION-TESTING.md)
+StrykerOutput/

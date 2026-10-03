@@ -5,6 +5,7 @@
     "thresholds": { "high": 80, "low": 60, "break": 0 },
     "ignore-methods": ["*Log.*", "*Logger.*", "ILog.*", "*.Dispose", "*.ToString"],
     "ignore-mutations": ["string", "regex"],
-    "mutation-level": "Basic"
+    "mutation-level": "Basic",
+    "configuration": "Release"
   }
 }
