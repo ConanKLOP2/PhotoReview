@@ -14,7 +14,7 @@ namespace PhotoReview.App.Tests.Coordinators;
 /// next navigation. The loader is driven directly; decodes are blocked on gates the test releases (no timing).
 /// </summary>
 [Trait("Category", "HotPath")]
-public sealed class ZoomDetailLoaderGapTests : IDisposable
+public sealed partial class ZoomDetailLoaderGapTests : IDisposable
 {
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "PhotoReview_ZoomGap_" + Guid.NewGuid().ToString("N"));
     private readonly GenerationClock _clock = new();
