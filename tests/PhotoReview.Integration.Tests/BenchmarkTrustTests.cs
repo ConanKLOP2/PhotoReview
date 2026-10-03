@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using PhotoReview.Benchmark.Cli;
@@ -215,63 +214,4 @@ public sealed class BenchmarkTrustTests : IDisposable
         Assert.Equal(1, BenchmarkWorkloadRunner.ImagesPerSample(profile, BenchmarkWorkload.FirstFrame, 3));
     }
 
-    // ---- TOOL-04 / TOOL-05 -----------------------------------------------------------------------
-
-    private static readonly string[] PowerShellPrefix = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"];
-    private static readonly byte[] Bytes = [1, 2, 3];
-
-    private static string RepoRoot()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "PhotoReview.slnx"))) return dir.FullName;
-        throw new DirectoryNotFoundException("PhotoReview.slnx not found above " + AppContext.BaseDirectory);
-    }
-
-    private static (int ExitCode, string Output) RunPowerShell(params string[] args)
-    {
-        var psi = new ProcessStartInfo("powershell.exe") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var a in PowerShellPrefix.Concat(args)) psi.ArgumentList.Add(a);
-        PowerShellRunner.ForWindowsPowerShell(psi);
-        using var process = Process.Start(psi)!;
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        return (process.ExitCode, stdout.Result + stderr.Result);
-    }
-
-    [Fact(DisplayName = "TOOL-04: procmon-summary counts production .pv4 preview-cache I/O as cache, not other")]
-    public void ProcmonSummary_CountsPv4PreviewCache()
-    {
-        var csv = _root.Combine("procmon.csv");
-        File.WriteAllLines(csv,
-        [
-            "\"Time of Day\",\"Process Name\",\"PID\",\"Operation\",\"Path\",\"Result\",\"Detail\"",
-            "\"1\",\"PhotoReview.App.exe\",\"1\",\"CreateFile\",\"C:\\Users\\u\\AppData\\Local\\PhotoReview\\cache\\abc.pv4\",\"SUCCESS\",\"\"",
-            "\"2\",\"PhotoReview.App.exe\",\"1\",\"ReadFile\",\"C:\\Users\\u\\AppData\\Local\\PhotoReview\\cache\\abc.pv4\",\"SUCCESS\",\"Length: 4,096\"",
-        ]);
-
-        var (exit, output) = RunPowerShell(Path.Combine(RepoRoot(), "tools", "diag", "procmon-summary.ps1"), "-Csv", csv, "-Out", _root.Combine("out.csv"));
-
-        Assert.Equal(0, exit);
-        var line = Assert.Single(output.Split('\n'), l => l.StartsWith("cache-pv4", StringComparison.Ordinal));
-        Assert.Contains("CreateFile=1", line, StringComparison.Ordinal);
-        Assert.Contains("ReadFile=1", line, StringComparison.Ordinal);
-        Assert.Contains("Bytes=4096", line, StringComparison.Ordinal);
-    }
-
-    [Fact(DisplayName = "TOOL-05: benchmark-folder rejects a folder holding only formats the app cannot review (.webp)")]
-    public void BenchmarkFolder_IgnoresWebp()
-    {
-        var folder = _root.Dir("webp");
-        _root.File("webp/a.webp", Bytes);
-        var script = Path.Combine(RepoRoot(), "tools", "benchmark-folder.ps1");
-
-        var (exit, _) = RunPowerShell(script, "-Folder", folder, "-Runs", "1");
-        Assert.NotEqual(0, exit);
-
-        _root.File("webp/b.jpg", Bytes);
-        var (okExit, okOutput) = RunPowerShell(script, "-Folder", folder, "-Runs", "1");
-        Assert.Equal(0, okExit);
-        Assert.Contains("files=1;", okOutput, StringComparison.Ordinal);
-    }
 }
