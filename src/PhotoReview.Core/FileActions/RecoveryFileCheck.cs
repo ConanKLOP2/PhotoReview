@@ -195,9 +195,6 @@ public sealed class RecoveryFileCheck
         return RecoveryVerdict.Unknown;
     }
 
-    public IReadOnlyList<RecoveryGroupMemberCheck> CheckGroupMembers(JournalEntry entry) =>
-        Check(entry).GroupMembers ?? [];
-
     internal static RecoveryVerdict Decide(JournalEntry entry, RecoveryPathCheck source, RecoveryPathCheck? destination)
     {
         var s = source.Status;

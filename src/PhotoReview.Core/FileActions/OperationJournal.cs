@@ -281,7 +281,7 @@ public sealed class OperationJournal
         lock (_gate)
         {
             if (!_fileSystem.FileExists(_path)) return [];
-            using var stream = _fileSystem.OpenReadShared(_path, 64 * 1024);
+            using var stream = _fileSystem.OpenReadShared(_path);
             if (stream.Length >= FullScanThresholdBytes)
                 return ReadCommittedMovesReverse(stream);
         }
@@ -426,7 +426,7 @@ public sealed class OperationJournal
         lock (_gate)
         {
             if (!_fileSystem.FileExists(_path)) return;
-            using var stream = _fileSystem.OpenReadShared(_path, 64 * 1024);
+            using var stream = _fileSystem.OpenReadShared(_path);
             using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             while (reader.ReadLine() is { } line)
             {
@@ -713,7 +713,7 @@ public sealed class OperationJournal
             if (!_fileSystem.FileExists(_path)) return new JournalCompactionResult(JournalCompactionOutcome.BelowThreshold, 0, 0);
 
             byte[] snapshot;
-            using (var stream = _fileSystem.OpenReadShared(_path, 64 * 1024))
+            using (var stream = _fileSystem.OpenReadShared(_path))
                 snapshot = ReadToEnd(stream);
             var snapshotLength = snapshot.AsSpan().LastIndexOf((byte)'\n') + 1; // a partial last line belongs to the delta
             if (snapshotLength < CompactionThresholdBytes)

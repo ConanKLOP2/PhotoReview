@@ -24,7 +24,4 @@ public sealed record CaptureGroupActionResult(
     bool JournalPersisted = true,
     string? JournalError = null,
     bool PermanentlyDeleted = false,
-    IReadOnlyList<string>? SkippedMissing = null)
-{
-    public bool HasCompletedMembers => Members.Any(member => member.Completed);
-}
+    IReadOnlyList<string>? SkippedMissing = null);
