@@ -418,7 +418,25 @@ public sealed class RawDecoderMutationGapTests
         Assert.Empty(full.Lengths);
     }
 
-    // ---- next-best preview selection ---------------------------------------------------------------------------------------
+    [Fact]
+    public void Decode_OrfThumbnailUndecodableThenFullDecodeOfAVirtualFile_DoesNotCountTheDiscardedThumbnailBytes()
+    {
+        var fallback = new StubFallback(() => new byte[20]);
+        var inner = new ScriptedDecoder(length => length switch
+        {
+            40 => throw new NotSupportedException("unsupported"),
+            20 => throw new InvalidDataException("thumb-undecodable"),
+            _ => new FakeImage(1, 1),
+        });
+        var full = new ScriptedDecoder(_ => new FakeImage(6000, 4000));
+
+        var decoded = NewDecoder(OrfInfo(), inner, fallback: fallback, noPreview: full).Decode(Request());
+
+        Assert.Equal(FileSize + 40, BytesRead(decoded)); // the header and the failed preview; the thumbnail that was thrown away is not counted
+    }
+
+    // ---- next-best preview selection ----
+
 
     [Fact]
     public void Decode_MoreThanFourPreviewsAllTheFirstFourFail_OnlyFourAreTriedBeforeGivingUp()
@@ -498,6 +516,16 @@ public sealed class RawDecoderMutationGapTests
     public void Decode_PreviewRangeRunsPastTheEndOfTheFile_FailsWithTheOutsideTheFileError()
     {
         var info = DngInfo(6000, 4000, Preview(0, FileSize - 6, 40, 1200, 900));
+
+        var thrown = Assert.Throws<EndOfStreamException>(() => NewDecoder(info, Always(1200, 900)).Decode(Request()));
+
+        Assert.Contains("outside", thrown.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Decode_PreviewWithANegativeOffset_FailsWithTheOutsideTheFileError()
+    {
+        var info = DngInfo(6000, 4000, Preview(0, -1, 40, 1200, 900));
 
         var thrown = Assert.Throws<EndOfStreamException>(() => NewDecoder(info, Always(1200, 900)).Decode(Request()));
 
