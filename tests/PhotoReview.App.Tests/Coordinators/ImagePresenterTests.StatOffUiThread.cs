@@ -60,7 +60,6 @@ public sealed partial class ImagePresenterTests
         public string ReadAllText(string path) => inner.ReadAllText(path);
         public IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
-        public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") => inner.EnumerateFilesWithStat(directory, pattern);
         public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
             inner.EnumerateFilesWithStat(directory, include, onSkipped);
         public bool TryProbeReadable(string path, out string? failure) => inner.TryProbeReadable(path, out failure);

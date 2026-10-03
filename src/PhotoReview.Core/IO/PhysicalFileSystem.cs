@@ -188,20 +188,6 @@ public sealed class PhysicalFileSystem : IFileSystem
     }
 
     /// <summary>
-    /// DirectoryInfo.EnumerateFiles() returns FileInfo already populated with
-    /// Length/LastWriteTimeUtc from the same FindFirstFile/FindNextFile directory entry used to
-    /// list the file, so a folder scan doesn't need one extra GetFileStat() syscall per file.
-    /// </summary>
-    public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*")
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
-        foreach (var info in new DirectoryInfo(directory).EnumerateFiles(pattern ?? "*"))
-        {
-            yield return (info.FullName, new FileStat(info.Length, info.LastWriteTimeUtc));
-        }
-    }
-
-    /// <summary>
     /// ADR 0007 section 3: no silent <c>IgnoreInaccessible</c>. Each included file is probed with
     /// <see cref="TryProbeReadable"/>; one that cannot be opened, or an error in the middle of the
     /// directory listing, is reported through <paramref name="onSkipped"/> and skipped.

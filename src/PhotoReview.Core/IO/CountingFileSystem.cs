@@ -29,7 +29,6 @@ public sealed class CountingFileSystem(IFileSystem inner, ReviewMetrics metrics)
     public string ReadAllText(string path) => _inner.ReadAllText(path);
     public IEnumerable<string> ReadLines(string path) => _inner.ReadLines(path);
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => _inner.EnumerateFiles(directory, pattern);
-    public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") => _inner.EnumerateFilesWithStat(directory, pattern);
     public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
         _inner.EnumerateFilesWithStat(directory, include, onSkipped);
     public bool TryProbeReadable(string path, out string? failure) => _inner.TryProbeReadable(path, out failure);
