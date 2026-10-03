@@ -101,7 +101,7 @@ public sealed class TurboJpegTests : IClassFixture<OrientationFixture>, IDisposa
         // Unconditional: with the old "if the fixture happens to carry an ICC profile" guards this test passed vacuously
         // whenever the encoder wrote none.
         Assert.True(File.Exists(generated));
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(File.ReadAllBytes(generated)), "the ICC fixture must actually carry an ICC profile");
+        Assert.True(JpegIccProbe.HasIcc(File.ReadAllBytes(generated)), "the ICC fixture must actually carry an ICC profile");
         Assert.Throws<NotSupportedException>(() => _turboDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0)));
     }
 }

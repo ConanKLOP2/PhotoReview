@@ -604,12 +604,6 @@ public sealed class TurboJpegDecoder : IImageDecoder
         return false;
     }
 
-    public static bool HasEmbeddedIccProfile(ReadOnlySpan<byte> jpeg)
-    {
-        ScanHeader(jpeg, wantIcc: true, wantExif: false, out bool hasIcc, out _);
-        return hasIcc;
-    }
-
     public static int ReadExifOrientation(ReadOnlySpan<byte> jpeg)
     {
         ScanHeader(jpeg, wantIcc: false, wantExif: true, out _, out var exifTiff);
@@ -619,8 +613,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// <summary>
     /// IMG-07: one marker walk that yields both ICC presence (APP2 "ICC_PROFILE\0") and the first Exif-headed
     /// APP1's TIFF span, so <see cref="Decode"/> never re-walks the same header bytes per consumer. Each want
-    /// flag is independently optional so a standalone caller (<see cref="HasEmbeddedIccProfile"/>,
-    /// <see cref="ReadExifOrientation"/>) still stops as soon as its own answer is known, exactly as the
+    /// flag is independently optional so a standalone caller (<see cref="ReadExifOrientation"/>) still stops as soon as its own answer is known, exactly as the
     /// single-purpose walks did before this was unified.
     /// </summary>
     /// <param name="exifTiff">

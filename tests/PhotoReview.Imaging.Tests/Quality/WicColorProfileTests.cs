@@ -30,7 +30,7 @@ public sealed class WicColorProfileTests : IDisposable
         var path = FixtureGenerator.GenerateJpegWithIcc(
             Path.Combine(_tempDir, "p3.jpg"), 128, 96);
 
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(File.ReadAllBytes(path)));
+        Assert.True(JpegIccProbe.HasIcc(File.ReadAllBytes(path)));
     }
 
     [Theory]

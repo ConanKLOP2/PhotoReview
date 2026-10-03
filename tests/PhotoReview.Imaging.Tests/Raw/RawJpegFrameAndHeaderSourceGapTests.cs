@@ -4,7 +4,7 @@ using Xunit;
 namespace PhotoReview.Imaging.Tests.Raw;
 
 /// <summary>
-/// Gap tests for <see cref="PreviewSelector.TryExtractJpegDimensions"/> on hostile frame headers and for
+/// Gap tests for <see cref="PreviewSelector.TryReadJpegFrame"/> on hostile frame headers and for
 /// <see cref="SourceRawHeaderSource"/> multi-block reads and a stream shorter than its declared length.
 /// </summary>
 public sealed class RawJpegFrameAndHeaderSourceGapTests
@@ -15,13 +15,13 @@ public sealed class RawJpegFrameAndHeaderSourceGapTests
     private static readonly byte[] Frame640x480 = [8, 0x01, 0xE0, 0x02, 0x80, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1];
 
     private static bool TryDims(byte[] jpeg, out int width, out int height) =>
-        PreviewSelector.TryExtractJpegDimensions(jpeg, out width, out height, out _);
+        PreviewSelector.TryReadJpegFrame(new InMemoryRawHeaderSource(jpeg), 0, jpeg.Length, out width, out height, out _);
 
     [Theory]
     [InlineData((byte)0xC0)]
     [InlineData((byte)0xC1)]
     [InlineData((byte)0xC2)]
-    public void TryExtractJpegDimensions_LossySofFrame_ReportsTheDimensions_Control(byte marker)
+    public void TryReadJpegFrame_LossySofFrame_ReportsTheDimensions_Control(byte marker)
     {
         byte[] jpeg = [0xFF, 0xD8, .. Sof(marker, 2 + Frame640x480.Length, Frame640x480), 0xFF, 0xD9];
 
@@ -35,7 +35,7 @@ public sealed class RawJpegFrameAndHeaderSourceGapTests
     [InlineData((byte)0xC9)] // arithmetic sequential
     [InlineData((byte)0xCA)] // arithmetic progressive
     [InlineData((byte)0xCB)] // arithmetic lossless
-    public void TryExtractJpegDimensions_SofFrameTypeThatIsNotBaselineOrHuffmanLossy_ReturnsFalse(byte marker)
+    public void TryReadJpegFrame_SofFrameTypeThatIsNotBaselineOrHuffmanLossy_ReturnsFalse(byte marker)
     {
         byte[] jpeg = [0xFF, 0xD8, .. Sof(marker, 2 + Frame640x480.Length, Frame640x480), 0xFF, 0xD9];
 
@@ -44,7 +44,7 @@ public sealed class RawJpegFrameAndHeaderSourceGapTests
     }
 
     [Fact]
-    public void TryExtractJpegDimensions_SofSegmentRunsPastTheBuffer_ReturnsFalseWithoutThrowing()
+    public void TryReadJpegFrame_SofSegmentRunsPastTheBuffer_ReturnsFalseWithoutThrowing()
     {
         // Declares a 19-byte segment but the buffer ends after the first 8 payload bytes.
         byte[] jpeg = [0xFF, 0xD8, .. Sof(0xC0, 2 + Frame640x480.Length, Frame640x480[..8])];
@@ -54,7 +54,7 @@ public sealed class RawJpegFrameAndHeaderSourceGapTests
     }
 
     [Fact]
-    public void TryExtractJpegDimensions_SofSegmentLengthFarBeyondTheBuffer_ReturnsFalse()
+    public void TryReadJpegFrame_SofSegmentLengthFarBeyondTheBuffer_ReturnsFalse()
     {
         byte[] jpeg = [0xFF, 0xD8, .. Sof(0xC0, 0xFFFF, Frame640x480)];
 
@@ -62,7 +62,7 @@ public sealed class RawJpegFrameAndHeaderSourceGapTests
     }
 
     [Fact]
-    public void TryExtractJpegDimensions_SofWithTooSmallPayload_DoesNotReadTheDimensionsFromTheFollowingSegment()
+    public void TryReadJpegFrame_SofWithTooSmallPayload_DoesNotReadTheDimensionsFromTheFollowingSegment()
     {
         // The SOF says it has a 2-byte payload; the 4 bytes after it belong to the next segment (0x01E0 / 0x0280 look like a size).
         byte[] jpeg = [0xFF, 0xD8, .. Sof(0xC0, 4, 8, 0x01), 0x01, 0xE0, 0x02, 0x80, 0xFF, 0xD9];
@@ -75,7 +75,7 @@ public sealed class RawJpegFrameAndHeaderSourceGapTests
     [InlineData(new byte[] { 0xFF, 0xD8 })]
     [InlineData(new byte[] { 0xFF, 0xD8, 0xFF })]
     [InlineData(new byte[] { 0xFF, 0xD8, 0xFF, 0xC0, 0x00 })]
-    public void TryExtractJpegDimensions_BufferEndsInsideTheFirstSegmentHeader_ReturnsFalse(byte[] jpeg)
+    public void TryReadJpegFrame_BufferEndsInsideTheFirstSegmentHeader_ReturnsFalse(byte[] jpeg)
     {
         Assert.False(TryDims(jpeg, out _, out _));
     }

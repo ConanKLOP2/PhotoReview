@@ -21,7 +21,7 @@ public sealed class FallbackSourceBytesTests : IDisposable
     {
         var path = FixtureGenerator.GenerateJpegWithIcc(Path.Combine(_root.Path, "icc.jpg"), 64, 48);
         var fileBytes = File.ReadAllBytes(path);
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(fileBytes)); // precondition: TurboJpeg will refuse it
+        Assert.True(JpegIccProbe.HasIcc(fileBytes)); // precondition: TurboJpeg will refuse it
         var fallback = new RecordingDecoder(new WpfBitmapImageDecoder());
         var decoder = new FallbackImageDecoder(new TurboJpegDecoder(), DecoderBackend.TurboJpeg, fallback, DecoderBackend.Wpf);
 

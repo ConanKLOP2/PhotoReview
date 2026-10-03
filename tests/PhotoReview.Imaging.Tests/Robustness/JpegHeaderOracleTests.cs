@@ -84,7 +84,7 @@ public sealed class JpegHeaderOracleTests
             var expected = Oracle(jpeg);
             var context = $"iteration {i}: {Convert.ToHexString(jpeg)}";
 
-            Assert.True(expected.HasIcc == TurboJpegDecoder.HasEmbeddedIccProfile(jpeg), "ICC mismatch, " + context);
+            Assert.True(expected.HasIcc == JpegIccProbe.HasIcc(jpeg), "ICC mismatch, " + context);
 
             var found = ExifParser.FindExifTiffBlock(jpeg);
             if (expected.ExifTiff is null) Assert.True(found.IsEmpty, "ExifParser found a block the oracle did not, " + context);
@@ -113,7 +113,7 @@ public sealed class JpegHeaderOracleTests
         foreach (var jpeg in new[] { afterEoi, afterStuffed })
         {
             Assert.Equal(1, TurboJpegDecoder.ReadExifOrientation(jpeg));
-            Assert.False(TurboJpegDecoder.HasEmbeddedIccProfile(jpeg));
+            Assert.False(JpegIccProbe.HasIcc(jpeg));
             Assert.True(ExifParser.FindExifTiffBlock(jpeg).IsEmpty);
         }
     }

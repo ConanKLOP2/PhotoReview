@@ -91,7 +91,7 @@ public sealed class DecoderErrorLocalizationTests : IDisposable
     public void IccJpeg_IsLocalizedAndFallbackStillTriggers()
     {
         var path = FixtureGenerator.GenerateJpegWithIcc(_root.Combine("icc.jpg"), 64, 48);
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(File.ReadAllBytes(path)));
+        Assert.True(JpegIccProbe.HasIcc(File.ReadAllBytes(path)));
 
         var ex = Assert.Throws<NotSupportedException>(() => _turbo.Decode(new DecodeRequest(path, TargetWidth: 0)));
 

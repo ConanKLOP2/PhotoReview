@@ -39,7 +39,7 @@ public sealed class ParserMutationFuzzTests
 
             var summary = ExifParser.TryParseJpeg(jpeg);
             var orientation = TurboJpegDecoder.ReadExifOrientation(jpeg);
-            _ = TurboJpegDecoder.HasEmbeddedIccProfile(jpeg);
+            _ = JpegIccProbe.HasIcc(jpeg);
 
             var elapsed = Stopwatch.GetElapsedTime(started);
             if (elapsed > worst) worst = elapsed;

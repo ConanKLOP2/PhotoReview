@@ -20,7 +20,7 @@ public sealed class JpegSegmentWalkerEquivalenceTests
         for (var i = 0; i < 20_000; i++)
         {
             var jpeg = BuildRandomJpeg(rng);
-            Assert.Equal(OldHasIcc(jpeg), TurboJpegDecoder.HasEmbeddedIccProfile(jpeg));
+            Assert.Equal(OldHasIcc(jpeg), JpegIccProbe.HasIcc(jpeg));
             Assert.Equal(OldOrientation(jpeg), TurboJpegDecoder.ReadExifOrientation(jpeg));
             if (OldHasIcc(jpeg)) iccHits++;
             if (OldOrientation(jpeg) != 1) exifHits++;
@@ -37,8 +37,8 @@ public sealed class JpegSegmentWalkerEquivalenceTests
         byte[] beforeSos = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0, 0, .. Segment(0xE2, IccTag), 0xFF, 0xDA, 0x00, 0x02];
         byte[] afterSos = [0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x02, .. Segment(0xE2, IccTag)];
 
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(beforeSos));
-        Assert.False(TurboJpegDecoder.HasEmbeddedIccProfile(afterSos));
+        Assert.True(JpegIccProbe.HasIcc(beforeSos));
+        Assert.False(JpegIccProbe.HasIcc(afterSos));
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public sealed class JpegSegmentWalkerEquivalenceTests
     {
         byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0, 0, 0xFF, 0xFF, .. Segment(0xE2, IccTag), 0xFF, 0xDA, 0x00, 0x02];
 
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(jpeg));
+        Assert.True(JpegIccProbe.HasIcc(jpeg));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class JpegSegmentWalkerEquivalenceTests
         byte[] icc = [0xFF, 0xD8, 0xFF, 0x01, .. Segment(0xE2, IccTag), 0xFF, 0xDA, 0x00, 0x02];
         byte[] exif = [0xFF, 0xD8, 0xFF, 0x01, 0xFF, 0x01, .. Segment(0xE1, ExifPayload(3)), 0xFF, 0xDA, 0x00, 0x02];
 
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(icc));
+        Assert.True(JpegIccProbe.HasIcc(icc));
         Assert.Equal(3, TurboJpegDecoder.ReadExifOrientation(exif));
     }
 
@@ -73,14 +73,14 @@ public sealed class JpegSegmentWalkerEquivalenceTests
         byte[] jpeg = [0xFF, 0xD8, .. Segment(0xE1, ExifPayload(8)), .. Segment(0xE2, IccTag), 0xFF, 0xDA, 0x00, 0x02];
 
         Assert.Equal(8, TurboJpegDecoder.ReadExifOrientation(jpeg));
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(jpeg));
+        Assert.True(JpegIccProbe.HasIcc(jpeg));
     }
 
     [Fact]
     public void Walker_TruncatedFillOrStuffedByte_DoesNotThrowOrMatch()
     {
         Assert.Equal(1, TurboJpegDecoder.ReadExifOrientation([0xFF, 0xD8, 0xFF, 0xFF, 0xFF]));
-        Assert.False(TurboJpegDecoder.HasEmbeddedIccProfile([0xFF, 0xD8, 0xFF, 0x00, 0x00, 0x00]));
+        Assert.False(JpegIccProbe.HasIcc([0xFF, 0xD8, 0xFF, 0x00, 0x00, 0x00]));
     }
 
     private static byte[] Segment(byte marker, byte[] payload)
