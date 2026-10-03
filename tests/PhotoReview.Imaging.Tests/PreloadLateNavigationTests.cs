@@ -16,9 +16,9 @@ public sealed class PreloadLateNavigationTests
     public async Task NavigationDuringAllCachedPass_IsServedByTheSameScheduler()
     {
         var target = new AllCachedTarget();
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 1, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance);
+            new FakeMemoryProbe(true));
         target.OnCheck = index =>
         {
             // Re-entrant on the scheduler's own pass: the version is bumped after the pass read it.

@@ -52,9 +52,9 @@ public sealed class PreloadRequeueTests
     }
 
     private static PreloadScheduler Create(GatedTarget target) =>
-        new(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        new(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance);
+            new FakeMemoryProbe(true));
 
     /// <summary>File-free preview cache: one index blocks inside PreloadAsync, one can fail with an IOException.</summary>
     private sealed class GatedTarget : IPreloadTarget

@@ -87,7 +87,7 @@ public class CompositionRootTests
         Assert.NotNull(provider.GetRequiredService<ThumbnailCache>());
         Assert.NotNull(provider.GetRequiredService<PreviewStateContext>());
         Assert.NotNull(provider.GetRequiredService<PreviewImageService>());
-        Assert.NotNull(provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, Func<int>, PreloadScheduler>>());
+        Assert.NotNull(provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<int>, PreloadScheduler>>());
     }
 
     [Fact]
@@ -485,8 +485,8 @@ public class CompositionRootTests
         App.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        var factory = provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, Func<int>, PreloadScheduler>>();
-        var scheduler = factory(() => [new CatalogEntry("image1.jpg")], () => 1024L, () => 0);
+        var factory = provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<int>, PreloadScheduler>>();
+        var scheduler = factory(() => [new CatalogEntry("image1.jpg")], () => 0);
 
         Assert.NotNull(scheduler);
         var probeField = typeof(PreloadScheduler).GetField("_memoryProbe", BindingFlags.Instance | BindingFlags.NonPublic);

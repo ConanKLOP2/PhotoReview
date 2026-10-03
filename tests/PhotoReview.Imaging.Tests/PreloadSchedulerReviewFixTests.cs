@@ -175,10 +175,10 @@ public sealed class PreloadSchedulerReviewFixTests : IDisposable
 
     private static PreloadScheduler Create(ScriptedTarget target, Func<CatalogEntry[]> entries, int workers, PreloadWindow window,
         Func<int>? snapshotVersion = null, ILog? log = null) =>
-        new(target, new ReviewMetrics(), entries, () => 0,
+        new(target, new ReviewMetrics(), entries,
             // Negative threshold: never whole-folder, so exactly the window is preloaded.
             new PreloadOptions(WorkerCount: workers, FullFolderThresholdBytes: -1) { Window = window },
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log, snapshotVersion: snapshotVersion);
+            new FakeMemoryProbe(true), log, snapshotVersion: snapshotVersion);
 
     private sealed class RecordingLog : ILog
     {

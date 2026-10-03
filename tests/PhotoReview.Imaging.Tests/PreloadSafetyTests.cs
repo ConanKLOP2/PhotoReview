@@ -135,8 +135,8 @@ public sealed class PreloadSafetyTests : IDisposable
     }
 
     private PreloadScheduler Create(IPreloadTarget target, IMemoryProbe probe, int workerCount) =>
-        new(target, new ReviewMetrics(), () => _entries, () => 0,
-            new PreloadOptions(WorkerCount: workerCount), probe, ImmediateUiScheduler.Instance);
+        new(target, new ReviewMetrics(), () => _entries,
+            new PreloadOptions(WorkerCount: workerCount), probe);
 
     public void Dispose()
     {

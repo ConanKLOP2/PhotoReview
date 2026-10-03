@@ -27,7 +27,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     // hasHeadroom defaults to the real OS memory check (production behavior), exactly like
     // PreloadScheduler's own constructor -- tests inject a fixed answer so preload-warming
     // assertions don't depend on how much RAM the machine running them has free.
-    public BenchmarkImageExecutor(BenchmarkProfile profile, string[] files, long totalSourceBytes,
+    public BenchmarkImageExecutor(BenchmarkProfile profile, string[] files,
         Func<double, bool>? hasHeadroom = null)
     {
         _profile = profile;
@@ -40,15 +40,14 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         // PERF-01: the profile's NextWindow/PreviousWindow/FullFolder must reach the scheduler, otherwise every
         // named profile ran the same production window policy regardless of what it claims to measure.
         _preloadTarget = new WindowedPreloadTarget(_previewService, files, profile);
-        _preloadScheduler = new PreloadScheduler(_preloadTarget, _metrics, () => catalogEntries, () => totalSourceBytes,
+        _preloadScheduler = new PreloadScheduler(_preloadTarget, _metrics, () => catalogEntries,
             options: new PreloadOptions(
                 WorkerCount: profile.Workers,
                 MemoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,
                 ReserveBytes: profile.MemoryReserveBytes,
                 // A profile without FullFolder must never escalate to a whole-folder pass, however small the folder.
                 FullFolderThresholdBytes: profile.FullFolder ? _previewService.CapacityBytes : 0),
-            memoryProbe: hasHeadroom is null ? WindowsMemoryProbe.Instance : new DelegateMemoryProbe(hasHeadroom),
-            uiScheduler: ImmediateUiScheduler.Instance);
+            memoryProbe: hasHeadroom is null ? WindowsMemoryProbe.Instance : new DelegateMemoryProbe(hasHeadroom));
     }
 
     // FirstFrame profiles always decode files[0] regardless of iteration index, to

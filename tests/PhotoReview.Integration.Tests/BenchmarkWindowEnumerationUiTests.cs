@@ -11,7 +11,7 @@ namespace PhotoReview.Integration.Tests;
 /// R11 (full-code-review-2026-09-27): <see cref="BenchmarkWindow.RunAsync"/> used to enumerate/stat the folder
 /// synchronously, on the dialog's own dispatcher, before its first await -- so Cancel could not interrupt a slow
 /// scan and a folder error path never went through the window's normal run/cancel button lifecycle. It now scans
-/// on a background thread (see <c>EnumerateAndStat</c>) with the run's <c>CancellationTokenSource</c> created
+/// on a background thread (see <c>EnumerateImageFiles</c>) with the run's <c>CancellationTokenSource</c> created
 /// before the scan starts (not after), so Cancel/Close can interrupt it. These tests drive the real window through
 /// <see cref="StaTestHost"/> to check the status text and button lifecycle are unchanged for the error paths, and
 /// that Cancel clicked immediately after Run can actually interrupt an in-progress scan.

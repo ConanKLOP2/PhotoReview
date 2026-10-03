@@ -275,10 +275,9 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
-        var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_preloadFiles), () => 0L, long.MaxValue,
+        var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_preloadFiles), long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: hasHeadroom ?? (_ => true),
-            workerCountOverride: workerCount,
-            uiScheduler: ImmediateUiScheduler.Instance);
+            workerCountOverride: workerCount);
         return (metrics, service, scheduler);
     }
 
@@ -379,8 +378,8 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
-        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_singleFiles), () => 0L, long.MaxValue,
-            memoryLoadLimit: 1.0, hasHeadroom: _ => true, uiScheduler: ImmediateUiScheduler.Instance);
+        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_singleFiles), long.MaxValue,
+            memoryLoadLimit: 1.0, hasHeadroom: _ => true);
         await scheduler.PreloadAroundAsync(0);
         var warmedKey = service.GetCurrentCacheKey(_singleFiles[1]);
         Assert.True(scheduler.TryConsumePreloadedKey(warmedKey) && !scheduler.TryConsumePreloadedKey(warmedKey));
@@ -390,7 +389,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
     public async Task PreloadWithoutDispatcherContinuesBeyondFirstBatchAndLoadsAllFiles()
     {
         // Issue detected in D10: when no Dispatcher was present, Dispatcher.Yield() threw
-        // and stopped preload after the first batch of workers. ImmediateUiScheduler fixes this.
+        // and stopped preload after the first batch of workers. The scheduler no longer touches any UI scheduler.
         var batchFiles = Enumerable.Range(0, 6).Select(i =>
         {
             var path = Path.Combine(_root.Dir("preload-batch"), $"batch-{i}.png");
@@ -406,8 +405,8 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
 
         // 2 workers, 6 files -> requires multiple batch yields
         var options = new PreloadOptions(WorkerCount: 2, MemoryLoadLimit: 1.0);
-        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(batchFiles), () => 0L,
-            options: options, memoryProbe: new FakeMemoryProbe(true), uiScheduler: ImmediateUiScheduler.Instance);
+        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(batchFiles),
+            options: options, memoryProbe: new FakeMemoryProbe(true));
 
         await scheduler.PreloadAroundAsync(0);
 

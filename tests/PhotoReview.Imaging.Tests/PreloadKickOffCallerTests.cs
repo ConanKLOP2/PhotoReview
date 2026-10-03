@@ -19,7 +19,7 @@ public sealed class PreloadKickOffCallerTests
     public async Task WholeFolderCached_CallerThreadExaminesOnlyTheWindow()
     {
         var target = new AllCachedTarget();
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => ImageCount,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1L << 40), new FakeMemoryProbe(true));
 
         target.TrackCaller(Environment.CurrentManagedThreadId);
@@ -43,7 +43,7 @@ public sealed class PreloadKickOffCallerTests
     {
         var target = new AllCachedTarget();
         var window = new PreloadWindow(3, 1);
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => ImageCount,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1L << 40) { Window = window }, new FakeMemoryProbe(true));
 
         target.TrackCaller(Environment.CurrentManagedThreadId);
@@ -62,7 +62,7 @@ public sealed class PreloadKickOffCallerTests
         const int LocalImageCount = 50;
         var target = new AutoCacheTarget(LocalImageCount);
         var options = new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 0) { Window = new PreloadWindow(3, 1) };
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 0,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             options, new FakeMemoryProbe(true));
 
         await scheduler.PreloadAroundAsync(25).WaitAsync(TimeSpan.FromSeconds(10));

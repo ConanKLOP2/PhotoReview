@@ -19,9 +19,9 @@ public sealed class PreloadPrefetchTests
     {
         var target = new DiskAwareTarget(onDisk: i => i % 2 == 0);
         var prefetched = new ConcurrentBag<string>();
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance,
+            new FakeMemoryProbe(true),
             prefetchSourceBytes: (path, _) => { prefetched.Add(path); return Task.CompletedTask; });
 
         await scheduler.PreloadAroundAsync(0).WaitAsync(TimeSpan.FromSeconds(10));
@@ -36,9 +36,9 @@ public sealed class PreloadPrefetchTests
     {
         var target = new DiskAwareTarget(_ => false, ".cr3");
         var prefetched = new ConcurrentBag<string>();
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance,
+            new FakeMemoryProbe(true),
             prefetchSourceBytes: (path, _) => { prefetched.Add(path); return Task.CompletedTask; });
 
         await scheduler.PreloadAroundAsync(0).WaitAsync(TimeSpan.FromSeconds(10));

@@ -62,9 +62,9 @@ public sealed class PreloadEstimateCalibrationTests
     {
         var target = new InMemoryTarget(new DecodeBox(100, 100), previewBytes: null);
         var probe = new LoadProbe(currentLoad: 0.85); // above the 0.80 default, below the configured 0.95
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, MemoryLoadLimit: 0.95, FullFolderThresholdBytes: Budget),
-            probe, ImmediateUiScheduler.Instance);
+            probe);
 
         await scheduler.PreloadAroundAsync(0).WaitAsync(TimeSpan.FromSeconds(10));
 
@@ -131,9 +131,9 @@ public sealed class PreloadEstimateCalibrationTests
     }
 
     private static PreloadScheduler Create(InMemoryTarget target) =>
-        new(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        new(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: Budget),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance);
+            new FakeMemoryProbe(true));
 
     /// <summary>Preview cache fake with no files: keys come from catalog metadata, sizes are fixed.</summary>
     private sealed class InMemoryTarget : IPreloadTarget
