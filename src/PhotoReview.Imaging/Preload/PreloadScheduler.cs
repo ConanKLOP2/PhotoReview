@@ -102,15 +102,7 @@ public sealed class PreloadScheduler : IDisposable
         _snapshotVersion = snapshotVersion;
 
         // D10: precedence is the explicit option/parameter, then the diagnostic environment variable
-        var diagOverride = Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PRELOAD_WORKERS");
-        if (int.TryParse(diagOverride, out var parsedWorkers) && parsedWorkers >= 0 && parsedWorkers <= 16)
-        {
-            _workerCount = parsedWorkers;
-        }
-        else
-        {
-            _workerCount = _options.WorkerCount;
-        }
+        _workerCount = DiagOptionsWorkers() ?? _options.WorkerCount;
 
         _preloadSlots = new SemaphoreSlim(Math.Max(1, _workerCount), Math.Max(1, _workerCount));
         _preloadLifetimes.Add(_preloadCts);
@@ -147,9 +139,12 @@ public sealed class PreloadScheduler : IDisposable
 
     private static int? DiagOptionsWorkers()
     {
-        var diagOverride = Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PRELOAD_WORKERS");
-        return int.TryParse(diagOverride, out var parsed) && parsed >= 0 && parsed <= 16 ? parsed : null;
+        return ParseDiagWorkers(Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PRELOAD_WORKERS"));
     }
+
+    /// <summary>The diagnostic worker-count override: an integer in [0, 16], otherwise null (pure, so tests need no process environment).</summary>
+    internal static int? ParseDiagWorkers(string? value) =>
+        int.TryParse(value, out var parsed) && parsed >= 0 && parsed <= 16 ? parsed : null;
 
     /// <summary>Cancels in-flight preload work. The next <see cref="PreloadAroundAsync"/> starts a fresh lifetime.</summary>
     public void Cancel()
@@ -779,6 +774,9 @@ public sealed class PreloadScheduler : IDisposable
     /// <summary>Longest Dispose blocks its caller (the UI thread at window close) for workers that ignore cancellation, e.g. a decode already running.</summary>
     internal TimeSpan DisposeDrainTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
+    /// <summary>Test seam: the continuation that releases the slots/CTS after a Dispose that outlasted <see cref="DisposeDrainTimeout"/>; null when Dispose drained in time.</summary>
+    internal Task? LateDisposalForTests { get; private set; }
+
     public void Dispose()
     {
         Task[] lifetimeTasks;
@@ -804,7 +802,7 @@ public sealed class PreloadScheduler : IDisposable
                 // slots/CTS it will still release/observe; they are unreferenced afterwards and reclaimed by the GC.
                 _log.Warn("Preload scheduler did not drain in time; leaving in-flight decodes to finish on their own");
                 // The slots/CTS are still in use by those decodes: release them once the last lifetime task has finished.
-                _ = Task.WhenAll(lifetimeTasks).ContinueWith(_ =>
+                LateDisposalForTests = Task.WhenAll(lifetimeTasks).ContinueWith(_ =>
                 {
                     foreach (var lifetimeCtsSource in lifetimeCts) lifetimeCtsSource.Dispose();
                     _preloadSlots.Dispose();
