@@ -156,7 +156,7 @@ public sealed class TurboJpegHardeningTests : IDisposable
     [InlineData(20000L * 20000 * 4, 16L * Gb, 14L * Gb, false)]
     [InlineData(12000L * 9000 * 4, 0L, 0L, true)] // unknown total never refuses
     public void OutputHasHeadroom_FollowsTheRamBudget(long bufferLength, long total, long load, bool expected) =>
-        Assert.Equal(expected, TurboJpegDecoder.OutputHasHeadroom(bufferLength, total, load));
+        Assert.Equal(expected, MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load));
 
     /// <summary>
     /// 8x8 single-component progressive JPEG: one DC-first scan, one AC-first scan per coefficient 1..63, and

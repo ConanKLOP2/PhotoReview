@@ -40,15 +40,6 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// </summary>
     internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = MemoryHeadroom.ReadGcMemoryInfo;
 
-    /// <summary>Output buffers below this never consult the memory guard (no GC info query on the common, small decode).</summary>
-    internal const long GuardThresholdBytes = 128L * 1024 * 1024;
-
-    /// <summary>
-    /// Peak of an unscaled/scaled decode in units of the output buffer: the native BGRX scratch plus the WPF bitmap
-    /// BitmapSource.Create copies it into (the source bytes are already resident and counted in the memory load).
-    /// </summary>
-    internal const int OutputPeakFactor = 2;
-
     /// <summary>Most scans a progressive JPEG may have (libjpeg-turbo's TJPARAM_SCANLIMIT); real files have about 10.</summary>
     internal const int MaxProgressiveScans = 500;
 
@@ -440,7 +431,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// </summary>
     private void EnsureSourceFits(long length)
     {
-        if (length < GuardThresholdBytes) return;
+        if (length < MemoryHeadroom.GuardThresholdBytes) return;
         var (total, load) = MemoryInfo();
         if (MemoryHeadroom.HasHeadroom(length, total, load)) return;
         throw UserFacingError.Localized(
@@ -514,22 +505,19 @@ public sealed class TurboJpegDecoder : IImageDecoder
     }
 
     /// <summary>
-    /// Refuses a decode whose output (see <see cref="OutputPeakFactor"/>) cannot fit into the RAM the process has left, before
+    /// Refuses a decode whose output (see <see cref="MemoryHeadroom.OutputPeakFactor"/>) cannot fit into the RAM the process has left, before
     /// anything big is allocated. Derived from the machine's memory like LibRaw's guard, not from a fixed pixel cap, so a
     /// 100+ MP original that fits is still decoded.
     /// </summary>
     private void EnsureOutputFits(int width, int height, int bufferLength)
     {
-        if (bufferLength < GuardThresholdBytes) return;
+        if (bufferLength < MemoryHeadroom.GuardThresholdBytes) return;
         var (total, load) = MemoryInfo();
-        if (OutputHasHeadroom(bufferLength, total, load)) return;
+        if (MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load)) return;
         throw UserFacingError.Localized(
             new InvalidDataException($"TurboJPEG output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
             () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
     }
-
-    internal static bool OutputHasHeadroom(long bufferLength, long totalAvailableBytes, long memoryLoadBytes) =>
-        MemoryHeadroom.HasHeadroom(bufferLength * OutputPeakFactor, totalAvailableBytes, memoryLoadBytes);
 
     private static void ConfigureStrictDecoding(Native.SafeTurboJpegHandle decompressor)
     {

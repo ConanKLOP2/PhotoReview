@@ -187,7 +187,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     }
 
     /// <summary>Test seam: (total available, current load) of the memory the pre-decode headroom check compares against; the GC's reading by default.</summary>
-    internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = DecodeMemoryGuard.ReadGcMemoryInfo;
+    internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = MemoryHeadroom.ReadGcMemoryInfo;
 
     private WpfDecodedImage DecodeCore(DecodeRequest request, FullDecodeGate.Lease slot, CancellationToken cancellationToken)
     {
@@ -266,7 +266,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         var (total, load) = MemoryInfo();
         var family = DecodeMemoryGuard.Classify(raw.DecoderName, raw.Structure);
         var estimate = DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight, raw.RawWidth, raw.RawHeight, family);
-        if (!DecodeMemoryGuard.HasHeadroom(estimate, total, load))
+        if (!MemoryHeadroom.HasHeadroom(estimate, total, load))
             throw new InvalidOperationException("Not enough memory to decode this RAW image.");
     }
 

@@ -8,6 +8,22 @@ namespace PhotoReview.Imaging.Decoding;
 /// </summary>
 public static class MemoryHeadroom
 {
+    /// <summary>Output buffers below this never consult the memory guard (no GC info query on the common, small decode).</summary>
+    public const long GuardThresholdBytes = 128L * 1024 * 1024;
+
+    /// <summary>
+    /// Peak of a decode in units of the output buffer: the native BGRX scratch plus the WPF bitmap BitmapSource.Create copies it
+    /// into (the source bytes are already resident and counted in the memory load).
+    /// </summary>
+    public const int OutputPeakFactor = 2;
+
+    /// <summary>
+    /// True when a decode whose output buffer is <paramref name="bufferLength"/> bytes fits (peak = <see cref="OutputPeakFactor"/> x the buffer,
+    /// see <see cref="HasHeadroom"/>).
+    /// </summary>
+    public static bool OutputHasHeadroom(long bufferLength, long totalAvailableBytes, long memoryLoadBytes) =>
+        HasHeadroom(bufferLength * OutputPeakFactor, totalAvailableBytes, memoryLoadBytes);
+
     /// <summary>True when <paramref name="estimatedBytes"/> fits into <paramref name="totalAvailableBytes"/> minus <paramref name="memoryLoadBytes"/>. An unknown total (&lt;= 0) never refuses.</summary>
     public static bool HasHeadroom(long estimatedBytes, long totalAvailableBytes, long memoryLoadBytes)
     {
