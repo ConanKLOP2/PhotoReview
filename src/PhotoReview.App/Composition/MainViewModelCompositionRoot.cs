@@ -40,7 +40,7 @@ internal static class MainViewModelCompositionRoot
         var thumbs = sp.GetRequiredService<ThumbnailCache>();
         var natural = sp.GetRequiredService<INaturalComparer>();
         var explorerOrder = sp.GetRequiredService<IExplorerOrderProvider>();
-        var schedulerFactory = sp.GetRequiredService<System.Func<System.Func<CatalogEntry[]>, System.Func<long>, System.Func<int>, PreloadScheduler>>();
+        var schedulerFactory = sp.GetRequiredService<System.Func<System.Func<CatalogEntry[]>, System.Func<int>, PreloadScheduler>>();
         var viewport = sp.GetRequiredService<ViewportSizeSource>();
         var observer = sp.GetRequiredService<IPresentationObserver>();
 
@@ -51,17 +51,8 @@ internal static class MainViewModelCompositionRoot
         var preloadController = sp.GetService<IPreloadController>();
         if (preloadController is null)
         {
-            var sourceSizeTracker = new SourceSizeTracker(catalog, fs);
             var preloadScheduler = schedulerFactory(
-                () =>
-                {
-                    // R2-F-11: taken on the UI thread; the tracker then sums this snapshot on the preload thread
-                    // instead of enumerating the live catalog there.
-                    var snapshot = catalog.EntriesSnapshot();
-                    sourceSizeTracker.Observe(snapshot);
-                    return snapshot;
-                },
-                sourceSizeTracker.GetTotal,
+                () => catalog.EntriesSnapshot(),
                 () => catalog.StructuralVersion);
             preloadController = new PreloadControllerAdapter(() => preloadScheduler);
         }

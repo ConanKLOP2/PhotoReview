@@ -82,11 +82,11 @@ public sealed class ErrorHandlingReviewDecodingTests : IDisposable
     {
         var path = Path.Combine(_root.Path, "huge.jpg");
         using (var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
-            fs.SetLength(TurboJpegDecoder.GuardThresholdBytes + 1024);
+            fs.SetLength(MemoryHeadroom.GuardThresholdBytes + 1024);
         // Available memory SMALLER than the file: only the source-size guard can produce this rejection (the all-zero file would
         // otherwise fail later in the decode with a different NotSupportedException).
         var probed = 0;
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => { probed++; return (TurboJpegDecoder.GuardThresholdBytes / 2, 0); } };
+        var decoder = new TurboJpegDecoder { MemoryInfo = () => { probed++; return (MemoryHeadroom.GuardThresholdBytes / 2, 0); } };
 
         var ex = Assert.Throws<NotSupportedException>(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
 

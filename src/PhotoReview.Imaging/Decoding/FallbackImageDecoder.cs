@@ -16,25 +16,23 @@ public sealed class FallbackImageDecoder : IImageDecoder
     private readonly IImageDecoder _primary;
     private readonly DecoderBackend _primaryBackend;
     private readonly IImageDecoder _fallback;
-    private readonly DecoderBackend _fallbackBackend;
     private readonly ILog _log;
     private readonly ReviewMetrics? _metrics;
 
     public DecoderBackend PrimaryBackend => _primaryBackend;
-    public DecoderBackend FallbackBackend => _fallbackBackend;
+    /// <summary>The fallback is always WPF (the only caller, ImageDecoderFactory, never used another backend).</summary>
+    public const DecoderBackend FallbackBackend = DecoderBackend.Wpf;
 
     public FallbackImageDecoder(
         IImageDecoder primary,
         DecoderBackend primaryBackend,
         IImageDecoder fallback,
-        DecoderBackend fallbackBackend = DecoderBackend.Wpf,
         ILog? log = null,
         ReviewMetrics? metrics = null)
     {
         _primary = primary ?? throw new ArgumentNullException(nameof(primary));
         _primaryBackend = primaryBackend;
         _fallback = fallback ?? throw new ArgumentNullException(nameof(fallback));
-        _fallbackBackend = fallbackBackend;
         _log = log ?? NullLog.Instance;
         _metrics = metrics;
     }
@@ -50,7 +48,7 @@ public sealed class FallbackImageDecoder : IImageDecoder
         }
         catch (Exception ex) when (IsFallbackable(ex))
         {
-            _log.Warn($"Decoder {_primaryBackend} failed for '{request.Path}', falling back to {_fallbackBackend}: {ex.Message}");
+            _log.Warn($"Decoder {_primaryBackend} failed for '{request.Path}', falling back to {FallbackBackend}: {ex.Message}");
             _metrics?.RecordDecoderFallback(_primaryBackend);
 
             // The primary may already have read the whole file (TurboJpeg): decode that copy instead of re-reading it.
@@ -58,9 +56,9 @@ public sealed class FallbackImageDecoder : IImageDecoder
                 ? request with { Bytes = sourceBytes }
                 : request;
             var decoded = _fallback.Decode(fallbackRequest);
-            return decoded.ActualBackend == _fallbackBackend
+            return decoded.ActualBackend == FallbackBackend
                 ? decoded
-                : new DecodedImageWithBackend(decoded, _fallbackBackend);
+                : new DecodedImageWithBackend(decoded, FallbackBackend);
         }
     }
 
@@ -72,7 +70,7 @@ public sealed class FallbackImageDecoder : IImageDecoder
         }
         catch (Exception ex) when (IsFallbackable(ex))
         {
-            _log.Warn($"Decoder {_primaryBackend}.ReadInfo failed for '{path}', falling back to {_fallbackBackend}: {ex.Message}");
+            _log.Warn($"Decoder {_primaryBackend}.ReadInfo failed for '{path}', falling back to {FallbackBackend}: {ex.Message}");
             _metrics?.RecordDecoderFallback(_primaryBackend);
             return _fallback.ReadInfo(path);
         }

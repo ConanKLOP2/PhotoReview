@@ -27,9 +27,9 @@ public sealed class PreloadSlowLinkViewerPriorityTests
         metrics.RecordSourceRead(1, 5000);
 
         var target = new GatedTarget(activeViewerDecodes: 1);
-        using var scheduler = new PreloadScheduler(target, metrics, () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, metrics, () => target.Entries,
             new PreloadOptions(WorkerCount: 8, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance);
+            new FakeMemoryProbe(true));
 
         var lifetime = scheduler.PreloadAroundAsync(0);
         // The scheduler only starts a new candidate while running.Count < limit: with limit == 1 it
@@ -51,9 +51,9 @@ public sealed class PreloadSlowLinkViewerPriorityTests
     {
         var metrics = new ReviewMetrics(); // no samples: DecodeMillisecondsEwma stays 0 (not a slow link)
         var target = new GatedTarget(activeViewerDecodes: 1);
-        using var scheduler = new PreloadScheduler(target, metrics, () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, metrics, () => target.Entries,
             new PreloadOptions(WorkerCount: 8, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance);
+            new FakeMemoryProbe(true));
 
         var lifetime = scheduler.PreloadAroundAsync(0);
         await Wait.UntilAsync(() => target.MaxConcurrent >= 2, "at least 2 concurrent preload decodes");

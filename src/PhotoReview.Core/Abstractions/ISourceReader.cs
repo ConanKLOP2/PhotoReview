@@ -4,7 +4,7 @@ namespace PhotoReview.Core.Abstractions;
 /// <summary>
 /// Q-R29 option C-2: which lane a source-image byte read belongs to. Carried by the caller so a
 /// throttling decorator (perf-harness only, see <see cref="ISourceReader"/>) can tell a foreground
-/// read from a background one; the default (pass-through) <see cref="ISourceReader"/> implementation
+/// read from a preload one; the default (pass-through) <see cref="ISourceReader"/> implementation
 /// ignores it entirely.
 /// </summary>
 public enum SourceReadPriority
@@ -13,8 +13,6 @@ public enum SourceReadPriority
     Viewer,
     /// <summary>Whole-folder preload's own read-ahead: never user-blocking by itself.</summary>
     Preload,
-    /// <summary>Anything else that reads source bytes off the interactive path (e.g. compare/hash).</summary>
-    Background,
 }
 
 /// <summary>

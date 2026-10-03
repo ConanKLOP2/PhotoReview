@@ -30,7 +30,7 @@ public sealed class PreloadLifetimeTrackingTests
     {
         using var root = new TempRoot("PreloadLifetimes");
         var entries = Enumerable.Range(0, 8).Select(i => new CatalogEntry(root.File($"i{i}.jpg", 1, 2, 3))).ToArray();
-        using var scheduler = new PreloadScheduler(new AllCachedTarget(), new ReviewMetrics(), () => entries, () => 0,
+        using var scheduler = new PreloadScheduler(new AllCachedTarget(), new ReviewMetrics(), () => entries,
             new PreloadOptions(WorkerCount: 2), new AlwaysHeadroom());
 
         for (var i = 0; i < 1_000; i++)

@@ -30,23 +30,6 @@ public sealed class StructureOptimizeRulesTests
             $"IProgressiveExplorerOrderProvider references still exist:\n{string.Join("\n", violations)}");
     }
 
-    [Fact(DisplayName = "Rule ST02: SourceSizeTracker is the sole location for catalog size computation")]
-    public void SourceSizeTracker_IsSoleLocationForCatalogSizeComputation()
-    {
-        var trackerAssembly = typeof(PhotoReview.Core.Catalog.SourceSizeTracker).Assembly;
-        var trackerTypes = Types.InAssembly(trackerAssembly);
-        var sourceTrackerType = trackerTypes.That().HaveName("SourceSizeTracker");
-
-        var typesList = sourceTrackerType.GetTypes().ToList();
-        Assert.NotEmpty(typesList);
-        Assert.Single(typesList);
-
-        var tracker = typesList[0];
-        Assert.True(
-            tracker.GetMethods().Any(m => m.Name == "GetTotal"),
-            "SourceSizeTracker must have GetTotal() method for efficient size queries");
-    }
-
     [Fact(DisplayName = "Rule ST03: MainViewModelCompositionRoot is isolated in Composition namespace")]
     public void MainViewModelCompositionRoot_IsIsolatedInCompositionNamespace()
     {

@@ -40,15 +40,6 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// </summary>
     internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = MemoryHeadroom.ReadGcMemoryInfo;
 
-    /// <summary>Output buffers below this never consult the memory guard (no GC info query on the common, small decode).</summary>
-    internal const long GuardThresholdBytes = 128L * 1024 * 1024;
-
-    /// <summary>
-    /// Peak of an unscaled/scaled decode in units of the output buffer: the native BGRX scratch plus the WPF bitmap
-    /// BitmapSource.Create copies it into (the source bytes are already resident and counted in the memory load).
-    /// </summary>
-    internal const int OutputPeakFactor = 2;
-
     /// <summary>Most scans a progressive JPEG may have (libjpeg-turbo's TJPARAM_SCANLIMIT); real files have about 10.</summary>
     internal const int MaxProgressiveScans = 500;
 
@@ -440,7 +431,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// </summary>
     private void EnsureSourceFits(long length)
     {
-        if (length < GuardThresholdBytes) return;
+        if (length < MemoryHeadroom.GuardThresholdBytes) return;
         var (total, load) = MemoryInfo();
         if (MemoryHeadroom.HasHeadroom(length, total, load)) return;
         throw UserFacingError.Localized(
@@ -514,22 +505,19 @@ public sealed class TurboJpegDecoder : IImageDecoder
     }
 
     /// <summary>
-    /// Refuses a decode whose output (see <see cref="OutputPeakFactor"/>) cannot fit into the RAM the process has left, before
+    /// Refuses a decode whose output (see <see cref="MemoryHeadroom.OutputPeakFactor"/>) cannot fit into the RAM the process has left, before
     /// anything big is allocated. Derived from the machine's memory like LibRaw's guard, not from a fixed pixel cap, so a
     /// 100+ MP original that fits is still decoded.
     /// </summary>
     private void EnsureOutputFits(int width, int height, int bufferLength)
     {
-        if (bufferLength < GuardThresholdBytes) return;
+        if (bufferLength < MemoryHeadroom.GuardThresholdBytes) return;
         var (total, load) = MemoryInfo();
-        if (OutputHasHeadroom(bufferLength, total, load)) return;
+        if (MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load)) return;
         throw UserFacingError.Localized(
             new InvalidDataException($"TurboJPEG output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
             () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
     }
-
-    internal static bool OutputHasHeadroom(long bufferLength, long totalAvailableBytes, long memoryLoadBytes) =>
-        MemoryHeadroom.HasHeadroom(bufferLength * OutputPeakFactor, totalAvailableBytes, memoryLoadBytes);
 
     private static void ConfigureStrictDecoding(Native.SafeTurboJpegHandle decompressor)
     {
@@ -604,12 +592,6 @@ public sealed class TurboJpegDecoder : IImageDecoder
         return false;
     }
 
-    public static bool HasEmbeddedIccProfile(ReadOnlySpan<byte> jpeg)
-    {
-        ScanHeader(jpeg, wantIcc: true, wantExif: false, out bool hasIcc, out _);
-        return hasIcc;
-    }
-
     public static int ReadExifOrientation(ReadOnlySpan<byte> jpeg)
     {
         ScanHeader(jpeg, wantIcc: false, wantExif: true, out _, out var exifTiff);
@@ -619,8 +601,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// <summary>
     /// IMG-07: one marker walk that yields both ICC presence (APP2 "ICC_PROFILE\0") and the first Exif-headed
     /// APP1's TIFF span, so <see cref="Decode"/> never re-walks the same header bytes per consumer. Each want
-    /// flag is independently optional so a standalone caller (<see cref="HasEmbeddedIccProfile"/>,
-    /// <see cref="ReadExifOrientation"/>) still stops as soon as its own answer is known, exactly as the
+    /// flag is independently optional so a standalone caller (<see cref="ReadExifOrientation"/>) still stops as soon as its own answer is known, exactly as the
     /// single-purpose walks did before this was unified.
     /// </summary>
     /// <param name="exifTiff">

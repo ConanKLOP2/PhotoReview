@@ -31,7 +31,7 @@ public sealed class IccMismatchTests
     {
         var format = name switch { "Gray8" => PixelFormats.Gray8, "Bgr24" => PixelFormats.Bgr24, _ => PixelFormats.Cmyk32 };
         var jpeg = Encode(format);
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(jpeg), "the fixture must carry the profile");
+        Assert.True(JpegIccProbe.HasIcc(jpeg), "the fixture must carry the profile");
 
         Assert.Throws<NotSupportedException>(() => new TurboJpegDecoder().Decode(new DecodeRequest("x.jpg", new DecodeBox(12, 12), bytes: jpeg)));
         var chains = new (string Name, IImageDecoder Decoder)[]

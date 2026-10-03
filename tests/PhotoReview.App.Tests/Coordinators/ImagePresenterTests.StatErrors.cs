@@ -27,7 +27,6 @@ public sealed partial class ImagePresenterTests
         public string ReadAllText(string path) => inner.ReadAllText(path);
         public IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
-        public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") => inner.EnumerateFilesWithStat(directory, pattern);
         public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
             inner.EnumerateFilesWithStat(directory, include, onSkipped);
         public bool TryProbeReadable(string path, out string? failure) => inner.TryProbeReadable(path, out failure);
@@ -90,7 +89,7 @@ public sealed partial class ImagePresenterTests
         var presenter = CreatePresenterWith(new StatThrowingFileSystem(new PhysicalFileSystem(), flaky, new IOException("share hiccup")));
         var token = _clock.NextNavigation();
 
-        await presenter.RemoveMissingCatalogItemAsync(missing, 0, token);
+        await presenter.RemoveMissingCatalogItemAsync(missing, token);
 
         Assert.Equal([flaky], _catalog.Paths);
     }
@@ -183,7 +182,6 @@ public sealed partial class ImagePresenterTests
         public string ReadAllText(string p) => inner.ReadAllText(p);
         public IEnumerable<string> ReadLines(string p) => inner.ReadLines(p);
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
-        public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") => inner.EnumerateFilesWithStat(directory, pattern);
         public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
             inner.EnumerateFilesWithStat(directory, include, onSkipped);
         public bool TryProbeReadable(string p, out string? failure) => inner.TryProbeReadable(p, out failure);

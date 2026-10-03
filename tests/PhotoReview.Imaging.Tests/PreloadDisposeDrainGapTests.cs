@@ -54,8 +54,8 @@ public sealed class PreloadDisposeDrainGapTests
         var entries = Enumerable.Range(0, 3).Select(i => new CatalogEntry(root.File($"i{i}.jpg", 1, 2, 3))).ToArray();
         var target = new UncancellableTarget();
         var log = new RecordingLog();
-        var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => entries, () => 0,
-            new PreloadOptions(WorkerCount: 1), new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log)
+        var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => entries,
+            new PreloadOptions(WorkerCount: 1), new FakeMemoryProbe(true), log)
         {
             DisposeDrainTimeout = TimeSpan.FromMilliseconds(100),
         };

@@ -82,7 +82,7 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
 
         var primary = primaryFactory();
         var fallback = _registry[DecoderBackend.Wpf]();
-        return Decorate(backend, new FallbackImageDecoder(primary, backend, fallback, DecoderBackend.Wpf, _log, _metrics));
+        return Decorate(backend, new FallbackImageDecoder(primary, backend, fallback, _log, _metrics));
     }
 
     private IImageDecoder Decorate(DecoderBackend backend, IImageDecoder decoder) =>

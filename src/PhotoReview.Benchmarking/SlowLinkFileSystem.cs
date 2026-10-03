@@ -59,15 +59,6 @@ public sealed class SlowLinkFileSystem : IFileSystem
 
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => _inner.EnumerateFiles(directory, pattern);
 
-    public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*")
-    {
-        foreach (var entry in _inner.EnumerateFilesWithStat(directory, pattern))
-        {
-            DelayMetadata();
-            yield return entry;
-        }
-    }
-
     public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(
         string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped)
     {

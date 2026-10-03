@@ -84,10 +84,8 @@ public sealed class PreloadScheduler : IDisposable
         IPreloadTarget target,
         ReviewMetrics metrics,
         Func<CatalogEntry[]> snapshotEntries,
-        Func<long> totalSourceBytes,
         PreloadOptions? options = null,
         IMemoryProbe? memoryProbe = null,
-        IUiScheduler? uiScheduler = null,
         ILog? log = null,
         Func<string, CancellationToken, Task>? prefetchSourceBytes = null,
         NavigationPace? pace = null,
@@ -97,7 +95,6 @@ public sealed class PreloadScheduler : IDisposable
         _pace = pace ?? new NavigationPace();
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _snapshotEntries = snapshotEntries ?? throw new ArgumentNullException(nameof(snapshotEntries));
-        ArgumentNullException.ThrowIfNull(totalSourceBytes); // retained for constructor compatibility; estimates now use per-entry metadata.
         _options = options ?? new PreloadOptions();
         _memoryProbe = memoryProbe ?? throw new ArgumentNullException(nameof(memoryProbe));
         _log = log ?? NullLog.Instance;
@@ -123,18 +120,16 @@ public sealed class PreloadScheduler : IDisposable
         IPreloadTarget target,
         ReviewMetrics metrics,
         Func<CatalogEntry[]> snapshotEntries,
-        Func<long> totalSourceBytes,
         long fullFolderRamThresholdBytes,
         double memoryLoadLimit,
         Func<double, bool>? hasHeadroom = null,
         IMemoryProbe? memoryProbe = null,
         int? workerCountOverride = null,
-        IUiScheduler? uiScheduler = null,
         ILog? log = null,
         Func<string, CancellationToken, Task>? prefetchSourceBytes = null,
         PreloadWindow? window = null,
         Func<int>? snapshotVersion = null)
-        : this(target, metrics, snapshotEntries, totalSourceBytes,
+        : this(target, metrics, snapshotEntries,
             new PreloadOptions(
                 WorkerCount: workerCountOverride ?? DiagOptionsWorkers() ?? 8,
                 MemoryLoadLimit: memoryLoadLimit,
@@ -143,7 +138,6 @@ public sealed class PreloadScheduler : IDisposable
             memoryProbe ?? (hasHeadroom is not null
                 ? new DelegateMemoryProbe(hasHeadroom)
                 : throw new ArgumentNullException(nameof(memoryProbe), "A real memory probe or an explicit test override is required.")),
-            uiScheduler,
             log,
             prefetchSourceBytes,
             pace: null,
@@ -836,13 +830,5 @@ public sealed class DelegateMemoryProbe : IMemoryProbe
     private readonly Func<double, bool> _hasHeadroom;
     public DelegateMemoryProbe(Func<double, bool> hasHeadroom) => _hasHeadroom = hasHeadroom;
     public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom(maximumLoad);
-    public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-}
-
-public sealed class FakeMemoryProbe : IMemoryProbe
-{
-    private readonly bool _hasHeadroom;
-    public FakeMemoryProbe(bool hasHeadroom = true) => _hasHeadroom = hasHeadroom;
-    public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom;
     public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
 }

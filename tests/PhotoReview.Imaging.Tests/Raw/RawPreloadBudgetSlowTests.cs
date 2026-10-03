@@ -47,9 +47,9 @@ public sealed class RawPreloadBudgetSlowTests
         try
         {
             await service.GetPreviewAsync(entries[0].Path);
-            using var scheduler = new PreloadScheduler(service, metrics, () => entries, () => entries.Sum(entry => entry.Length ?? 0),
+            using var scheduler = new PreloadScheduler(service, metrics, () => entries,
                 new PreloadOptions(WorkerCount: 8, FullFolderThresholdBytes: CacheCapacityBytes),
-                new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log);
+                new FakeMemoryProbe(true), log);
 
             await scheduler.PreloadAroundAsync(0).WaitAsync(TimeSpan.FromSeconds(30));
 

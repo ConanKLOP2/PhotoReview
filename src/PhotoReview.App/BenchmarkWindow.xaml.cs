@@ -122,15 +122,14 @@ public partial class BenchmarkWindow : Window, IDisposable
         cts.Dispose();
     }
 
-    /// <summary>How many top-level entries <see cref="EnumerateAndStat"/> checks between cancellation polls: fine
+    /// <summary>How many top-level entries <see cref="EnumerateImageFiles"/> checks between cancellation polls: fine
     /// enough that Cancel/Close lands promptly on a huge or slow/NAS folder, coarse enough that checking the token
     /// is not itself a per-file cost.</summary>
     private const int EnumerationCancellationCheckInterval = 256;
 
     /// <summary>
     /// Background-thread scan (R11): folder existence, the full top-level file listing filtered to supported image
-    /// types (in the same enumeration order as before), the image-count cap (see <see cref="ApplyImageLimit"/>) and
-    /// the stat pass over the capped subset for the total source-byte count. A large or slow/NAS folder can hold tens
+    /// types (in the same enumeration order as before) and the image-count cap (see <see cref="ApplyImageLimit"/>). A large or slow/NAS folder can hold tens
     /// of thousands of top-level entries, so this used to run synchronously on the dialog's dispatcher before its
     /// first await; moving it here keeps the window (and Cancel) responsive while the scan runs.
     /// <see cref="Directory.EnumerateFiles(string, string, System.IO.SearchOption)"/> has no cancellation overload,
@@ -140,7 +139,7 @@ public partial class BenchmarkWindow : Window, IDisposable
     /// the benchmark executor builds its <c>PreviewImageService</c> without the RAW-routed decoder, so a RAW would fail or
     /// measure the WIC fallback instead of the real RAW path.
     /// </summary>
-    internal static (string[] Files, long TotalSourceBytes) EnumerateAndStat(string folder, int imageLimit, CancellationToken cancellationToken = default)
+    internal static string[] EnumerateImageFiles(string folder, int imageLimit, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
         var supported = new List<string>();
@@ -154,15 +153,13 @@ public partial class BenchmarkWindow : Window, IDisposable
         // perf(bench-window): cap to the first N files in the same (enumeration) order as before this change,
         // same idea as the CLI's --benchmark-all Take(64) -- a large real folder no longer forces every run
         // (including "Quick check") to decode thousands of images just to compare configurations. 0 = all.
-        var files = ApplyImageLimit(supported, imageLimit);
-        var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppLog.Error($"Benchmark could not stat {path}", ex); return 0L; } });
-        return (files, totalSourceBytes);
+        return ApplyImageLimit(supported, imageLimit);
     }
 
     private async Task RunAsync(BenchmarkProfile[] profiles)
     {
         // UI-thread reads captured before the background hop; DirectoryNotFoundException (thrown by
-        // EnumerateAndStat when the folder is gone) is a subtype of IOException, so it must be caught
+        // EnumerateImageFiles when the folder is gone) is a subtype of IOException, so it must be caught
         // ahead of the generic IOException/UnauthorizedAccessException clause below to keep its own message.
         var folder = FolderText.Text;
         var imageLimit = ImageLimit;
@@ -179,10 +176,9 @@ public partial class BenchmarkWindow : Window, IDisposable
         try
         {
             string[] files;
-            long totalSourceBytes;
             try
             {
-                (files, totalSourceBytes) = await Task.Run(() => EnumerateAndStat(folder, imageLimit, runToken), runToken);
+                files = await Task.Run(() => EnumerateImageFiles(folder, imageLimit, runToken), runToken);
             }
             catch (DirectoryNotFoundException) { StatusText.Text = Tr.BenchmarkStatusFolderMissing; return; }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -202,7 +198,7 @@ public partial class BenchmarkWindow : Window, IDisposable
                     RunProgress.Value = p.Total == 0 ? 0 : (double)p.Completed / p.Total;
                     StatusText.Text = Tr.BenchmarkStatusProgress(currentIndex, profiles.Length, p.ProfileId, p.Completed, p.Total, BenchmarkText.ProgressMessage(p.Message));
                 });
-                var executor = new BenchmarkImageExecutor(profile, files, totalSourceBytes);
+                var executor = new BenchmarkImageExecutor(profile, files);
                 var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
                 // DetailedLogging distinguishes the logging-on/logging-off profiles: without
                 // toggling AppLog around the run, both profiles measured identical (whatever

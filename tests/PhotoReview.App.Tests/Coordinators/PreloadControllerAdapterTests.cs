@@ -24,7 +24,7 @@ public sealed class PreloadControllerAdapterTests
     }
 
     private static PreloadScheduler NewScheduler(RecordingTarget target) =>
-        new(target, new ReviewMetrics(), () => target.Entries, () => 0L,
+        new(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 2, FullFolderThresholdBytes: 0), new FakeMemoryProbe());
 
     [Fact]

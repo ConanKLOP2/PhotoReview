@@ -21,9 +21,9 @@ public sealed class PreloadDecoderBusyTests
     {
         var log = new RecordingLog();
         var target = new BusyTarget();
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log) { BusyNoted = _ => target.BusyWasRecorded() };
+            new FakeMemoryProbe(true), log) { BusyNoted = _ => target.BusyWasRecorded() };
 
         var lifetime = scheduler.PreloadAroundAsync(0);
         await target.BlockedEntered.WaitAsync(TimeSpan.FromSeconds(10));
@@ -51,9 +51,9 @@ public sealed class PreloadDecoderBusyTests
     public async Task BusyPath_IsNotRetriedOnEveryOrderRebuild_ButAfterTheCooldown()
     {
         var target = new BusyTarget(busyAttempts: int.MaxValue);
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, new RecordingLog()) { BusyNoted = _ => target.BusyWasRecorded() };
+            new FakeMemoryProbe(true), new RecordingLog()) { BusyNoted = _ => target.BusyWasRecorded() };
         _ = scheduler.PreloadAroundAsync(0);
         await target.WaitForPassesAsync(1).WaitAsync(Bound);
         await target.BusyRecorded(1).WaitAsync(Bound);
@@ -77,9 +77,9 @@ public sealed class PreloadDecoderBusyTests
     {
         var log = new RecordingLog();
         var target = new BusyTarget(busyAttempts: int.MaxValue);
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log) { BusyNoted = _ => target.BusyWasRecorded() };
+            new FakeMemoryProbe(true), log) { BusyNoted = _ => target.BusyWasRecorded() };
         _ = scheduler.PreloadAroundAsync(0);
         await target.WaitForPassesAsync(1).WaitAsync(Bound);
         var expectedBusyAttempts = 1;
@@ -104,9 +104,9 @@ public sealed class PreloadDecoderBusyTests
     public async Task BusyPathAtTheRetryCap_ForgetsItsHistoryWhenItIsSeenCached()
     {
         var target = new BusyTarget(busyAttempts: int.MaxValue);
-        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, new RecordingLog()) { BusyNoted = _ => target.BusyWasRecorded() };
+            new FakeMemoryProbe(true), new RecordingLog()) { BusyNoted = _ => target.BusyWasRecorded() };
         _ = scheduler.PreloadAroundAsync(0);
         await target.WaitForPassesAsync(1).WaitAsync(Bound);
         var busyAttempts = 1;

@@ -62,7 +62,7 @@ public sealed class FactoryTests : IDisposable
         var decoder = factory.Create(backend);
         var fallbackDecoder = Assert.IsType<FallbackImageDecoder>(decoder);
         Assert.Equal(backend, fallbackDecoder.PrimaryBackend);
-        Assert.Equal(DecoderBackend.Wpf, fallbackDecoder.FallbackBackend);
+        Assert.Equal(DecoderBackend.Wpf, FallbackImageDecoder.FallbackBackend);
 
         // The primary throws NotSupportedException, so the decode is served by the Wpf fallback.
         var decoded = decoder.Decode(new DecodeRequest(_validImagePath, TargetWidth: 0));
@@ -76,7 +76,7 @@ public sealed class FactoryTests : IDisposable
         var wpf = new WpfBitmapImageDecoder();
         var metrics = new ReviewMetrics();
         var fallbackDecoder = new FallbackImageDecoder(
-            wpf, DecoderBackend.WicDirect, wpf, DecoderBackend.Wpf, metrics: metrics);
+            wpf, DecoderBackend.WicDirect, wpf, metrics: metrics);
 
         var decoded = fallbackDecoder.Decode(new DecodeRequest(_validImagePath, TargetWidth: 0));
 
@@ -109,7 +109,7 @@ public sealed class FactoryTests : IDisposable
         var wpf = new WpfBitmapImageDecoder();
         var metrics = new ReviewMetrics();
         var fallbackDecoder = new FallbackImageDecoder(
-            failingMock, DecoderBackend.TurboJpeg, wpf, DecoderBackend.Wpf, metrics: metrics);
+            failingMock, DecoderBackend.TurboJpeg, wpf, metrics: metrics);
 
         var decoded = fallbackDecoder.Decode(new DecodeRequest(_validImagePath, TargetWidth: 0));
 
@@ -126,7 +126,7 @@ public sealed class FactoryTests : IDisposable
         var wpf = new WpfBitmapImageDecoder();
         var metrics = new ReviewMetrics();
         var fallbackDecoder = new FallbackImageDecoder(
-            failingMock, DecoderBackend.WicDirect, wpf, DecoderBackend.Wpf, metrics: metrics);
+            failingMock, DecoderBackend.WicDirect, wpf, metrics: metrics);
 
         Assert.Throws<FileNotFoundException>(() =>
             fallbackDecoder.Decode(new DecodeRequest(missingPath, TargetWidth: 0)));
@@ -141,7 +141,7 @@ public sealed class FactoryTests : IDisposable
         var wpf = new WpfBitmapImageDecoder();
         var metrics = new ReviewMetrics();
         var fallbackDecoder = new FallbackImageDecoder(
-            failingMock, DecoderBackend.WicDirect, wpf, DecoderBackend.Wpf, metrics: metrics);
+            failingMock, DecoderBackend.WicDirect, wpf, metrics: metrics);
 
         var info = fallbackDecoder.ReadInfo(_validImagePath);
 

@@ -77,23 +77,14 @@ public interface IFileSystem
     IEnumerable<string> EnumerateFiles(string directory, string pattern = "*");
 
     /// <summary>
-    /// Liệt kê tệp tin kèm Length/LastWriteUtc lấy thẳng từ directory entry, không cần một
-    /// GetFileStat riêng cho từng file (implementation mặc định gọi EnumerateFiles + GetFileStat
-    /// cho từng phần tử; <see cref="PhotoReview.Core.IO.PhysicalFileSystem"/> ghi đè bằng
-    /// DirectoryInfo.EnumerateFiles để tránh syscall stat riêng).
-    /// </summary>
-    IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") =>
-        EnumerateFiles(directory, pattern).Select(path => (path, GetFileStat(path)));
-
-    /// <summary>
     /// Liệt kê nhanh cho lần mở folder (AR16): các tệp thỏa <paramref name="include"/> kèm stat, KHÔNG dò khả
     /// năng đọc từng file. Lỗi giữa chừng khi liệt kê (sau mục đầu tiên) được báo qua <paramref name="onSkipped"/>
     /// (<see cref="SkippedKind.ListingInterrupted"/>) và giữ phần đã đọc; lỗi trước mục đầu tiên ném ra (ADR 0007
-    /// mục 3). Mặc định (fake trong bộ nhớ) = <see cref="EnumerateFilesWithStat(string, string)"/> + lọc.
+    /// mục 3). Mặc định (fake trong bộ nhớ) = EnumerateFiles + GetFileStat cho từng file, rồi lọc.
     /// </summary>
     IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(
         string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
-        EnumerateFilesWithStat(directory, "*").Where(f => include(f.Path));
+        EnumerateFiles(directory, "*").Select(path => (path, GetFileStat(path))).Where(f => include(f.path));
 
     /// <summary>
     /// Dò một tệp có mở đọc được không (một lần open/close, không đọc byte). Trả false và lý do kỹ thuật
