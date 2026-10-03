@@ -4,32 +4,6 @@ namespace PhotoReview.Imaging.Tests;
 [Trait("Category", "HotPath")] // pure computation: no I/O or timing, so it belongs in the default gate
 public sealed class AdaptivePreviewPolicyTests
 {
-    [Fact(DisplayName = "Decode width clamped between MinimumDecodeWidth and MaximumDecodeWidth")]
-    public void CalculateTargetDecodeWidth_Clamped()
-    {
-        // Very small request clamped to 1200
-        var small = AdaptivePreviewPolicy.CalculateTargetDecodeWidth(500, 1.0, 1.0);
-        Assert.Equal(AdaptivePreviewPolicy.MinimumDecodeWidth, small);
-
-        // Very large request clamped to 4000
-        var large = AdaptivePreviewPolicy.CalculateTargetDecodeWidth(5000, 2.0, 1.5);
-        Assert.Equal(AdaptivePreviewPolicy.MaximumDecodeWidth, large);
-
-        // Normal request: 1920 * 1.25 * 1.15 = 2760
-        var normal = AdaptivePreviewPolicy.CalculateTargetDecodeWidth(1920, 1.25, 1.15);
-        Assert.Equal(2760, normal);
-    }
-
-    [Fact(DisplayName = "Invalid non-positive or non-finite inputs throw ArgumentOutOfRangeException")]
-    public void CalculateTargetDecodeWidth_ThrowsOnInvalid()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => AdaptivePreviewPolicy.CalculateTargetDecodeWidth(0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => AdaptivePreviewPolicy.CalculateTargetDecodeWidth(-10));
-        Assert.Throws<ArgumentOutOfRangeException>(() => AdaptivePreviewPolicy.CalculateTargetDecodeWidth(double.NaN));
-        Assert.Throws<ArgumentOutOfRangeException>(() => AdaptivePreviewPolicy.CalculateTargetDecodeWidth(1920, -1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => AdaptivePreviewPolicy.CalculateTargetDecodeWidth(1920, 1.0, -1));
-    }
-
     [Fact(DisplayName = "Box for a 1920x1080 viewport: x1.15 quality, rounded up to 128 px")]
     public void CalculateTargetDecodeBox_FullHd_QuantizedUp()
     {
@@ -116,7 +90,7 @@ public sealed class AdaptivePreviewPolicyTests
     [InlineData(4000, 6000, 2208 * 3312, 853 * 1280)]    // 7.31 MP -> 1.09 MP (-85%)
     public void BoxDecode_24MpInFullHdWindow_PixelCounts(int srcW, int srcH, int widthOnlyPixels, int boxPixels)
     {
-        var width = AdaptivePreviewPolicy.CalculateTargetDecodeWidth(1920, 1.0, 1.15);
+        const int width = 2208; // the former width-only target for this window: 1920 x 1.15
         var box = AdaptivePreviewPolicy.CalculateTargetDecodeBox(1920, 1080, 1.0, 1.15);
 
         var (ow, oh) = new DecodeBox(width, 0).Fit(srcW, srcH);
