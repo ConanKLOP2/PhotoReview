@@ -503,4 +503,20 @@ public sealed class RecoveryRetryServiceMutationTests
         Assert.Equal("disk full", result.JournalError);
         Assert.Null(result.Entry);
     }
+
+    [Theory]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    [InlineData(typeof(ArgumentException))]
+    [InlineData(typeof(NotSupportedException))]
+    public async Task RetryMoveOrCopyAsync_MoveGroupRecheckThrowsAFileSystemError_FailsWithItsMessageBeforeJournaling(Type failure)
+    {
+        AddMoveSources();
+        var failed = FailedMoveGroup();
+        _journal.Append(failed);
+        var count = 0;
+        _fs.StatHook = path => path == Jpg && ++count == 2 ? (Exception)Activator.CreateInstance(failure, "share gone")! : null;
+
+        AssertRefusedBeforeJournaling(await _service.RetryMoveOrCopyAsync(failed), "share gone");
+    }
 }
