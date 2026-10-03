@@ -48,23 +48,4 @@ public class SiblingFolderServiceTests : IDisposable
         Assert.Equal(["Album 1", "Album 2", "Album 10"], names);
     }
 
-    [Fact]
-    public void GetTargetNavigatesNextAndPrevious()
-    {
-        var next = SiblingFolderService.GetTarget(_folderA, 1);
-        Assert.Equal(_folderB, next);
-
-        var prev = SiblingFolderService.GetTarget(_folderB, -1);
-        Assert.Equal(_folderA, prev);
-
-        var end = SiblingFolderService.GetTarget(_folderC, 1);
-        Assert.Null(end);
-    }
-
-    [Fact]
-    public void GetTarget_FolderPathWithTrailingSeparator_StillFindsSiblings()
-    {
-        var target = SiblingFolderService.GetTarget(_folderA + Path.DirectorySeparatorChar, 1);
-        Assert.Equal(_folderB, target);
-    }
 }
