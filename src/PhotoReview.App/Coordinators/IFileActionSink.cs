@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.App.Coordinators;

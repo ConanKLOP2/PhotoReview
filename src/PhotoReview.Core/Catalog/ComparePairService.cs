@@ -1,4 +1,3 @@
-using System.IO;
 using System.Text.RegularExpressions;
 
 namespace PhotoReview.Core.Catalog;

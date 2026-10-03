@@ -1,10 +1,8 @@
-using System;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
-using PhotoReview.App.Diagnostics;
 using ReviewMetrics = PhotoReview.Core.Diagnostics.ReviewMetrics;
 
 namespace PhotoReview.App.Services;

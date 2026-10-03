@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using System.Windows;
 using PhotoReview.Core.Abstractions;

@@ -1,5 +1,4 @@
 using System.IO;
-using System.Threading;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Benchmarking;

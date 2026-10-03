@@ -1,9 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 

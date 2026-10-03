@@ -1,5 +1,4 @@
 using System.Windows.Input;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.Input;
 

@@ -1,4 +1,3 @@
-using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 

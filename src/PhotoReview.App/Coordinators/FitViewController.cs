@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using PhotoReview.App.Input;
 using PhotoReview.App.ViewModels;

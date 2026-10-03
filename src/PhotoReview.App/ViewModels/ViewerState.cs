@@ -1,6 +1,5 @@
 using PhotoReview.Core.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.ViewModels;
 

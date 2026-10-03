@@ -1,7 +1,5 @@
 using PhotoReview.Platform.Windows;
-using PhotoReview.Core.Settings;
 using System.IO;
-using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;

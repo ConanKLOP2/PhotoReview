@@ -1,10 +1,8 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Imaging.Caching;

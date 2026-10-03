@@ -3,13 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.Diagnostics;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Caching;

@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.IO;
 using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Core.FileActions;

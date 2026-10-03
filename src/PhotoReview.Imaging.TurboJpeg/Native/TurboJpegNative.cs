@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.InteropServices;
 
 // Load turbojpeg.dll only from the application folder: without this Windows falls back to its default search order

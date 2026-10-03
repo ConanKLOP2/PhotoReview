@@ -1,7 +1,5 @@
-using System;
 using System.IO;
 using System.Runtime.InteropServices;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 

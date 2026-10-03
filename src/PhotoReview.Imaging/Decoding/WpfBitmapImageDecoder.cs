@@ -1,6 +1,5 @@
 using System.IO;
 using System.Windows.Media.Imaging;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Metadata;
 

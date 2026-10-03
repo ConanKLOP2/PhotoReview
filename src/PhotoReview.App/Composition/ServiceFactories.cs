@@ -1,7 +1,5 @@
-using System;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.LibRaw;

@@ -1,6 +1,4 @@
-using System;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging;
 
 namespace PhotoReview.App.Services;
 

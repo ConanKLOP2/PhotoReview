@@ -3,7 +3,6 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;

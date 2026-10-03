@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.IO;
-using System.Text;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.Raw.Tiff;
 

@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.IO;
 using System.Windows.Media;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
