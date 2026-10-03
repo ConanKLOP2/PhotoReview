@@ -9,28 +9,24 @@ public sealed class RawContainerReaderRegistry
 
     public RawContainerReaderRegistry()
     {
-        // Standard TIFF-family readers
-        Register(new Tiff.Cr2ContainerReader());
-        Register(new Tiff.NefContainerReader());
-        Register(new Tiff.ArwContainerReader());
-        Register(new Tiff.DngContainerReader());
-        Register(new Tiff.OrfContainerReader());
-        Register(new Tiff.Rw2ContainerReader());
-        Register(new Bmff.Cr3ContainerReader());
-        Register(new Raf.RafContainerReader());
+        // Standard TIFF-family readers, then CR3 (BMFF) and RAF
+        _readers.AddRange(
+        [
+            new Tiff.Cr2ContainerReader(),
+            new Tiff.NefContainerReader(),
+            new Tiff.ArwContainerReader(),
+            new Tiff.DngContainerReader(),
+            new Tiff.OrfContainerReader(),
+            new Tiff.Rw2ContainerReader(),
+            new Bmff.Cr3ContainerReader(),
+            new Raf.RafContainerReader(),
+        ]);
     }
 
     public RawContainerReaderRegistry(IEnumerable<IRawContainerReader> readers)
     {
         ArgumentNullException.ThrowIfNull(readers);
         _readers.AddRange(readers);
-    }
-
-    /// <summary>Registers a container reader.</summary>
-    public void Register(IRawContainerReader reader)
-    {
-        ArgumentNullException.ThrowIfNull(reader);
-        _readers.Add(reader);
     }
 
     /// <summary>
