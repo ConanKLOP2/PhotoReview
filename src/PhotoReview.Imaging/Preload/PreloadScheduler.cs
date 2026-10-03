@@ -832,11 +832,3 @@ public sealed class DelegateMemoryProbe : IMemoryProbe
     public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom(maximumLoad);
     public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
 }
-
-public sealed class FakeMemoryProbe : IMemoryProbe
-{
-    private readonly bool _hasHeadroom;
-    public FakeMemoryProbe(bool hasHeadroom = true) => _hasHeadroom = hasHeadroom;
-    public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom;
-    public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-}

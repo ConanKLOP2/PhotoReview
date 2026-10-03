@@ -2,6 +2,7 @@ using System.IO;
 using PhotoReview.Benchmark.Cli;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Tests.Raw;
+using PhotoReview.TestSupport.Windows.Fixtures;
 using Measurement = PhotoReview.Benchmark.Cli.RawDecoderBenchmark.Measurement;
 
 namespace PhotoReview.Integration.Tests;
