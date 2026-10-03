@@ -394,6 +394,15 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
         Assert.Equal(3, Orientation(exif: (ushort)3, windows: (ushort)6));
     }
 
+    [Theory]
+    [InlineData(1, 6, 1)]   // an explicit "normal" is a usable tag: the Windows property is not consulted
+    [InlineData(8, 3, 8)]   // the upper bound is usable too
+    [InlineData(2, 6, 2)]
+    public void ReadMetadataValues_ExifTagInRange_NeverFallsThroughToTheWindowsProperty(int exif, int windows, int expected)
+    {
+        Assert.Equal(expected, Orientation(exif: (ushort)exif, windows: (ushort)windows));
+    }
+
     [Fact]
     public void ReadMetadataValues_OrientationNotRequested_IsNeverQueried()
     {

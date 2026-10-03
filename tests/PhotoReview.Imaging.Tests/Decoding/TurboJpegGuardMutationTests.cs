@@ -119,6 +119,16 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
         Assert.Equal("File is not a valid JPEG: memory buffer", ex.Message);
     }
 
+    [Fact]
+    public void Decode_NonJpegBytesWithAPath_NamesThePathInTheLogMessage()
+    {
+        var request = new DecodeRequest("some-photo.jpg", 0, Bytes: new byte[] { 1, 2, 3, 4 });
+
+        var ex = Catch(() => new TurboJpegDecoder().Decode(request));
+
+        Assert.Equal("File is not a valid JPEG: some-photo.jpg", ex.Message);
+    }
+
     // ---- native error detail in the messages ----
 
     [Fact]
