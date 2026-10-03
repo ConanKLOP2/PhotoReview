@@ -303,11 +303,17 @@ public sealed class WicDirectDecoder : IImageDecoder
     private static IWICImagingFactory CreateFactory()
     {
         int hr = WicNativeMethods.WICCreateImagingFactory_Proxy(WicNativeMethods.WINCODEC_SDK_VERSION1, out IWICImagingFactory? factory);
-        if (hr < 0 || factory is null)
+        ThrowIfFactoryFailed(hr, factory is not null);
+        return factory!;
+    }
+
+    /// <summary>Test seam for the factory-creation failure path (a real WIC failure cannot be provoked): an HRESULT failure throws its mapped exception.</summary>
+    internal static void ThrowIfFactoryFailed(int hr, bool factoryCreated)
+    {
+        if (hr < 0 || !factoryCreated)
         {
             Marshal.ThrowExceptionForHR(hr);
         }
-        return factory!;
     }
 
     private static readonly HashSet<Guid> OpaquePixelFormats =

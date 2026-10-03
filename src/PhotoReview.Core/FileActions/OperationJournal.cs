@@ -163,6 +163,9 @@ public sealed class OperationJournal
         _path = paths.JournalFile;
     }
 
+    /// <summary>Test seam: the durable flush of a real <see cref="FileStream"/> (not observable otherwise); production flushes to disk.</summary>
+    internal Action<FileStream> FlushToDisk { get; init; } = static fs => fs.Flush(flushToDisk: true);
+
     /// <summary>Mode applied to the next write (re-read from the provider every time, so a Settings change needs no restart).</summary>
     public JournalDurability Durability => _durability();
 
@@ -247,7 +250,7 @@ public sealed class OperationJournal
             // Fast: plain Flush() hands the bytes to the OS before the file operation starts (survives a process crash).
             if (durable && stream is FileStream fs)
             {
-                fs.Flush(flushToDisk: true);
+                FlushToDisk(fs);
             }
             else
             {
