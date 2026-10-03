@@ -22,7 +22,7 @@ Lookup order for every text: your file → shipped file → built-in English →
 1. Settings → **Language** → **Open languages folder**.
 2. Create `vi.json` (or the code of your language) with only the keys you want to change:
    ```json
-   { "_meta": { "code": "vi" }, "status.scanningFolder": "Đang quét thư mục ảnh…" }
+   { "_meta": { "code": "vi" }, "status.siblingFolder.first": "Đã ở thư mục đầu tiên cùng cấp." }
    ```
 3. Settings → **Reload translations**. The change shows immediately.
 
