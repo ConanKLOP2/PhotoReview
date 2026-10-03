@@ -27,8 +27,6 @@ public sealed class LocTemplate
     /// <summary>Placeholder names in order of appearance (may repeat).</summary>
     public IReadOnlyList<string> PlaceholderNames => _names;
 
-    public bool HasPlaceholders => _names.Length > 0;
-
     /// <summary>Parses <paramref name="text"/>; returns false for unbalanced braces or invalid placeholder names.</summary>
     public static bool TryParse(string text, [NotNullWhen(true)] out LocTemplate? template)
     {
