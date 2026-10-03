@@ -120,7 +120,6 @@ public sealed class PhotoFolderBuilder : IDisposable
         }
 
         // Add seeded deterministic blocks (make it slightly less uniform)
-        var rng = new Random(width * height); // Seed based on size for determinism
         int blockSize = 100;
         for (int by = 0; by < height; by += blockSize * 2)
         {

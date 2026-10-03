@@ -27,9 +27,6 @@ public static class ExifParser
     /// <summary>More entries than any real IFD has; a larger count means a corrupt block (read only this many).</summary>
     internal const int MaxIfdEntries = 256;
 
-    /// <summary>Longest ASCII value read (bytes); <see cref="ExifSummary.CleanText"/> caps further.</summary>
-    private const int MaxAsciiBytes = 256;
-
     /// <summary>Reads the EXIF summary of a JPEG; null for a non-JPEG, no/corrupt EXIF, or no usable field.</summary>
     public static ExifSummary? TryParseJpeg(ReadOnlySpan<byte> jpeg) => TryParseGuarded(FindExifTiffBlock(jpeg), allowOlympusRawMagic: false);
 
