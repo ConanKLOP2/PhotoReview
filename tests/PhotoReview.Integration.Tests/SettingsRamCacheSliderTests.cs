@@ -18,7 +18,7 @@ public sealed class SettingsRamCacheSliderTests
     public async Task Slider_RangeIsDeviceMinimumToNinety_AndBelowMinimumValueIsRaised()
     {
         var physical = RamBudgetPolicy.GetPhysicalMemoryBytes();
-        var minimum = RamBudgetPolicy.MinimumCachePercent(physical);
+        var minimum = RamBudgetPolicy.MinimumCachePercent(physical, PreloadWindow.Default);
         await StaTestHost.RunAsync(() =>
         {
             var window = new SettingsWindow(new AppSettings { ImageCacheRamPercent = 1 });

@@ -42,16 +42,16 @@ public sealed class RamBudgetPropertyTests
             var requested = rng.Next(-50, 250);
             var source = rng.Next(3) == 0 ? 0 : rng.NextInt64(0, physical);
 
-            var minimum = RamBudgetPolicy.MinimumCachePercent(physical);
-            var clamped = RamBudgetPolicy.ClampCachePercent(requested, physical);
+            var minimum = RamBudgetPolicy.MinimumCachePercent(physical, PreloadWindow.Default);
+            var clamped = RamBudgetPolicy.ClampCachePercent(requested, physical, PreloadWindow.Default);
             Assert.InRange(clamped, minimum, PhotoReview.Core.Settings.PerformanceOptions.MaxImageCacheRamPercent);
-            Assert.True(RamBudgetPolicy.ClampCachePercent(requested + 1, physical) >= clamped, $"not monotonic at {requested} on {physical}");
+            Assert.True(RamBudgetPolicy.ClampCachePercent(requested + 1, physical, PreloadWindow.Default) >= clamped, $"not monotonic at {requested} on {physical}");
 
-            var preview = RamBudgetPolicy.PreviewBytesForPercent(requested, physical, source);
+            var preview = RamBudgetPolicy.PreviewBytesForPercent(requested, physical, source, PreloadWindow.Default);
             Assert.True(preview >= 1, $"preview budget {preview} for physical={physical} requested={requested} source={source}");
             Assert.True(preview <= RamBudgetPolicy.BytesForPercent(clamped, physical) || preview == 1);
 
-            var sourceCapacity = RamBudgetPolicy.SourceBytesForPercent(rng.NextInt64(0, long.MaxValue), requested, physical);
+            var sourceCapacity = RamBudgetPolicy.SourceBytesForPercent(rng.NextInt64(0, long.MaxValue), requested, physical, PreloadWindow.Default);
             Assert.InRange(sourceCapacity, 0, (long)(physical * RamBudgetPolicy.MaxSourceBytesShare) + 1);
         }
     }

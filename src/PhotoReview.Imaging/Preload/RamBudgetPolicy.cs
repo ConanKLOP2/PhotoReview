@@ -4,18 +4,9 @@ using PhotoReview.Core.Settings;
 namespace PhotoReview.Imaging.Preload;
 
 /// <summary>Estimates decoded image memory before deciding whether a folder can be preloaded.</summary>
-public sealed record RamBudgetEntry(long CompressedBytes, int? Width = null, int? Height = null, string? Extension = null)
-{
-    public RamBudgetEntry(long compressedBytes, int width, int height, string? extension = null)
-        : this(compressedBytes, (int?)width, (int?)height, extension) { }
-}
-
-public sealed record RamBudgetDecision(long EstimatedDecodedBytes, long CapacityBytes, bool HasHeadroom, bool ShouldPreloadWholeFolder);
-
 public static class RamBudgetPolicy
 {
     public const double JpegExpansionFactor = 10;
-    public const double PngExpansionFactor = 3;
     public const double DefaultAverageBytesPerPixel = 4;
 
     /// <summary>Per-axis upper bound of an embedded RAW preview relative to the container's sensor size (Canon sRAW/mRAW: 2).</summary>
@@ -62,17 +53,6 @@ public static class RamBudgetPolicy
     /// <inheritdoc cref="MinimumBudgetBoxWidth"/>
     public const int MinimumBudgetBoxHeight = 2160;
 
-    /// <summary>Previews in the full preload window: current image plus the forward and backward lookahead.</summary>
-    public const int PreloadWindowImageCount = PreloadOrderService.ForwardLookahead + PreloadOrderService.BackwardLookahead + 1;
-
-    /// <summary>
-    /// Bytes needed to hold the whole default preload window (<see cref="PreloadWindowImageCount"/> previews decoded
-    /// to a <see cref="MinimumBudgetBoxWidth"/> x <see cref="MinimumBudgetBoxHeight"/> box at 4 bytes/pixel, ~1.27 GiB).
-    /// A smaller cache would evict previews the scheduler is still preloading. feat/preload-window-setting: shortcut
-    /// for <see cref="MinimumPreviewWindowBytes(PreloadWindow)"/> with <see cref="PreloadWindow.Default"/>.
-    /// </summary>
-    public static long MinimumPreviewWindowBytes() => MinimumPreviewWindowBytes(PreloadWindow.Default);
-
     /// <summary>
     /// Bytes needed to hold the whole preload <paramref name="window"/> (<see cref="PreloadWindow.ImageCount"/> previews
     /// decoded to a <see cref="MinimumBudgetBoxWidth"/> x <see cref="MinimumBudgetBoxHeight"/> box at 4 bytes/pixel). A
@@ -80,14 +60,6 @@ public static class RamBudgetPolicy
     /// </summary>
     public static long MinimumPreviewWindowBytes(PreloadWindow window) =>
         (long)window.ImageCount * MinimumBudgetBoxWidth * MinimumBudgetBoxHeight * 4;
-
-    /// <summary>
-    /// Smallest selectable cache percent on a device with <paramref name="physicalBytes"/> of RAM for the default preload
-    /// window: the percent (rounded up) that holds <see cref="MinimumPreviewWindowBytes()"/>, at least
-    /// <see cref="PerformanceOptions.MinImageCacheRamPercent"/> and never above <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>.
-    /// Unknown RAM (&lt;= 0) gives the absolute floor.
-    /// </summary>
-    public static int MinimumCachePercent(long physicalBytes) => MinimumCachePercent(physicalBytes, PreloadWindow.Default);
 
     /// <summary>
     /// Smallest selectable cache percent on a device with <paramref name="physicalBytes"/> of RAM for a user-configured
@@ -101,10 +73,6 @@ public static class RamBudgetPolicy
         var percent = (MinimumPreviewWindowBytes(window) * 100 + physicalBytes - 1) / physicalBytes; // ceiling, no overflow for real RAM sizes
         return (int)Math.Clamp(percent, PerformanceOptions.MinImageCacheRamPercent, PerformanceOptions.MaxImageCacheRamPercent);
     }
-
-    /// <summary>Clamps a requested percent to [<see cref="MinimumCachePercent"/>, <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>].</summary>
-    public static int ClampCachePercent(int requestedPercent, long physicalBytes) =>
-        ClampCachePercent(requestedPercent, physicalBytes, PreloadWindow.Default);
 
     /// <summary>
     /// Clamps a requested percent to [<see cref="MinimumCachePercent(long, PreloadWindow)"/>, <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>]
@@ -126,12 +94,8 @@ public static class RamBudgetPolicy
     /// holds, so both caches together stay within the chosen share (the R2-A-06 rule with the user percent instead of
     /// <see cref="MaxPhysicalMemoryShare"/>). Never below 1 byte (the LRU cache rejects a zero capacity).
     /// Requires known physical RAM; callers fall back to <see cref="ClampPreviewToPhysicalMemory"/> otherwise.
+    /// The percent floor follows <paramref name="window"/> (Q-R31).
     /// </summary>
-    public static long PreviewBytesForPercent(int requestedPercent, long physicalBytes, long sourceBytesCapacity) =>
-        PreviewBytesForPercent(requestedPercent, physicalBytes, sourceBytesCapacity, PreloadWindow.Default);
-
-    /// <inheritdoc cref="PreviewBytesForPercent(int, long, long)"/>
-    /// <remarks>The percent floor follows <paramref name="window"/> (Q-R31).</remarks>
     public static long PreviewBytesForPercent(int requestedPercent, long physicalBytes, long sourceBytesCapacity, PreloadWindow window)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(physicalBytes);
@@ -141,15 +105,10 @@ public static class RamBudgetPolicy
 
     /// <summary>
     /// Source-bytes cache request for a user percent: the usual <see cref="ClampSourceBytesToPhysicalMemory"/> limit, and
-    /// additionally small enough to leave <see cref="MinimumPreviewWindowBytes()"/> of the percent budget to the preview cache
+    /// additionally small enough to leave <see cref="MinimumPreviewWindowBytes(PreloadWindow)"/> of the percent budget to the preview cache
     /// (a low percent must not let the source-bytes cache starve the previews). 0 = no room for a source-bytes cache.
-    /// Unknown physical RAM (&lt;= 0) returns the request unchanged.
+    /// Unknown physical RAM (&lt;= 0) returns the request unchanged. The preview room left over follows <paramref name="window"/> (Q-R31).
     /// </summary>
-    public static long SourceBytesForPercent(long requestedBytes, int requestedPercent, long physicalBytes) =>
-        SourceBytesForPercent(requestedBytes, requestedPercent, physicalBytes, PreloadWindow.Default);
-
-    /// <inheritdoc cref="SourceBytesForPercent(long, int, long)"/>
-    /// <remarks>The preview room left over follows <paramref name="window"/> (Q-R31).</remarks>
     public static long SourceBytesForPercent(long requestedBytes, int requestedPercent, long physicalBytes, PreloadWindow window)
     {
         if (physicalBytes <= 0) return requestedBytes;
@@ -176,46 +135,6 @@ public static class RamBudgetPolicy
         if (physicalBytes <= 0) return clamped;
         var remaining = Math.Max(0, ClampToPhysicalMemory(long.MaxValue, physicalBytes) - Math.Max(0, sourceBytesCapacity));
         return Math.Min(clamped, remaining);
-    }
-
-    public static long EstimateDecodedBytes(IEnumerable<RamBudgetEntry> entries, int targetWidth,
-        double? measuredBytesPerPixel = null)
-    {
-        ArgumentNullException.ThrowIfNull(entries);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(targetWidth);
-        var fallbackBpp = measuredBytesPerPixel is > 0 ? measuredBytesPerPixel.Value : DefaultAverageBytesPerPixel;
-        long total = 0;
-        foreach (var entry in entries)
-        {
-            if (entry.CompressedBytes < 0) throw new ArgumentOutOfRangeException(nameof(entries));
-            long estimate;
-            if (entry.Width is > 0 && entry.Height is > 0)
-            {
-                var width = Math.Min(entry.Width.Value, targetWidth);
-                var height = Math.Max(1, (int)Math.Round(entry.Height.Value * (double)width / entry.Width.Value));
-                estimate = checked((long)(width * (double)height * fallbackBpp));
-            }
-            else
-            {
-                var factor = string.Equals(entry.Extension, ".png", StringComparison.OrdinalIgnoreCase)
-                    ? PngExpansionFactor : JpegExpansionFactor;
-                estimate = checked((long)(entry.CompressedBytes * factor));
-            }
-            total = checked(total + estimate);
-        }
-        return total;
-    }
-
-    public static RamBudgetDecision Decide(IEnumerable<RamBudgetEntry> entries, int targetWidth,
-        long capacityBytes, IMemoryProbe memoryProbe, long reserveBytes = PerformanceOptionsDefaults.MemoryReserveBytes,
-        double? measuredBytesPerPixel = null)
-    {
-        ArgumentNullException.ThrowIfNull(memoryProbe);
-        ArgumentOutOfRangeException.ThrowIfNegative(capacityBytes);
-        var estimated = EstimateDecodedBytes(entries, targetWidth, measuredBytesPerPixel);
-        var headroom = memoryProbe.HasHeadroom(PerformanceOptionsDefaults.PreloadMemoryLoadLimit, reserveBytes);
-        return new RamBudgetDecision(estimated, capacityBytes, headroom,
-            estimated <= capacityBytes && headroom);
     }
 
     /// <summary>
@@ -332,14 +251,6 @@ public static class RamBudgetPolicy
             if (total >= long.MaxValue) return long.MaxValue;
         }
         return checked((long)Math.Ceiling(total));
-    }
-
-    public static bool ShouldPreloadWholeFolder(long totalSourceBytes, long capacityBytes, IMemoryProbe memoryProbe,
-        long reserveBytes = PerformanceOptionsDefaults.MemoryReserveBytes)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(totalSourceBytes);
-        return ShouldPreloadWholeFolderEstimate(checked((long)(totalSourceBytes * JpegExpansionFactor)),
-            capacityBytes, memoryProbe, reserveBytes);
     }
 
     /// <summary>Whole-folder preload when an already computed estimate (see <see cref="EstimateFolderPreviewBytes"/>) fits the budget and RAM has headroom.</summary>

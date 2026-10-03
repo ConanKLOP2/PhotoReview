@@ -10,19 +10,10 @@ public sealed class RamBudgetPolicyEstimateGapTests
     [Fact]
     public void EstimateFolderPreviewBytes_UnboundedBoxWithPngEntries_UsesTheJpegFactorTenOfTheEntriesOverload()
     {
-        // Pinned on purpose: the entries overload does not special-case PNG (x10) while EstimateDecodedBytes uses x3.
-        // If the two are ever unified, this test and the next one must change together.
+        // Pinned on purpose: the entries overload does not special-case PNG (x10).
         var entries = new[] { new CatalogEntry("a.png").WithMetadata(1_000, DateTime.UnixEpoch) };
 
         Assert.Equal(10_000L, RamBudgetPolicy.EstimateFolderPreviewBytes(entries, DecodeBox.Unbounded));
-    }
-
-    [Fact]
-    public void EstimateDecodedBytes_PngWithoutDimensions_UsesThePngFactorThree()
-    {
-        var bytes = RamBudgetPolicy.EstimateDecodedBytes([new RamBudgetEntry(1_000, Extension: ".PNG")], 1000);
-
-        Assert.Equal(3_000L, bytes);
     }
 
     [Fact]
@@ -32,7 +23,6 @@ public sealed class RamBudgetPolicyEstimateGapTests
         Assert.Equal(0L, RamBudgetPolicy.EstimateFolderPreviewBytes(Array.Empty<CatalogEntry>(), new DecodeBox(1920, 1080)));
         Assert.Equal(0L, RamBudgetPolicy.EstimateFolderPreviewBytes(0, new DecodeBox(1920, 1080), totalSourceBytes: 0));
         Assert.Equal(0L, RamBudgetPolicy.EstimateFolderPreviewBytes(0, DecodeBox.Unbounded, totalSourceBytes: 0));
-        Assert.Equal(0L, RamBudgetPolicy.EstimateDecodedBytes(Array.Empty<RamBudgetEntry>(), 1000));
     }
 
     [Fact]
