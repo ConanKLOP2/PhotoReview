@@ -1,4 +1,3 @@
-using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using PhotoReview.Core.Diagnostics;

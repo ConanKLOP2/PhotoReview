@@ -1,12 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.ViewModels;
 

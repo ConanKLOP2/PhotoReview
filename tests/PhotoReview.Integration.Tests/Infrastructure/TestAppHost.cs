@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
@@ -7,7 +6,6 @@ using PhotoReview.App.Coordinators;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Integration.Tests.Infrastructure;
 

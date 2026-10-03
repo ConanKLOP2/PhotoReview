@@ -1,5 +1,4 @@
 ﻿using PhotoReview.App.ViewModels;
-using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 

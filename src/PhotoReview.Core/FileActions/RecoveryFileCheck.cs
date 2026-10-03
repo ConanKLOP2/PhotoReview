@@ -1,4 +1,3 @@
-using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 
@@ -195,9 +194,6 @@ public sealed class RecoveryFileCheck
         if (verdicts.Contains(RecoveryVerdict.NotRecycled)) return RecoveryVerdict.NotRecycled;
         return RecoveryVerdict.Unknown;
     }
-
-    public IReadOnlyList<RecoveryGroupMemberCheck> CheckGroupMembers(JournalEntry entry) =>
-        Check(entry).GroupMembers ?? [];
 
     internal static RecoveryVerdict Decide(JournalEntry entry, RecoveryPathCheck source, RecoveryPathCheck? destination)
     {

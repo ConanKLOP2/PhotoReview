@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Windows;
 using PhotoReview.App;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.Settings;
 using PhotoReview.Integration.Tests.Infrastructure;
 
 namespace PhotoReview.Integration.Tests;

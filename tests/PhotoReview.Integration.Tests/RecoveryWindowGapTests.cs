@@ -1,13 +1,10 @@
 using System.Reflection;
 using System.IO;
-using System.Windows;
 using PhotoReview.App;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Model;
 using PhotoReview.Integration.Tests.Infrastructure;
 
 namespace PhotoReview.Integration.Tests;

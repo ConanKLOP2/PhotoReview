@@ -1,6 +1,4 @@
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Raw.Tiff;
-using Xunit;
 using static PhotoReview.Imaging.Tests.Raw.Tiff.TiffBytes;
 
 namespace PhotoReview.Imaging.Tests.Raw.Tiff;

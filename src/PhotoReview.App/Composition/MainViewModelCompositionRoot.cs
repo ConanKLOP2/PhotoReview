@@ -1,11 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Coordinators;
-using PhotoReview.App.Services;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;

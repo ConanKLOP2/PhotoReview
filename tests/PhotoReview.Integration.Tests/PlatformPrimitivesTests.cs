@@ -1,7 +1,5 @@
-﻿using System.Threading;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Interop;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Platform.Windows;
 
 namespace PhotoReview.Integration.Tests;

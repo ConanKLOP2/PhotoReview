@@ -1,7 +1,5 @@
-using System;
 using System.Diagnostics;
 using System.IO;
-using PhotoReview.Imaging.Caching;
 using Xunit;
 using Xunit.Abstractions;
 

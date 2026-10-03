@@ -1,5 +1,4 @@
 using PhotoReview.Core.Diagnostics;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.Abstractions;
 

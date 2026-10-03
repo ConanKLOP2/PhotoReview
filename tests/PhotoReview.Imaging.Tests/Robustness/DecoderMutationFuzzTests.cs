@@ -4,7 +4,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding.Wic;
-using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.Tests.Fixtures;
 using PhotoReview.Imaging.Tests.Metadata;
 using Xunit.Abstractions;

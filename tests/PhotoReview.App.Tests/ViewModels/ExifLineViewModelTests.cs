@@ -1,28 +1,22 @@
-using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.App.Coordinators;
-using PhotoReview.App.Services;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;
-using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 

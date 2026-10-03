@@ -1,5 +1,4 @@
 using System.IO;
-using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Tests.Robustness;
 

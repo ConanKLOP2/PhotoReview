@@ -2,10 +2,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Text.Json;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using PhotoReview.App.Services;
 
 namespace PhotoReview.App;

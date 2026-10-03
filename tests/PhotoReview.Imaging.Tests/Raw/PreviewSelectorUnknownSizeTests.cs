@@ -1,7 +1,5 @@
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Tests.Raw.Tiff;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 

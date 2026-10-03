@@ -1,5 +1,4 @@
 using PhotoReview.App.Input;
-using Xunit;
 
 namespace PhotoReview.App.Tests.Input;
 

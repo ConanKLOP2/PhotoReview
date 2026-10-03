@@ -1,6 +1,5 @@
 using System.IO;
 using PhotoReview.Imaging.LibRaw;
-using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw;

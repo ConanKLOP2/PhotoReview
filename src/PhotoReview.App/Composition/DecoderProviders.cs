@@ -1,9 +1,6 @@
-using System;
 using System.Collections.Generic;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.LibRaw;
 using PhotoReview.Imaging.TurboJpeg;

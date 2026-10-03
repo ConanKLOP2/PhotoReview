@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Windows.Threading;
 using PhotoReview.App.Diagnostics;
-using Xunit;
 
 namespace PhotoReview.App.Tests;
 

@@ -1,5 +1,4 @@
-﻿using System.IO;
-using PhotoReview.Core;
+﻿using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;

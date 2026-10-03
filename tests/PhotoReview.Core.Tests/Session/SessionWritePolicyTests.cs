@@ -1,10 +1,8 @@
 using System.Diagnostics;
-using System.IO;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
-using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.Core.Tests.Fakes;

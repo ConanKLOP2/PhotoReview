@@ -1,9 +1,6 @@
-using System.IO;
 using System.Text.Json;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.Settings;

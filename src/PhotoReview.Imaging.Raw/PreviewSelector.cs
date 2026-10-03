@@ -218,7 +218,7 @@ public static class PreviewSelector
             || preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
-        var colorSpace = PreviewColorSpace.Unknown;
+        PreviewColorSpace colorSpace;
         try
         {
             WalkJpeg(source, preview.Offset, preview.Length, needFrame: false, out _, out _, out colorSpace);

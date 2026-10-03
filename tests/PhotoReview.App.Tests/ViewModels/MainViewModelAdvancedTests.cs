@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App;
@@ -12,10 +10,8 @@ using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Caching;
 using Xunit;

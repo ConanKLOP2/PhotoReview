@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Tests.Fixtures;
 using PhotoReview.Imaging.Tests.Quality;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

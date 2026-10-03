@@ -1,10 +1,8 @@
 using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Tests.Fixtures;
-using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw;

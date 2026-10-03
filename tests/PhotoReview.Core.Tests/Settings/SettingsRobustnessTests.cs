@@ -1,11 +1,9 @@
-using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Core.Tests.Settings;
 

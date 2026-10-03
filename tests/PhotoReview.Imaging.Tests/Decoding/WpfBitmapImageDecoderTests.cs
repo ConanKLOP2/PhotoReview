@@ -1,9 +1,7 @@
 ﻿using System.IO;
-using System.Windows.Media.Imaging;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
-using PhotoReview.TestSupport;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

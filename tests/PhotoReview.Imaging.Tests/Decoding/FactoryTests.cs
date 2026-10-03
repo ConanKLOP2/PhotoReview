@@ -1,15 +1,11 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Runtime.InteropServices;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Tests.Fixtures;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

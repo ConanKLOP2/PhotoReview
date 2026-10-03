@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.InteropServices;
 
 // Load turbojpeg.dll only from the application folder: without this Windows falls back to its default search order
@@ -55,15 +54,6 @@ public enum TjPixelFormat
     Abgr = 9,
     Argb = 10,
     Cmyk = 11
-}
-
-public enum TjColorspace
-{
-    Rgb = 0,
-    YCbCr = 1,
-    Gray = 2,
-    Cmyk = 3,
-    Ycck = 4
 }
 
 [StructLayout(LayoutKind.Sequential)]

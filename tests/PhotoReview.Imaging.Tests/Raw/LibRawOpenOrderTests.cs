@@ -1,6 +1,5 @@
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.LibRaw;
 
 namespace PhotoReview.Imaging.Tests.Raw;

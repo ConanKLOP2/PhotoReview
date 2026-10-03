@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Core.Localization;

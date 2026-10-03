@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
-using Xunit;
 
 namespace PhotoReview.Architecture.Tests;
 

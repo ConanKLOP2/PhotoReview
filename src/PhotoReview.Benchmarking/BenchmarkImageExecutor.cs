@@ -1,7 +1,5 @@
 using PhotoReview.Platform.Windows;
-using PhotoReview.Core.Settings;
 using System.IO;
-using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
@@ -97,10 +95,6 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         _lastPreloadTask = _preloadScheduler.PreloadAroundAsync(center);
     }
 
-    /// <summary>The scheduler/logging settings this executor really applies for its profile (PERF-01).</summary>
-    public BenchmarkEffectiveConfig EffectiveConfig => new(_profile.Workers, _profile.NextWindow, _profile.PreviousWindow,
-        _profile.FullFolder, _profile.DetailedLogging, _profile.DiskCache);
-
     /// <summary>Test seam: whether the RAM cache currently holds a preview for this path.</summary>
     internal bool IsPreviewCached(string path) => _previewService.TryGetCachedPreview(_previewService.GetCurrentCacheKey(path), out _);
 
@@ -165,10 +159,6 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         }
     }
 }
-
-/// <summary>Effective per-profile settings the executor applies (recorded so a report can prove what was measured).</summary>
-public sealed record BenchmarkEffectiveConfig(int Workers, int NextWindow, int PreviousWindow, bool FullFolder,
-    bool DetailedLogging, bool DiskCache);
 
 /// <summary>
 /// Applies a profile's per-run process state (currently detailed logging) around a benchmark run. Shared by the

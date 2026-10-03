@@ -4,13 +4,10 @@ using System.IO;
 using PhotoReview.Core.Catalog;
 using System.Threading.Channels;
 using System.Windows.Media.Imaging;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
-using PhotoReview.Core.Diagnostics;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
 using PhotoReview.Core.Localization;
-using PhotoReview.Imaging;
 
 namespace PhotoReview.Imaging.Caching;
 

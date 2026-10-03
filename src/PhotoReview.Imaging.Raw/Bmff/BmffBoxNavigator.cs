@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.IO;
 using System.Text;
 
 namespace PhotoReview.Imaging.Raw.Bmff;

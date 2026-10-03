@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.Platform.Windows;

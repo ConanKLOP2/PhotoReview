@@ -1,5 +1,4 @@
 using System.IO;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Tests.Fixtures;
 
 namespace PhotoReview.Imaging.Tests.Decoding;

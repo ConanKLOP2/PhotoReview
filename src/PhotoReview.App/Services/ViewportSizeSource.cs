@@ -1,4 +1,3 @@
-using PhotoReview.Imaging;
 
 namespace PhotoReview.App.Services;
 

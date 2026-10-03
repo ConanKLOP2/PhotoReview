@@ -8,9 +8,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PhotoReview.App;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using PhotoReview.Integration.Tests.Infrastructure;
-using Xunit;
 
 namespace PhotoReview.Integration.Tests;
 

@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using PhotoReview.Core.Model;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Localization;
 

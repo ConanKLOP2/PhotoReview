@@ -1,6 +1,5 @@
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Core.Tests.Settings;
 

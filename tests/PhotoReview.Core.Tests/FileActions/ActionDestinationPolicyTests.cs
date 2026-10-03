@@ -1,6 +1,4 @@
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Tests.Fakes;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.FileActions;
 

@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using System.Threading;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.TestSupport.Windows.Fixtures;

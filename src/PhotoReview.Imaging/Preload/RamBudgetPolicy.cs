@@ -1,7 +1,5 @@
-﻿using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.Catalog;
+﻿using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Settings;
-using System.IO;
 
 namespace PhotoReview.Imaging.Preload;
 

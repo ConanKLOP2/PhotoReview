@@ -1,7 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Settings;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Preload;
 
 namespace PhotoReview.Imaging.Tests;

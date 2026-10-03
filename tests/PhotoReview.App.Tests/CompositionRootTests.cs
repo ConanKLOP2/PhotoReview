@@ -1,28 +1,21 @@
-using System;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using PhotoReview.App;
 using PhotoReview.App.Composition;
 using PhotoReview.App.Services;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
 using PhotoReview.Imaging.LibRaw;
 using PhotoReview.Imaging.Raw;
-using PhotoReview.TestSupport;
 using PhotoReview.TestSupport.Windows;
-using Xunit;
 
 namespace PhotoReview.App.Tests;
 

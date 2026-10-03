@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Preload;

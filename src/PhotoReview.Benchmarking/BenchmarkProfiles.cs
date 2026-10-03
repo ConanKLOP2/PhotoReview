@@ -1,4 +1,3 @@
-using PhotoReview.Core.Settings;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Benchmarking;

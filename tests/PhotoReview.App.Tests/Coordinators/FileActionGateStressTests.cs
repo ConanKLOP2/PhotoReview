@@ -1,9 +1,7 @@
-using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
-using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.Coordinators;

@@ -1,6 +1,5 @@
 ﻿﻿using System.Diagnostics;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.Session;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.Session;

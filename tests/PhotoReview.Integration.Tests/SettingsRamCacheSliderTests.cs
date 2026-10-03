@@ -4,7 +4,6 @@ using PhotoReview.App;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core;
 using PhotoReview.Core.IO;
-using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Preload;
 using PhotoReview.Integration.Tests.Infrastructure;
 

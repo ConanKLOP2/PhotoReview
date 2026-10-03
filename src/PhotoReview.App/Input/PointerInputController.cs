@@ -1,10 +1,8 @@
-using System;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.Input;
 

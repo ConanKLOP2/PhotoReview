@@ -5,7 +5,6 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;

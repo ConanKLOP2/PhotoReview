@@ -3,7 +3,6 @@ using System.Globalization;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Metadata;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace PhotoReview.App.Tests.HotPath;

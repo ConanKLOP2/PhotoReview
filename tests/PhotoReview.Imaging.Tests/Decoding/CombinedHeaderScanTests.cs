@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;
-using PhotoReview.Imaging.TurboJpeg;
 using PhotoReview.Imaging.Tests.Metadata;
 using PhotoReview.Imaging.Tests.Robustness;
 using Xunit.Abstractions;

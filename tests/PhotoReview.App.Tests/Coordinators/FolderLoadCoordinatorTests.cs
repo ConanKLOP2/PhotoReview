@@ -1,14 +1,11 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.TestSupport;
 using Xunit;

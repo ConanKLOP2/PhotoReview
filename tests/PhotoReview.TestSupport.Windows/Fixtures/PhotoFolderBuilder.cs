@@ -1,9 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Windows.Media.Imaging;
-using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.TestSupport.Windows.Fixtures;
 
@@ -123,7 +120,6 @@ public sealed class PhotoFolderBuilder : IDisposable
         }
 
         // Add seeded deterministic blocks (make it slightly less uniform)
-        var rng = new Random(width * height); // Seed based on size for determinism
         int blockSize = 100;
         for (int by = 0; by < height; by += blockSize * 2)
         {

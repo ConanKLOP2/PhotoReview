@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Platform.Windows;

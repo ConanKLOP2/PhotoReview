@@ -1,7 +1,5 @@
-﻿using System.IO;
-using PhotoReview.Core.Abstractions;
+﻿using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 

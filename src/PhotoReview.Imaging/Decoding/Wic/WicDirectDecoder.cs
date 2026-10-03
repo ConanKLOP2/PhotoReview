@@ -1,9 +1,7 @@
-using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Core.Localization;

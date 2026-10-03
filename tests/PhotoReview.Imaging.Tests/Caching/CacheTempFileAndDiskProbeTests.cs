@@ -1,6 +1,5 @@
 using System.IO;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.Imaging.Tests.Caching;
 

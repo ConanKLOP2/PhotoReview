@@ -1,5 +1,4 @@
 using System.IO;
-using System;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using PhotoReview.Imaging.Decoding.Wic;

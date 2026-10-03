@@ -3,7 +3,6 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;
@@ -12,7 +11,6 @@ using PhotoReview.Imaging.Tests.Quality;
 using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Tests.Fixtures;
 using PhotoReview.Imaging.Decoding.Wic;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 

@@ -1,4 +1,3 @@
-using System.IO;
 using PhotoReview.Core.IO;
 
 namespace PhotoReview.Core.Tests.IO;

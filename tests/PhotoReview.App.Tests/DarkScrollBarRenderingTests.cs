@@ -1,7 +1,5 @@
-using System;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using PhotoReview.App;
 using PhotoReview.TestSupport.Windows;
 using System.Windows;

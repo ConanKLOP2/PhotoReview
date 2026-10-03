@@ -1,9 +1,7 @@
-using System.IO;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using PhotoReview.Core.IO;
-using PhotoReview.TestSupport;
 
 namespace PhotoReview.Core.Tests.IO;
 

@@ -1,9 +1,7 @@
 using System.IO;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
-using PhotoReview.Imaging.TurboJpeg;
 using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;

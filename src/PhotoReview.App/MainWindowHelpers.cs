@@ -1,7 +1,5 @@
-using System;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;

@@ -1,7 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Localization;
-using PhotoReview.Imaging.Tests.Fixtures;
 using PhotoReview.TestSupport;
 
 namespace PhotoReview.Imaging.Tests.Caching;

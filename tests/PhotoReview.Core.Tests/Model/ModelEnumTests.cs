@@ -1,5 +1,4 @@
 using PhotoReview.Core.Model;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.Model;
 

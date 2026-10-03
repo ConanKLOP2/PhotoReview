@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using PhotoReview.Imaging;
 
 namespace PhotoReview.Imaging.Tests;
 

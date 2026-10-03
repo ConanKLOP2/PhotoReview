@@ -1,6 +1,4 @@
-﻿using System.IO;
-using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.IO;
+﻿using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 

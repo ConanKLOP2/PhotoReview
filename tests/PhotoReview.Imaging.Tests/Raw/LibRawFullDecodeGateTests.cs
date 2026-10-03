@@ -1,5 +1,4 @@
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.LibRaw;
 
 namespace PhotoReview.Imaging.Tests.Raw;

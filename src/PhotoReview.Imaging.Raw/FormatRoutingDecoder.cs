@@ -1,7 +1,5 @@
 using System.IO;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Raw;

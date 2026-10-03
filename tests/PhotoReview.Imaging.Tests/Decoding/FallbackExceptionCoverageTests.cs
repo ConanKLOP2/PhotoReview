@@ -1,9 +1,6 @@
-using System;
 using System.IO;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

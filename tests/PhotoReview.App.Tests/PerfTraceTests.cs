@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using PhotoReview.App;
 using PhotoReview.Core.Diagnostics;
 

@@ -1,5 +1,4 @@
 using System.IO;
-using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.Imaging.Tests.Caching;
 

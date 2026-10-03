@@ -1,13 +1,10 @@
-using System;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
 using PhotoReview.Imaging.Tests.Quality;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Caching;
 

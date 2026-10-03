@@ -1,4 +1,3 @@
-using System;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 

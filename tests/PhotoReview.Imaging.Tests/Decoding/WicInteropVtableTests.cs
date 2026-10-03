@@ -1,7 +1,5 @@
-using System.Linq;
 using System.Reflection;
 using PhotoReview.Imaging.Decoding.Wic;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

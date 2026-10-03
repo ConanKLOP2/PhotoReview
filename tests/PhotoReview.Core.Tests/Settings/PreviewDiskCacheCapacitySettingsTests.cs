@@ -1,4 +1,3 @@
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Core.Tests.Settings;
 

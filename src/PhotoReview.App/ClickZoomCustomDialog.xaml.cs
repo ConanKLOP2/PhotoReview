@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Windows;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;
 

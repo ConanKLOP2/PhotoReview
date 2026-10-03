@@ -1,7 +1,5 @@
 using PhotoReview.Imaging.Metadata;
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Raw.Tiff;
-using PhotoReview.Imaging.Tests.Raw;
 using Xunit;
 using static PhotoReview.Imaging.Tests.Raw.Tiff.TiffBytes;
 

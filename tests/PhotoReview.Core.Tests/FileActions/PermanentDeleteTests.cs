@@ -1,10 +1,7 @@
-using System.IO;
 using System.Text.Json;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.FileActions;

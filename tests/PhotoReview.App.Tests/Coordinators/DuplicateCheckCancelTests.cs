@@ -3,10 +3,8 @@ using PhotoReview.App.Coordinators;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Model;
 
 namespace PhotoReview.App.Tests.Coordinators;
 

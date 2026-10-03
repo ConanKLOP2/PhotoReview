@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.IO;
 using System.Runtime.InteropServices;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.LibRaw;
 

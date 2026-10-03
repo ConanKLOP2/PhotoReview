@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Interop;
-using PhotoReview.Platform.Windows;
 
 namespace PhotoReview.App.Services;
 

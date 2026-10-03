@@ -1,13 +1,10 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.Session;
 using PhotoReview.Imaging;
 
 namespace PhotoReview.App.Coordinators;

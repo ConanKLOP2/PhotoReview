@@ -1,5 +1,4 @@
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Core.Tests.Settings;
 

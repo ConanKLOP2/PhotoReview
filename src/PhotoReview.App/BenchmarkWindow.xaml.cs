@@ -8,9 +8,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Interop;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 

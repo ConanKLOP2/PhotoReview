@@ -1,5 +1,4 @@
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.Settings;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.Settings;

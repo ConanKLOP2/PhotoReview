@@ -1,4 +1,3 @@
-using System;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Core.Catalog;

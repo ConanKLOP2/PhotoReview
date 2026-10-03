@@ -1,4 +1,3 @@
-using PhotoReview.App;
 using System.IO;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Catalog;

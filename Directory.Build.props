@@ -9,7 +9,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <Deterministic>true</Deterministic>
   </PropertyGroup>
 
   <!-- AR12b: Release is the shipped configuration, so a new warning there must fail the build

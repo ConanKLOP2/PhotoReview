@@ -1,4 +1,3 @@
-using System.Windows.Input;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.App.Services;

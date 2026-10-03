@@ -1,4 +1,3 @@
-using PhotoReview.Core.Model;
 
 namespace PhotoReview.Imaging.Decoding;
 

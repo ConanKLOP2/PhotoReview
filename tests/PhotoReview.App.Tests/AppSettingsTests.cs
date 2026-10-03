@@ -1,10 +1,8 @@
 ﻿using System.Text.Json;
-using PhotoReview.App;
 using PhotoReview.Core;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.Tests;
 

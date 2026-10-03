@@ -1,4 +1,3 @@
-using PhotoReview.App;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;

@@ -1,14 +1,10 @@
-using System;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Core.Model;
-using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.Coordinators;

@@ -5,11 +5,9 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.App.Localization;
-using PhotoReview.App.Services;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Updates;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
 
 using PhotoReview.Core.Settings;

@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.IO;
 using PhotoReview.Core.Localization;
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.TestSupport;
 using Xunit;

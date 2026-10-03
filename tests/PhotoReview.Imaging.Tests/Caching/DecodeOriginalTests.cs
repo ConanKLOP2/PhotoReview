@@ -1,11 +1,8 @@
-using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
 

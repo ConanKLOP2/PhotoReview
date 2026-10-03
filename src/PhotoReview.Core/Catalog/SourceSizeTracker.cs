@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.IO;
 
 namespace PhotoReview.Core.Catalog;
 

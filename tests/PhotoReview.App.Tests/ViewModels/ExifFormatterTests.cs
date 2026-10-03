@@ -1,9 +1,7 @@
 using System.Globalization;
 using PhotoReview.App.ViewModels;
-using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Metadata;
-using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 

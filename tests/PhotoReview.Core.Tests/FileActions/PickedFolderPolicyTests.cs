@@ -1,4 +1,3 @@
-using PhotoReview.Core.FileActions;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.FileActions;

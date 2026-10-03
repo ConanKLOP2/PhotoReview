@@ -1,4 +1,3 @@
-using PhotoReview.Imaging.TurboJpeg;
 using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Tests.Metadata;

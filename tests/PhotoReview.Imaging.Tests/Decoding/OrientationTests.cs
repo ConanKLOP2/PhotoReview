@@ -1,6 +1,4 @@
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

@@ -1,5 +1,4 @@
 using System.IO;
-using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -10,7 +9,6 @@ using PhotoReview.App.Localization;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
-using PhotoReview.Core.Localization;
 using PhotoReview.Integration.Tests.Infrastructure;
 
 namespace PhotoReview.Integration.Tests;

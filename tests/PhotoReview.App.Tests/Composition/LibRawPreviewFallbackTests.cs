@@ -1,8 +1,6 @@
-using System;
 using System.IO;
 using PhotoReview.App.Composition;
 using PhotoReview.Imaging.Raw;
-using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.Composition;

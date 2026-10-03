@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using System.IO;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Localization;
 

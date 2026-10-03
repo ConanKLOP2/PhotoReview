@@ -1,10 +1,8 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Collections.Concurrent;
-using System.Threading;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Core.Localization;
 
 namespace PhotoReview.App;

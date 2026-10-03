@@ -2,7 +2,6 @@
 using System.IO;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Tests.Caching;
 

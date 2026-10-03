@@ -1,8 +1,6 @@
-using System.IO;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Instance;
 

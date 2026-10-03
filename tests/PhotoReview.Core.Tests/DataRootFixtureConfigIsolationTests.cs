@@ -1,4 +1,3 @@
-using System.IO;
 using PhotoReview.TestSupport;
 using Xunit;
 

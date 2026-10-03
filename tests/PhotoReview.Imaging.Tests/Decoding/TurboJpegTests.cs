@@ -1,10 +1,7 @@
-﻿using System;
-using System.IO;
-using System.Windows.Media.Imaging;
+﻿using System.IO;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
-using PhotoReview.Imaging.Tests.Quality;
 using PhotoReview.Imaging.TurboJpeg;
 using Xunit;
 

@@ -1,9 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 
@@ -26,7 +24,6 @@ public sealed class PreloadScheduler : IDisposable
     private readonly Func<int>? _snapshotVersion;
     private readonly PreloadOptions _options;
     private readonly IMemoryProbe _memoryProbe;
-    private readonly IUiScheduler _ui;
     private readonly ILog _log;
     private readonly Func<string, CancellationToken, Task>? _prefetchSourceBytes;
     // perf(preload): direction + key-rate tracking; see NotifyNavigation and PreloadOrderService.Build.
@@ -103,7 +100,6 @@ public sealed class PreloadScheduler : IDisposable
         ArgumentNullException.ThrowIfNull(totalSourceBytes); // retained for constructor compatibility; estimates now use per-entry metadata.
         _options = options ?? new PreloadOptions();
         _memoryProbe = memoryProbe ?? throw new ArgumentNullException(nameof(memoryProbe));
-        _ui = uiScheduler ?? ImmediateUiScheduler.Instance;
         _log = log ?? NullLog.Instance;
         _prefetchSourceBytes = prefetchSourceBytes;
         _snapshotVersion = snapshotVersion;
@@ -667,7 +663,7 @@ public sealed class PreloadScheduler : IDisposable
         var perf = PhotoReviewPerf.Log.IsEnabled();
         if (perf) PhotoReviewPerf.NavContext = -1;
         long perfEnqueue = perf ? Stopwatch.GetTimestamp() : 0;
-        var slot = -1;
+        int slot;
         await _preloadSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {

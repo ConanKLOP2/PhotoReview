@@ -1,9 +1,7 @@
 ﻿using System.Collections;
 using System.Globalization;
-using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.VisualBasic.FileIO;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Platform.Windows;

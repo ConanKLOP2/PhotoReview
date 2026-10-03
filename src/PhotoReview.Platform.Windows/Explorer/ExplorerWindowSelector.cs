@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Platform.Windows.Explorer;
 

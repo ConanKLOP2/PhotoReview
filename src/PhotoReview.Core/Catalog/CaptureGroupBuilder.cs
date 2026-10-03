@@ -1,4 +1,3 @@
-using System.IO;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Catalog;

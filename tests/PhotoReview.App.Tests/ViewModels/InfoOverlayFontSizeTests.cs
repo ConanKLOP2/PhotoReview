@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using System.ComponentModel;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.ViewModels;
-using PhotoReview.Core.Settings;
 using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;

@@ -1,10 +1,8 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 

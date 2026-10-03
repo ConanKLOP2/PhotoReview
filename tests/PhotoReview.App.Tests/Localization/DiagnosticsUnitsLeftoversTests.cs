@@ -6,7 +6,6 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Localization;
 using PhotoReview.Platform.Windows.Explorer;
-using PhotoReview.TestSupport;
 
 namespace PhotoReview.App.Tests.Localization;
 

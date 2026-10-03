@@ -1,4 +1,3 @@
-using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Imaging.Decoding;
 

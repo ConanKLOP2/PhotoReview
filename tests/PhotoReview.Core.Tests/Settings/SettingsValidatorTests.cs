@@ -1,5 +1,4 @@
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Core.Tests.Settings;
 

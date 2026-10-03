@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using PhotoReview.App;
 using PhotoReview.Core.Model; // InstanceMode, MouseWheelAction, ExifInfoFields
-using PhotoReview.Core.Settings;
 using PhotoReview.Integration.Tests.Infrastructure;
 
 namespace PhotoReview.Integration.Tests;

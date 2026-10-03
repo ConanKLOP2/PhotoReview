@@ -1,6 +1,5 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.TestSupport;
 using Xunit;

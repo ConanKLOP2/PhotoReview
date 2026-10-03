@@ -1,4 +1,3 @@
-using System.IO;
 using System.Globalization;
 using System.Text.Json;
 using PhotoReview.Core.Abstractions;

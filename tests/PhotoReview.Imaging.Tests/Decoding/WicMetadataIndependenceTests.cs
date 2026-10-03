@@ -1,7 +1,5 @@
-using System;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Metadata;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

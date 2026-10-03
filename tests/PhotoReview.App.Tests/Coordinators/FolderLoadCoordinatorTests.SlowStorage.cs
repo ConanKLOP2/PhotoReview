@@ -1,8 +1,6 @@
 using System.Globalization;
-using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.TestSupport;
 using Xunit;

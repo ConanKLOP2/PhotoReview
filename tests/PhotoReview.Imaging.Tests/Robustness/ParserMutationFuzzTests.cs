@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.Tests.Metadata;
-using PhotoReview.Imaging.TurboJpeg;
 
 namespace PhotoReview.Imaging.Tests.Robustness;
 
