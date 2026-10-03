@@ -12,7 +12,7 @@ namespace PhotoReview.App.Tests.Input;
 /// AR13a: the wheel / pan / click-to-zoom / kinetic-glide state machine moved out of MainWindow, driven through a
 /// fake <see cref="IImageSurface"/> (no WPF window, no STA).
 /// </summary>
-public sealed class PointerInputControllerTests
+public sealed partial class PointerInputControllerTests
 {
     private readonly FakeSurface _surface = new();
     private readonly ViewerState _viewer = new();
