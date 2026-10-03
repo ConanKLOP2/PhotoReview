@@ -48,8 +48,6 @@ public sealed class DiskCacheStore
     internal int FullScanCount => Volatile.Read(ref _fullScanCount);
 
     public string Directory => _directory;
-    public string SearchPattern => _searchPattern;
-    public long MaxBytes => _maxBytes;
     public ILog Log => _log;
 
     public DiskCacheStore(string directory, string searchPattern = "*.png", long maxBytes = 0, ILog? log = null, string? companionSuffix = null, Func<DateTime>? utcNow = null)

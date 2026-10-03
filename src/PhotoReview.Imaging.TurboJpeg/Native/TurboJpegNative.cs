@@ -56,15 +56,6 @@ public enum TjPixelFormat
     Cmyk = 11
 }
 
-public enum TjColorspace
-{
-    Rgb = 0,
-    YCbCr = 1,
-    Gray = 2,
-    Cmyk = 3,
-    Ycck = 4
-}
-
 [StructLayout(LayoutKind.Sequential)]
 public struct TjScalingFactor : IEquatable<TjScalingFactor>
 {

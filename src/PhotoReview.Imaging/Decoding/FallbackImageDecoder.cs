@@ -22,8 +22,6 @@ public sealed class FallbackImageDecoder : IImageDecoder
 
     public DecoderBackend PrimaryBackend => _primaryBackend;
     public DecoderBackend FallbackBackend => _fallbackBackend;
-    public IImageDecoder PrimaryDecoder => _primary;
-    public IImageDecoder FallbackDecoder => _fallback;
 
     public FallbackImageDecoder(
         IImageDecoder primary,
