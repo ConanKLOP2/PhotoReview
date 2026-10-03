@@ -90,19 +90,13 @@ public sealed class SettingsStore
             if (_fileSystem.FileExists(filePath))
             {
                 var json = ReadAllTextWithRetry(filePath);
-                AppSettings loaded;
-                IReadOnlyList<string> salvagedFrom = [];
-                try
-                {
-                    loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new();
-                }
-                catch (JsonException ex) when (TrySalvage(json, out var salvaged, out var unusable))
+                var parsed = ParseText(json); // the shared parse pipeline (also used by Settings > Import); throws JsonException for an unreadable file
+                var loaded = parsed.Settings;
+                if (parsed.SalvageCause is { } salvageCause)
                 {
                     // One mistyped value (e.g. "ClickZoomPercent": "abc") must not throw away the user's actions and shortcuts:
-                    // keep every property that reads fine, reset only the unusable ones, and keep the original as a backup.
-                    loaded = salvaged;
-                    salvagedFrom = unusable;
-                    LogStartupError("config.json has unreadable values (" + string.Join(", ", unusable) + "); the rest was kept", ex);
+                    // ParseText kept every property that reads fine and reset only the unusable ones; keep the original as a backup.
+                    LogStartupError("config.json has unreadable values (" + string.Join(", ", parsed.Salvaged) + "); the rest was kept", salvageCause);
                     try
                     {
                         _fileSystem.Copy(filePath, UniqueBackupPath(filePath));
@@ -113,17 +107,12 @@ public sealed class SettingsStore
                         LogStartupError("Could not back up config.json with unreadable values", copyEx);
                     }
                 }
-                FinishDeserialize(loaded, json);
-                LastLoadRepairs = [.. salvagedFrom, .. SettingsNormalizer.Normalize(loaded).Except(salvagedFrom, StringComparer.Ordinal)];
-                if (LastLoadRepairs.Count > 0)
-                    _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", LastLoadRepairs));
-                var disabledShortcuts = SettingsNormalizer.DisableConflictingOptionalShortcuts(loaded);
-                if (disabledShortcuts.Count > 0)
-                {
-                    _log.Info("Optional shortcuts disabled because their key is already bound: " + string.Join(", ", disabledShortcuts));
-                    // Surface it too (the startup dialog lists LastLoadRepairs): the user must not silently lose a shortcut.
-                    LastLoadRepairs = [.. LastLoadRepairs, .. disabledShortcuts.Select(name => "Shortcuts." + name)];
-                }
+                if (parsed.ResetSettings.Count > 0)
+                    _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", parsed.ResetSettings));
+                if (parsed.DisabledShortcuts.Count > 0)
+                    _log.Info("Optional shortcuts disabled because their key is already bound: " + string.Join(", ", parsed.DisabledShortcuts));
+                // The startup dialog lists LastLoadRepairs (resets + "Shortcuts.<name>" entries): the user must not silently lose a shortcut.
+                LastLoadRepairs = parsed.Repairs;
                 _current = loaded;
                 // Write the repaired settings back once so the start-up dialog does not repeat on every launch (the repairs
                 // are recomputed from the file on each Load). Save raises Changed itself; only the default file is rewritten.
@@ -298,6 +287,38 @@ public sealed class SettingsStore
         var loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
         FinishDeserialize(loaded, json);
         return loaded;
+    }
+
+    /// <summary>
+    /// The ONE parse pipeline for a config.json-shaped text, shared by <see cref="Load"/> and Settings > Import (no disk
+    /// access): deserialize (on a <see cref="JsonException"/> salvage property by property), mark an unversioned file as
+    /// legacy, migrate, normalize (out-of-range values and unparsable enums reset to defaults) and turn off optional
+    /// shortcuts whose key is already bound. Missing keys keep their defaults. Throws <see cref="JsonException"/> when the
+    /// text is not a JSON object at all (empty, garbage, an array...).
+    /// </summary>
+    public static SettingsParseResult ParseText(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        AppSettings loaded;
+        IReadOnlyList<string> salvaged = [];
+        JsonException? cause = null;
+        var isNull = false;
+        try
+        {
+            var deserialized = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings);
+            isNull = deserialized is null;
+            loaded = deserialized ?? new();
+        }
+        catch (JsonException ex) when (TrySalvage(json, out var salvagedSettings, out var unusable))
+        {
+            loaded = salvagedSettings;
+            salvaged = unusable;
+            cause = ex;
+        }
+        FinishDeserialize(loaded, json);
+        IReadOnlyList<string> reset = [.. salvaged, .. SettingsNormalizer.Normalize(loaded).Except(salvaged, StringComparer.Ordinal)];
+        var disabled = SettingsNormalizer.DisableConflictingOptionalShortcuts(loaded);
+        return new SettingsParseResult(loaded, salvaged, reset, disabled, cause, isNull);
     }
 
     private static void FinishDeserialize(AppSettings loaded, string json)
