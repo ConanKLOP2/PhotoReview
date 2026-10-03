@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using PhotoReview.Benchmarking;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -46,7 +47,7 @@ public partial class BenchmarkWindow : Window, IDisposable
 
     // XAML texts follow a language switch through {loc:Tr}; the profile list and the grid cells are
     // code-provided, so refresh them here (the window is modeless and can stay open across a switch).
-    private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.InvokeAsync(() =>
+    private void OnLanguageChanged(object? sender, EventArgs e) => _ = Dispatcher.InvokeAsync(() =>
     {
         foreach (var item in _profileItems) item.NotifyTextsChanged();
         ResultsGrid.Items.Refresh();
@@ -63,6 +64,7 @@ public partial class BenchmarkWindow : Window, IDisposable
 
     private void SelectNone_Click(object sender, RoutedEventArgs e) => ProfilesList.UnselectAll();
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
         var profiles = ProfilesList.SelectedItems.Cast<BenchmarkProfileItem>().Select(i => i.Profile).ToArray();
@@ -73,6 +75,7 @@ public partial class BenchmarkWindow : Window, IDisposable
     // "Quick check" (perf(bench-window)): a fixed, fast smoke run -- fast-sequential only, 10 iterations,
     // 1 warm-up (the profile's default WarmupCount) -- that never touches ProfilesList.SelectedItems, so a
     // careful multi-profile comparison the user set up is left alone.
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void QuickCheck_Click(object sender, RoutedEventArgs e)
     {
         var profile = BuildQuickCheckProfile();

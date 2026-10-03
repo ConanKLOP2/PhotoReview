@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.IO;
 using System.Windows.Threading;
@@ -235,6 +236,7 @@ public partial class App : System.Windows.Application, IDisposable
         return moveOverride is null ? null : moveOverride.MoveAsync;
     }
 
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void App_Startup(object sender, StartupEventArgs e)
     {
         // R2-F-04: this is an async void handler installed before the unhandled-exception hooks exist, and the default
@@ -426,7 +428,7 @@ public partial class App : System.Windows.Application, IDisposable
         }
         if (path is null) return;
         var open = window.OpenPathAsync(path);
-        open.ContinueWith(
+        _ = open.ContinueWith(
             t => AppLog.Error("Forwarded open failed", t.Exception),
             CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.FromCurrentSynchronizationContext());
     }
