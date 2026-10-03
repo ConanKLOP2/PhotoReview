@@ -28,6 +28,7 @@ public partial class SettingsWindow : Window
 
     /// <summary>Test seam: receives the invalid-destination warning of Save instead of a MessageBox.</summary>
     internal Action<string>? InvalidSettingsWarning { get; set; }
+    internal Action<string>? ImportRepairsNotice { get; set; } // test seam for the "some imported values were reset" info message
 
     /// <summary>Session-only "remember the last opened page" (DR02): resets on process restart, not persisted to disk.</summary>
     private static string s_lastPageKey = "General";
@@ -1008,31 +1009,40 @@ public partial class SettingsWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog { Title = Tr.DialogImportSettingsTitle, Filter = Tr.DialogFileFilterJson, InitialDirectory = AppContext.BaseDirectory };
         if (dialog.ShowDialog(this) != true) return;
-        AppSettings? imported;
+        string json;
         try
         {
-            var json = File.ReadAllText(dialog.FileName);
-            imported = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings);
+            json = File.ReadAllText(dialog.FileName);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             ShowInvalid(Tr.DialogImportSettingsFailed(ex.Message));
             return;
         }
-        if (imported is null)
-        {
-            ShowInvalid(Tr.DialogImportSettingsFailed(string.Empty));
-            return;
-        }
+        if (!TryApplyImportedJson(json, out var message)) ShowInvalid(message!);
+        else if (message is not null) ShowImportRepairs(message);
+    }
+
+    /// <summary>
+    /// Fills the window from imported text through the same pipeline as start-up (<see cref="SettingsStore.ParseText"/>: per-property
+    /// salvage, migration of an unversioned file, normalization, optional-shortcut conflicts). True on success with
+    /// <paramref name="message"/> = what was reset (null when nothing was); false with the error text when the file is unusable,
+    /// in which case the window keeps the settings it had.
+    /// </summary>
+    internal bool TryApplyImportedJson(string json, out string? message)
+    {
         var previous = Settings;
         try
         {
-            // A file that deserializes but holds values the clone, the normalizer or the field loader cannot take (null members,
-            // out-of-range values) must be reported like any unreadable file, and the window keeps the settings it had.
-            var cloned = AppSettings.Clone(imported);
-            SettingsNormalizer.Normalize(cloned);
-            Settings = cloned;
+            var parsed = SettingsStore.ParseText(json);
+            if (parsed.IsJsonNull) throw new JsonException("The file does not contain a settings object.");
+            var repairs = parsed.Repairs;
+            // A file that parses but holds values the clone or the field loader cannot take (null members) must be reported
+            // like any unreadable file, and the window keeps the settings it had.
+            Settings = AppSettings.Clone(parsed.Settings);
             LoadFields();
+            message = repairs.Count > 0 ? SettingsLoadRepairText.Build(repairs, forImport: true) : null;
+            return true;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -1040,7 +1050,15 @@ public partial class SettingsWindow : Window
             Settings = previous;
             try { LoadFields(); }
             catch (Exception reloadEx) when (reloadEx is not OutOfMemoryException) { AppLog.Error("Settings import: could not restore the previous fields", reloadEx); }
-            ShowInvalid(Tr.DialogImportSettingsFailed(ex.Message));
+            message = Tr.DialogImportSettingsFailed(ex.Message);
+            return false;
         }
+    }
+
+    /// <summary>Tells the user which imported values were reset; the import itself succeeded (the window is filled, nothing saved yet).</summary>
+    private void ShowImportRepairs(string message)
+    {
+        if (ImportRepairsNotice is { } notice) notice(message);
+        else System.Windows.MessageBox.Show(this, message, Tr.DialogImportSettingsTitle, MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

@@ -211,6 +211,7 @@
   "dialog.importActions.failed.title": "Import failed",
   "dialog.importActions.invalid.message": "The action profile file is not valid.",
   "dialog.importSettings.failed": "Could not import settings: {message}",
+  "dialog.importSettings.repaired": "The imported file contained invalid values. These settings were reset to their defaults: {items}.",
   "dialog.importSettings.title": "Import settings",
   "dialog.openEditorFailed.message": "The current action profiles JSON is not valid.",
   "dialog.openEditorFailed.title": "Cannot open the editor",
