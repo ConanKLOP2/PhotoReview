@@ -39,7 +39,7 @@ public static class InstanceForwardPipe
 /// Owner side of Q-R10. Accepts one connection at a time, reads a size-capped, time-boxed request, validates it and
 /// answers <c>OK</c> or <c>ERR</c>. Malformed input is dropped and never affects the listener loop.
 /// </summary>
-public sealed class InstanceForwardServer : IInstanceForwardServer
+public sealed class InstanceForwardServer : IDisposable
 {
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
 
