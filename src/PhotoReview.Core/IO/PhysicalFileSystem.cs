@@ -241,11 +241,18 @@ public sealed class PhysicalFileSystem : IFileSystem
     public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(
         string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped)
     {
+        return EnumerateFilesWithStat(directory, include, onSkipped, static dir => new DirectoryInfo(dir).EnumerateFiles("*").GetEnumerator());
+    }
+
+    /// <summary>Test seam: the directory enumerator is injected so a test can make <c>MoveNext</c> throw part-way through a listing.</summary>
+    internal static IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(
+        string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped, Func<string, IEnumerator<FileInfo>> openListing)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         ArgumentNullException.ThrowIfNull(include);
         ArgumentNullException.ThrowIfNull(onSkipped);
 
-        using var enumerator = new DirectoryInfo(directory).EnumerateFiles("*").GetEnumerator();
+        using var enumerator = openListing(directory);
         var listed = 0;
         while (true)
         {
