@@ -26,7 +26,6 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
     var files = allFiles.Where(p => supported.Contains(Path.GetExtension(p))).Take(64).ToArray();
     if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
-    var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0L; } });
     var reports = new List<BenchmarkReport>();
     var outcomes = new List<BenchmarkPhaseResult>();
     var manifest = new BenchmarkDatasetManifest(Path.GetFullPath(folder),
@@ -36,7 +35,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     foreach (var profile in profiles)
     {
         Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");
-        await using var imageExecutor = new BenchmarkImageExecutor(profile, files, totalSourceBytes);
+        await using var imageExecutor = new BenchmarkImageExecutor(profile, files);
         var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
         // Same profile application as the WPF benchmark window: logging-on/logging-off must differ (PERF-01).
         using var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled);

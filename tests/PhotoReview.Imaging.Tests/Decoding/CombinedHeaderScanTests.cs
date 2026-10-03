@@ -34,7 +34,7 @@ public sealed class CombinedHeaderScanTests
 
         Assert.True(hasIcc);
         Assert.False(exifTiff.IsEmpty);
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(jpeg));
+        Assert.True(JpegIccProbe.HasIcc(jpeg));
         Assert.Equal(6, TurboJpegDecoder.ReadExifOrientation(jpeg));
         Assert.Equal(ExifParser.FindExifTiffBlock(jpeg).ToArray(), exifTiff.ToArray());
     }
@@ -95,7 +95,7 @@ public sealed class CombinedHeaderScanTests
         var ex = Record.Exception(() =>
             TurboJpegDecoder.ScanHeader(truncated, wantIcc: true, wantExif: true, out bool hasIcc, out var exifTiff));
         Assert.Null(ex);
-        Assert.False(TurboJpegDecoder.HasEmbeddedIccProfile(truncated));
+        Assert.False(JpegIccProbe.HasIcc(truncated));
         Assert.Equal(1, TurboJpegDecoder.ReadExifOrientation(truncated));
         Assert.Null(ExifParser.TryParseJpeg(truncated));
     }
@@ -171,7 +171,7 @@ public sealed class CombinedHeaderScanTests
         const int rounds = 2000;
 
         // Warm-up (JIT).
-        _ = TurboJpegDecoder.HasEmbeddedIccProfile(bytes);
+        _ = JpegIccProbe.HasIcc(bytes);
         _ = TurboJpegDecoder.ReadExifOrientation(bytes);
         _ = ExifParser.TryParseJpeg(bytes);
         TurboJpegDecoder.ScanHeader(bytes, true, true, out _, out var warm);
@@ -180,7 +180,7 @@ public sealed class CombinedHeaderScanTests
         var threeWalks = Stopwatch.StartNew();
         for (var i = 0; i < rounds; i++)
         {
-            _ = TurboJpegDecoder.HasEmbeddedIccProfile(bytes);
+            _ = JpegIccProbe.HasIcc(bytes);
             _ = TurboJpegDecoder.ReadExifOrientation(bytes);
             _ = ExifParser.TryParseJpeg(bytes);
         }
@@ -221,7 +221,7 @@ public sealed class CombinedHeaderScanTests
         var bytes = padded.ToArray();
         const int rounds = 500;
 
-        _ = TurboJpegDecoder.HasEmbeddedIccProfile(bytes);
+        _ = JpegIccProbe.HasIcc(bytes);
         _ = TurboJpegDecoder.ReadExifOrientation(bytes);
         _ = ExifParser.TryParseJpeg(bytes);
         TurboJpegDecoder.ScanHeader(bytes, true, true, out _, out var warm);
@@ -230,7 +230,7 @@ public sealed class CombinedHeaderScanTests
         var threeWalks = Stopwatch.StartNew();
         for (var i = 0; i < rounds; i++)
         {
-            _ = TurboJpegDecoder.HasEmbeddedIccProfile(bytes);
+            _ = JpegIccProbe.HasIcc(bytes);
             _ = TurboJpegDecoder.ReadExifOrientation(bytes);
             _ = ExifParser.TryParseJpeg(bytes);
         }

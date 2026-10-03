@@ -5,9 +5,7 @@ namespace PhotoReview.Imaging.Raw;
 /// </summary>
 public enum EmbeddedPreviewKind
 {
-    Jpeg,
-    UncompressedRgb,
-    Other
+    Jpeg
 }
 
 /// <summary>

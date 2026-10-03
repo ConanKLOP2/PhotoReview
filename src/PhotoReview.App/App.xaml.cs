@@ -184,8 +184,8 @@ public partial class App : System.Windows.Application, IDisposable
 
         // RV-I13: getSnapshotVersion (ReviewCatalog.StructuralVersion) lets a running preload lifetime notice a catalog
         // change that did not go through Cancel() and restart on the new snapshot.
-        services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, Func<int>, PreloadScheduler>>(sp =>
-            (getEntries, getTotalBytes, getSnapshotVersion) =>
+        services.AddSingleton<Func<Func<CatalogEntry[]>, Func<int>, PreloadScheduler>>(sp =>
+            (getEntries, getSnapshotVersion) =>
             {
                 var settingsStore = sp.GetRequiredService<SettingsStore>();
                 var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
@@ -194,7 +194,6 @@ public partial class App : System.Windows.Application, IDisposable
                 previewService,
                 sp.GetRequiredService<ReviewMetrics>(),
                 getEntries,
-                getTotalBytes,
                 fullFolderRamThresholdBytes: previewService.CapacityBytes, // effective (clamped) budget, R2-A-05
                 memoryLoadLimit: settingsStore.Current.PreloadMemoryLoadLimit,
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),

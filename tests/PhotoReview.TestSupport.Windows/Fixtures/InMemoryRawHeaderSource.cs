@@ -1,6 +1,7 @@
 using System.IO;
+using PhotoReview.Imaging.Raw;
 
-namespace PhotoReview.Imaging.Raw;
+namespace PhotoReview.TestSupport.Windows.Fixtures;
 
 /// <summary>
 /// In-memory <see cref="IRawHeaderSource"/> backed by a <see cref="ReadOnlyMemory{Byte}"/> buffer.

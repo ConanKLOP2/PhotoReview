@@ -23,7 +23,7 @@ public sealed class FallbackExceptionCoverageTests : IDisposable
     {
         var path = FixtureGenerator.GenerateJpegWithIcc(Path.Combine(_root.Path, "a.jpg"), 32, 24);
         var decoder = new FallbackImageDecoder(new ThrowingDecoder(exceptionType), DecoderBackend.TurboJpeg,
-            new WpfBitmapImageDecoder(), DecoderBackend.Wpf);
+            new WpfBitmapImageDecoder());
 
         var decoded = decoder.Decode(new DecodeRequest(path, TargetWidth: 0));
         var info = decoder.ReadInfo(path);
@@ -42,7 +42,7 @@ public sealed class FallbackExceptionCoverageTests : IDisposable
     {
         var path = FixtureGenerator.GenerateJpegWithIcc(Path.Combine(_root.Path, "b.jpg"), 32, 24);
         var decoder = new FallbackImageDecoder(new ThrowingDecoder(exceptionType), DecoderBackend.TurboJpeg,
-            new WpfBitmapImageDecoder(), DecoderBackend.Wpf);
+            new WpfBitmapImageDecoder());
 
         Assert.Throws(exceptionType, () => decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
         Assert.Throws(exceptionType, () => decoder.ReadInfo(path));

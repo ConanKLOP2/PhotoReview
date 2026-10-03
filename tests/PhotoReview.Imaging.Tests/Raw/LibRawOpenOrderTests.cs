@@ -1,4 +1,3 @@
-using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.LibRaw;
 
@@ -12,10 +11,6 @@ namespace PhotoReview.Imaging.Tests.Raw;
 [Trait("Category", "Native")]
 public sealed class LibRawOpenOrderTests
 {
-    private readonly Xunit.Abstractions.ITestOutputHelper _output;
-
-    public LibRawOpenOrderTests(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
-
     [Fact]
     public void Decode_MissingFile_ConfiguresOutputBeforeAttemptingToOpen()
     {
@@ -39,35 +34,6 @@ public sealed class LibRawOpenOrderTests
         _ = new LibRawDecoder(stages.Add).Decode(new DecodeRequest(path, new DecodeBox(160, 120)));
 
         Assert.Equal(["configured", "opened", "unpacked", "processed", "handle-closed", "source-released", "bitmap-created"], stages);
-    }
-
-    [Fact]
-    public void Decode_LegacyOrderSeam_ReportsOpenBeforeConfigure()
-    {
-        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
-            RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is not { } path) return;
-        var stages = new List<string>();
-
-        _ = new LibRawDecoder(stages.Add, configureAfterOpen: true).Decode(new DecodeRequest(path, new DecodeBox(160, 120)));
-
-        Assert.Equal(["opened", "configured", "unpacked", "processed", "handle-closed", "source-released", "bitmap-created"], stages);
-    }
-
-    [Fact]
-    public void Decode_OrfCameraMatrix_DiffersMeasurablyBetweenOpenTimeAndAfterOpenConfiguration()
-    {
-        // E-P3 is the smallest ORF of the corpus; measured open-time vs after-open R/G,B/G: E-P3 (0.953,1.042) vs (0.905,1.053),
-        // E-M1 (0.920,0.957) vs (0.896,0.950), OM-1 (1.033,0.929) vs (1.029,0.908); CR2/NEF/ARW/RW2/Pentax DNG were byte-identical.
-        const string fileName = "Olympus - E-P3 - 16bit (4_3).ORF";
-        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
-            RawCorpus.TryGetFile(fileName) is not { } path) return;
-
-        var before = Ratios(new LibRawDecoder(null).Decode(new DecodeRequest(path, new DecodeBox(240, 180))));
-        var after = Ratios(new LibRawDecoder(null, configureAfterOpen: true).Decode(new DecodeRequest(path, new DecodeBox(240, 180))));
-        _output.WriteLine($"{fileName}: open-time {before}, after-open {after}");
-
-        Assert.True(Math.Abs(before.RG / after.RG - 1) > 0.01 || Math.Abs(before.BG / after.BG - 1) > 0.01,
-            $"{fileName}: open-time {before} vs after-open {after}");
     }
 
     [Fact]
@@ -114,16 +80,5 @@ public sealed class LibRawOpenOrderTests
         var decoded = decoder.Decode(new DecodeRequest(path, new DecodeBox(240, 180)));
 
         Assert.Equal(DecoderBackend.LibRaw, decoded.ActualBackend);
-    }
-
-    private static (double RG, double BG) Ratios(IDecodedImage image)
-    {
-        var bitmap = (BitmapSource)image.PlatformImage;
-        var stride = bitmap.PixelWidth * 4;
-        var pixels = new byte[stride * bitmap.PixelHeight];
-        bitmap.CopyPixels(pixels, stride, 0);
-        double r = 0, g = 0, b = 0;
-        for (var i = 0; i < pixels.Length; i += 4) { b += pixels[i]; g += pixels[i + 1]; r += pixels[i + 2]; }
-        return (r / g, b / g);
     }
 }

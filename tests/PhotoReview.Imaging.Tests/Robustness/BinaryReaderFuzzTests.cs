@@ -246,7 +246,6 @@ public sealed class BinaryReaderFuzzTests : IDisposable
                     // Lengths and offsets the container would claim but the file cannot honour.
                     _ = JpegMarkerProbe.TryReadLossyFrame(source, 0, long.MaxValue, out _, out _);
                     _ = JpegMarkerProbe.TryReadLossyFrame(source, bytes.Length / 2, bytes.Length, out _, out _);
-                    _ = PreviewSelector.TryExtractJpegDimensions(bytes, out _, out _, out _);
                     _ = PreviewSelector.IsAdobeRgbExif(bytes);
                     var previews = new[]
                     {
@@ -275,7 +274,7 @@ public sealed class BinaryReaderFuzzTests : IDisposable
             bytes =>
             {
                 Assert.InRange(TurboJpegDecoder.ReadExifOrientation(bytes), 1, 8);
-                _ = TurboJpegDecoder.HasEmbeddedIccProfile(bytes);
+                _ = JpegIccProbe.HasIcc(bytes);
                 File.WriteAllBytes(path, bytes);
                 var info = decoder.ReadInfo(path);
                 Assert.True(info.Width > 0 && info.Height > 0, "ReadInfo accepted a non-positive size");

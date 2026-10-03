@@ -56,7 +56,7 @@ public sealed class BenchmarkTrustTests : IDisposable
 
     private BenchmarkImageExecutor NewExecutor(BenchmarkProfile profile, string[] files)
     {
-        var executor = new BenchmarkImageExecutor(profile, files, files.Sum(f => new FileInfo(f).Length), hasHeadroom: _ => true);
+        var executor = new BenchmarkImageExecutor(profile, files, hasHeadroom: _ => true);
         _executors.Add(executor);
         return executor;
     }

@@ -113,7 +113,7 @@ public sealed class DecoderQualityGateTests : IDisposable
         var generated = FixtureGenerator.GenerateJpegWithIcc(iccJpegPath, 128, 96);
 
         var bytes = File.ReadAllBytes(generated);
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(bytes),
+        Assert.True(JpegIccProbe.HasIcc(bytes),
             "The deterministic fixture must contain a JPEG APP2 ICC profile.");
 
         // 1. WPF is the color-managed reference; direct WIC applies an IWICColorTransform to sRGB

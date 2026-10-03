@@ -91,7 +91,7 @@ public sealed class DecoderErrorLocalizationTests : IDisposable
     public void IccJpeg_IsLocalizedAndFallbackStillTriggers()
     {
         var path = FixtureGenerator.GenerateJpegWithIcc(_root.Combine("icc.jpg"), 64, 48);
-        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(File.ReadAllBytes(path)));
+        Assert.True(JpegIccProbe.HasIcc(File.ReadAllBytes(path)));
 
         var ex = Assert.Throws<NotSupportedException>(() => _turbo.Decode(new DecodeRequest(path, TargetWidth: 0)));
 
@@ -100,7 +100,7 @@ public sealed class DecoderErrorLocalizationTests : IDisposable
 
         // The fallback decision reads the exception type only: it must work while the UI language is Vietnamese.
         using var _ = TestLocalization.Use(TestLocalization.Vietnamese);
-        var decoder = new FallbackImageDecoder(_turbo, DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder(), DecoderBackend.Wpf);
+        var decoder = new FallbackImageDecoder(_turbo, DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder());
         var decoded = decoder.Decode(new DecodeRequest(path, TargetWidth: 32));
         Assert.Equal(DecoderBackend.Wpf, decoded.ActualBackend);
         Assert.Equal(32, decoded.PixelWidth);

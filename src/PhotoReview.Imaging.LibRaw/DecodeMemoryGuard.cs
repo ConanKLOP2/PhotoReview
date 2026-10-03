@@ -88,12 +88,4 @@ internal static class DecodeMemoryGuard
         var total = source + raw + target;
         return total >= long.MaxValue ? long.MaxValue : (long)total;
     }
-
-    /// <summary>True when <paramref name="estimatedBytes"/> fits into <paramref name="totalAvailableBytes"/> minus <paramref name="memoryLoadBytes"/>. An unknown total (&lt;= 0) never refuses.</summary>
-    internal static bool HasHeadroom(long estimatedBytes, long totalAvailableBytes, long memoryLoadBytes) =>
-        PhotoReview.Imaging.Decoding.MemoryHeadroom.HasHeadroom(estimatedBytes, totalAvailableBytes, memoryLoadBytes);
-
-    /// <summary>Production memory reading: (total available, current load) from the GC.</summary>
-    internal static (long TotalAvailable, long Load) ReadGcMemoryInfo() =>
-        PhotoReview.Imaging.Decoding.MemoryHeadroom.ReadGcMemoryInfo();
 }

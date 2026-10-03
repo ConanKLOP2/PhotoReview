@@ -81,12 +81,12 @@ public static class PreviewCacheFile
         ExifSummary? Exif = null);
 
     /// <summary>Public, framework-agnostic entry point: encodes an already-decoded preview.</summary>
-    public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, int jpegQuality = DefaultJpegQuality, CancellationToken cancellationToken = default)
+    public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(image);
         if (image.PlatformImage is not BitmapSource bitmap)
             throw new ArgumentException("PlatformImage must be a BitmapSource for the preview cache.", nameof(image));
-        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath, jpegQuality, exif: image.Exif, cancellationToken: cancellationToken);
+        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath, exif: image.Exif, cancellationToken: cancellationToken);
     }
 
     /// <summary>Public, framework-agnostic entry point: reads a v5 entry back as an <see cref="IDecodedImage"/>.</summary>
@@ -109,7 +109,6 @@ public static class PreviewCacheFile
         int originalWidth,
         int originalHeight,
         string cachePath,
-        int jpegQuality = DefaultJpegQuality,
         bool opacityVerified = false,
         ExifSummary? exif = null,
         CancellationToken cancellationToken = default)
@@ -138,7 +137,7 @@ public static class PreviewCacheFile
             stream.Write(header);
             stream.Write(exifLength);
             stream.Write(exifBytes);
-            var encoder = new JpegBitmapEncoder { QualityLevel = jpegQuality };
+            var encoder = new JpegBitmapEncoder { QualityLevel = DefaultJpegQuality };
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
             encoder.Save(stream);
         }, log: null, cancellationToken).ConfigureAwait(false);

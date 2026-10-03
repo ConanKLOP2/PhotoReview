@@ -28,12 +28,6 @@ public sealed class WicDirectDecoder : IImageDecoder
     /// <summary>Memory seam for the output-size guard (total available, current load); tests inject a small machine.</summary>
     internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = MemoryHeadroom.ReadGcMemoryInfo;
 
-    /// <summary>Output buffers below this never consult the memory guard (no GC info query on the common, small decode).</summary>
-    internal const long GuardThresholdBytes = 128L * 1024 * 1024;
-
-    /// <summary>Native scratch buffer plus the WPF bitmap BitmapSource.Create copies it into.</summary>
-    internal const int OutputPeakFactor = 2;
-
     public IDecodedImage Decode(DecodeRequest request)
     {
         // With pre-read bytes the path is only a label (TurboJpeg accepts any); a file is opened only without them.
@@ -298,9 +292,9 @@ public sealed class WicDirectDecoder : IImageDecoder
     /// <summary>Refuses an output buffer the machine cannot hold with a clean error instead of an OutOfMemoryException.</summary>
     internal static void EnsureOutputFits(int width, int height, long bufferLength, Func<(long TotalAvailable, long Load)> memoryInfo)
     {
-        if (bufferLength < GuardThresholdBytes) return;
+        if (bufferLength < MemoryHeadroom.GuardThresholdBytes) return;
         var (total, load) = memoryInfo();
-        if (MemoryHeadroom.HasHeadroom(bufferLength * OutputPeakFactor, total, load)) return;
+        if (MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load)) return;
         throw UserFacingError.Localized(
             new InvalidDataException($"WicDirect output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
             () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));

@@ -35,10 +35,10 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
         _root.Dispose();
     }
 
-    private BenchmarkImageExecutor NewExecutor(BenchmarkProfile profile, string[] files, long totalSourceBytes,
+    private BenchmarkImageExecutor NewExecutor(BenchmarkProfile profile, string[] files,
         Func<double, bool>? hasHeadroom = null)
     {
-        var executor = new BenchmarkImageExecutor(profile, files, totalSourceBytes, hasHeadroom);
+        var executor = new BenchmarkImageExecutor(profile, files, hasHeadroom);
         _executors.Add(executor);
         return executor;
     }
@@ -51,7 +51,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     {
         var profile = BenchmarkProfiles.Find(profileId)!;
         var files = new[] { _root.File($"{profileId}-source.png", TestImages.PreviewPng) };
-        var executor = NewExecutor(profile, files, new FileInfo(files[0]).Length);
+        var executor = NewExecutor(profile, files);
 
         var (correct, metrics) = await BenchmarkWorkloadRunner.RunIterationAsync(
             executor, files, profile, BenchmarkWorkload.FileAction, iteration: 0,
@@ -73,7 +73,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     {
         var profile = BenchmarkProfiles.Find("action-delete")!;
         var files = new[] { _root.File("prepare-source.png", TestImages.PreviewPng) };
-        var executor = NewExecutor(profile, files, new FileInfo(files[0]).Length);
+        var executor = NewExecutor(profile, files);
 
         var measure = await BenchmarkWorkloadRunner.PrepareIterationAsync(
             executor, files, profile, BenchmarkWorkload.FileAction, iteration: 0,
@@ -91,7 +91,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     {
         var profile = BenchmarkProfiles.Find("action-interleaved")!;
         var files = new[] { _root.File("interleaved-source.png", TestImages.PreviewPng) };
-        var executor = NewExecutor(profile, files, new FileInfo(files[0]).Length);
+        var executor = NewExecutor(profile, files);
         var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
 
         for (var iteration = 0; iteration < 3; iteration++)
@@ -116,7 +116,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
         // Real preload memory headroom is machine-dependent (production behavior); fix it to
         // "always available" so this assertion exercises the preload-hit bookkeeping itself,
         // not how much free RAM the machine running the test happens to have.
-        var executor = NewExecutor(profile, files, files.Sum(f => new FileInfo(f).Length), hasHeadroom: _ => true);
+        var executor = NewExecutor(profile, files, hasHeadroom: _ => true);
 
         await executor.DecodeAsync(files[0]);
         executor.WarmPreloadAround(0);

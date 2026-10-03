@@ -3,9 +3,6 @@ namespace PhotoReview.Imaging;
 /// <summary>Calculates the bounded preview decode size from the viewport and display DPI.</summary>
 public static class AdaptivePreviewPolicy
 {
-    public const int MinimumDecodeWidth = 1200;
-    public const int MaximumDecodeWidth = 4000;
-
     /// <summary>The box's long side is scaled up (keeping the viewport's aspect) to at least this.</summary>
     public const int MinimumBoxLongSide = 1200;
 
@@ -18,15 +15,6 @@ public static class AdaptivePreviewPolicy
     /// still yields bigger decodes.
     /// </summary>
     public const int BoxQuantum = 128;
-
-    public static int CalculateTargetDecodeWidth(double viewportWidth, double dpiScale = 1.0, double qualityMultiplier = 1.0)
-    {
-        Validate(viewportWidth, nameof(viewportWidth));
-        Validate(dpiScale, nameof(dpiScale));
-        Validate(qualityMultiplier, nameof(qualityMultiplier));
-        var requested = viewportWidth * dpiScale * qualityMultiplier;
-        return (int)Math.Clamp(Math.Round(requested, MidpointRounding.AwayFromZero), MinimumDecodeWidth, MaximumDecodeWidth);
-    }
 
     /// <summary>
     /// Preview decode box (device pixels) for a viewport of <paramref name="viewportWidth"/> x

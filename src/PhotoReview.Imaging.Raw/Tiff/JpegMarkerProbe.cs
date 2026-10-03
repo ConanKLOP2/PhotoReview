@@ -8,11 +8,6 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// </summary>
 internal static class JpegMarkerProbe
 {
-    private const int MaxSegments = 512;
-
-    /// <summary>Fill bytes (extra 0xFF before a marker) are skipped without using a segment iteration, up to this many in a row.</summary>
-    private const int MaxFillBytes = 64 * 1024;
-
     /// <summary>
     /// True when the range starts with SOI and its first frame header is baseline, extended sequential or
     /// progressive (SOF0/1/2). Lossless (SOF3), arithmetic/hierarchical frames and truncated data return false.
@@ -43,7 +38,7 @@ internal static class JpegMarkerProbe
 
         long pos = offset + 2;
         int fillBytes = 0;
-        for (int segment = 0; segment < MaxSegments && pos + 4 <= end; segment++)
+        for (int segment = 0; segment < RawContainerLimits.MaxJpegMarkerSegments && pos + 4 <= end; segment++)
         {
             var head = source.Read(pos, 4);
             if (head[0] != 0xFF) return false;
@@ -52,7 +47,7 @@ internal static class JpegMarkerProbe
             if (marker == 0xFF)
             {
                 // Fill byte: does not consume a segment iteration (only the separate fill cap bounds it).
-                if (++fillBytes > MaxFillBytes) return false;
+                if (++fillBytes > RawContainerLimits.MaxJpegFillBytes) return false;
                 pos++;
                 segment--;
                 continue;

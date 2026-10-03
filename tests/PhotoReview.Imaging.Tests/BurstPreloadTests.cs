@@ -194,8 +194,8 @@ public sealed class BurstPreloadSchedulerTests : IDisposable
 
     private PreloadScheduler Create(GatedTarget target, int workers) =>
         // Windowed (not whole-folder) preload: the tests reason about the 32/8 windows only.
-        new(target, _metrics, () => _entries, () => 1, new PreloadOptions(WorkerCount: workers, FullFolderThresholdBytes: 0),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, pace: new NavigationPace(() => _now));
+        new(target, _metrics, () => _entries, new PreloadOptions(WorkerCount: workers, FullFolderThresholdBytes: 0),
+            new FakeMemoryProbe(true), pace: new NavigationPace(() => _now));
 
     private int IndexOf(string path) => Array.FindIndex(_files, f => string.Equals(f, path, StringComparison.OrdinalIgnoreCase));
 

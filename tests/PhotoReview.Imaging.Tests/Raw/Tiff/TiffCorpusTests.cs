@@ -92,7 +92,7 @@ public sealed class TiffCorpusTests
         byte[] bytes = ReadRange(file, preview.Offset, preview.Length);
         Assert.True(bytes[0] == 0xFF && bytes[1] == 0xD8, $"{Path.GetFileName(file)}: preview at {preview.Offset} does not start with SOI.");
         Assert.True(
-            PreviewSelector.TryExtractJpegDimensions(bytes, out int width, out int height, out _) && width > 0 && height > 0,
+            PreviewSelector.TryReadJpegFrame(new InMemoryRawHeaderSource(bytes), 0, bytes.Length, out int width, out int height, out _) && width > 0 && height > 0,
             $"{Path.GetFileName(file)}: preview at {preview.Offset} has no SOF0/1/2 frame (lossless or corrupt).");
     }
 

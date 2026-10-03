@@ -59,7 +59,7 @@ public sealed class Cr3BmffHardeningTests
                 fs.ReadExactly(bytes);
 
                 Assert.True(bytes[0] == 0xFF && bytes[1] == 0xD8, $"{name}: preview at {preview.Offset} lacks JPEG SOI");
-                Assert.True(PreviewSelector.TryExtractJpegDimensions(bytes, out int w, out int h, out _));
+                Assert.True(PreviewSelector.TryReadJpegFrame(new InMemoryRawHeaderSource(bytes), 0, bytes.Length, out int w, out int h, out _));
                 Assert.Equal((preview.Width, preview.Height), (w, h));
 
                 // Real decode through libjpeg-turbo agrees with the advertised dimensions.

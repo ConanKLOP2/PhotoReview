@@ -219,7 +219,7 @@ public sealed class LibRawDecoderTests
         var bytes = File.ReadAllBytes(source);
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         var info = new PhotoReview.Imaging.Raw.RawContainerReaderRegistry()
-            .FindReader(bytes.AsSpan(0, 64), extension)!.Read(new PhotoReview.Imaging.Raw.InMemoryRawHeaderSource(bytes), CancellationToken.None);
+            .FindReader(bytes.AsSpan(0, 64), extension)!.Read(new InMemoryRawHeaderSource(bytes), CancellationToken.None);
         Assert.True(RawOrientationPatcher.TryWriteOrientation(bytes, extension, info, 6), $"{fileName} has no orientation tag to rewrite");
         using var temp = new PhotoReview.TestSupport.TempRoot("libraw-portrait");
         var path = temp.File(fileName, bytes);

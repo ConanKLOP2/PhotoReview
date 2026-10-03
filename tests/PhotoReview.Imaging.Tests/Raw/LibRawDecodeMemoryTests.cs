@@ -66,8 +66,8 @@ public sealed class LibRawDecodeMemoryTests
         const int Width = 11_600, Height = 8_700;
         var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height);
 
-        Assert.False(DecodeMemoryGuard.HasHeadroom(estimate, totalAvailableBytes: 1_200_000_000L, memoryLoadBytes: 0));
-        Assert.True(DecodeMemoryGuard.HasHeadroom(estimate, totalAvailableBytes: 1_500_000_000L, memoryLoadBytes: 0));
+        Assert.False(MemoryHeadroom.HasHeadroom(estimate, totalAvailableBytes: 1_200_000_000L, memoryLoadBytes: 0));
+        Assert.True(MemoryHeadroom.HasHeadroom(estimate, totalAvailableBytes: 1_500_000_000L, memoryLoadBytes: 0));
     }
 
     private static readonly DecodeMemoryGuard.RawStructure Mosaic = new(Colors: 3, Filters: 0x94949494);
@@ -228,7 +228,7 @@ public sealed class LibRawDecodeMemoryTests
     [InlineData(long.MaxValue, 0L, 0L, true)]     // unknown total never refuses
     public void HasHeadroom_ComparesTheEstimateWithTotalMinusLoad(long estimate, long total, long load, bool expected)
     {
-        Assert.Equal(expected, DecodeMemoryGuard.HasHeadroom(estimate, total, load));
+        Assert.Equal(expected, MemoryHeadroom.HasHeadroom(estimate, total, load));
     }
 
     private static BitmapSource Bitmap(byte[] source, int sw, int sh, int tw, int th, int channels)
