@@ -12,6 +12,7 @@ namespace PhotoReview.Imaging.Tests.Decoding;
 /// native error detail carried by the messages, the memory/size guard thresholds, the DCT scale picked from the declared size, the
 /// source-size limit, the header-area growth when the first read ends inside the SOS header, and the ICC/EXIF header scan.
 /// </summary>
+[Collection("GlobalState")] // switches the process-wide ambient localizer (TEST-09c)
 public sealed class TurboJpegGuardMutationTests : IDisposable
 {
     private const long Gb = 1024L * 1024 * 1024;

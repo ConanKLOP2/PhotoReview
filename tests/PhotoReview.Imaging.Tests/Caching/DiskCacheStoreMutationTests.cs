@@ -322,6 +322,7 @@ public sealed class DiskCacheStoreMutationTests : IDisposable
     // ---- DeleteStaleTempFiles -------------------------------------------------------------------------------------
 
     [Fact(DisplayName = "DeleteStaleTempFiles on a directory that cannot be listed logs the failure and returns 0 instead of throwing")]
+    [Trait("Category", "Native")] // changes a real ACL (Deny ListDirectory): a killed test host could leave the Deny ACE behind, the finally block restores it otherwise
     public void DeleteStaleTempFiles_UnlistableDirectory_LogsAndReturnsZero()
     {
         var dir = _root.Dir("denied");

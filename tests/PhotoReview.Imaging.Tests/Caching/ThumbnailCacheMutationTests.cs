@@ -136,6 +136,7 @@ public sealed class ThumbnailCacheMutationTests : IDisposable
     }
 
     [Fact(DisplayName = "ClearDisk on a directory that cannot be listed logs the failure instead of throwing")]
+    [Trait("Category", "Native")] // changes a real ACL (Deny ListDirectory): a killed test host could leave the Deny ACE behind, the finally block restores it otherwise
     public async Task ClearDisk_UnlistableDirectory_LogsAndDoesNotThrow()
     {
         var disk = _root.Dir("disk-denied");

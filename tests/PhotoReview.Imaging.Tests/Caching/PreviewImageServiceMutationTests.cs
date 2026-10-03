@@ -247,6 +247,7 @@ public sealed class PreviewImageServiceMutationTests : IAsyncLifetime, IDisposab
     }
 
     [Fact(DisplayName = "A cache directory that cannot be listed makes the startup cleanup log the failure and finish, not fault")]
+    [Trait("Category", "Native")] // changes a real ACL (Deny ListDirectory): a killed test host could leave the Deny ACE behind, the finally block restores it otherwise
     public async Task StartupCleanup_UnlistableDirectory_LogsAndCompletes()
     {
         var disk = _root.Dir("denied-startup");
@@ -262,6 +263,7 @@ public sealed class PreviewImageServiceMutationTests : IAsyncLifetime, IDisposab
     }
 
     [Fact(DisplayName = "ClearDisk on a cache directory that cannot be listed logs the failure instead of throwing")]
+    [Trait("Category", "Native")] // changes a real ACL (Deny ListDirectory): a killed test host could leave the Deny ACE behind, the finally block restores it otherwise
     public async Task ClearDisk_UnlistableDirectory_LogsAndDoesNotThrow()
     {
         var disk = _root.Dir("denied-clear");

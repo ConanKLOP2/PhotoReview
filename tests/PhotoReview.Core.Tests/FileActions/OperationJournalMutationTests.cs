@@ -129,7 +129,7 @@ public sealed class OperationJournalMutationTests
     {
         var entry = FullEntry() with { GroupId = null, GroupMembers = null };
 
-        _ = entry.GetHashCode();
+        Assert.Equal(entry.GetHashCode(), (entry with { }).GetHashCode()); // equal records hash equally, with null group fields too
     }
 
     [Fact]

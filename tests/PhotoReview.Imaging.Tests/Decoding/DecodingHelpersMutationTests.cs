@@ -352,7 +352,8 @@ public sealed class DecodingHelpersMutationTests : IDisposable
         for (var length = 0; length < bytes.Length; length += length < 700 ? 1 : 9)
         {
             File.WriteAllBytes(path, bytes.AsSpan(0, length).ToArray());
-            EmbeddedThumbnailReader.TryRead(path); // null or an image, never an exception
+            var result = EmbeddedThumbnailReader.TryRead(path); // null or an image, never an exception
+            if (length == 0) Assert.Null(result);
         }
     }
 

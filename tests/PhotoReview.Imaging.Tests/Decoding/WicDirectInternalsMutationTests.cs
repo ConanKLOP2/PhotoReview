@@ -64,8 +64,11 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
     [Fact]
     public void EnsureOutputFits_BufferJustBelowTheGuardThreshold_NeverConsultsTheMemoryBudget()
     {
+        var consulted = false;
         WicDirectDecoder.EnsureOutputFits(8192, 4095, MemoryHeadroom.GuardThresholdBytes - 1,
-            () => throw new InvalidOperationException("must not be consulted"));
+            () => { consulted = true; throw new InvalidOperationException("must not be consulted"); });
+
+        Assert.False(consulted);
     }
 
     // ---- native-reduction predicate (TryGetNativeReducedSize) ----
