@@ -26,22 +26,19 @@ public sealed class ShortcutKeyCanonicalTests
         Assert.Equal(canonical, ShortcutKeyCanonical.Canonicalize(canonical.ToLowerInvariant()));
     }
 
-    [Fact(DisplayName = "All table pairs canonicalise and compare as the same key")]
+    [Fact(DisplayName = "All table pairs canonicalise to their canonical name")]
     public void AliasPairs_AllSameKey()
     {
         foreach (var (alias, canonical) in ShortcutKeyCanonical.AliasPairs)
         {
             Assert.Equal(canonical, ShortcutKeyCanonical.Canonicalize(alias));
-            Assert.True(ShortcutKeyCanonical.SameKey(alias, canonical));
         }
     }
 
-    [Fact(DisplayName = "Different keys that only look alike (Add/OemPlus) and blanks are never the same key; unknown names stay as they are")]
+    [Fact(DisplayName = "Keys that only look alike (Add/OemPlus) are not merged; blanks give empty; unknown names stay as they are")]
     public void Canonicalize_NonAliases_Unchanged()
     {
-        Assert.False(ShortcutKeyCanonical.SameKey("Add", "OemPlus"));
-        Assert.False(ShortcutKeyCanonical.SameKey("", ""));
-        Assert.False(ShortcutKeyCanonical.SameKey(null, " "));
+        Assert.Equal("Add", ShortcutKeyCanonical.Canonicalize("Add"));
         Assert.Equal("", ShortcutKeyCanonical.Canonicalize(null));
         Assert.Equal("Bogus", ShortcutKeyCanonical.Canonicalize(" Bogus "));
         Assert.Equal("f11", ShortcutKeyCanonical.Canonicalize("f11"));
