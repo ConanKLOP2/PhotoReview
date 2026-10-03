@@ -138,4 +138,27 @@ public sealed class RawExifMergeGapTests
         Assert.Null(RawExif.TryReadExif(source, Info(new ExifBlock(0, 0, true)), out var complete));
         Assert.True(complete);
     }
+
+    [Fact]
+    public void TryReadExif_BothBlocksHaveTheFocalLength_FirstBlockWins()
+    {
+        var other = ExifTestData.Tiff(true, [], [ExifTestData.Rational(ExifParser.TagFocalLength, 85, 1, true)]);
+        var (source, info) = Blocks(FullCameraTiff(t => t != ExifParser.TagLensModel), other);
+
+        Assert.Equal(new ExifRational(50, 1), RawExif.TryReadExif(source, info)!.FocalLength);
+    }
+
+    [Fact]
+    public void TryReadExif_SecondBlockClaimingToExtendPastTheEndOfTheFile_IsReadUpToTheEnd()
+    {
+        var first = FullCameraTiff(t => t != ExifParser.TagLensModel);
+        var second = ExifTestData.Tiff(true, [], [ExifTestData.Ascii(ExifParser.TagLensModel, "Lens X")]);
+        var source = new InMemoryRawHeaderSource([.. first, .. second]);
+        var info = Info(new ExifBlock(0, first.Length, true), new ExifBlock(first.Length, second.Length + 1000, true));
+
+        var exif = RawExif.TryReadExif(source, info, out var complete);
+
+        Assert.Equal("Lens X", exif!.LensModel);
+        Assert.True(complete);
+    }
 }
