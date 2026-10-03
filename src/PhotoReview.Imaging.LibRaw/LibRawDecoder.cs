@@ -16,7 +16,6 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     internal const int MaxQueuedPreloadDecodes = 2;
     private static readonly FullDecodeGate s_fullDecodeGate = new(MaxQueuedPreloadDecodes);
     private readonly Action<string>? _stageObserver;
-    private readonly bool _configureAfterOpen;
 
     /// <summary>Free slots of the single-slot gate that serialises LibRaw decodes (test seam).</summary>
     internal static int FullDecodeSlotsAvailable => s_fullDecodeGate.SlotsAvailable;
@@ -28,16 +27,6 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 
     /// <summary>Test seam: <paramref name="stageObserver"/> is told "opened", "unpacked" and "processed" as each native stage completes.</summary>
     internal LibRawDecoder(Action<string>? stageObserver) => _stageObserver = stageObserver;
-
-    /// <summary>
-    /// Test seam reproducing the pre-fix order: <paramref name="configureAfterOpen"/> applies the output settings and
-    /// use_camera_wb after libraw_open (as before), so a test can measure what the open-time order changes. Also reports "configured".
-    /// </summary>
-    internal LibRawDecoder(Action<string>? stageObserver, bool configureAfterOpen)
-    {
-        _stageObserver = stageObserver;
-        _configureAfterOpen = configureAfterOpen;
-    }
 
     /// <summary>
     /// Extracts LibRaw's embedded JPEG thumbnail without demosaicing the sensor image. Deliberately NOT behind the full-decode gate:
@@ -216,10 +205,9 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
             // The parameters must be set BEFORE libraw_open: identify() adopts the embedded camera matrix (rgb_cam) only when
             // use_camera_wb is already set at open time (identify.cpp: use_camera_matrix & (use_camera_wb|dng_version ? 1 : 0 | 2)), and some
             // makers (Olympus ORF, Pentax PEF, Leaf) read it while parsing. Setting it afterwards leaves those files on LibRaw's generic matrix.
-            if (!_configureAfterOpen) ConfigureOutput(raw);
+            ConfigureOutput(raw);
             OpenSource(raw, request, bufferPin, cancellationToken);
             _stageObserver?.Invoke("opened");
-            if (_configureAfterOpen) ConfigureOutput(raw);
             AdmitDecode(new NativeProbe(raw), request, slot);
             CheckResult(LibRawNativeMethods.LibRawUnpack(raw), "unpack RAW data", cancellationToken);
             _stageObserver?.Invoke("unpacked");
