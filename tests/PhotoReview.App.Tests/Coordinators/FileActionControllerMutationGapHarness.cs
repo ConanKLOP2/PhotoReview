@@ -139,12 +139,13 @@ internal sealed class FileActionControllerMutationGapHarness : IDisposable
     {
         public List<string> Sessions { get; } = [];
         public List<string> Statuses { get; } = [];
+        public List<string> LateStatuses { get; } = [];
         public Func<Task>? PresentResult { get; set; }
 
         public string? LastStatus => Statuses.Count > 0 ? Statuses[^1] : null;
         public void Reset() { Sessions.Clear(); Statuses.Clear(); }
         public void SetStatusText(string status) => Statuses.Add(status);
-        public void ShowLateActionStatus(string status) { }
+        public void ShowLateActionStatus(string status) => LateStatuses.Add(status);
         public void OnCatalogChanged(string? removedPath) { }
         public Task PresentAsync(int index) => PresentResult?.Invoke() ?? Task.CompletedTask;
         public void UpdateSessionPath(string currentPath) => Sessions.Add(currentPath);

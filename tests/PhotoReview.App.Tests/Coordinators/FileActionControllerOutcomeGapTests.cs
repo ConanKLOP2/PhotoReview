@@ -185,6 +185,23 @@ public sealed class FileActionControllerOutcomeGapTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAction_CaptureMoveFinishingAfterAFolderSwitch_ReportsTheLateMoveWithItsDestinationFolder()
+    {
+        var jpeg = Make("pair.jpg");
+        var raw = Make("pair.cr2");
+        var other = Make("other.jpg");
+        Catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg);
+        Fs.OnMove = () => { Clock.NextFolder(); Catalog.Reset([other]); };
+        var controller = NewController(new AppSettings { RawSupportEnabled = true, Actions = [MoveAction()] });
+
+        await controller.RunActionAsync(0, null, jpeg);
+
+        var late = Assert.Single(Sink.LateStatuses);
+        Assert.Equal(Tr.StatusLateMoveUndoable("pair.jpg", Path.Combine(Root, "Sorted")), late);
+        Assert.Equal([other], Catalog.Paths);
+    }
+
+    [Fact]
     public async Task MoveToFolder_CompareSelectionDifferentFromCurrentAndLastFolderReused_MovesTheCompareSelection()
     {
         var current = Make("a.jpg");
