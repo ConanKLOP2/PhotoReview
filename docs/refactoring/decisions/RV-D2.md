@@ -26,6 +26,8 @@ because 0 is defined, so a typo silently changed behaviour and nothing was repor
   name to `LastLoadRepairs`; the startup dialog (`SettingsLoadRepairText`, key `settings.load.repaired`) already lists those names,
   so no new text keys. The repaired value is persisted by the existing write-back as its PascalCase name.
 - Side effect: anything deserializing `AppSettings` without normalizing sees the sentinel (settings import and `AppSettings.Clone`
-  already normalize or round-trip through the same converter).
+  already normalize or round-trip through the same converter). Update: Settings > Import now uses the same pipeline as `Load`
+  (`SettingsStore.ParseText`: per-property salvage, legacy migration, normalize, optional-shortcut conflicts) and tells the
+  user what was reset (key `dialog.importSettings.repaired`).
 - Tests: `SettingsStoreFailureTests` (6 properties x 5 literals + write-back), `MouseSettingsTests.Load_GlideSmoothingText_IsReadLeniently`
   updated (unknown text now gives `Predict`, not `Off`).

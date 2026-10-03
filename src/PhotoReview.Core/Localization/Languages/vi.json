@@ -210,6 +210,7 @@
   "dialog.importActions.failed.title": "Nhập thất bại",
   "dialog.importActions.invalid.message": "Tệp thiết lập hành động không hợp lệ.",
   "dialog.importSettings.failed": "Không thể nhập cài đặt: {message}",
+  "dialog.importSettings.repaired": "Tệp đã nhập có giá trị không hợp lệ. Các cài đặt sau đã được đặt lại về mặc định: {items}.",
   "dialog.importSettings.title": "Nhập cài đặt",
   "dialog.openEditorFailed.message": "JSON thiết lập hành động hiện tại không hợp lệ.",
   "dialog.openEditorFailed.title": "Không thể mở trình chỉnh sửa",
