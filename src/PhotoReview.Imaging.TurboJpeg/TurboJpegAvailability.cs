@@ -23,16 +23,25 @@ public static class TurboJpegAvailability
         return available;
     }
 
-    private static (bool, string?) RunProbe()
+    private static (bool, string?) RunProbe() =>
+        RunProbe(
+            static (out nint handle) => NativeLibrary.TryLoad(TurboJpegNative.DllName, typeof(TurboJpegNative).Assembly, null, out handle),
+            NativeLibrary.Free,
+            static () => TurboJpegNative.CreateDecompressor());
+
+    internal delegate bool TryLoadLibrary(out nint handle);
+
+    /// <summary>Test seam: the native load, free and decompressor creation are injected; <see cref="RunProbe()"/> passes the real ones.</summary>
+    internal static (bool, string?) RunProbe(TryLoadLibrary tryLoad, Action<nint> free, Func<IDisposable> createDecompressor)
     {
-        if (!NativeLibrary.TryLoad(TurboJpegNative.DllName, typeof(TurboJpegNative).Assembly, null, out nint handle))
+        if (!tryLoad(out nint handle))
         {
             return (false, FormattableString.Invariant($"Could not load {TurboJpegNative.DllName} (not found or incompatible with the current process architecture)."));
         }
 
         try
         {
-            using var decompressor = TurboJpegNative.CreateDecompressor();
+            using var decompressor = createDecompressor();
             return (true, null);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -41,7 +50,7 @@ public static class TurboJpegAvailability
         }
         finally
         {
-            NativeLibrary.Free(handle);
+            free(handle);
         }
     }
 }

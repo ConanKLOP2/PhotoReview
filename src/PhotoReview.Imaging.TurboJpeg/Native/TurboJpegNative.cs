@@ -115,7 +115,12 @@ internal static unsafe class TurboJpegNative
 
     internal static SafeTurboJpegHandle CreateDecompressor()
     {
-        var ptr = tj3Init((int)TjInit.Decompress);
+        return WrapInitResult(tj3Init((int)TjInit.Decompress));
+    }
+
+    /// <summary>Turns the raw <c>tj3Init</c> result into an owning handle; a null result is the documented init failure.</summary>
+    internal static SafeTurboJpegHandle WrapInitResult(IntPtr ptr)
+    {
         if (ptr == IntPtr.Zero)
         {
             throw new InvalidOperationException("Failed to initialize TurboJPEG decompressor instance.");
