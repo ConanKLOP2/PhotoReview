@@ -1,6 +1,6 @@
 # I18N — Multi-language UI (English + Vietnamese first, community-editable)
 
-**Status:** L00–L11 done 2026-09-24 (L12 later) · approved 2026-09-24 (all recommendations, Q-L1..Q-L8 = a) · **ADR:** [0006](../adr/0006-localization-json-catalogs.md)
+**Status:** L00–L12 done (see [HISTORY](HISTORY.md); L00–L11 2026-09-24) · approved 2026-09-24 (all recommendations, Q-L1..Q-L8 = a) · **ADR:** [0006](../adr/0006-localization-json-catalogs.md)
 
 ## Goal
 
@@ -27,7 +27,7 @@ add or override a language by dropping a file into a folder.
 | Catalog files | `src/PhotoReview.Core/Localization/Languages/*.json` | Flat JSON, `_meta` block, named placeholders `{count}`, plurals `key.one`/`key.other`. `en.json` embedded (fallback) and copied; `vi.json` copied to `<app>\Languages\`. |
 | User files | `%LocalAppData%\PhotoReview\Languages\*.json` | Override single keys of a shipped language, or add a new one. |
 | Lookup order | — | user file → shipped file → embedded English → the key itself. |
-| `Localizer` | Core `Localization/` | Loads/merges/validates catalogs, pre-parses templates, `SafeFormatter` never throws. Ambient `Localizer.Current` (swapped atomically, like `CultureInfo.CurrentUICulture`). |
+| `Localizer` | Core `Localization/` | Loads/merges/validates catalogs, pre-parses templates into `LocTemplate`; rendering never throws. Ambient `Localizer.Current` (swapped atomically, like `CultureInfo.CurrentUICulture`). |
 | Generated `Tr` API | `src/PhotoReview.Localization.Generator` (Roslyn source generator over `en.json`) | `Tr.StatusBatchDone(succeeded, failures)` — one method per key, parameters from placeholders; a typo is a build error. `TrKeys.*` constants for XAML/tests. |
 | XAML | App `Localization/TrExtension` | `{loc:Tr settings.title}` binds to `LocalizationSource.Instance[key]` → live language switch and "Reload translations" without restart. |
 | Setting | `AppSettings.UiLanguage` (`auto`/code) | Migration: existing config → `vi`; new install → `auto` (Windows UI language if a catalog exists, else `en`). |
@@ -41,18 +41,18 @@ per-navigation cost = one dictionary lookup + one pre-parsed template concat. XA
 | ID | Task | Tests / evidence | Status |
 |---|---|---|---|
 | L00 | This plan, ADR 0006, decisions Q-L1..Q-L8 | docs only | ✅ #55 merged |
-| L01 | Core: `Localizer`, catalog loader (3 layers), `SafeFormatter` (named args, plurals), validation (size cap, unknown placeholders, bad braces → key rejected + logged), `en.json`/`vi.json` skeleton; source generator | Unit tests: broken JSON, partial catalog, placeholder mismatch, fallback order, plural rules | ⏳ |
-| L02 | App wiring: DI + startup apply, `TrExtension`, `LocalizationSource`, `UiLanguage` + migration, `IAppPaths.UserLanguagesDir`; test assemblies pin `vi` via `ModuleInitializer` | Existing Vietnamese assertions still pass unchanged | ⏳ |
-| L03 | Guard tests: no Vietnamese literals in `src/**/*.cs` outside catalogs (shrinking allowlist); no literal text attributes in XAML (symbol whitelist); every XAML `Tr` key exists in `en.json`; `vi.json` has no unknown keys | Architecture tests | ⏳ |
-| L04 | Hot path: `StatusFormatter`, `MainViewModel`, coordinators; replace `Contains("· Explorer")` with state flag | Old tests pass in `vi`; new `en` tests | ⏳ |
-| L05 | All XAML windows; `SourcePresenceTests` checks keys instead of literals | XAML tests | ⏳ |
-| L06 | Core messages via `Tr`; journal stores stable error code + English text, Recovery window localizes by code (old entries: stored text) | Core + journal round-trip tests | ⏳ |
-| L07 | Dialogs, folder picker title, enum combo items, BenchmarkWindow UI; Benchmarking/PerfAnalysis reports → fixed English | | ⏳ |
-| L08 | Settings: language picker (bilingual label, native names), live switch, "Open languages folder", "Reload translations", "Export strings to translate" | ViewModel + settings round-trip | ⏳ |
-| L09 | Translator mode: `--i18n-keys` (show keys) and pseudo-locale `qps-ploc` (+35 % length, accents) | Unit test for pseudo transform | ⏳ |
-| L10 | `tools/i18n-check.ps1` in CI (JSON valid, no unknown keys, placeholder parity, completeness %), a translator guide `TRANSLATING.md` in `docs/` (EN+VI, created in L10), PR template, README table; `verify-release.ps1` checks `Languages\` | CI green | ⏳ |
-| L11 | Real-machine check: GUI in `en`, `vi`, pseudo (screenshots, overflow), startup perf vs 1.8 s | Evidence in this file | ⏳ |
-| L12 | Vietnamese copy polish (folder/thư mục, Action/thao tác…) — separate PR, user reviews wording | | 🔍 PR open, wording review (236 values + glossary in TRANSLATING.md) |
+| L01 | Core: `Localizer`, catalog loader (3 layers), `LocTemplate` rendering (named args, plurals), validation (size cap, unknown placeholders, bad braces → key rejected + logged), `en.json`/`vi.json` skeleton; source generator | Unit tests: broken JSON, partial catalog, placeholder mismatch, fallback order, plural rules | ✅ |
+| L02 | App wiring: DI + startup apply, `TrExtension`, `LocalizationSource`, `UiLanguage` + migration, `IAppPaths.UserLanguagesDir`; test assemblies pin `vi` via `ModuleInitializer` | Existing Vietnamese assertions still pass unchanged | ✅ |
+| L03 | Guard tests: no Vietnamese literals in `src/**/*.cs` outside catalogs (shrinking allowlist); no literal text attributes in XAML (symbol whitelist); every XAML `Tr` key exists in `en.json`; `vi.json` has no unknown keys | Architecture tests | ✅ |
+| L04 | Hot path: `StatusFormatter`, `MainViewModel`, coordinators; replace `Contains("· Explorer")` with state flag | Old tests pass in `vi`; new `en` tests | ✅ |
+| L05 | All XAML windows; `SourcePresenceTests` checks keys instead of literals | XAML tests | ✅ |
+| L06 | Core messages via `Tr`; journal stores stable error code + English text, Recovery window localizes by code (old entries: stored text) | Core + journal round-trip tests | ✅ |
+| L07 | Dialogs, folder picker title, enum combo items, BenchmarkWindow UI; Benchmarking/PerfAnalysis reports → fixed English | | ✅ |
+| L08 | Settings: language picker (bilingual label, native names), live switch, "Open languages folder", "Reload translations", "Export strings to translate" | ViewModel + settings round-trip | ✅ |
+| L09 | Translator mode: `--i18n-keys` (show keys) and pseudo-locale `qps-ploc` (+35 % length, accents) | Unit test for pseudo transform | ✅ |
+| L10 | `tools/i18n-check.ps1` in CI (JSON valid, no unknown keys, placeholder parity, completeness %), a translator guide `TRANSLATING.md` in `docs/` (EN+VI, created in L10), PR template, README table; `verify-release.ps1` checks `Languages\` | CI green | ✅ |
+| L11 | Real-machine check: GUI in `en`, `vi`, pseudo (screenshots, overflow), startup perf vs 1.8 s | Evidence in this file | ✅ |
+| L12 | Vietnamese copy polish (folder/thư mục, Action/thao tác…) — separate PR, user reviews wording | | ✅ glossary in `docs/TRANSLATING.md` |
 
 Order: L00 → L01 → L02 → L03 → L04–L07 → L08–L10 → L11 → L12.
 PR policy: every PR based on `master` (no stacks); code tasks L01–L11 may share one branch with one commit per task.
@@ -76,11 +76,11 @@ PR policy: every PR based on `master` (no stacks); code tasks L01–L11 may shar
 - Translations may drop a placeholder (warning) but never introduce an unknown one (key rejected).
 - Translator context lives in `en.notes.json` (same keys), not in the catalog.
 
-## L11 evidence (2026-09-24, real machine, synthetic 1600×1000 JPEGs)
+## L11 evidence (2026-09-24, real machine, synthetic 1600×1000 JPEGs; historical snapshot, test and key counts below are from that day)
 
 - **vi** (user's v2 config, migrated in memory): main window, status, Settings identical to the pre-i18n text; new "Language / Ngôn ngữ" group; instance-lock dialog localized.
 - **en** (temporary config copy, restored byte-identical): every main/Settings text English, no clipping at 760 px.
 - **pseudo** (`--i18n-pseudo`): no un-bracketed text left except the build hash; only the long "Compare hash …" checkbox touches the right edge at +35 %.
 - **Startup → first image status** (5 interleaved runs, median): master build 1662 ms, i18n 1438 ms — no regression (noise-level).
 - Tests: Architecture 34, Core 478, Imaging 339, Integration 69 (+5 skip), App 299 (+1 skip); build 0 warnings; `i18n-check` PASS (en 366, vi 361).
-- Allowlists left: `ReviewAction.cs|4` (Q-L5 default action names), `WindowsRecycleBin.cs|1` (OS shell verb "Khôi phục").
+- Allowlists left then: `ReviewAction.cs|4` (Q-L5 default action names), `WindowsRecycleBin.cs|1` (OS shell verb "Khôi phục"). Today `tests/PhotoReview.Architecture.Tests/localization-allowlist.txt` lists only `WindowsRecycleBin.cs|1`.

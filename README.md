@@ -25,6 +25,7 @@ See [Architecture](docs/architecture.md) and [Image Loading Mechanisms, Safety I
 
 - Windows 10/11 x64.
 - .NET 10 Windows Desktop Runtime for the framework-dependent build; self-contained builds include the runtime.
+- To build: .NET SDK 10.0.401 or a later feature band (`global.json`, `rollForward: latestFeature`). The build fetches the hash-pinned native DLLs itself (`tools/fetch-native.ps1`, `tools/fetch-libraw.ps1`; see [native/README.md](native/README.md)). Release builds treat warnings as errors.
 
 ### Build, Test, and Publish
 
@@ -37,7 +38,7 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) is the only supported release folder; CI builds it and uploads it as the `release-publish` artifact. Verification for self-contained builds uses separate scripts and paths in `tools/`; a successful build/test pass does not replace runtime benchmarks or GUI acceptance testing.
 
-**Releasing:** CI tags every merge to `master` (`v2.0.N`) and then automatically creates a **draft** GitHub Release for that tag (framework-dependent zip, exe SHA256, generated notes). Drafts are invisible to the public: review one under Releases and press **Publish** to release it. Delete drafts you do not want. You can also run the **Release** workflow by hand (Actions → Release → Run workflow) for an existing tag that has no release yet.
+**Releasing:** CI tags every merge to `master` (`v2.0.N`) but does not create a release. A maintainer runs the **Release** workflow by hand (Actions → Release → Run workflow), enters an existing tag and chooses whether to create it as a **draft** (input `draft`, default off). It requires the CI check to have succeeded on the tagged commit, then attaches the framework-dependent zip with the zip and exe SHA256 and generated notes. A draft is invisible to the public until you press **Publish** under Releases.
 
 **Downgrade note (camera RAW release):** this release writes JPEG+RAW capture actions to the operation journal as one line that lists every file of the capture. An older build only understands the first file of such a line. Before going back to an older build, open **Recovery** and resolve any unfinished Move/Copy/Delete of a JPEG+RAW capture first; a new build repairs lines an older build rewrote the next time it starts (see `docs/adr/0003-journal-startup.md`, "Older builds"), but it cannot recover a journal the older build already compacted.
 
@@ -118,6 +119,7 @@ Xem [kiến trúc](docs/architecture.md) và [cơ chế load ảnh, bất biến
 
 - Windows 10/11 x64.
 - .NET 10 Windows Desktop Runtime cho bản framework-dependent; bản self-contained kèm runtime.
+- Để build: .NET SDK 10.0.401 hoặc feature band mới hơn (`global.json`, `rollForward: latestFeature`). Build tự tải DLL native có ghim hash (`tools/fetch-native.ps1`, `tools/fetch-libraw.ps1`; xem [native/README.md](native/README.md)). Build Release coi warning là lỗi.
 
 ### Build, test và publish
 
@@ -130,7 +132,7 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) là thư mục release duy nhất được hỗ trợ; CI build và upload thư mục này thành artifact `release-publish`. Verification cho self-contained dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
 
-**Phát hành:** CI gắn tag cho mỗi lần merge vào `master` (`v2.0.N`) rồi tự tạo một **bản nháp (draft)** GitHub Release cho tag đó (zip framework-dependent, SHA256 của exe, release notes tự sinh). Bản nháp không hiện công khai: vào Releases xem lại rồi bấm **Publish** để phát hành, bản không cần thì xoá. Vẫn có thể chạy tay workflow **Release** (Actions → Release → Run workflow) cho một tag chưa có release.
+**Phát hành:** CI gắn tag cho mỗi lần merge vào `master` (`v2.0.N`) nhưng không tự tạo release. Người bảo trì chạy tay workflow **Release** (Actions → Release → Run workflow), nhập một tag có sẵn và chọn tạo dưới dạng **bản nháp (draft)** hay không (input `draft`, mặc định tắt). Workflow yêu cầu check CI của commit được tag đã thành công, rồi đính kèm zip framework-dependent cùng SHA256 của zip và exe, release notes tự sinh. Bản nháp không hiện công khai cho đến khi bấm **Publish** trong Releases.
 
 **Lưu ý nâng cấp (bản hỗ trợ Camera RAW):** hỗ trợ Camera RAW được BẬT mặc định (`RawSupportEnabled`, RAW-70), nên `config.json` do bản cũ ghi (chưa có trường này) sẽ bắt đầu liệt kê các tệp RAW (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2) trong thư mục được mở sau khi nâng cấp. Việc ghép cặp JPEG+RAW mặc định là `RawPairMode` = Separate, nghĩa là JPEG và RAW của cùng một bộ ảnh là hai mục riêng; có thể đổi trong **Cài đặt > Cặp ảnh JPEG+RAW**. Muốn quay về như trước, tắt **Cài đặt > Bật hỗ trợ định dạng Camera RAW**. Ứng dụng không hiện thông báo riêng cho việc này: chưa có cơ chế lưu "đã xem một lần" cho thông báo thông tin (hộp thoại khi khởi động cho `LastLoadRepairs` dành cho giá trị không hợp lệ đã được sửa ; cấu hình đã sửa được ghi lại một lần nên hộp thoại không lặp lại).
 

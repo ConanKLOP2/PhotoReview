@@ -2,9 +2,13 @@
 
 Detail behind [`AGENTS.md` > Tests](../AGENTS.md#tests): categories, parallel local runs, and the hang guard.
 
+## Test projects
+
+Five xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`, `Core.Tests`, `Imaging.Tests`, `Integration.Tests`, `App.Tests` (all under `tests/PhotoReview.*`). Two helper libraries are not test projects: `PhotoReview.TestSupport` (net10.0: `TempRoot`, `Wait`, `FakeMemoryProbe`, `RawCorpus`, ...) and `PhotoReview.TestSupport.Windows` (WPF-dependent fixtures such as `InMemoryRawHeaderSource`). Test-only fakes live there, not in `src/`.
+
 ## Categories
 
-`HotPath` (fast unit tests), `Slow`, `Architecture`, `Integration`, `Manual`, `Native`, and `UI` (real WPF `Application`/STA-dispatcher tests — mostly `PhotoReview.Integration.Tests`, plus a couple in `PhotoReview.App.Tests`; always paired with `[Collection("GlobalState")]`). Filter on any of these with `dotnet test --filter "Category=X"`.
+`HotPath` (fast unit tests), `Slow`, `Architecture`, `Integration`, `Manual`, `Native`, and `UI` (real WPF `Application`/STA-dispatcher tests — mostly `PhotoReview.Integration.Tests`, plus a few in `PhotoReview.App.Tests`; always paired with `[Collection("GlobalState")]`). Filter on any of these with `dotnet test --filter "Category=X"`.
 
 ## Parallel local runs
 
@@ -17,6 +21,10 @@ Detail behind [`AGENTS.md` > Tests](../AGENTS.md#tests): categories, parallel lo
 ## Hang guard
 
 `tests/test.runsettings` caps `dotnet test` at 120s/test, 20min/session, no flags needed; prefer `verify-all.ps1` ([detail](refactoring/decisions/TEST-HANG-GUARD.md)).
+
+## Fuzz tests
+
+`tests/PhotoReview.Imaging.Tests/Robustness/BinaryFuzz.cs` is the shared harness for `BinaryReaderFuzzTests` (binary readers fed untrusted bytes): a bounded, reproducible mutant corpus (truncation, length-field overwrites, seeded bit flips/splices) run under a wall-clock bound. It asserts only "no hang" and "every failure is the reader's documented clean failure"; a failing case prints a label that reproduces it.
 
 ## Timing tests
 
