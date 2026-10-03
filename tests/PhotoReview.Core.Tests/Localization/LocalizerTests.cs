@@ -62,7 +62,6 @@ public sealed class LocTemplateTests
     {
         var template = Parse("Just text.");
 
-        Assert.False(template.HasPlaceholders);
         Assert.Equal("Just text.", template.Render([]));
         Assert.Equal("Just text.", template.Text);
     }
@@ -184,7 +183,6 @@ public sealed class LocTemplateTests
     {
         var template = LocTemplate.Literal("{not a placeholder");
 
-        Assert.False(template.HasPlaceholders);
         Assert.Equal("{not a placeholder", template.Render([new LocArg("not", "x")]));
     }
 

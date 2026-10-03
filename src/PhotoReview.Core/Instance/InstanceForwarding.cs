@@ -19,8 +19,3 @@ public interface IInstanceForwardClient
     Task<ForwardOutcome> SendAsync(IReadOnlyList<string> paths, TimeSpan timeout, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Server half: listens until disposed and reports validated path lists of second launches.</summary>
-public interface IInstanceForwardServer : IDisposable
-{
-    void Start();
-}

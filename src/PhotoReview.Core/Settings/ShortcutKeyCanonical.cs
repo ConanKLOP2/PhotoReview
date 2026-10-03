@@ -48,13 +48,6 @@ public static class ShortcutKeyCanonical
         return Map.TryGetValue(text, out var canonical) ? canonical : text;
     }
 
-    /// <summary>True when both names press the same key (canonical form, case-insensitive). Two blank names are not "the same key".</summary>
-    public static bool SameKey(string? a, string? b)
-    {
-        var left = Canonicalize(a);
-        return left.Length > 0 && string.Equals(left, Canonicalize(b), StringComparison.OrdinalIgnoreCase);
-    }
-
     /// <summary>Canonicalises every shortcut string of <paramref name="settings"/> in place (mandatory, optional and action shortcuts).</summary>
     public static void CanonicalizeAll(AppSettings settings)
     {
