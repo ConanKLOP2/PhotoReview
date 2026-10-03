@@ -1,5 +1,4 @@
 using PhotoReview.App.Services;
-using Xunit;
 
 namespace PhotoReview.App.Tests.Services;
 

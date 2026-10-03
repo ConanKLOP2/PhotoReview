@@ -1,7 +1,5 @@
 using System.IO;
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Raw.Tiff;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw.Tiff;
 

@@ -1,9 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
-using Xunit;
 
 namespace PhotoReview.App.Tests.Coordinators;
 

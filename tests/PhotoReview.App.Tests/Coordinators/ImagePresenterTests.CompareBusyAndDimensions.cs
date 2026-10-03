@@ -1,12 +1,9 @@
-using System;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using Xunit;

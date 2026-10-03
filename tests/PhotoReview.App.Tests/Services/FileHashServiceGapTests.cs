@@ -2,7 +2,6 @@ using System.IO;
 using System.Reflection;
 using System.Security.Cryptography;
 using PhotoReview.Core.Localization;
-using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.App.Tests.Services;
 

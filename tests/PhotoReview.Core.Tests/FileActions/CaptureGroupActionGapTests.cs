@@ -1,8 +1,6 @@
-using System.IO;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
 

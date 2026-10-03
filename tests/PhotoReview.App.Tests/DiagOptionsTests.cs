@@ -1,7 +1,5 @@
-using System.IO;
 using PhotoReview.App;
 using PhotoReview.Core.Diagnostics;
-using Xunit;
 
 namespace PhotoReview.App.Tests;
 

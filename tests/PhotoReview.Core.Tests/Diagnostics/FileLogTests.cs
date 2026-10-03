@@ -1,6 +1,4 @@
-﻿using System.IO;
-using PhotoReview.Core.Diagnostics;
-using Xunit;
+﻿using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Core.Tests.Diagnostics;
 

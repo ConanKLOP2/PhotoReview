@@ -8,7 +8,6 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using PhotoReview.App;
-using PhotoReview.Core;
 using PhotoReview.Integration.Tests.Infrastructure;
 
 namespace PhotoReview.Integration.Tests;

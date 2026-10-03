@@ -1,13 +1,9 @@
-using System.IO;
 using System.Text;
-using System.Threading.Tasks;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.FileActions;

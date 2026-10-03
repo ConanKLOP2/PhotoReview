@@ -1,7 +1,5 @@
-using System.IO;
 using System.Reflection;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.FileActions;
 

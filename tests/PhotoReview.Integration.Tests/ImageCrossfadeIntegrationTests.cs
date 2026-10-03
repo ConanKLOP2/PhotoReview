@@ -5,9 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using PhotoReview.App;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using PhotoReview.Integration.Tests.Infrastructure;
-using PhotoReview.TestSupport;
 
 namespace PhotoReview.Integration.Tests;
 

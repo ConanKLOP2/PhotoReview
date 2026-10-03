@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using PhotoReview.App;
 using PhotoReview.Core.Localization;
 using PhotoReview.Integration.Tests.Infrastructure;

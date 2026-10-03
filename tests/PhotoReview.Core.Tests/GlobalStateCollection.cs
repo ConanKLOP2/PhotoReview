@@ -1,4 +1,3 @@
-using Xunit;
 
 namespace PhotoReview.Core.Tests;
 

@@ -1,7 +1,5 @@
-using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
-using PhotoReview.TestSupport;
 
 namespace PhotoReview.Core.Tests.IO;
 

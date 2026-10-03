@@ -1,8 +1,5 @@
-using System;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using PhotoReview.TestSupport.Windows.Fixtures;
 using Xunit;
 
 namespace PhotoReview.App.Tests.HotPath;

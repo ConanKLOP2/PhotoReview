@@ -1,6 +1,5 @@
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 

@@ -4,9 +4,7 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.App.Tests.Coordinators;

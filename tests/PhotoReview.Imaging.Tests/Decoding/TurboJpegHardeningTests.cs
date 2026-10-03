@@ -1,8 +1,6 @@
 using System.IO;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
 using PhotoReview.Imaging.Tests.Robustness;
-using PhotoReview.Imaging.TurboJpeg;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

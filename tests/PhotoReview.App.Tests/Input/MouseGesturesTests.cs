@@ -1,7 +1,6 @@
 using System.Windows;
 using PhotoReview.App.Input;
 using PhotoReview.Core.Model;
-using Xunit;
 
 namespace PhotoReview.App.Tests.Input;
 

@@ -1,8 +1,6 @@
 using System.IO;
 using System.Windows;
-using System.Windows.Controls;
 using PhotoReview.App;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Integration.Tests.Infrastructure;
 

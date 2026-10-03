@@ -1,16 +1,11 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Session;
 using PhotoReview.Platform.Windows;
-using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.HotPath;

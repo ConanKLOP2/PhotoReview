@@ -1,5 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using PhotoReview.Imaging.TurboJpeg.Native;
+﻿using PhotoReview.Imaging.TurboJpeg.Native;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 

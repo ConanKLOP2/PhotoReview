@@ -1,5 +1,4 @@
 using System.IO;
-using PhotoReview.Imaging.TurboJpeg;
 using PhotoReview.TestSupport;
 
 namespace PhotoReview.Imaging.Tests.Decoding;

@@ -1,6 +1,5 @@
 using System.IO;
 using System.Runtime.CompilerServices;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.TestSupport.Windows.Fixtures;
 

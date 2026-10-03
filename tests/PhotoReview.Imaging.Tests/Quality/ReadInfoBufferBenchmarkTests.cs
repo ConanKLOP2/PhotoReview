@@ -1,10 +1,7 @@
-using System;
 using System.Diagnostics;
 using System.IO;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Tests.Fixtures;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace PhotoReview.Imaging.Tests.Quality;

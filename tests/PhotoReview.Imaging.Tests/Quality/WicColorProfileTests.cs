@@ -1,13 +1,10 @@
-using System;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Tests.Fixtures;
-using PhotoReview.Imaging.TurboJpeg;
 
 namespace PhotoReview.Imaging.Tests.Quality;
 

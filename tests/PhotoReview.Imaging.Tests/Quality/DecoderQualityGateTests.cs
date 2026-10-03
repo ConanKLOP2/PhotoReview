@@ -1,12 +1,9 @@
-using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Tests.Fixtures;
-using PhotoReview.Imaging.TurboJpeg;
 using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Quality;

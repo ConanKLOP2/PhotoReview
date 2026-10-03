@@ -1,10 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 using Xunit.Abstractions;

@@ -1,7 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.LibRaw;
 

@@ -3,9 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
 using PhotoReview.App.Composition;
 using PhotoReview.Core;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Integration.Tests.Infrastructure;
-using PhotoReview.TestSupport;
 
 namespace PhotoReview.Integration.Tests;
 

@@ -6,7 +6,6 @@ using PhotoReview.App;
 using PhotoReview.Core.Model;
 using PhotoReview.Integration.Tests.Fakes;
 using PhotoReview.Integration.Tests.Infrastructure;
-using Xunit;
 
 namespace PhotoReview.Integration.Tests;
 

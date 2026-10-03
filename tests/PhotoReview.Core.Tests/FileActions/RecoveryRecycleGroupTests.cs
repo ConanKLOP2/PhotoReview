@@ -1,6 +1,4 @@
-using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;

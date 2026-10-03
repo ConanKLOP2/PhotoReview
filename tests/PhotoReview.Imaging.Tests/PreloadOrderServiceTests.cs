@@ -1,5 +1,4 @@
-﻿using PhotoReview.Imaging;
-
+﻿
 namespace PhotoReview.Imaging.Tests;
 
 [Trait("Category", "HotPath")] // pure computation: no I/O or timing, so it belongs in the default gate

@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Imaging.Preload;
 
 namespace PhotoReview.Imaging.Tests;
 

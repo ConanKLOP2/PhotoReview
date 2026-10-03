@@ -1,11 +1,8 @@
-using System;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Settings;
 using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;

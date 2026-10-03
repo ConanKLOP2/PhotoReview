@@ -1,9 +1,7 @@
 using System.Buffers.Binary;
 using System.IO;
 using System.Text;
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Raw.Bmff;
-using PhotoReview.Imaging.TurboJpeg;
 using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw;

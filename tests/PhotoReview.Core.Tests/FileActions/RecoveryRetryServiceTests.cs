@@ -1,5 +1,4 @@
 ﻿using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
 

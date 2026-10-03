@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.TestSupport;
 

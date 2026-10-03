@@ -1,4 +1,3 @@
-using System.IO;
 using System.IO.Enumeration;
 using System.Text;
 using PhotoReview.Core.Abstractions;

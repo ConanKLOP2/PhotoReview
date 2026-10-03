@@ -1,5 +1,4 @@
 using System.IO;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.TestSupport;
 using Xunit;

@@ -1,10 +1,8 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Tests.Raw.Tiff;
-using PhotoReview.TestSupport;
 using Xunit;
 using static PhotoReview.Imaging.Tests.Raw.Tiff.TiffBytes;
 

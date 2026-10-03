@@ -1,6 +1,5 @@
 using System.Windows;
 using PhotoReview.App.ViewModels;
-using Xunit;
 
 namespace PhotoReview.App.Tests;
 

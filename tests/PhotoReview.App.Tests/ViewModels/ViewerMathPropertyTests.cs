@@ -1,10 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using PhotoReview.App;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Model;
-using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 

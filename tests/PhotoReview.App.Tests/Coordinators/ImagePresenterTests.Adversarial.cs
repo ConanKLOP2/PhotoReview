@@ -1,12 +1,8 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
-using PhotoReview.Core.Catalog;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Decoding;
 using Xunit;

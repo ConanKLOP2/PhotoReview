@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-using PhotoReview.Core.Catalog;
-using Xunit;
+﻿using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.Core.Tests.Catalog;
 

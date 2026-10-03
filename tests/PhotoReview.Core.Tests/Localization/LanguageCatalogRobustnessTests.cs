@@ -1,5 +1,4 @@
 using PhotoReview.Core.Localization;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.Localization;
 

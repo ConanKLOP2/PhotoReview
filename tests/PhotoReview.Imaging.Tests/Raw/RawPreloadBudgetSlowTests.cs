@@ -3,7 +3,6 @@ using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Tests.Metadata;
 

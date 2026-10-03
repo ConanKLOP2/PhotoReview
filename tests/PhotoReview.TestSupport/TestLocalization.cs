@@ -1,4 +1,3 @@
-using System.IO;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
 

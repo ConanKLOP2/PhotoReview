@@ -1,7 +1,5 @@
-using System.IO;
 using System.Text;
 using System.Text.Json;
-using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;

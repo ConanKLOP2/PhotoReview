@@ -1,13 +1,9 @@
-using System;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
-using PhotoReview.Imaging.TurboJpeg;
 using PhotoReview.TestSupport;
 using Xunit;
 

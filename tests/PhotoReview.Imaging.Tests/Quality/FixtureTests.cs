@@ -1,9 +1,6 @@
-using System;
 using System.IO;
 using System.Windows.Media.Imaging;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Quality;
 

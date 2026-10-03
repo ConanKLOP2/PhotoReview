@@ -1,4 +1,3 @@
-using System;
 
 namespace PhotoReview.Imaging.Tests.Quality;
 

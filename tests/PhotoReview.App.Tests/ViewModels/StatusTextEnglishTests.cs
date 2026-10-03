@@ -1,7 +1,5 @@
-using System;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
-using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;

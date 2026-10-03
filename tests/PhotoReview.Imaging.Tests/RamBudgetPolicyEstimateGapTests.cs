@@ -1,5 +1,4 @@
 ﻿using PhotoReview.Core.Catalog;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
 
 namespace PhotoReview.Imaging.Tests;

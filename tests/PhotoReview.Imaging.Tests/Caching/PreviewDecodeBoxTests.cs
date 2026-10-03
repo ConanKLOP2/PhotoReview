@@ -1,14 +1,10 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Tests.Caching;

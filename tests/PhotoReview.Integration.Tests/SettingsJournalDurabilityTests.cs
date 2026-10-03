@@ -5,10 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
 using PhotoReview.App.Composition;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using PhotoReview.Integration.Tests.Infrastructure;
 
 namespace PhotoReview.Integration.Tests;

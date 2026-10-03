@@ -1,13 +1,9 @@
-using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
 using PhotoReview.Core.Tests.Fakes;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.FileActions;
 

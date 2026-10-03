@@ -1,8 +1,6 @@
-using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Core.Tests.Services;
 

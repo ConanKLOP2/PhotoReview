@@ -3,7 +3,6 @@ using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Tests.Caching;

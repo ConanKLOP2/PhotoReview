@@ -1,11 +1,9 @@
 using System.Diagnostics;
 using System.IO;
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Raw.Bmff;
 using PhotoReview.Imaging.Raw.Raf;
 using PhotoReview.Imaging.Raw.Tiff;
 using PhotoReview.Imaging.Tests.Raw;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Robustness;
 

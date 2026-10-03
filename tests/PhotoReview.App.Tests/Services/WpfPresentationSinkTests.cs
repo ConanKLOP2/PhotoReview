@@ -1,10 +1,8 @@
-using System;
 using System.Threading;
 using System.Windows.Threading;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.TestSupport.Windows;
-using Xunit;
 
 namespace PhotoReview.App.Tests.Services;
 

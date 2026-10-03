@@ -1,7 +1,5 @@
 using System.Text;
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Raw.Bmff;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 

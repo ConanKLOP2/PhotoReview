@@ -1,6 +1,5 @@
 using PhotoReview.Benchmarking;
 using System.IO;
-using PhotoReview.App;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Integration.Tests;

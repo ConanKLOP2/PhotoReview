@@ -1,10 +1,8 @@
-﻿using System;
-using PhotoReview.Core.Abstractions;
+﻿using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Tests.Fakes;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 

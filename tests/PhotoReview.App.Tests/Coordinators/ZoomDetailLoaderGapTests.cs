@@ -3,7 +3,6 @@ using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
-using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 

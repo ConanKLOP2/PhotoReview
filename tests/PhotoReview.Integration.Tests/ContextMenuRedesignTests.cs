@@ -1,10 +1,8 @@
 using System.IO;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using PhotoReview.App;
 using PhotoReview.Integration.Tests.Infrastructure;
-using PhotoReview.TestSupport;
 
 namespace PhotoReview.Integration.Tests;
 

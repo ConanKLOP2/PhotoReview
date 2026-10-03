@@ -2,7 +2,6 @@ using System.IO;
 using System.Reflection;
 using PhotoReview.Benchmarking;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 
 namespace PhotoReview.Integration.Tests;

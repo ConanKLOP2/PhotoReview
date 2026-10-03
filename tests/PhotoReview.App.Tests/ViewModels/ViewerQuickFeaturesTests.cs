@@ -1,13 +1,9 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Settings;
 using PhotoReview.TestSupport;
 using Xunit;
 

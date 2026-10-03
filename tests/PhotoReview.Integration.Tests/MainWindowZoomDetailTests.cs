@@ -7,7 +7,6 @@ using System.Windows.Threading;
 using PhotoReview.App;
 using PhotoReview.Core.Model;
 using PhotoReview.Integration.Tests.Infrastructure;
-using PhotoReview.TestSupport;
 using Xunit;
 using Xunit.Abstractions;
 

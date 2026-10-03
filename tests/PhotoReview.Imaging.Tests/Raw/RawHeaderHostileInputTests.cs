@@ -1,8 +1,6 @@
 using System.IO;
 using PhotoReview.Imaging.Metadata;
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Tests.Robustness;
-using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 

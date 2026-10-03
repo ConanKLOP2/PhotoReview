@@ -1,4 +1,3 @@
-using PhotoReview.Imaging.TurboJpeg;
 using System.IO;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Tests.Metadata;

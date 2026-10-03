@@ -1,10 +1,7 @@
-using System;
 using System.IO;
-using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Tests.ViewModels;
 using PhotoReview.Core.Abstractions;
-using Xunit;
 
 namespace PhotoReview.App.Tests.Coordinators;
 

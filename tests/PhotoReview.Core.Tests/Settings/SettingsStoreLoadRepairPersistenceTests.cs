@@ -1,7 +1,5 @@
-using System.IO;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.Settings;

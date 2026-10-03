@@ -2,7 +2,6 @@ using System.Text;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Tests.Fakes;
-using Xunit;
 
 namespace PhotoReview.Core.Tests.IO;
 

@@ -1,4 +1,3 @@
-using System.Text;
 using PhotoReview.Imaging.Metadata;
 using static PhotoReview.Imaging.Tests.Metadata.ExifTestData;
 

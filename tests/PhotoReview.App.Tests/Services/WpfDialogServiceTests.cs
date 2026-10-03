@@ -1,6 +1,5 @@
 using System.IO;
 using PhotoReview.App.Services;
-using PhotoReview.Core.FileActions;
 using Xunit;
 
 namespace PhotoReview.App.Tests.Services;

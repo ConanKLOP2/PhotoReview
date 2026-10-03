@@ -1,7 +1,6 @@
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
-using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 

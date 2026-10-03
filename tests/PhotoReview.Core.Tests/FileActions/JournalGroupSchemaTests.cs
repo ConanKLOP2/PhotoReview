@@ -1,5 +1,4 @@
 using System.Text.Json;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Tests.FileActions;

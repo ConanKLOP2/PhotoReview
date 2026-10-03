@@ -1,4 +1,3 @@
-using System.IO;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Core.Tests.Diagnostics;

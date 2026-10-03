@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Globalization;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
-using PhotoReview.Core.Session;
 using Xunit.Abstractions;
 
 namespace PhotoReview.Core.Tests.Session;

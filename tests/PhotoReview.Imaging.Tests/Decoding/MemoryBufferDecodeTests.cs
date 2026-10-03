@@ -1,4 +1,3 @@
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Tests.Metadata;
 

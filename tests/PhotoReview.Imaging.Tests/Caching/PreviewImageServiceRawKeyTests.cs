@@ -1,7 +1,5 @@
 using System.IO;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.TestSupport;

@@ -1,4 +1,3 @@
-using System.IO;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Core.Tests.Fakes;

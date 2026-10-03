@@ -1,9 +1,6 @@
-using System;
 using System.Diagnostics;
-using System.Threading;
 using System.Windows;
 using PhotoReview.TestSupport.Windows;
-using Xunit;
 
 namespace PhotoReview.App.Tests;
 

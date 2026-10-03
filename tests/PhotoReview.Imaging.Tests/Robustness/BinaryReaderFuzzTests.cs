@@ -1,6 +1,5 @@
 using System.IO;
 using PhotoReview.Imaging.Metadata;
-using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Raw.Bmff;
 using PhotoReview.Imaging.Raw.Raf;
 using PhotoReview.Imaging.Raw.Tiff;

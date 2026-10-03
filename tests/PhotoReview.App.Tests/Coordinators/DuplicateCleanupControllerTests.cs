@@ -1,15 +1,12 @@
 using System.IO;
-using PhotoReview.Imaging;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core;
-using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.App.Tests.Coordinators;

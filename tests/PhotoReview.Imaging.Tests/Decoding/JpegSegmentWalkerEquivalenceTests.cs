@@ -1,4 +1,3 @@
-using PhotoReview.Imaging.TurboJpeg;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
