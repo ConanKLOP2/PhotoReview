@@ -4,7 +4,7 @@
 
   Problem (2026-09-27): CI (.github/workflows/ci.yml) and tools/verify-all.ps1 always pass the CLI
   flags blame-hang, blame-hang-timeout 120s and blame-hang-dump-type none, but a raw
-  `dotnet test PhotoReview.slnx ...` (the command agents and AGENTS.md "Quick Checks" actually run
+  `dotnet test PhotoReview.slnx ...` (the command agents and AGENTS.md "Tests" section actually run
   day to day) has no hang guard at all. A single deadlocked UI test then hangs the whole session
   indefinitely (observed: 80+ minutes) instead of failing fast.
 
