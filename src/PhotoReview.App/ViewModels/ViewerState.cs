@@ -420,8 +420,6 @@ public sealed partial class ViewerState : ObservableObject
                 SetZoom(clickZoomPercent / 100.0);
                 break;
             case InitialViewMode.Percent200:
-                SetZoom(2.0);
-                break;
             case InitialViewMode.Percent400: // legacy: SettingsNormalizer migrates a saved value to Percent200; kept defensively
                 SetZoom(2.0);
                 break;

@@ -4,8 +4,6 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Platforms>AnyCPU;x64</Platforms>
-    <Nullable>enable</Nullable>
-    <RootNamespace>PhotoReview.Imaging.Raw</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,9 +14,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="PhotoReview.Imaging.Tests" />
     <InternalsVisibleTo Include="PhotoReview.Integration.Tests" />
-    <InternalsVisibleTo Include="PhotoReview.Architecture.Tests" />
     <InternalsVisibleTo Include="PhotoReview.Benchmark.Cli" />
-    <InternalsVisibleTo Include="PhotoReview.App" />
   </ItemGroup>
 
   <ItemGroup>
