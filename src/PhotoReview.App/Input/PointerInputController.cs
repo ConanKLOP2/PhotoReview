@@ -212,7 +212,7 @@ internal sealed class PointerInputController
 
     /// <summary>
     /// FitWidth shortcut (PR-B): fills the viewport width. The vertical anchor always follows
-    /// <see cref="AppSettings.FitWidthAnchor"/> (top third by default), regardless of mouse position -- same as the
+    /// <see cref="AppSettings.FitWidthAnchor"/> (centre by default), regardless of mouse position -- same as the
     /// initial view (image change), see <see cref="ApplyInitialViewAsync"/>.
     /// </summary>
     public async Task FitWidthAsync()
@@ -240,7 +240,7 @@ internal sealed class PointerInputController
     /// Applies the configured initial view on an image change (PR-B): the callback wired into
     /// <c>WpfPresentationSink.ApplyInitialViewMode</c> through <c>ImagePresenter.Sink</c>. <see cref="ViewerState.ApplyInitialViewMode"/>
     /// does the zoom/mode change (and is a no-op when <see cref="AppSettings.KeepZoomAcrossImages"/> is on); Fit
-    /// width/Fit height then get their scroll placement here (top-third/centre per <see cref="AppSettings.FitWidthAnchor"/>,
+    /// width/Fit height then get their scroll placement here (per <see cref="AppSettings.FitWidthAnchor"/>,
     /// or always centre for Fit height) because the pointer controller owns the surface.
     /// </summary>
     public async Task ApplyInitialViewAsync(InitialViewMode mode, int clickZoomPercent)

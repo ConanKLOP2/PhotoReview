@@ -339,7 +339,7 @@ if ($TestReport) {
 }
 
 # DT09: Documentation budget check (warning level; error after stabilization)
-Invoke-Gate 'Check documentation budget (T0 <= 16 KB total, T1 <= 24 KB per file)' {
+Invoke-Gate 'Check documentation budget (T0 <= 18 KB total, T1 <= 24 KB per file)' {
     & (Join-Path $PSScriptRoot 'docs-budget.ps1') -Check | Out-Null
 }
 

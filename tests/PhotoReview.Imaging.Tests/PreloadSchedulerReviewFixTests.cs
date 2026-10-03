@@ -100,7 +100,7 @@ public sealed class PreloadSchedulerReviewFixTests : IDisposable
         var entries = Entries("ver-throw", 4);
         var log = new RecordingLog();
         using var scheduler = Create(new ScriptedTarget(), () => entries, workers: 1, new PreloadWindow(1, 0),
-            snapshotVersion: () => throw new ObjectDisposedException("catalog"), log: log);
+            snapshotVersion: () => throw new InvalidOperationException("catalog replaced"), log: log);
 
         var task = scheduler.PreloadAroundAsync(0);
 

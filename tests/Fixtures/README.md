@@ -20,10 +20,7 @@ Tài liệu này mô tả hệ thống fixture ảnh mẫu và các công cụ �
      - Góc dưới-phải (Bottom-Right): Trắng (White: R=255, G=255, B=255)
      Đặc điểm này là cốt lõi để xác minh tính đúng đắn khi áp dụng xoay/lật EXIF orientation (T83).
 
-3. **Kích thước tiêu chuẩn:**
-   - **64×48:** Ảnh thu nhỏ, kiểm tra nhanh (smoke test, thumbnail).
-   - **4000×3000 (~12 MP):** Kích thước phổ biến của ảnh smartphone/máy ảnh tiêu chuẩn.
-   - **8000×6000 (~48 MP):** Kích thước ảnh độ phân giải cao, đo đạc độ trễ giải mã nặng và áp lực bộ nhớ RAM.
+3. **Kích thước:** do từng test chọn khi gọi `FixtureGenerator`; phổ biến nhất là **64×48** (smoke test, thumbnail), ngoài ra 400×300 … 800×600 cho test chức năng và 6000×4000 (~24 MP) cho test đo (`ReadInfoBufferBenchmarkTests`). Lưới tile và 4 góc tự co theo kích thước (tile >= 4 px, góc >= 2 px).
 
 ---
 
@@ -38,7 +35,7 @@ Tài liệu này mô tả hệ thống fixture ảnh mẫu và các công cụ �
 - **Profile màu ICC:**
   - Fixture dùng `ColorProfiles/DisplayP3-v4.icc` cố định, SHA-256 `CB51DE38E482EE974C0C76B9689E16AAD04BAD16E226FED2F30C842D15FF3A3D`.
   - Profile lấy từ `saucecontrol/Compact-ICC-Profiles`, phát hành public domain theo CC0-1.0; bản license đi kèm trong cùng thư mục.
-  - WicDirect hiện từ chối ảnh có color context bằng `NotSupportedException`, để factory fallback sang WPF thay vì trả pixel chưa biến đổi sang sRGB.
+  - WicDirect đọc color context nhúng (hoặc color space EXIF không phải sRGB) và biến đổi sang sRGB bằng WIC; nếu không biến đổi được thì ném `NotSupportedException` để factory fallback sang WPF thay vì trả pixel chưa chuyển sang sRGB (`WicColorProfileTests`, `DamagedIccProfileTests`).
 - **File hỏng (Corrupt / Fault Injection):**
   - File rỗng 0 byte.
   - File JPEG bị cắt ngắn còn 50% byte (`truncated`).

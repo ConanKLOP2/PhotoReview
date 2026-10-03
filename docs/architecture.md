@@ -6,21 +6,24 @@ Tài liệu này mô tả cấu trúc sau đợt refactor, các luồng runtime 
 
 ```text
 PhotoReview.App (WPF composition root, View, ViewModel, coordinator)
-  ├─> PhotoReview.Core (catalog, settings, session, file action, abstractions)
+  ├─> PhotoReview.Core (catalog, settings, session, file action, abstractions; net10.0, không WPF)
   ├─> PhotoReview.Imaging (decode, cache, preload)
+  ├─> PhotoReview.Imaging.Raw (metadata + JPEG preview của camera RAW, ADR 0009)
+  ├─> PhotoReview.Imaging.LibRaw (P/Invoke libraw.dll: decode cảm biến, thumbnail dự phòng)
   ├─> PhotoReview.Imaging.TurboJpeg (đăng ký khi TurboJpegAvailability.Probe() thành công — AR01)
   ├─> PhotoReview.Platform.Windows (Explorer, Recycle Bin, memory/monitor)
-  └─> PhotoReview.Benchmarking (benchmark dùng chung)
-      — cũng là backend của cửa sổ Benchmark trong app; assembly chỉ nạp khi mở cửa sổ (AR18, Q-AR9 a)
+  └─> PhotoReview.Benchmarking (benchmark dùng chung; backend của cửa sổ Benchmark, nạp khi mở cửa sổ — AR18)
+        └─> PhotoReview.PerfAnalysis (phân tích perf session)
 
-PhotoReview.Imaging ─> PhotoReview.Core
-PhotoReview.Platform.Windows ─> PhotoReview.Core
-PhotoReview.Imaging.TurboJpeg ─> PhotoReview.Imaging + PhotoReview.Core
+Imaging, Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg, Platform.Windows ─> Core
+Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg ─> Imaging
+Core ─> PhotoReview.Localization.Generator (source generator, netstandard2.0)
+tools/PhotoReview.Benchmark.Cli ─> App, Benchmarking, Imaging*, Platform.Windows, PerfAnalysis
 ```
 
 `PhotoReview.Core` không phụ thuộc WPF. `MainWindow` giữ phần view/input; `MainViewModel`, coordinator và service điều phối hành vi. `App.xaml.cs` là composition root đăng ký dependency và nối implementation Windows/WPF vào abstraction.
 
-**AppHost (AR02a–d, xong):** `PhotoReview.App.Composition.AppHost.BuildServices(overrides)` là điểm vào duy nhất dựng `IServiceProvider` — nó gọi `App.ConfigureServices`, áp `overrides` (nếu có), rồi `BuildServiceProvider()`. `App.App_Startup`, `Benchmark.Cli` (AR02c) và test tích hợp (AR02b) đều dùng cùng hàm này, chỉ khác override để thay `IPreloadController`, `IPresentationObserver` hay `IMoveOverride`. `MainWindow` giờ chỉ còn **một constructor DI duy nhất** (AR02d xoá các constructor phi-DI và `MainWindowHelpers.CreateTestViewModel` — composition root thứ hai không còn tồn tại); các trường public trước đây (`_files`, `_index`, `_compareSelectedPath`, `_metrics`, `_fileActionInProgress`) đã thành thuộc tính chỉ-đọc (`Files`, `CurrentIndex`, `CompareSelectedPath`, `Metrics`, `IsFileActionInProgress`). Các seam production hỗ trợ override: `ViewportSizeSource` (F3 — `MainWindow` gán `Get` về `GetViewportSize` ngay sau `InitializeComponent()`), `IPresentationObserver`/`NullPresentationObserver`, seam preload (`MainViewModelCompositionRoot` chỉ dựng `PreloadScheduler` thật khi không có `IPreloadController` nào được đăng ký) và seam di chuyển tệp (`IMoveOverride`, `null` ở production).
+**AppHost (AR02a–d, xong):** `PhotoReview.App.Composition.AppHost.BuildServices(overrides)` là điểm vào duy nhất dựng `IServiceProvider` — gọi `App.ConfigureServices`, áp `overrides` (nếu có), rồi `BuildServiceProvider()`. `App.App_Startup`, `Benchmark.Cli` (AR02c) và test tích hợp (AR02b) đều dùng hàm này, chỉ khác override để thay `IPreloadController`, `IPresentationObserver` hay `IMoveOverride`. `MainWindow` chỉ có **một constructor DI** (AR02d); các trường public cũ đã thành thuộc tính chỉ-đọc (`Files`, `CurrentIndex`, `CompareSelectedPath`, `Metrics`, `IsFileActionInProgress`). Seam production: `ViewportSizeSource` (F3 — `MainWindow` gán `Get` về `GetViewportSize` ngay sau `InitializeComponent()`), `IPresentationObserver`/`NullPresentationObserver`, seam preload (`MainViewModelCompositionRoot` chỉ dựng `PreloadScheduler` thật khi không có `IPreloadController` nào được đăng ký) và `IMoveOverride` (`null` ở production).
 
 ## Khoảng trống đã biết (cập nhật 2026-09-27)
 
@@ -46,7 +49,7 @@ MainWindow / command line / drag-drop
                  -> WPF | WIC Direct | TurboJPEG
                  -> FallbackImageDecoder -> WPF
        -> WpfPresentationSink -> View binding
-  -> PreloadController / PreloadScheduler (nền)
+  -> PreloadControllerAdapter / PreloadScheduler (nền)
 ```
 
 Mở trực tiếp một file trình diễn ngay file đó (không chờ Explorer snapshot — truy vấn Explorer mất ~1–2 s với folder lớn; perf/startup), rồi áp thứ tự native khi snapshot tới mà giữ nguyên ảnh đang xem (`ReplaceOrder` giữ current, preload re-center theo index mới). Trong lúc snapshot chưa tới, điều hướng và file action chờ `FolderLoadCoordinator.PendingOrder` (tối đa timeout của truy vấn) trước khi tăng interaction generation, nên bước đầu tiên rời khỏi ảnh vẫn đi theo thứ tự Explorer và INV-7 không vứt snapshot. Truy vấn Explorer được `App_Startup` prefetch ngay sau khi dựng service (`IExplorerOrderProvider.Prefetch`), folder load join truy vấn đó; `ExplorerOrderService` đọc cả view bằng một `IEnumIDList` (`IFolderView::Items(SVGIO_ALLVIEW | SVGIO_FLAG_VIEWORDER)`, 512 PIDL/lần, tên file giải trong process) thay vì 2 lời gọi cross-process mỗi item (~60 ms thay vì ~1 s cho 1841 file; lỗi hoặc thiếu item thì quay lại đọc từng item). Snapshot nào đã có sẵn khi catalog sẵn sàng thì được áp trước frame đầu (cùng trạng thái cuối như đường trễ, không có frame fallback trung gian). Mở folder trình diễn fallback trước, sau đó chỉ áp dụng snapshot còn hợp lệ. `GenerationClock` và token presentation chặn kết quả của folder/ảnh cũ. `ImagePresenter` là choke point trình diễn và cập nhật session; view không tự decode.
@@ -79,7 +82,7 @@ Input/action profile
 | exists | exists | Copy: `AlreadyDone`; Move: `Conflict` (mọi tổ hợp cả hai còn: `Conflict`) |
 | unreadable | any | `Unknown` (cũng khi entry không có đích) |
 
-Committed: D exists = `AlreadyDone`, S và D missing = `Lost`, còn lại `Unknown`. Recycle: S missing = `RecycleUnverifiable`, S present = `NotRecycled`. Chi tiết trong comment của `RecoveryFileCheck`.
+Committed: D exists = `AlreadyDone`, S và D missing = `Lost`, còn lại `Unknown`. Recycle: S missing = `RecycleUnverifiable` (hoặc `PermanentlyDeleted` nếu entry đánh dấu `Permanent`; capture lẫn cả hai = `PartiallyPermanentlyDeleted`), S present = `NotRecycled`. Chi tiết trong comment của `RecoveryFileCheck`.
 
 **Chế độ journal (ADR 0007, IO03, `AppSettings.JournalDurability`, đọc live cho mỗi lần ghi):** *Fast* (mặc định) mở stream không `WriteThrough`, `Flush()` thường sau mỗi bản ghi; *PowerLossSafe* giữ `WriteThrough` + `Flush(true)` và `FileActionService` ghi Prepared trên pool thread (`Task.Run`) rồi mới mutation/Committed — UI không bị chặn. Cả hai: Prepared → mutation → Committed, một bản ghi = một dòng JSON, đọc bỏ qua dòng hỏng.
 
@@ -89,11 +92,13 @@ Committed: D exists = `AlreadyDone`, S và D missing = `Lost`, còn lại `Unkno
 
 Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **không bao giờ** `ConfigureAwait(false)` và không chặn đồng bộ trên Task (`.Result`, `.Wait()`, `GetAwaiter().GetResult()`), nên mọi continuation quay về `SynchronizationContext` của WPF và `ReviewCatalog`, `ViewerState`, `CompareViewModel`, `MainViewModel` chỉ bị sửa trên UI thread. Core, Imaging và Platform.Windows thì ngược lại: luôn `ConfigureAwait(false)` và đặt việc CPU/I-O nặng trong `Task.Run` (hoặc I/O async thật) — phần đồng bộ trước `await` đầu tiên của một method mà App gọi phải nhẹ, vì nó chạy trên UI thread. Khi một callee có phần đầu đồng bộ nặng, sửa ở callee (hoặc App bọc lời gọi trong `Task.Run`), không thêm `ConfigureAwait(false)` vào App. Khoá bằng: `AppThreadAffinityTests` (quét source `src/PhotoReview.App`), guard Debug `ReviewCatalog.AssertOwnerThread` (composition root gọi `BindToCurrentThread()`; unit test không bind thì không kiểm tra), và metric `CrossThreadPresentCount` (số lần `WpfPresentationSink` phải `Dispatcher.Invoke` vì nhận cập nhật ngoài UI thread; kỳ vọng 0, hiện trong cửa sổ Diagnostics và `metrics.json` của perf session).
 
+**Analyzer và task không ai await:** `Microsoft.VisualStudio.Threading.Analyzers` đặt `VSTHRD100` (async void) và `VSTHRD110` (gọi async bị bỏ rơi) cùng `CA2012` (ValueTask) ở mức error cho `src/` (`.editorconfig`; các rule VSTHRD khác tắt). Handler `async void` của WPF bọc việc trong `MainWindow.RunGuardedAsync` (log + status "action failed", bỏ qua cancellation) hoặc command của view-model; task cố ý fire-and-forget đi qua `TaskLogging.FireAndLog` để lỗi được log kèm ngữ cảnh thay vì rơi vào `UnobservedTaskException`.
+
 ## Luồng decoder và cache
 
 `PreviewImageService` chụp backend hiện hành khi tạo `ImageCacheKey`. Key gồm path chuẩn hóa, length, mtime, Original/target width, backend và orientation. RAM cache, disk cache và in-flight dedup dùng identity này. `ImageDecoderFactory` tạo backend được chọn; WIC Direct và TurboJPEG được bọc bởi `FallbackImageDecoder`, quay về WPF cho nhóm lỗi codec được phép và ghi metrics backend thực tế.
 
-Camera RAW (ADR 0009) đi qua `FormatRoutingDecoder` khi `RawSupportEnabled` (mặc định bật): đọc metadata giới hạn và vùng JPEG preview được chọn; `RawFullDecode=OnZoom` mới gọi LibRaw cho file hiện tại. Adobe RGB preview thiếu ICC dùng profile CC0 tích hợp. `RawPairMode` mặc định `Separate`; người dùng có thể chọn gom cặp trong Settings. Khi RAW tắt, `FormatRoutingDecoder` ném `NotSupportedException` cho đuôi RAW. Dự phòng LibRaw (thumbnail ORF, RAW không có JPEG) và cổng tuần tự một slot: xem ADR 0009.
+Camera RAW (ADR 0009) đi qua `FormatRoutingDecoder` khi `RawSupportEnabled` (mặc định bật): đọc metadata giới hạn và vùng JPEG preview được chọn; `RawFullDecode=OnZoom` mới gọi LibRaw cho file hiện tại. Adobe RGB preview thiếu ICC dùng profile CC0 tích hợp. `RawPairMode` mặc định `Separate`; người dùng có thể chọn gom cặp trong Settings. Khi RAW tắt, `FormatRoutingDecoder` ném `NotSupportedException` cho đuôi RAW. Dự phòng LibRaw (thumbnail ORF, RAW không có JPEG) và cổng tuần tự một slot: xem ADR 0009. `libraw.dll` chỉ được nạp từ thư mục assembly của app (`LibRawAvailability`, `DllImportSearchPath.AssemblyDirectory`).
 
 **Zoom (option A cho #43):** ngoài Fit, `ViewerState.Zoom` tính theo pixel GỐC — phần tử ảnh có kích thước `OriginalWidth × Zoom / DpiScale` DIP (100 % = 1 pixel nguồn trên 1 pixel thiết bị), không phụ thuộc bitmap đang hiển thị. `ImagePresenter` hiện preview ngay ở đúng kích thước đó, còn `ZoomDetailLoader` gọi `PreviewImageService.DecodeOriginalAsync` (thread riêng, không vào RAM LRU/disk cache) cho ảnh HIỆN TẠI rồi thay `Source` mà không đổi layout/scroll. Chỉ giữ tối đa một original (của ảnh hiện tại); điều hướng sẽ hủy decode chưa chạy, bỏ kết quả trễ (token navigation) và thả original. Về Fit thì dùng lại preview. Quyết định: [ADR 0008](adr/0008-zoom-source-pixel.md).
 
@@ -124,17 +129,17 @@ Camera RAW (ADR 0009) đi qua `FormatRoutingDecoder` khi `RawSupportEnabled` (m�
 |---|---|---|
 | `DecoderBackend` | `WicDirect` mặc định (nhanh nhất, ADR 0001); `Wpf`; `TurboJpeg` | `SettingsStore` → `PreviewStateContext` → `PreviewImageService`/`ImageDecoderFactory`. Đổi khi đang xem làm clear cache và present lại ảnh hiện tại. |
 | `ScalingQuality` | `HighQuality` mặc định; `Linear` | `MainViewModel` → `ViewerState` → WPF `RenderOptions.BitmapScalingMode`; không đổi decode/cache key. |
-| `UseSourceBytesCache` | `false` mặc định | Được chụp lúc composition trong `App.xaml.cs`; bật cache byte 16 GiB cho service hỗ trợ. Thay đổi cần khởi động lại để toàn bộ dependency nhận cùng policy. |
+| `UseSourceBytesCache` | `false` mặc định | Chụp lúc composition trong `App.xaml.cs`; bật cache byte 16 GiB. Cần khởi động lại để mọi dependency nhận cùng policy. |
 | `RawSupportEnabled` / `RawFullDecode` / `RawPairMode` | `true` / `Never` / `Separate` | Mở 8 định dạng RAW; mặc định xem embedded JPEG, chỉ giải mã cảm biến qua LibRaw khi bật `OnZoom`. Gom JPG+RAW là lựa chọn riêng trong Settings và mặc định tắt. ADR 0009. |
-| `PreloadForwardCount` / `PreloadBackwardCount` | `32` / `8` mặc định; `1`-`500` / `0`-`500` | `SettingsStore` → `PreloadWindow.FromSettings` → `PreloadScheduler`/`PreloadOrderService.Build`; sàn phần trăm RAM (`RamBudgetPolicy.MinimumCachePercent`) tính theo cửa sổ này. Được chụp lúc composition trong `App.xaml.cs`; có hiệu lực sau khi khởi động lại (giống `PreloadWorkerCount`). |
-| `KeyboardZoomAnchor` | `Pointer` mặc định (neo tại con trỏ nếu đang ở trên viewport, giữa khung nhìn nếu không); `ViewportCentre` | `PointerInputController.ResolveKeyboardAnchor` (dùng `PointerGestures.ResolveKeyboardZoomAnchor` + `IImageSurface.PointerPosition`) cho `ZoomInAsync`/`ZoomOutAsync`/`ZoomActualSizeAsync`/`ToggleClickZoomAsync`; con lăn chuột và click-to-zoom luôn neo tại con trỏ, không đọc setting này. |
-| `InitialViewMode` (PR-B: thêm `FitWidth`/`FitHeight`/`ClickZoomLevel`) | `Fit` mặc định; `Percent400` giữ lại trong enum để đọc config cũ nhưng combo Settings không còn hiển thị -- `SettingsNormalizer` chuyển giá trị đã nạp thành `Percent200` | `ViewerState.ApplyInitialViewMode` (Fit/Percent*/ClickZoomLevel: zoom thuần) → `PointerInputController.ApplyInitialViewAsync` (thêm bước cuộn cho FitWidth/FitHeight, vì controller này giữ `IImageSurface`) → gọi từ `WpfPresentationSink.ApplyInitialViewModeOverride`, được `MainWindow` gán sau khi `_pointer` dựng xong (hook mặc định trong `MainViewModelCompositionRoot` chỉ đổi zoom, không cuộn). |
-| `FitWidthAnchor` | `Centre` mặc định (`TopThird` là lựa chọn khác) | Điểm neo dọc khi `InitialViewMode.FitWidth` (ảnh vào lần đầu) và phím tắt `W` khi chuột KHÔNG ở trên ảnh (chuột trên ảnh thì neo tại điểm dưới con trỏ). Hàm thuần `MainWindowHelpers.CalculateFitWidthAnchorPoint`. |
-| `KeepZoomAcrossImages` | `false` mặc định | Khi bật, `ViewerState.ApplyInitialViewMode` không làm gì khi đổi ảnh (trả về `false`) -- Fit vẫn Fit, một mức zoom vẫn giữ nguyên, ScrollViewer tự giữ/kẹp offset. Bật/tắt bằng phím `K` (`ShortcutMappings.ToggleKeepZoom`), lưu ngay như `MainViewModel.ToggleInfoOverlay`. |
-| `ImageTransition` / `ImageTransitionMs` | `None` mặc định; `Fade`; `120` ms mặc định, `40`-`400` | feat/image-crossfade (Q-R37): `ImagePresenter.UpdateCurrentImage` → `ImageTransitionDecision.ShouldTransition` quyết định (chỉ true khi đổi sang file khác, không bao giờ true cho nâng cấp thumbnail→preview→gốc cùng file, ảnh đầu tiên sau khi mở folder, hoặc khi đang Compare) → `IPresentationSink.SetCurrentImage(image, isFileChange)` → `MainViewModel.ImageChanging` (raise TRƯỚC `PropertyChanged(CurrentImage)`) → `MainWindow` chụp khung hình cũ (`OutgoingImage`, sibling ngoài `ImageScroll`, `TranslateTransform` = -offset cuộn cũ) và fade riêng lớp đó (`Opacity` 1→0); ảnh mới bên dưới đã hiển thị đầy, không có khoảng tối. `None` không tạo phần tử/animation nào (chi phí 0). |
-| `SetZoomAlsoSetsClickLevel` (PR-C) | `true` mặc định | Khi chọn preset/Custom trong submenu "Zoom" của menu chuột phải: bật thì cũng ghi đè `ClickZoomPercent` (hành vi cũ, `MainWindow.ApplyClickZoomLevelAsync`); tắt thì chỉ zoom một lần qua `PointerInputController.SetClickZoomLevelAsync`, không đụng vào `ClickZoomPercent` đã lưu. `MainWindow.ApplyZoomMenuSelectionAsync` chọn nhánh. |
-| `ShowFolderMenuItems` (PR-C) | `true` mặc định | Ẩn/hiện cả cụm "Open folder / Next folder / Previous folder" (và separator ngay phía trên) trong menu chuột phải, đọc lại mỗi lần mở (`MainWindow.ImageContextMenu_Opened`); phím tắt `NextFolder`/`PreviousFolder` vẫn hoạt động khi cụm bị ẩn. |
-| `ShowRecycleMenuItem` (feat/ux-fixes-round1) | `false` mặc định | Ẩn/hiện riêng mục "Đưa vào Thùng rác" (không kèm separator, không phải cả cụm) trong menu chuột phải, đọc lại mỗi lần mở (`MainWindow.ImageContextMenu_Opened`); phím tắt Đưa vào Thùng rác vẫn hoạt động khi mục bị ẩn. Mục hiện kèm phím tắt đang cấu hình (`InputGestureText` = `Shortcuts.SendToRecycleBin`); "Khôi phục mặc định" đưa về `false`. |
+| `PreloadForwardCount` / `PreloadBackwardCount` | `32` / `8` mặc định; `1`-`500` / `0`-`500` | `SettingsStore` → `PreloadWindow.FromSettings` → `PreloadScheduler`/`PreloadOrderService.Build`; sàn phần trăm RAM (`RamBudgetPolicy.MinimumCachePercent`) tính theo cửa sổ này. Chụp lúc composition; hiệu lực sau khi khởi động lại (như `PreloadWorkerCount`). |
+| `KeyboardZoomAnchor` | `ViewportCentre` mặc định (cũng khi config cũ không có field); `Pointer` (neo tại con trỏ nếu đang trên viewport, giữa khung nhìn nếu không) | `PointerInputController.ResolveKeyboardAnchor` (dùng `PointerGestures.ResolveKeyboardZoomAnchor` + `IImageSurface.PointerPosition`) cho `ZoomInAsync`/`ZoomOutAsync`/`ZoomActualSizeAsync`/`ToggleClickZoomAsync`; con lăn chuột và click-to-zoom luôn neo tại con trỏ. |
+| `InitialViewMode` | `Fit` mặc định; còn `Percent100`/`Percent200`/`FitWidth`/`FitHeight`/`ClickZoomLevel`. `Percent400` chỉ còn để đọc config cũ: `SettingsNormalizer` đổi thành `Percent200` | `ViewerState.ApplyInitialViewMode` (zoom thuần) → `PointerInputController.ApplyInitialViewAsync` (thêm bước cuộn cho FitWidth/FitHeight, vì controller giữ `IImageSurface`) → gọi từ `WpfPresentationSink.ApplyInitialViewModeOverride`, `MainWindow` gán sau khi `_pointer` dựng xong (hook mặc định trong `MainViewModelCompositionRoot` chỉ đổi zoom). |
+| `FitWidthAnchor` | `Centre` mặc định (`TopThird` là lựa chọn khác) | Neo dọc khi `InitialViewMode.FitWidth` và phím `W` khi chuột KHÔNG ở trên ảnh (chuột trên ảnh thì neo tại con trỏ). Hàm thuần `MainWindowHelpers.CalculateFitWidthAnchorPoint`. |
+| `KeepZoomAcrossImages` | `false` mặc định | Khi bật, `ViewerState.ApplyInitialViewMode` không làm gì khi đổi ảnh (trả về `false`): Fit vẫn Fit, mức zoom giữ nguyên, ScrollViewer tự giữ/kẹp offset. Phím `K` (`ShortcutMappings.ToggleKeepZoom`, lệnh `ReviewCommand.ToggleKeepZoom`) bật/tắt và lưu ngay, như `ToggleInfoOverlay`. |
+| `ImageTransition` / `ImageTransitionMs` | `None` mặc định; `Fade`; `120` ms mặc định, `40`-`400` | Q-R37: `ImagePresenter.UpdateCurrentImage` → `ImageTransitionDecision.ShouldTransition` (chỉ true khi đổi sang file khác; không bao giờ cho nâng cấp thumbnail→preview→gốc cùng file, ảnh đầu sau khi mở folder, hoặc khi Compare) → `IPresentationSink.SetCurrentImage(image, isFileChange)` → `MainViewModel.ImageChanging` (raise TRƯỚC `PropertyChanged(CurrentImage)`) → `MainWindow` chụp khung hình cũ (`OutgoingImage`) và fade lớp đó (`Opacity` 1→0) trên ảnh mới đã hiển thị đầy. `None` không tạo phần tử/animation nào. |
+| `SetZoomAlsoSetsClickLevel` | `true` mặc định | Chọn preset/Custom trong submenu "Zoom" của menu chuột phải: bật thì ghi đè cả `ClickZoomPercent` (`MainWindow.ApplyClickZoomLevelAsync`); tắt thì chỉ zoom một lần qua `PointerInputController.SetClickZoomLevelAsync`. `MainWindow.ApplyZoomMenuSelectionAsync` chọn nhánh. |
+| `ShowFolderMenuItems` | `true` mặc định | Ẩn/hiện cụm "Open folder / Next folder / Previous folder" trong menu chuột phải, đọc lại mỗi lần mở (`MainWindow.ImageContextMenu_Opened`); phím tắt `NextFolder`/`PreviousFolder` vẫn hoạt động. |
+| `ShowRecycleMenuItem` | `false` mặc định | Ẩn/hiện riêng mục "Đưa vào Thùng rác" trong menu chuột phải, đọc lại mỗi lần mở; phím tắt vẫn hoạt động. Mục hiện kèm phím tắt đang cấu hình (`Shortcuts.SendToRecycleBin`). |
 
 ## Kiểm tra cập nhật thủ công (chỉ dùng mạng ở đây)
 
@@ -146,16 +151,7 @@ Workstation concurrent GC (mặc định .NET) là lựa chọn có chủ đích
 
 ## Build, test, benchmark và publish
 
-```powershell
-dotnet build PhotoReview.slnx -c Release
-.\tools\verify-all.ps1
-dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-list-profiles
-dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-all 'C:\duong-dan\folder-anh' 'C:\duong-dan\ket-qua'
-dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
-.\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
-```
-
-`verify-all.ps1` build solution, chạy năm project xUnit (loại `Category=Manual`), smoke file operation, fault injection, publish framework-dependent và verify artifact. Benchmark và T73 GUI acceptance vẫn là gate riêng vì test tự động không chứng minh hình ảnh đã render đúng trên desktop.
+Lệnh build/test/publish/benchmark: xem [README](../README.md); quy tắc test: [TESTING.md](TESTING.md). `tools/verify-all.ps1` build solution, chạy năm project xUnit (loại `Category=Manual`; mặc định cũng loại `Native`/`Slow`, riêng `Integration`+`Slow` vẫn chạy ở lượt thêm), kiểm tra docs/OPEN-DECISIONS/i18n, publish framework-dependent và verify artifact. Benchmark và T73 GUI acceptance vẫn là gate riêng vì test tự động không chứng minh hình ảnh đã render đúng trên desktop.
 
 ## Chính sách ghi session và file không đọc được (ADR 0007)
 

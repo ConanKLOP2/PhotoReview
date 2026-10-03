@@ -1,6 +1,6 @@
 # Native Binaries
 
-Thư mục này chứa các thư viện native unmanaged được nạp runtime bởi PhotoReview.
+Thư mục này chứa các thư viện native unmanaged được nạp runtime bởi PhotoReview. Các file `.dll` trong `native/x64/` **không được commit** (xem `.gitignore`): trong git chỉ có hash ghim (`*.sha256`), giấy phép và archive mã nguồn; build tự tải và xác minh chúng.
 
 ## `native/x64/libraw.dll`
 
@@ -15,6 +15,7 @@ Thư mục này chứa các thư viện native unmanaged được nạp runtime 
 - **Thông báo và giấy phép:** output phát hành có `LibRaw-NOTICE.txt`, `LibRaw-LICENSE.LGPL`, và `LibRaw-LICENSE.CDDL`.
 - **Tải/kiểm tra:** `tools/fetch-libraw.ps1` xác minh hash của cả DLL và archive mã nguồn trước khi lưu.
 - **Kiểm tra khi build:** target `EnsureLibRawBinary` của `PhotoReview.Imaging.LibRaw.csproj` luôn chạy `tools/fetch-libraw.ps1`; script băm `libraw.dll` và archive nguồn theo `native/libraw.sha256` / `native/libraw.package.sha256`. Nếu mọi pin khớp thì không dùng mạng (build offline được); nếu DLL thiếu, cũ hoặc sai thì cài lại từ package đã commit `native/libraw/LibRaw-0.22.2-Win64.zip` (sau khi băm khớp pin, không dùng mạng, nên checkout mới trên CI/release/raw-corpus cũng không tải gì); chỉ khi file đó thiếu hoặc không khớp pin mới tải bản 0.22.2 chính thức bằng `curl` (chỉ HTTPS, TLS 1.2 trở lên). Package được băm TRƯỚC khi giải nén, các entry bị chặn thoát khỏi thư mục tạm, file được cài qua bản tạm đã xác minh. Một named mutex (`Local\PhotoReview-fetch-libraw-*`) tuần tự hóa các lần chạy đồng thời (cấu hình AnyCPU và x64).
+- **Nạp runtime:** chỉ từ thư mục assembly của ứng dụng (`DefaultDllImportSearchPaths(AssemblyDirectory)` và `NativeLibrary.TryLoad` với `AssemblyDirectory`), không tìm trong thư mục làm việc hay `PATH`.
 - **Chế độ script:** `-Verify` chỉ kiểm tra (không mạng, không ghi, exit 1 nếu lệch pin); `-PackagePath <zip>` cài từ package cục bộ (offline/test) với cùng các kiểm tra hash; `-DownloadUrl <url>` chỉ đổi địa chỉ tải dự phòng (dùng trong test).
 
 ## `native/x64/turbojpeg.dll`
@@ -27,3 +28,4 @@ Thư mục này chứa các thư viện native unmanaged được nạp runtime 
 - **Dependencies:** Statically linked CRT (chỉ phụ thuộc `KERNEL32.dll`)
 - **Giấy phép:** BSD-3-Clause / Independent JPEG Group (IJG) / zlib (xem `THIRD-PARTY-NOTICES.md`)
 - **Mục đích:** Backend giải mã ảnh JPEG tốc độ cao (SIMD-accelerated) cho `PhotoReview.Imaging.TurboJpeg`.
+- **Tải/kiểm tra:** target `EnsureNativeBinaries` của `PhotoReview.Imaging.TurboJpeg.csproj` chạy `tools/fetch-native.ps1` khi build; script xác minh hash theo `native/turbojpeg.sha256`.

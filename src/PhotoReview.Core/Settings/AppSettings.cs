@@ -297,8 +297,8 @@ public class AppSettings
     public bool KeepZoomAcrossImages { get; set; }
 
     /// <summary>
-    /// Vertical anchor for <see cref="Model.InitialViewMode.FitWidth"/> (initial view and the FitWidth shortcut when
-    /// the mouse is not over the image viewport). Default <see cref="Model.FitWidthAnchor.Centre"/>.
+    /// Vertical anchor for <see cref="Model.InitialViewMode.FitWidth"/> (initial view and the FitWidth shortcut,
+    /// regardless of mouse position). Default <see cref="Model.FitWidthAnchor.Centre"/>.
     /// </summary>
     public Model.FitWidthAnchor FitWidthAnchor { get; set; } = Model.FitWidthAnchor.Centre;
 

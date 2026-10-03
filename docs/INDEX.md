@@ -20,4 +20,4 @@ Find a document by purpose. Read tiers: **T0** (every session, â‰¤18 KB total) Â
 | [`../README.md`](../README.md) | Overview, setup, build, settings | T1, first-time setup |
 | [`../tests/Fixtures/README.md`](../tests/Fixtures/README.md) | Test fixtures and env vars | T1, tests |
 
-Everything else that was finished (plans, review reports, per-task tables, ADR evidence, the review ledger) was deleted on 2026-09-27 and 2026-10-01 (last copy of the 10-01 set: `2f2bf342`); use `git log --follow -- <path>` or `git show 1de561c:<path>`.
+Everything else that was finished (plans, review reports, per-task tables, ADR evidence, the review ledger) was deleted on 2026-09-27, 2026-10-01 and 2026-10-02 (review plans: `5a39e92c`; the 10-01 set: `2f2bf342`; earlier: `1de561c`); finished decision fragments are deleted too (2026-10-03: CI-TAG-VERSION-BATCH-PUSH, OPT-IMAGING-FIXES, OPT-TOOLING-TRGENERATOR-HASHSET, last copy `d19359dd`). Use `git log --follow -- <path>` or `git show <sha>:<path>`.

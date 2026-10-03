@@ -18,7 +18,7 @@ mà không cần build lại hay biết Visual Studio.
    file người dùng (`%LocalAppData%\PhotoReview\Languages`) → file đi kèm (`<app>\Languages`) → English nhúng → chính tên key.
    Danh sách ngôn ngữ = quét các file `*.json`; thêm ngôn ngữ không cần sửa code.
 3. **File dịch là dữ liệu không tin cậy.** Giới hạn kích thước; key có placeholder lạ hoặc ngoặc hỏng bị loại và ghi log;
-   file hỏng bị bỏ qua. `SafeFormatter` không bao giờ ném exception. Không có biểu thức, không có code.
+   file hỏng bị bỏ qua. Việc render template (`LocTemplate`; trước đây ghi là `SafeFormatter`, không có type nào tên đó) không bao giờ ném exception. Không có biểu thức, không có code.
 4. **API an toàn lúc build:** một source generator đọc `en.json` sinh `Tr.<Key>(args)` và `TrKeys.<Key>`;
    sai tên key hoặc sai số tham số là lỗi build.
 5. **Localizer ambient** (`Localizer.Current`, thay nguyên tử khi đổi ngôn ngữ) — giống `CultureInfo.CurrentUICulture`.
