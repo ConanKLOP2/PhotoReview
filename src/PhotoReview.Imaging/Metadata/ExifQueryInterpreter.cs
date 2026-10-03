@@ -64,8 +64,9 @@ public static class ExifQueryInterpreter
     {
         ulong packed => FromPacked(packed),
         long signed => FromSigned(signed),
+        // The CLR treats long[] as ulong[] (and the reverse) in type tests, so the exact array type is checked for the signed form.
+        long[] { Length: > 0 } signed when signed.GetType() == typeof(long[]) => FromSigned(signed[0]),
         ulong[] { Length: > 0 } array => FromPacked(array[0]),
-        long[] { Length: > 0 } array => FromSigned(array[0]),
         _ => null,
     };
 
