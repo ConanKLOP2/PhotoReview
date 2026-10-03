@@ -27,6 +27,12 @@ public static class RawContainerLimits
     /// <summary>Upper bound for an EXIF block grown to reach IFDs written after the pixel data (4 MiB, half the header budget).</summary>
     public const int MaxExifBlockBytes = 4 << 20;
 
+    /// <summary>Most JPEG marker segments the bounded JPEG walkers (PreviewSelector, JpegMarkerProbe) visit.</summary>
+    internal const int MaxJpegMarkerSegments = 512;
+
+    /// <summary>Fill bytes (extra 0xFF before a marker) the JPEG walkers skip without using a segment iteration, up to this many in a row.</summary>
+    internal const int MaxJpegFillBytes = 64 * 1024;
+
     /// <summary>Returns a safe initial container probe length without narrowing a potentially large file length first.</summary>
     internal static int InitialProbeLength(long sourceLength) => (int)Math.Min(64L, sourceLength);
 

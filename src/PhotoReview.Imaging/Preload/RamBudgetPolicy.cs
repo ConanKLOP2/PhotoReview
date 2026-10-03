@@ -255,7 +255,7 @@ public static class RamBudgetPolicy
 
     /// <summary>Whole-folder preload when an already computed estimate (see <see cref="EstimateFolderPreviewBytes"/>) fits the budget and RAM has headroom.</summary>
     public static bool ShouldPreloadWholeFolderEstimate(long estimatedBytes, long capacityBytes, IMemoryProbe memoryProbe,
-        long reserveBytes = PerformanceOptionsDefaults.MemoryReserveBytes,
+        long reserveBytes = PerformanceOptions.MemoryReserveBytes,
         double maximumLoad = PerformanceOptionsDefaults.PreloadMemoryLoadLimit)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(estimatedBytes);
@@ -265,7 +265,7 @@ public static class RamBudgetPolicy
 
     private static class PerformanceOptionsDefaults
     {
-        public const long MemoryReserveBytes = 2L * 1024 * 1024 * 1024;
+        // Deliberately not PerformanceOptions.PreloadMemoryLoadLimit (0.90): this is the whole-folder gate's own, stricter default.
         public const double PreloadMemoryLoadLimit = 0.80;
     }
 }

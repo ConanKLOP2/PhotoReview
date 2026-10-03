@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Raw;
 
@@ -13,8 +14,6 @@ namespace PhotoReview.Imaging.Raw;
 /// </summary>
 public static class PreviewSelector
 {
-    private const int MaxJpegSegments = 512;
-
     /// <summary>
     /// A preview whose pixel size could not be determined (lossless/arithmetic-coded frame, truncated header) would score an area
     /// of 0 and always lose to any tiny known thumbnail, even when it is by far the largest JPEG in the file. Its size is
@@ -26,9 +25,6 @@ public static class PreviewSelector
 
     /// <summary>A known-size preview with a long side of at least this many pixels is viewable and always outranks unknown-size entries.</summary>
     private const int ViewablePreviewLongSide = 1000;
-
-    /// <summary>Fill bytes (extra 0xFF before a marker) are skipped without using a segment iteration, up to this many in a row.</summary>
-    private const int MaxFillBytes = 64 * 1024;
 
     /// <summary>
     /// Selects the best embedded preview matching <paramref name="requestBox"/> and <paramref name="orientation"/>.
@@ -202,7 +198,7 @@ public static class PreviewSelector
     /// bounded per-segment reads, so a frame header located anywhere in the range (Fuji RAF: after a ~65 KB EXIF APP1)
     /// is found without buffering the range. Accepts SOF0/1/2 only; lossless (SOF3), arithmetic-coded or hierarchical
     /// frames, malformed markers, truncation and SOS/EOI before a frame header yield <c>false</c> (dimensions unknown).
-    /// At most <see cref="MaxJpegSegments"/> segments are visited. Never reads past the source or the range.
+    /// At most <see cref="RawContainerLimits.MaxJpegMarkerSegments"/> segments are visited. Never reads past the source or the range.
     /// </summary>
     public static bool TryReadJpegFrame(IRawHeaderSource source, long offset, long length, out int width, out int height, out PreviewColorSpace colorSpace) =>
         WalkJpeg(source, offset, length, needFrame: true, out width, out height, out colorSpace);
@@ -251,7 +247,7 @@ public static class PreviewSelector
 
         long pos = offset + 2;
         int fillBytes = 0;
-        for (int segment = 0; segment < MaxJpegSegments && pos + 4 <= end; segment++)
+        for (int segment = 0; segment < RawContainerLimits.MaxJpegMarkerSegments && pos + 4 <= end; segment++)
         {
             var head = source.Read(pos, 4);
             if (head[0] != 0xFF) break;
@@ -260,7 +256,7 @@ public static class PreviewSelector
             if (marker == 0xFF)
             {
                 // Fill byte: does not consume a segment iteration (only the separate fill cap bounds it).
-                if (++fillBytes > MaxFillBytes) break;
+                if (++fillBytes > RawContainerLimits.MaxJpegFillBytes) break;
                 pos++;
                 segment--;
                 continue;
@@ -351,14 +347,9 @@ public static class PreviewSelector
         return false;
     }
 
-    private static ushort ReadU16(ReadOnlySpan<byte> data, long offset, bool little) =>
-        little ? (ushort)(data[(int)offset] | (data[(int)offset + 1] << 8)) : (ushort)((data[(int)offset] << 8) | data[(int)offset + 1]);
+    // Every offset passed here was bounds-checked against the TIFF block by TryFindEntry / the header checks, so the shared reader's
+    // out-of-range fallback (0) is never reached and the values are identical to the former private copies.
+    private static ushort ReadU16(ReadOnlySpan<byte> data, long offset, bool little) => TiffStructure.ReadU16(data, (int)offset, little);
 
-    private static uint ReadU32(ReadOnlySpan<byte> data, long offset, bool little)
-    {
-        var o = (int)offset;
-        return little
-            ? (uint)(data[o] | (data[o + 1] << 8) | (data[o + 2] << 16) | (data[o + 3] << 24))
-            : (uint)((data[o] << 24) | (data[o + 1] << 16) | (data[o + 2] << 8) | data[o + 3]);
-    }
+    private static uint ReadU32(ReadOnlySpan<byte> data, long offset, bool little) => TiffStructure.ReadU32(data, (int)offset, little);
 }
