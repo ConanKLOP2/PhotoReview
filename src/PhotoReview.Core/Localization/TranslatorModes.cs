@@ -40,7 +40,7 @@ public static class TranslatorModes
         });
     }
 
-    /// <summary>Every text is replaced by its key in brackets, e.g. <c>[status.scanningFolder]</c>.</summary>
+    /// <summary>Every text is replaced by its key in brackets, e.g. <c>[status.siblingFolder.first]</c>.</summary>
     public static Localizer CreateShowKeys(Localizer source)
     {
         ArgumentNullException.ThrowIfNull(source);
