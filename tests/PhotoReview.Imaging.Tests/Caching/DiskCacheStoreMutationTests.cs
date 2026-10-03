@@ -102,6 +102,9 @@ public sealed class DiskCacheStoreMutationTests : IDisposable
         File.SetLastAccessTimeUtc(a, Sentinel);
         store.NoteAccessed(a);
         Assert.True(Touched(a, Sentinel), "a throttled repeat must not clear the table or touch the file");
+        store.NoteAccessed(Path.Combine(dir, "other.png")); // a second entry well below the cap must not make the table forget "a"
+        store.NoteAccessed(a);
+        Assert.True(Touched(a, Sentinel), "the table was cleared long before reaching its cap");
 
         // 8191 further distinct entries (missing files: the touch fails quietly, the entry is still tracked) -> exactly 8192 tracked.
         for (var i = 0; i < 8191; i++) store.NoteAccessed(Path.Combine(dir, $"f{i}.png"));
