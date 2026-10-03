@@ -90,7 +90,7 @@ public sealed partial class ImagePresenterTests
         var presenter = CreatePresenterWith(new StatThrowingFileSystem(new PhysicalFileSystem(), flaky, new IOException("share hiccup")));
         var token = _clock.NextNavigation();
 
-        await presenter.RemoveMissingCatalogItemAsync(missing, 0, token);
+        await presenter.RemoveMissingCatalogItemAsync(missing, token);
 
         Assert.Equal([flaky], _catalog.Paths);
     }
