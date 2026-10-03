@@ -147,7 +147,7 @@ public sealed class PreviewImageService : IPreloadTarget
         _diskCacheCapacityBytes = diskCacheCapacityBytes;
         _log = log ?? NullLog.Instance;
         // perf(cache) v4: single-file entries (see PreviewCacheFile), no ".meta" companion.
-        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.pv4", _diskCacheCapacityBytes, _log, companionSuffix: null);
+        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.pv4", _diskCacheCapacityBytes, _log);
         // F-IMG-4: a capacity of 0 (or less) means "preview disk cache off": no reads, writes or prunes (a 0-byte quota
         // would otherwise write every entry and immediately prune it). An explicit override still wins.
         _disableDiskCache = disableDiskCacheOverride

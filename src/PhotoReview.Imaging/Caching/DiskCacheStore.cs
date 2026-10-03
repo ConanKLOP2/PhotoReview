@@ -17,7 +17,6 @@ public sealed class DiskCacheStore
     private readonly string _searchPattern;
     private readonly long _maxBytes;
     private readonly ILog _log;
-    private readonly string? _companionSuffix;
     private readonly Func<DateTime> _utcNow;
 
     // F-IMG-3: prune orders by LastAccessTimeUtc, but NTFS does not update it on reads by default and nothing else did,
@@ -50,7 +49,7 @@ public sealed class DiskCacheStore
     public string Directory => _directory;
     public ILog Log => _log;
 
-    public DiskCacheStore(string directory, string searchPattern = "*.png", long maxBytes = 0, ILog? log = null, string? companionSuffix = null, Func<DateTime>? utcNow = null)
+    public DiskCacheStore(string directory, string searchPattern = "*.png", long maxBytes = 0, ILog? log = null, Func<DateTime>? utcNow = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         ArgumentException.ThrowIfNullOrWhiteSpace(searchPattern);
@@ -58,7 +57,6 @@ public sealed class DiskCacheStore
         _searchPattern = searchPattern;
         _maxBytes = Math.Max(0, maxBytes);
         _log = log ?? NullLog.Instance;
-        _companionSuffix = companionSuffix;
         _utcNow = utcNow ?? (() => DateTime.UtcNow);
     }
 
@@ -76,12 +74,6 @@ public sealed class DiskCacheStore
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
     }
-
-    /// <summary>
-    /// Atomically writes a decoded image as a PNG to <paramref name="cachePath"/> using a temporary file and atomic replace.
-    /// </summary>
-    public Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, CancellationToken cancellationToken = default)
-        => WriteAtomicallyAsync(image, cachePath, _log, cancellationToken);
 
     /// <summary>
     /// Static atomic write helper for IDecodedImage.
@@ -193,7 +185,7 @@ public sealed class DiskCacheStore
         }
 
         Interlocked.Increment(ref _fullScanCount);
-        var remaining = PruneDirectoryCore(_directory, _searchPattern, _maxBytes, _log, _companionSuffix);
+        var remaining = PruneDirectory(_directory, _searchPattern, _maxBytes, _log);
         lock (_sizeGate)
         {
             // Writes noted while the scan ran may or may not have been enumerated; counting them again
@@ -218,11 +210,8 @@ public sealed class DiskCacheStore
     /// <summary>
     /// Static helper: deletes least-recently-used files matching <paramref name="searchPattern"/> until directory size is at or under <paramref name="maxBytes"/>.
     /// </summary>
-    public static void PruneDirectory(string directory, string searchPattern, long maxBytes, ILog? log = null, string? companionSuffix = null)
-        => PruneDirectoryCore(directory, searchPattern, maxBytes, log, companionSuffix);
-
-    /// <summary>Prunes and returns the bytes remaining, or -1 when the directory does not exist.</summary>
-    private static long PruneDirectoryCore(string directory, string searchPattern, long maxBytes, ILog? log, string? companionSuffix)
+    /// <returns>The bytes remaining, or -1 when the directory does not exist.</returns>
+    public static long PruneDirectory(string directory, string searchPattern, long maxBytes, ILog? log = null)
     {
         if (!System.IO.Directory.Exists(directory)) return -1;
 
@@ -238,18 +227,6 @@ public sealed class DiskCacheStore
             if (TryDelete(info.FullName, log))
             {
                 total -= info.Length;
-                if (companionSuffix is not null) TryDelete(info.FullName + companionSuffix, log);
-            }
-        }
-
-        // A crash between the two atomic writes can leave metadata without its PNG.
-        // Remove those orphans during the same maintenance pass.
-        if (companionSuffix is not null)
-        {
-            foreach (var companion in System.IO.Directory.EnumerateFiles(directory, searchPattern + companionSuffix))
-            {
-                var imagePath = companion[..^companionSuffix.Length];
-                if (!File.Exists(imagePath)) TryDelete(companion, log);
             }
         }
 
