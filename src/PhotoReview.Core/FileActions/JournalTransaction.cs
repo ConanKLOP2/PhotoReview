@@ -142,9 +142,12 @@ internal sealed class JournalTransaction : IDisposable
     /// <summary>Appends Committed. A journal failure does not undo the mutation: it is returned in <paramref name="journalError"/>.</summary>
     public JournalEntry Commit(out string? journalError)
     {
-        var committed = _prepared with { State = JournalState.Committed, TimestampUtc = _clock.UtcNow };
+        var committed = _prepared with { State = JournalState.Committed };
         try
         {
+            // Inside the try: the mutation already happened, so a clock failure here is a journal failure (Prepared stays,
+            // reconcile judges it), never an exception that makes the caller append a Failed line for a completed operation.
+            committed = committed with { TimestampUtc = _clock.UtcNow };
             _journal.Append(committed);
             journalError = null;
         }

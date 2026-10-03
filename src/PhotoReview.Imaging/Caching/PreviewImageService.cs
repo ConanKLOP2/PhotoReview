@@ -260,6 +260,9 @@ public sealed class PreviewImageService : IPreloadTarget
         return Task.WhenAll(_persistWorkers);
     }
 
+    /// <summary>Test seam: runs on the persist worker right after a write completed, before the stale-epoch re-check (null in production).</summary>
+    internal Action? AfterPersistWriteForTests { get; set; }
+
     private async Task RunPersistWorkerAsync()
     {
         await foreach (var request in _persistQueue.Reader.ReadAllAsync().ConfigureAwait(false))
@@ -276,6 +279,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
                         request.OriginalWidth, request.OriginalHeight, request.CachePath, opacityVerified: true, exif: request.Exif)
                     .ConfigureAwait(false);
+                AfterPersistWriteForTests?.Invoke();
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
                     // Went stale mid-write (e.g. Clear Cache ran concurrently): don't leave

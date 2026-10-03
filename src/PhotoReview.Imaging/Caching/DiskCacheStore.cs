@@ -140,6 +140,9 @@ public sealed class DiskCacheStore
         RunPruneLoop();
     }
 
+    /// <summary>Test seam: runs on the prune loop's exit path after its last pending check, right before the scheduled flag is cleared (null in production).</summary>
+    internal Action? BeforeClearPruneScheduledForTests { get; set; }
+
     private void RunPruneLoop()
     {
         _ = Task.Run(() =>
@@ -164,6 +167,7 @@ public sealed class DiskCacheStore
             }
             finally
             {
+                BeforeClearPruneScheduledForTests?.Invoke();
                 Interlocked.Exchange(ref _pruneScheduled, 0);
             }
 
