@@ -13,7 +13,7 @@ public sealed class DecoderBusyFallbackTests
         var fallback = new CountingDecoder();
         var metrics = new ReviewMetrics();
         var log = new WarnCountingLog();
-        var decoder = new FallbackImageDecoder(new BusyDecoder(), DecoderBackend.LibRaw, fallback, DecoderBackend.Wpf, log, metrics);
+        var decoder = new FallbackImageDecoder(new BusyDecoder(), DecoderBackend.LibRaw, fallback, log, metrics);
 
         Assert.Throws<DecoderBusyException>(() => decoder.Decode(new DecodeRequest(@"C:\raw\a.cr2", TargetWidth: 0)));
 
@@ -26,7 +26,7 @@ public sealed class DecoderBusyFallbackTests
     public void ReadInfo_PrimaryThrowsDecoderBusy_PropagatesWithoutUsingTheFallback()
     {
         var fallback = new CountingDecoder();
-        var decoder = new FallbackImageDecoder(new BusyDecoder(), DecoderBackend.LibRaw, fallback, DecoderBackend.Wpf);
+        var decoder = new FallbackImageDecoder(new BusyDecoder(), DecoderBackend.LibRaw, fallback);
 
         Assert.Throws<DecoderBusyException>(() => decoder.ReadInfo(@"C:\raw\a.cr2"));
 

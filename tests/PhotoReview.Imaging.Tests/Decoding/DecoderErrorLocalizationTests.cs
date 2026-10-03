@@ -100,7 +100,7 @@ public sealed class DecoderErrorLocalizationTests : IDisposable
 
         // The fallback decision reads the exception type only: it must work while the UI language is Vietnamese.
         using var _ = TestLocalization.Use(TestLocalization.Vietnamese);
-        var decoder = new FallbackImageDecoder(_turbo, DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder(), DecoderBackend.Wpf);
+        var decoder = new FallbackImageDecoder(_turbo, DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder());
         var decoded = decoder.Decode(new DecodeRequest(path, TargetWidth: 32));
         Assert.Equal(DecoderBackend.Wpf, decoded.ActualBackend);
         Assert.Equal(32, decoded.PixelWidth);

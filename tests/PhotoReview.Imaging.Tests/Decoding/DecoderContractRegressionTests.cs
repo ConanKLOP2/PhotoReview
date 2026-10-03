@@ -66,7 +66,7 @@ public sealed class DecoderContractRegressionTests : IDisposable
         var fallback = new CountingDecoder(new ThrowingDecoder(sentinel));
         var decoder = new FallbackImageDecoder(
             new TurboJpegDecoder(), DecoderBackend.TurboJpeg,
-            fallback, DecoderBackend.Wpf);
+            fallback);
 
         var thrown = Assert.Throws<FileFormatException>(() => decoder.Decode(new DecodeRequest(path, 0)));
 
@@ -84,7 +84,7 @@ public sealed class DecoderContractRegressionTests : IDisposable
         var fallback = new CountingDecoder(new WpfBitmapImageDecoder());
         var decoder = new FallbackImageDecoder(
             new TurboJpegDecoder(), DecoderBackend.TurboJpeg,
-            fallback, DecoderBackend.Wpf);
+            fallback);
 
         IDecodedImage decoded = decoder.Decode(new DecodeRequest(path, 0));
         Assert.Equal(DecoderBackend.Wpf, decoded.ActualBackend);
@@ -98,7 +98,7 @@ public sealed class DecoderContractRegressionTests : IDisposable
         var fallback = new CountingDecoder(new ConstantDecoder());
         var decoder = new FallbackImageDecoder(
             new ThrowingDecoder(failure), DecoderBackend.TurboJpeg,
-            fallback, DecoderBackend.Wpf);
+            fallback);
 
         Exception actual = Assert.Throws(failure.GetType(), () =>
             decoder.Decode(new DecodeRequest("unused.jpg", 0)));
