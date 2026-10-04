@@ -252,6 +252,23 @@ public sealed class ZoomDetailTests : IDisposable
         Assert.Equal(cachedBytes, service.CacheBytes);
     }
 
+    [Fact(DisplayName = "R10: a same-file full-resolution swap keeps the file identity, so the next navigation still requests the fade")]
+    public async Task NavigatingAfterTheOriginalSwap_StillRequestsTheFileChangeTransition()
+    {
+        var decoder = new SizedDecoder();
+        var (presenter, _) = Create(decoder, "a.jpg", "b.jpg");
+        await presenter.PresentAsync(0);
+        _viewer.SetZoom(2.0);
+        await WhenOriginalShownAsync(presenter);
+        Assert.True(presenter.ZoomDetail.IsShowingOriginal);
+        var shownBefore = _sink.FileChangeFlags.Count;
+
+        await presenter.PresentAsync(1);
+
+        Assert.True(_sink.FileChangeFlags.Count > shownBefore);
+        Assert.True(_sink.FileChangeFlags[shownBefore]); // first bitmap of the different file fades
+    }
+
     [Fact]
     public async Task BackToFit_ShowsPreview_AndZoomingAgainReusesTheHeldOriginal()
     {
@@ -1058,10 +1075,12 @@ public sealed class ZoomDetailTests : IDisposable
         public object? Current { get; private set; }
         public Action? OnImageChanged { get; set; }
         public Action? OnApplyInitialViewMode { get; set; }
+        public List<bool> FileChangeFlags { get; } = [];
 
         public void SetCurrentImage(object? image, bool isFileChange = false)
         {
             Current = image;
+            FileChangeFlags.Add(isFileChange);
             OnImageChanged?.Invoke();
         }
 
