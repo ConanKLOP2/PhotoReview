@@ -200,39 +200,54 @@ public sealed class SessionWriter : IDisposable
     private void WriteBatch(List<(SessionState State, long Version)> batch, bool bounded)
     {
         if (batch.Count == 0) return;
-        if (bounded)
-        {
-            if (!_writeLock.Wait(BoundedWaitForTests))
-            {
-                _log?.Error("Session write skipped: writer busy", null);
-                RequeueSkipped(batch);
-                return;
-            }
-        }
-        else
+        if (!bounded)
         {
             _writeLock.Wait();
+            try { SaveBatch(batch); }
+            finally { _writeLock.Release(); }
+            return;
         }
-        try
+
+        // One budget for lock wait AND the save itself: acquiring the free lock says nothing about how long a synchronous
+        // _store.Save takes (a stalled disk/NAS), and a UI-thread flush or the shutdown must not hang behind it.
+        var budget = System.Diagnostics.Stopwatch.StartNew();
+        if (!_writeLock.Wait(BoundedWaitForTests))
         {
-            foreach (var (state, version) in batch)
+            _log?.Error("Session write skipped: writer busy", null);
+            RequeueSkipped(batch);
+            return;
+        }
+        // The save runs on its own thread, which owns the lock until it is done. If it outlives the budget the caller
+        // moves on and the write simply completes later (or is lost if the process exits first, Q-R5: ADR 0007 section 2,
+        // a session write is best effort); the state is not requeued because that worker still writes it.
+        var save = Task.Factory.StartNew(() =>
+        {
+            try { SaveBatch(batch); }
+            finally { _writeLock.Release(); }
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        var remaining = BoundedWaitForTests - budget.Elapsed;
+        if (!save.Wait(remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining))
+            _log?.Error("Session write may be lost at shutdown: the save is still running after the wait budget", null);
+    }
+
+    private void SaveBatch(List<(SessionState State, long Version)> batch)
+    {
+        foreach (var (state, version) in batch)
+        {
+            // A newer snapshot may have arrived while this batch was waiting for
+            // the writer lock. Do not let an obsolete batch overwrite it.
+            lock (_gate)
             {
-                // A newer snapshot may have arrived while this batch was waiting for
-                // the writer lock. Do not let an obsolete batch overwrite it.
-                lock (_gate)
-                {
-                    if (!_versions.TryGetValue(KeyOf(state.Folder), out var current) || current != version)
-                        continue;
-                }
-                try { _store.Save(state); }
-                catch (Exception ex)
-                {
-                    // Best-effort like the rest of session persistence: a failed write must not break navigation, and any
-                    // exception type (not only IO) must not drop the rest of the drained batch or fault the timer task.
-                    _log?.Error($"Session write failed: {state.Folder}", ex);
-                }
+                if (!_versions.TryGetValue(KeyOf(state.Folder), out var current) || current != version)
+                    continue;
+            }
+            try { _store.Save(state); }
+            catch (Exception ex)
+            {
+                // Best-effort like the rest of session persistence: a failed write must not break navigation, and any
+                // exception type (not only IO) must not drop the rest of the drained batch or fault the timer task.
+                _log?.Error($"Session write failed: {state.Folder}", ex);
             }
         }
-        finally { _writeLock.Release(); }
     }
 }
