@@ -173,6 +173,79 @@ public sealed class FileLogTests : IDisposable
         Assert.Contains("post-rotation-entry", File.ReadAllText(_logFile));
     }
 
+    private sealed class ThrowingToStringException : Exception
+    {
+        public override string ToString() => throw new InvalidOperationException("boom");
+    }
+
+    private static int Count(string text, string needle)
+    {
+        var n = 0;
+        for (var i = text.IndexOf(needle, StringComparison.Ordinal); i >= 0; i = text.IndexOf(needle, i + needle.Length, StringComparison.Ordinal)) n++;
+        return n;
+    }
+
+    [Fact(DisplayName = "W2CM-01: a mid-batch write failure does not re-append the entries that were already flushed")]
+    public void PartialBatchFailure_DoesNotDuplicateFlushedEntries()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        using var retried = new ManualResetEventSlim(false);
+        var log = new FileLog(_logFile);
+        var gated = 0;
+        log.DrainHook = () =>
+        {
+            if (Thread.CurrentThread.Name == "PhotoReview.LogWriter" && Interlocked.Exchange(ref gated, 1) == 0)
+                gate.Wait(TimeSpan.FromSeconds(30));
+        };
+        var failed = 0;
+        log.BeforeEntryWrittenHook = index =>
+        {
+            if (index == 1 && Interlocked.Exchange(ref failed, 1) == 0) throw new IOException("disk full (simulated)");
+        };
+        log.AfterBatchWrittenHook = () => retried.Set();
+        log.Enabled = true;
+        log.Info("entry-one");
+        log.Info("entry-two");
+        log.Info("entry-three");
+        gate.Set();
+        Assert.True(retried.Wait(TimeSpan.FromSeconds(30)));
+        log.Flush();
+        log.Dispose();
+
+        var content = File.ReadAllText(_logFile);
+        Assert.Equal(1, Count(content, "entry-one"));
+        Assert.Equal(1, Count(content, "entry-two"));
+        Assert.Equal(1, Count(content, "entry-three"));
+    }
+
+    [Fact(DisplayName = "W2CM-01: an exception whose ToString throws does not repeat earlier lines nor block later ones")]
+    public void ThrowingExceptionToString_DoesNotRepeatEarlierLinesNorBlockLaterOnes()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        using var written = new ManualResetEventSlim(false);
+        var log = new FileLog(_logFile);
+        var gated = 0;
+        log.DrainHook = () =>
+        {
+            if (Thread.CurrentThread.Name == "PhotoReview.LogWriter" && Interlocked.Exchange(ref gated, 1) == 0)
+                gate.Wait(TimeSpan.FromSeconds(30));
+        };
+        log.AfterBatchWrittenHook = () => written.Set();
+        log.Enabled = true;
+        log.Info("first-line");
+        log.Error("poisoned-entry", new ThrowingToStringException());
+        log.Info("trailing-entry");
+        gate.Set();
+        Assert.True(written.Wait(TimeSpan.FromSeconds(30)));
+        log.Flush();
+        log.Dispose();
+
+        var content = File.ReadAllText(_logFile);
+        Assert.Equal(1, Count(content, "first-line"));
+        Assert.Equal(1, Count(content, "poisoned-entry"));
+        Assert.Equal(1, Count(content, "trailing-entry"));
+    }
+
     [Fact(DisplayName = "Error-handling review: Drain never dequeues an unwritten entry after the producer trimmed the written head")]
     public void DrainKeepsUnwrittenEntriesWhenTheProducerTrimsDuringTheWrite()
     {

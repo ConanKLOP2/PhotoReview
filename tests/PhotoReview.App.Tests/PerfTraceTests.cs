@@ -115,7 +115,7 @@ public sealed class PerfTraceTests : IDisposable
         var upper = PhotoReviewPerf.PathId(file.ToUpperInvariant());
         var lower = PhotoReviewPerf.PathId(file.ToLowerInvariant());
 
-        Assert.Equal(8, first.Length);
+        Assert.Equal(16, first.Length);
         Assert.Equal(first, second);
         Assert.Equal(first, upper);
         Assert.Equal(first, lower);

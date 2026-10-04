@@ -130,23 +130,23 @@ public sealed class Localizer
             {
                 if (!englishTemplates.TryGetValue(key, out var source))
                 {
-                    warnings.Add($"{overlay.Code}: unknown key '{key}' ignored");
+                    warnings.Add($"{overlay.Code}: unknown key '{LanguageCatalog.Safe(key)}' ignored");
                     continue;
                 }
                 if (!LocTemplate.TryParse(text, out var translated))
                 {
-                    warnings.Add($"{overlay.Code}: '{key}' has unbalanced braces or an invalid placeholder; English used");
+                    warnings.Add($"{overlay.Code}: '{LanguageCatalog.Safe(key)}' has unbalanced braces or an invalid placeholder; English used");
                     continue;
                 }
                 var allowed = source.PlaceholderNames;
                 var unknown = translated.PlaceholderNames.FirstOrDefault(n => !allowed.Contains(n));
                 if (unknown is not null)
                 {
-                    warnings.Add($"{overlay.Code}: '{key}' uses unknown placeholder {{{unknown}}}; English used");
+                    warnings.Add($"{overlay.Code}: '{LanguageCatalog.Safe(key)}' uses unknown placeholder {{{unknown}}}; English used");
                     continue;
                 }
                 var missing = allowed.FirstOrDefault(n => !translated.PlaceholderNames.Contains(n));
-                if (missing is not null) warnings.Add($"{overlay.Code}: '{key}' does not use placeholder {{{missing}}}");
+                if (missing is not null) warnings.Add($"{overlay.Code}: '{LanguageCatalog.Safe(key)}' does not use placeholder {{{missing}}}");
                 templates[key] = translated;
             }
         }

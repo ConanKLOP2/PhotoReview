@@ -37,7 +37,7 @@ public sealed class PhotoReviewPerf : EventSource
     }
 
     /// <summary>
-    /// Stable 8 hex-char identifier for a file path: first 4 bytes (8 hex chars) of the SHA-256 of
+    /// Stable 16 hex-char identifier for a file path: first 8 bytes (16 hex chars, 64 bits: a collision among 50k files is below 1e-10) of the SHA-256 of
     /// the case-normalized, fully-qualified path. Never emit the raw path into perf events/CSV/reports.
     /// </summary>
     public static string PathId(string path)
@@ -46,7 +46,7 @@ public sealed class PhotoReviewPerf : EventSource
         var bytes = Encoding.UTF8.GetBytes(full);
         Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
         SHA256.HashData(bytes, hash);
-        return Convert.ToHexString(hash[..4]).ToLowerInvariant();
+        return Convert.ToHexString(hash[..8]).ToLowerInvariant();
     }
 
     /// <summary>Converts a <see cref="Stopwatch.GetTimestamp"/> snapshot into elapsed milliseconds.</summary>

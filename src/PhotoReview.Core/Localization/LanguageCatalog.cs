@@ -71,7 +71,7 @@ public sealed class LanguageCatalog
         }
         catch (JsonException ex)
         {
-            warnings.Add($"{source}: invalid JSON ({ex.Message})");
+            warnings.Add($"{Safe(source)}: invalid JSON ({Safe(ex.Message)})");
             return false;
         }
 
@@ -82,7 +82,7 @@ public sealed class LanguageCatalog
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
             // Well-formed JSON can still hold text GetString() rejects (a lone "\ud800" surrogate escape).
-            warnings.Add($"{source}: unreadable text ({ex.Message})");
+            warnings.Add($"{Safe(source)}: unreadable text ({Safe(ex.Message)})");
             catalog = null;
             return false;
         }
@@ -95,7 +95,7 @@ public sealed class LanguageCatalog
         {
             if (doc.RootElement.ValueKind != JsonValueKind.Object)
             {
-                warnings.Add($"{source}: root must be a JSON object");
+                warnings.Add($"{Safe(source)}: root must be a JSON object");
                 return false;
             }
 
@@ -114,19 +114,19 @@ public sealed class LanguageCatalog
                 if (property.Name.StartsWith('_')) continue;
                 if (property.Value.ValueKind != JsonValueKind.String)
                 {
-                    warnings.Add($"{source}: '{property.Name}' is not a string, ignored");
+                    warnings.Add($"{Safe(source)}: '{Safe(property.Name)}' is not a string, ignored");
                     continue;
                 }
                 if (!entries.TryAdd(property.Name, property.Value.GetString()!))
                 {
-                    warnings.Add($"{source}: duplicate key '{property.Name}', the last value is used");
+                    warnings.Add($"{Safe(source)}: duplicate key '{Safe(property.Name)}', the last value is used");
                     entries[property.Name] = property.Value.GetString()!;
                 }
             }
 
             if (string.IsNullOrWhiteSpace(code) || !IsValidCode(code))
             {
-                warnings.Add($"{source}: _meta.code is missing or invalid");
+                warnings.Add($"{Safe(source)}: _meta.code is missing or invalid");
                 return false;
             }
 
@@ -142,7 +142,7 @@ public sealed class LanguageCatalog
     {
         if (meta.ValueKind != JsonValueKind.Object)
         {
-            warnings.Add($"{source}: _meta must be an object");
+            warnings.Add($"{Safe(source)}: _meta must be an object");
             return;
         }
         foreach (var p in meta.EnumerateObject())
@@ -150,8 +150,8 @@ public sealed class LanguageCatalog
             switch (p.Name)
             {
                 case "code" when p.Value.ValueKind == JsonValueKind.String: code = p.Value.GetString(); break;
-                case "name" when p.Value.ValueKind == JsonValueKind.String: name = p.Value.GetString(); break;
-                case "nativeName" when p.Value.ValueKind == JsonValueKind.String: nativeName = p.Value.GetString(); break;
+                case "name" when p.Value.ValueKind == JsonValueKind.String: name = CleanDisplayName(p.Value.GetString()); break;
+                case "nativeName" when p.Value.ValueKind == JsonValueKind.String: nativeName = CleanDisplayName(p.Value.GetString()); break;
                 case "plural" when p.Value.ValueKind == JsonValueKind.String:
                     var rule = p.Value.GetString();
                     pluralDeclared = true;
@@ -160,7 +160,7 @@ public sealed class LanguageCatalog
                     {
                         plural = PluralRule.OneOther;
                         if (!string.Equals(rule, "one-other", StringComparison.OrdinalIgnoreCase))
-                            warnings.Add($"{source}: unknown _meta.plural '{rule}', using one-other (valid: one-other, none)");
+                            warnings.Add($"{Safe(source)}: unknown _meta.plural '{Safe(rule)}', using one-other (valid: one-other, none)");
                     }
                     break;
                 case "authors" when p.Value.ValueKind == JsonValueKind.Array:
@@ -171,6 +171,40 @@ public sealed class LanguageCatalog
                     break;
             }
         }
+    }
+
+    /// <summary>Longest language display name kept (picker rows are one line).</summary>
+    private const int MaxDisplayNameLength = 64;
+
+    /// <summary>Longest untrusted fragment echoed into a warning (and so into the log).</summary>
+    private const int MaxWarningFragmentLength = 120;
+
+    /// <summary>Trims a <c>_meta</c> display name, drops control characters and caps its length; null when nothing visible is left,
+    /// so the caller falls back to the next name or the code instead of showing a blank picker row.</summary>
+    private static string? CleanDisplayName(string? value)
+    {
+        if (value is null) return null;
+        var cleaned = StripControl(value, ' ').Trim();
+        if (cleaned.Length > MaxDisplayNameLength) cleaned = cleaned[..MaxDisplayNameLength].TrimEnd();
+        return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned;
+    }
+
+    /// <summary>Makes untrusted text (key names, file names, parser messages) safe to embed in a one-line warning: control
+    /// characters (CR/LF would forge extra log lines) become U+FFFD and long text is cut.</summary>
+    internal static string Safe(string? value)
+    {
+        if (value is null) return "";
+        var cleaned = StripControl(value, '�');
+        return cleaned.Length > MaxWarningFragmentLength ? cleaned[..MaxWarningFragmentLength] + "..." : cleaned;
+    }
+
+    private static string StripControl(string value, char replacement)
+    {
+        if (!value.Any(char.IsControl)) return value;
+        return string.Create(value.Length, (value, replacement), static (span, state) =>
+        {
+            for (var i = 0; i < span.Length; i++) span[i] = char.IsControl(state.value[i]) ? state.replacement : state.value[i];
+        });
     }
 
     /// <summary>BCP-47-ish: letters, digits and '-', 2..16 chars, starting with a letter.</summary>
