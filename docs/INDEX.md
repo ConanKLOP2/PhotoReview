@@ -7,7 +7,7 @@ Find a document by purpose. Read tiers: **T0** (every session, ≤18 KB total) �
 | [`AGENTS.md`](../AGENTS.md) | Work mode, priorities, coding/test rules, agent workflow | T0 |
 | [`task_on_progress.md`](../task_on_progress.md) | Current state, pending checks, critical rules | T0 |
 | [`ACTIVE-TASKS.md`](ACTIVE-TASKS.md) | Open work only (single source) | T1, always cheap |
-| [`refactoring/review-20261004/WORK-REVIEW.md`](refactoring/review-20261004/WORK-REVIEW.md) | Incomplete function review at 5d291076: findings, coverage ledger, validation, continuation | T1, review task |
+| [`refactoring/review-20261004/WORK-REVIEW.md`](refactoring/review-20261004/WORK-REVIEW.md) | Incomplete function-by-function review reconciled through master 8952067d; current ledger, findings, validation, continuation | T1, review task |
 | [`architecture.md`](architecture.md) | System design, code map, invariants INV-1..12, settings table | T1, any code area |
 | [`APP-MECHANISMS-VI.md`](APP-MECHANISMS-VI.md) | Core app flows and settings (Vietnamese) | T1, app flow |
 | [`adr/`](adr/) | Decisions 0001 decoder · 0002 UI framework · 0003 journal startup · 0004 no Presentation project · 0005 UI-thread affinity · 0006 localization catalogs · 0007 I/O durability · 0008 zoom = source pixel · 0009 camera RAW support | T1, relevant area |

@@ -1,6 +1,6 @@
 # App review — 2026-10-04
 
-Baseline: `5d2910761f14bd99745b9c4bdcd636b36263e716`. Production read-only. All `src/PhotoReview.App` callable bodies inventoried by lead were read in their enclosing files. `STATIC-ONLY` means source semantics inspected with file/function context, not runtime PASS. Lambda/helper annotations explicitly inherit enclosing review. No build, GUI, native, recycle-bin or perf gate was run by this worker. Lead owns validation.
+Historical baseline: `5d2910761f14bd99745b9c4bdcd636b36263e716`. This file preserves the original baseline App review and findings; it is not a current-head completion claim. The live coverage/status is in [WORK-REVIEW.md](WORK-REVIEW.md) and [functions.tsv](functions.tsv), reconciled through `8952067d`, with a new App/Integration lane review in progress. Production remains read-only in this audit. `STATIC-ONLY` means source semantics inspected with file/function context, not runtime PASS. Lambda/helper annotations explicitly inherit enclosing review. No build, GUI, native, recycle-bin or perf gate was run by the original worker. Lead owns validation.
 
 ## Findings
 

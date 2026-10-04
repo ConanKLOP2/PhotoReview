@@ -1,30 +1,63 @@
-# Function review — 2026-10-04 (incomplete)
+# Function review — current-head checkpoint (2026-10-04, incomplete)
 
-Baseline: `5d2910761f14bd99745b9c4bdcd636b36263e716` (`origin/master`, PR #280). Review branch: `codex/review-all-20261004`; [draft PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open/not merged at handoff. No production fixes in this PR. Three isolated workers reviewed App, Core and Imaging; lead covered integration evidence and tooling. Workers inherited the parent model; its actual model name was unavailable. All three workers stopped at the account usage limit before finishing the test/source review.
+Current pinned head: `8952067db8fd820afe47e112c202c75c0cae181b` (`origin/master`). The audit began at `5d291076` and has been reconciled through PRs merged since then. Review branch: `codex/review-all-20261004`; [PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open and not merged. This is a documentation/review PR; it makes no production changes. Three independent lanes are continuing semantic review against the current inventory. Their actual inherited model name is unavailable.
 
 ## Coverage contract
 
-The Roslyn inventory covers 15,690 callable bodies in 1,018 tracked C# files: methods/constructors/operators with bodies, explicit accessors, expression-bodied properties/indexers, local functions and lambdas. Declaration-only interfaces/extern members, implicit record members, XAML event declarations and the outer top-level statement body are excluded. Nested bodies have individual rows. This is an inventory, not semantic sign-off.
+The current Roslyn inventory covers 16,795 callable bodies in 1,068 tracked C# files: methods/constructors/operators with bodies, explicit accessors, expression-bodied properties/indexers, local functions and lambdas. Declaration-only interfaces/extern members, implicit record members, XAML event declarations and the outer top-level statement body are excluded. Nested bodies have individual rows. This is an inventory, not semantic sign-off.
 
-[functions.tsv](functions.tsv) records ID, path, baseline line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved worker semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses.
+The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-Saved coverage: App 1,203/1,203 source bodies; Imaging family 694/694 source bodies. Total saved rows: 1,927 STATIC-ONLY, 20 ISSUE, 13,743 UNREVIEWED. Core worker reported production reading progress, but did not save a complete source ledger before interruption; its ledger remains UNREVIEWED except for 14 SessionWriter bodies independently reviewed by the lead. Lead also saved 36 Platform instance-forwarding/identity/ownership bodies; remaining Platform bodies are pending. Selective relevant tests were read, but no exhaustive test-body ledger was completed. [App details](app.md).
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 5,457 `STATIC-ONLY`, 63 `ISSUE`, and 11,275 `UNREVIEWED` rows after merging available agent ledgers. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
 
-| Area | Source bodies | Test bodies | Saved semantic ledger |
-|---|---:|---:|---|
-| App + Integration | 1,203 | 4,820 | All source; selective test oracles only |
-| Core | 748 | 3,207 | Lead SessionWriter 14; worker full ledger pending |
-| Imaging + Raw + LibRaw + TurboJpeg | 694 | 3,968 | All source; selected test oracles only |
-| Platform.Windows | 139 | included in Integration | 36 instance bodies; remainder pending |
-| Benchmarking | 136 | included in Integration | Pending |
-| PerfAnalysis | 167 | included in Integration | Pending |
-| Localization.Generator | 54 | included in Integration | Pending |
-| Benchmark.Cli | 256 | included in Integration | Pending |
-| Architecture.Tests / TestSupport / TestSupport.Windows | — | 198 / 67 / 33 | Pending |
+The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App, Core/tooling, and Imaging agents are reviewing the remaining current-head rows in separate ownership lanes. No lane may be marked complete until its exact callable coverage and remaining count are reconciled against this inventory. [App baseline details](app.md).
 
-[powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. Lead traced publish guard and reviewed selected tooling/docs, but 5 publish-guard functions have saved source rationale (2 ISSUE); exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
+| Area | Production bodies | Test bodies | Total | Status |
+|---|---:|---:|---:|---|
+| App + Integration | 1,229 | 5,226 | 6,455 | 1,596 rows reread; 4,859 remaining |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,011 rows reread; 4,036 remaining |
+| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 2,407 test rows reread; 1,872 remaining |
+| Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | Not yet assigned to a continuation lane |
 
-## Findings requiring fixes
+[powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
+
+## Original baseline findings (R02–R10 fixed; R01 has a residual; R11 remains open)
+
+### Current-head triage through `8952067d`
+
+The R01–R10 descriptions below record defects on the original `5d291076` baseline. #290 fixes the pre-creation/in-flight destination ownership cases in R01, but a separate same-size replacement during completed group-Copy rollback remains under R01 below. R02 #288; R03 #292; R04 #298; R05 #287/#315; R06 #299; R07 #290; R08 #288/#309; R09 #288; and R10 #298 are fixed and should not be reported as open. Their old repros remain regression context only. R11 remains an open conditional permanent-delete safety issue after #312. R12 remains a static reporting concern pending exact current-line recheck. Wave-two findings are carried forward only for unchanged source files; see the linked Core, Platform, and tooling reports under `wave2/`.
+
+### R13 — P1 candidate — Benchmark CLI can follow an output symlink into a photo
+
+`tools/PhotoReview.Benchmark.Cli/RawSurvey.cs:116-126,131-186`; `DecoderBenchmark.cs:134-399`; `RawDecoderBenchmark.cs:63-79`.
+
+The CLI guards output-directory containment but does not reject an existing output file that is a symlink/reparse point. `RawSurvey.ValidateMarkdownPath` validates the parent, then `File.WriteAllTextAsync` follows the report-file link. The fixed summary/report paths in decoder benchmarks have the same shape. A report path linked to a photo can truncate that photo. This is source-traced only; no link was created and no file was changed. Reject final reparse-point targets and use safe create/replace semantics for the report outputs. Current delta review is documented in the Core supplement; add a regression using only a self-cleaning temporary target.
+
+### R14 — P2 candidate — An older folder-open request can replace a newer one
+
+`src/PhotoReview.App/ViewModels/MainViewModel.cs:366-415,1223-1228`; `DuplicateCleanupController.cs:259-269`; `Platform.Windows/InstanceScope.cs:88-120`.
+
+All normal `OpenFolderAsync` calls and duplicate-cleanup reloads reach `OpenFolderCoreAsync` with no request epoch. It awaits ownership negotiation before incrementing the folder epoch. If open B is delayed in `BeforeOpenAsync` and later open C completes first, B can resume with `Proceed` and replace C; the duplicate-cleanup A/B race is the same root path. Existing tests cover a single pending open and immediate outcomes, but not two overlapping open requests. Static trace only. Capture a request token at invocation, recheck after ownership negotiation, preserve the `AfterOpen` contract when ownership was granted, and add a gated B/C regression. No Recycle Bin operation is needed.
+
+### R15 — P2 candidate — Journal reconcile accepts any existing path as a restored group member
+
+`src/PhotoReview.Core/FileActions/OperationJournal.cs:490-498,614-620`.
+
+For a prepared group Recycle undo, `IsGroupMemberCompleted` treats `FileExists(member.Source)` as proof of restoration. If an unrelated/replacement file appears at an original path while another member remains in the Recycle Bin, startup reconciliation can mark the group Committed and remove it from pending Recovery even though the original photo remains unrestored. The active Undo and Recovery checks compare both size and last-write time (`UndoService.cs:561-572`; `RecoveryFileCheck.cs:114-134`), so this reconcile path is weaker. Existing tests seed matching fingerprints and do not cover a mismatched but present target. Static-only recoverability risk; add a fake-filesystem reconciliation case that proves the mismatched target does not settle the group. No real Recycle Bin use.
+
+### R16 — P2 candidate — Checked WIC buffer overflow falls through to unchecked WPF admission math
+
+`src/PhotoReview.Imaging/Decoding/Wic/WicDirectDecoder.cs:238-240`; `FallbackImageDecoder.cs:76-95`; `WpfBitmapImageDecoder.cs:230-235,294`.
+
+WIC accepts each dimension up to `int.MaxValue`, then checked stride/size arithmetic can throw `OverflowException` before `EnsureOutputFits`. The fallback classifier treats `OverflowException` as fallbackable. WPF recomputes bytes as `(long)outW * outH * 4`; sufficiently large positive dimensions can wrap that `long` negative, and `EnsureOutputFits` treats values below its minimum threshold as fitting before `EndInit` attempts full-resolution decode. No cross-backend huge-dimension regression covers this chain. Static arithmetic/control-flow review only; no native decoder or large image ran. Use checked/overflow-safe size admission before either backend allocates or decodes, and ensure admission failures cannot fall back.
+
+### Test-only and oracle findings retained at current head
+
+- `TurboJpegGuardMutationTests.ReadAllBytes_LengthExactlyTheLimit_PassesTheLimitCheck` attempts to allocate `MaxSourceBytes` (about 2 GiB) in a default-gate test. Do not run it during this review; replace the allocation with a seam or isolate the resource test.
+- `PerfCsvListenerMappingTests.Writer_FlushesAfterOneSecond` and Core timing tests use fixed pauses before assertions. This conflicts with the repository's no-fixed-delay-assert rule and can flake under load; static review only.
+- `UpdateCheckerBoundaryTests.DeclaredLengthOverMax_IsRejected` checks only the returned failure with `ByteArrayContent`; it does not prove the body was rejected before consumption. Add a read-counting or throw-on-read body.
+- Two App presentation test helpers create a timeout source but do not pass its token to the barrier await; the requested timeout does not bound a missing presentation.
+- Existing baseline test-oracle gaps APP-T04/APP-T05 and imaging wrapper resource leaks are described in the lane notes; their current status must be reconciled by the active agents before this report is final.
 
 ### R01 — P1 — Copy cleanup can delete a foreign destination
 
@@ -33,6 +66,12 @@ Saved coverage: App 1,203/1,203 source bodies; Imaging family 694/694 source bod
 Ownership is set before `TryCopyNew` has created anything. If another process creates the destination and the source vanishes before the copy opens its source, `TryCopyNew` throws FileNotFoundException instead of returning collision=false. Single/recovery cleanup infers ownership from shorter length; group compensation deletes the in-flight destination outright. A foreign file can therefore be deleted. Safe fake-file-system repro covers all three paths, 3/3 observed-bug assertions passed on the pinned baseline. It never uses real photos or the real bin. Existing destination-collision tests keep the source present and miss this pre-creation exception. A separate own-temp Windows File.Copy probe confirmed that missing-source plus existing-destination throws FileNotFoundException (HResult -2147024894), leaving the foreign file intact before application cleanup.
 
 Remedy: propagate proof of successful creation from the copy implementation; only clean up a destination owned by this operation. Length or preflight absence cannot establish ownership. Add regressions that assert the foreign file survives.
+
+#### R01 residual — Copy rollback can delete a foreign replacement
+
+`src/PhotoReview.Core/FileActions/FileActionService.cs:189,212,283-305,376-381,666-667`; `PartialDestinationCleanup.cs:17-28`.
+
+After a group Copy destination passes `VerifyGroupDestination`, the member is added to `done`. If a later member fails, `RemoveCreatedCopies` deletes each completed destination whenever it still exists and has the expected length. A foreign same-size replacement is therefore treated as operation-owned and can be deleted. On the single-Copy path, `TryCopyNew` leaves a creation-proof bool true after success, but `RemovePartialCopy`/`PartialDestinationCleanup.RemoveIfPartial` later deletes any current destination whose length is smaller than the source. If the completed copy is replaced by a shorter foreign file before verification/journal cleanup, that foreign file can be deleted too. #290 proves the original creation event but does not preserve file identity through cleanup. This is a static race trace; no file was replaced or deleted. Preserve destination identity across cleanup or leave ambiguous destinations for Recovery instead of deciding ownership from length; add deterministic fake replacement-before-rollback regressions for both paths.
 
 ### R02 — P1 — Queued file commands act on a newly opened folder
 
