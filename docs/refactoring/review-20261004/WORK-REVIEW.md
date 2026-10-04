@@ -68,6 +68,24 @@ Safe own-fixture probe returned `Refused=false`, `MarkerPresent=false`; no destr
 - R09: `MainViewModel.cs:581-599` reopens Undo's source folder after a concurrent user folder open, even when controller correctly drops stale catalog changes. Recheck caller's folder-load identity before reopen and subsequent status update. Existing mid-Undo test uses same-folder Move and misses Recycle/prior-folder Move.
 - R10: `ImagePresenter.cs:130-151,777-791` clears `_presentedFilePath` on same-file full-resolution bitmap swap. The next navigation skips enabled Fade because previous identity is null. Preserve file identity during same-source swaps. No visual acceptance was performed.
 
+### R11 — P1 — Unknown drive type can pass the permanent-delete guard
+
+`src/PhotoReview.Platform.Windows/WindowsRecycleBin.cs:77-85,235-255`; callers: `src/PhotoReview.Core/FileActions/FileActionService.cs:140-142,598-624` and `RecoveryRetryService.cs:137-160,204-213`. `QueryDriveType` returns null when `DriveInfo` throws `ArgumentException`, `IOException` or `UnauthorizedAccessException`; `CanRecycle` reduces null and known non-fixed volumes to the same `false`. `DeletePermanently` rejects only `true`, so a fixed-drive photo can reach `File.Delete` when the drive query transiently fails, provided permanent deletion is enabled/confirmed. Retry repeats the same ambiguous bool check; the journal's prior `Permanent` bit and current allow-permanent setting do not establish that the current drive is known unsupported. This is source-traced conditional data loss, not runtime-reproduced; no real delete, Recycle Bin operation, or native API was run. Remedy: use a tri-state eligibility result and allow permanent deletion only for positively identified unsupported drive types; fail closed on unknown, including retry preflight and execution. Add fake drive-query tests for unknown, fixed, and known unsupported types, asserting unknown never invokes permanent deletion.
+
+### R12 — P3 — Test report labels cumulative test duration as wall time
+
+`tools/verify-all.ps1:170-186`. `Generate-TestReport` sums each TRX test's `DurationSeconds` and prints the result as “Per-Project Wall Time” with a 60-second warning threshold. xUnit may execute collections concurrently, so summed test time can exceed elapsed project time and produce a misleading wall-time warning. This is a source-traced tooling/reporting issue, not runtime-verified. Use TRX run-level elapsed time or label the metric as cumulative test duration.
+
+## Test harness and oracle findings
+
+- APP-T03 — `tests/PhotoReview.App.Tests/MainViewModelFileActionTests.cs:991-1003`: `WaitForPresentationCountAsync` creates a timeout source but awaits a barrier task without applying that token or a timed wait. Missing presentation can therefore wait until the outer test-run hang guard, not the helper's requested timeout. Static review only; no deliberate hang was run.
+- APP-T04 — `tests/PhotoReview.Integration.Tests/BenchmarkImageExecutorTeardownTests.cs`: the test seeds a cache entry but does not start or hold a prune pass, so its elapsed-time assertion does not exercise the behavior claimed by its name. Add a deterministic prune barrier and assert the prune starts before checking disposal latency.
+- APP-T05 — `tests/PhotoReview.Integration.Tests/RecoveryPathPanelTests.cs`: the clipboard test only asserts no exception while another thread owns the clipboard; a no-op handler satisfies that assertion. It does not prove the expected clipboard call or COM failure handling. The real clipboard test was not run.
+- IMG-R04 — `tests/PhotoReview.Imaging.Tests/Decoding/WpfDecoderGapTests.cs` and `WicDirectFaultInjectionTests.cs`: two fault-stream wrappers do not dispose the owned inner stream; TempRoot suppresses directory cleanup errors, so fixture files can remain until GC. This is test-fixture resource leakage, not production image-data loss; source-slice probe confirmed wrapper disposal leaves the inner stream readable.
+- TEST-R05 — `tests/PhotoReview.Imaging.Tests/Decoding/ErrorHandlingReviewDecodingTests.cs::HugeSourceFile_IsRefusedBeforeReading`: the fixture is 128 MiB + 1 KiB and categorized HotPath. If its guard regresses, the decoder may read that large file before the expected refusal, adding avoidable disk/memory pressure. Static warning only; this test was not run or mutated.
+
+Further per-test oracle gaps (assertions that do not reach the named code path, prove only a subset of behavior, or rely on permissive predicates) are listed next to their callable rows in [functions.tsv](functions.tsv) and the lane reports. They are not counted as production defects.
+
 ### Candidates that need controlled evidence
 
 - `PreviewImageService.cs:262-283`: two persistence workers across cache epochs can write the same cache path; stale worker cleanup may delete a newer worker's file. Cache performance/completeness impact, not source-photo deletion; needs controlled two-worker interleaving.
