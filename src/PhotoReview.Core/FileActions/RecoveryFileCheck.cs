@@ -166,7 +166,8 @@ public sealed class RecoveryFileCheck
             // recycled members must not tell the user that files sitting in the Recycle Bin are gone.
             if (verdicts.All(verdict => verdict == RecoveryVerdict.PermanentlyDeleted)) return RecoveryVerdict.PermanentlyDeleted;
             if (verdicts.Contains(RecoveryVerdict.PermanentlyDeleted)) return RecoveryVerdict.PartiallyPermanentlyDeleted;
-            return entry.Type == FileOperationType.Recycle ? RecoveryVerdict.RecycleUnverifiable : RecoveryVerdict.AlreadyDone;
+            // An undo of a Recycle whose members are all back on disk is done (W2-FA-02); only a plain Recycle stays unverifiable.
+            return entry.Type == FileOperationType.Recycle && entry.Undo != true ? RecoveryVerdict.RecycleUnverifiable : RecoveryVerdict.AlreadyDone;
         }
         if (verdicts.All(verdict => verdict is RecoveryVerdict.AlreadyDone or RecoveryVerdict.CanRetry)
             && verdicts.Contains(RecoveryVerdict.CanRetry))
