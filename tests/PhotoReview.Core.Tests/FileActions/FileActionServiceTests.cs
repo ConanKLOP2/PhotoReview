@@ -121,7 +121,7 @@ public sealed class FileActionServiceTests
     [InlineData(FileOperationType.Copy)]
     public async Task ExecuteAsync_DriveRelativeDestination_FailsWithoutJournalOrMove(FileOperationType operation)
     {
-        var source = @"C:\photos.jpg";
+        var source = @"C:\photos\a.jpg";
         _fs.WriteAllTextAtomic(source, "hello photo");
 
         var result = await _service.ExecuteAsync(new FileActionRequest(source, operation, "D:Backup"));

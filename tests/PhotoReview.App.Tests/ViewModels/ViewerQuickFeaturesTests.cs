@@ -150,13 +150,13 @@ public sealed class ViewerQuickFeaturesTests
         // while SetFolder/Refresh is still executing. Refresh must therefore publish the placeholder BEFORE it starts
         // the search; the other order lets the placeholder overwrite an already finished result (seen on CI).
         // The window is a few instructions wide, so this repeats the scenario to make an ordering regression show up.
-        var folder = @"C:\photos";
-        var expected = Expected(@"C:\photos", folder, @"C:\photos\c");
+        var folder = @"C:\photos\b";
+        var expected = Expected(@"C:\photos\a", folder, @"C:\photos\c");
         for (var i = 0; i < 3000; i++)
         {
             var settings = new AppSettings { ShowFolderInfo = true };
             var finder = new Finder();
-            finder.Results[folder] = new SiblingImageFolders(@"C:\photos", @"C:\photos\c");
+            finder.Results[folder] = new SiblingImageFolders(@"C:\photos\a", @"C:\photos\c");
             var vm = new InfoOverlayViewModel(() => settings, finder.Find);
 
             vm.SetFolder(folder);

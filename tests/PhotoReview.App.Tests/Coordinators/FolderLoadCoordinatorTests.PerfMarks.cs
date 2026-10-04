@@ -144,7 +144,8 @@ public sealed partial class FolderLoadCoordinatorTests
     public async Task LoadAsync_WithRawSupportOff_TheListingNeverAcceptsSidecarFiles()
     {
         TwoImages(out _, out _);
-        _fs.WriteAllTextAtomic(@"C:\photos.xmp", "sidecar");
+        _fs.WriteAllTextAtomic(@"C:\photos\a.xmp", "sidecar");
+        _settingsStore.Current.RawSupportEnabled = false; // the test's premise; not left to the fixture default
 
         using var coordinator = CreateCoordinator();
         await coordinator.LoadAsync(@"C:\photos");

@@ -75,7 +75,7 @@ public sealed class AccessibilityNamesTests
     private static RecoveryWindow CreateRecovery()
     {
         var window = new RecoveryWindow([]);
-        var view = new RecoveryPathView("Source", "C:\a.jpg", string.Empty, System.Windows.Media.Brushes.Gray, string.Empty, string.Empty, null);
+        var view = new RecoveryPathView("Source", @"C:\a.jpg", string.Empty, System.Windows.Media.Brushes.Gray, string.Empty, string.Empty, null);
         window.SourceDetails.Show(view);
         window.DestinationDetails.Show(view with { Title = "Destination" });
         return window;
