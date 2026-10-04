@@ -1,21 +1,21 @@
 # Function review — current-head checkpoint (2026-10-04, incomplete)
 
-Current pinned head: `8952067db8fd820afe47e112c202c75c0cae181b` (`origin/master`). The audit began at `5d291076` and has been reconciled through PRs merged since then. Review branch: `codex/review-all-20261004`; [PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open and not merged. This is a documentation/review PR; it makes no production changes. Three independent lanes are continuing semantic review against the current inventory. Their actual inherited model name is unavailable.
+Current pinned head: `18aa6eb64ba48666de620937211e0782dd6131c1` (`origin/master`). The audit began at `5d291076` and has been reconciled through PRs merged since then. Review branch: `codex/review-all-20261004`; [PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open and not merged. This is a documentation/review PR; it makes no production changes. App/Integration and Core/Platform/tooling lanes are continuing semantic review; Imaging is complete and Architecture/TestSupport remains unassigned. The inherited model names are unavailable.
 
 ## Coverage contract
 
-The current Roslyn inventory covers 16,795 callable bodies in 1,068 tracked C# files: methods/constructors/operators with bodies, explicit accessors, expression-bodied properties/indexers, local functions and lambdas. Declaration-only interfaces/extern members, implicit record members, XAML event declarations and the outer top-level statement body are excluded. Nested bodies have individual rows. This is an inventory, not semantic sign-off.
+The current Roslyn inventory covers 16,799 callable bodies in 1,068 tracked C# files: methods/constructors/operators with bodies, explicit accessors, expression-bodied properties/indexers, local functions and lambdas. Declaration-only interfaces/extern members, implicit record members, XAML event declarations and the outer top-level statement body are excluded. Nested bodies have individual rows. This is an inventory, not semantic sign-off.
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 12,818 `STATIC-ONLY`, 78 `ISSUE`, and 3,899 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 13,144 `STATIC-ONLY`, 86 `ISSUE`, and 3,569 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
 
 The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App, Core/tooling, and Imaging agents are reviewing the remaining current-head rows in separate ownership lanes. No lane may be marked complete until its exact callable coverage and remaining count are reconciled against this inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 4,441 rows reread; 2,014 remaining |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,562 reread in current-head scan (1,161 Core-owned + 401 overlapping Integration rows) |
+| App + Integration | 1,229 | 5,226 | 6,455 | 4,629 rows reread; 1,826 remaining |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,834 reread in current-head scan (1,433 Core-owned + 401 overlapping Integration rows) |
 | Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,279 Imaging.Tests reread; complete; 189 related Integration/App/Architecture rows also read |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | 8 Architecture decoder rows read; TestSupport and remaining Architecture rows unreviewed |
 
@@ -23,7 +23,7 @@ The original baseline ledger reported 1,203 App and 694 Imaging-family source bo
 
 ## Original baseline findings (R02–R10 fixed; R01 has a residual; R11 remains open)
 
-### Current-head triage through `8952067d`
+### Current-head triage through `18aa6eb6`
 
 The R01–R10 descriptions below record defects on the original `5d291076` baseline. #290 fixes the pre-creation/in-flight destination ownership cases in R01, but a separate same-size replacement during completed group-Copy rollback remains under R01 below. R02 #288; R03 #292; R04 #298; R05 #287/#315; R06 #299; R07 #290; R08 #288/#309; R09 #288; and R10 #298 are fixed and should not be reported as open. Their old repros remain regression context only. R11 remains an open conditional permanent-delete safety issue after #312. R12 remains a static reporting concern pending exact current-line recheck. Wave-two findings are carried forward only for unchanged source files; see the linked Core, Platform, and tooling reports under `wave2/`.
 
@@ -65,6 +65,10 @@ The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreV
 
 `src/PhotoReview.App/Coordinators/ImagePresenter.cs:247-253,286,377-378`. `PresentCoreAsync` captures `viewerDecodeToken` but later rereads `viewerDecodeCts.Token`. A second overlapping presentation can exchange and dispose that CTS first, making the later getter throw `ObjectDisposedException`. Existing supersession tests do not cover this exact interleave. Static race trace only; no runtime reproduction. Use the captured token consistently and add a gated overlap regression.
 
+### APP-P02 — P2 candidate — Loss of display timing can double-count glide elapsed time
+
+`src/PhotoReview.App/Input/KineticPan.cs:326-341. After Predict anchors the glide to a refresh grid, a null timing callback advances using rendering time but keeps the old anchor. When timing returns at the same period, Advance recomputes from that old anchor and can apply the missing interval again, causing a pan jump. Display timing can be null during initialization, query failure, or monitor change. Static trace only. Re-anchor on timing loss/recovery or use one consistent fallback epoch; add an anchored → null frames → same-period recovery regression. No runtime reproduction.
+
 ### R20 — P2 candidate — RAW survey can label an ordinary JPEG as preview-only
 
 `tools/PhotoReview.Benchmark.Cli/RawSurvey.cs:358-367`. `WicDecodedPreviewOnly` is set when WIC dimensions equal the largest embedded JPEG, without requiring a RAW format or comparing with sensor dimensions. An ordinary JPEG's sole embedded stream naturally matches its full WIC dimensions, so the report is false. Existing synthetic JPEG coverage does not assert this flag. Static report-accuracy finding; no benchmark was run. Limit the inference to RAW and distinguish preview/sensor dimensions, or report ambiguity.
@@ -83,7 +87,9 @@ The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreV
 
 - `TurboJpegGuardMutationTests.ReadAllBytes_LengthExactlyTheLimit_PassesTheLimitCheck` attempts to allocate `MaxSourceBytes` (about 2 GiB) in a default-gate test. Do not run it during this review; replace the allocation with a seam or isolate the resource test.
 - `SourceBytesCacheTests.GetOrRead_ReadsOnCallingThread` uses an unbounded `Thread.Join()`; a deadlock can outlive its test bound and rely on the outer suite watchdog. Static only; not run.
-- `WarmNavigationReadBoundsTests` claims no duplicate presentations but uses a no-op sink and checks only final state; use a recording sink to assert the sequence/count (APP-T19). Static only; not run.\n- `MainWindowBehaviorTests.Fit` passes `MouseButton.Right` for a negative double-click case, but its helper always raises `PreviewMouseLeftButtonDownEvent`; the case never exercises the right-button route (APP-T20). Route the event from the requested button and cover right/middle behavior per contract. Static only; not run.
+- `WarmNavigationReadBoundsTests` claims no duplicate presentations but uses a no-op sink and checks only final state; use a recording sink to assert the sequence/count (APP-T19). Static only; not run.
+- `MainWindowBehaviorTests.Fit` passes `MouseButton.Right` for a negative double-click case, but its helper always raises `PreviewMouseLeftButtonDownEvent`; the case never exercises the right-button route (APP-T20). Route the event from the requested button and cover right/middle behavior per contract. Static only; not run.
+- `FolderLoadCoordinatorTests.PerfMarks.LoadAsync_WithRawSupportOff_TheListingNeverAcceptsSidecarFiles` has a bell control character embedded in the would-be sidecar path, so it is not a child of the scanned folder and the count assertion cannot prove sidecar exclusion (APP-T21). Use a normal child path and assert that the fake contains it. Static only; not run.
 - `BenchmarkCliHardeningTests` supplies `OperationCanceledException` for both cancellation and OOM negative classification cases; use `OutOfMemoryException` for the latter (APP-T18). Static only; not run.
 - `DecoderRegistrationTests.ImageDecoderFactory_HasNoReflectionLoading` scans source text, contrary to the no-source-text-test rule; use behavioral or IL inspection instead. Static only; not run.
 - `PerfCsvListenerMappingTests.Writer_FlushesAfterOneSecond` and Core timing tests use fixed pauses before assertions. This conflicts with the repository's no-fixed-delay-assert rule and can flake under load; static review only.
