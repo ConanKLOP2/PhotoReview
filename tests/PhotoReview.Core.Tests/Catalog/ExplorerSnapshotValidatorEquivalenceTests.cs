@@ -37,7 +37,8 @@ public sealed class ExplorerSnapshotValidatorEquivalenceTests
 
             Assert.Equal(expectedOk, actualOk);
             Assert.Equal(expectedReason, actualReason);
-            Assert.Equal(expectedOrder, actualOrder);
+            // The oracle returns normalized spellings; the validator returns the caller's scanned strings (W2-CC-01).
+            Assert.Equal(expectedOrder.Select(p => scanned.First(s => string.Equals(ExplorerSnapshotValidator.NormalizePath(s), p, StringComparison.OrdinalIgnoreCase))), actualOrder);
         }
     }
 }

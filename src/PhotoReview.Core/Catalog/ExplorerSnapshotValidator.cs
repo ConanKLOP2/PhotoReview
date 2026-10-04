@@ -38,11 +38,12 @@ public static class ExplorerSnapshotValidator
         }
 
         string folder;
-        HashSet<string> expected;
+        Dictionary<string, string> expected; // normalized scanned path -> the scanned string itself
         try
         {
             folder = CanonicalizeFolder(snapshot.Folder);
-            expected = new HashSet<string>(scannedFiles.Select(NormalizePath), StringComparer.OrdinalIgnoreCase);
+            expected = new Dictionary<string, string>(scannedFiles.Count, StringComparer.OrdinalIgnoreCase);
+            foreach (var scanned in scannedFiles) expected.TryAdd(NormalizePath(scanned), scanned);
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
@@ -81,9 +82,10 @@ public static class ExplorerSnapshotValidator
                 return false;
             }
 
-            if (expected.Contains(path))
+            // Return the caller's own string (the catalog may keep an extended-length prefix), not the normalized spelling.
+            if (expected.TryGetValue(path, out var original))
             {
-                result.Add(path);
+                result.Add(original);
             }
         }
 

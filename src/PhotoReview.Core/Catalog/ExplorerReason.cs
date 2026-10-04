@@ -28,8 +28,12 @@ public static class ExplorerReason
 
     private const char Separator = '|';
 
+    /// <summary>Joins a code and its details. The separator cannot be escaped in this wire form, so a '|' inside the code or a
+    /// detail (an exception message, a path) is replaced by '/', which keeps <see cref="Parse"/> returning exactly the details given.</summary>
     public static string Format(string code, params string[] details) =>
-        details.Length == 0 ? code : code + Separator + string.Join(Separator, details);
+        details.Length == 0 ? Clean(code) : Clean(code) + Separator + string.Join(Separator, details.Select(Clean));
+
+    private static string Clean(string? value) => (value ?? "").Replace(Separator, '/');
 
     /// <summary>Splits a reason into its code and details (a text without a known shape is returned as its own code).</summary>
     public static (string Code, string[] Details) Parse(string reason)

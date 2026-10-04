@@ -30,7 +30,7 @@ public static class DragDropInputService
         var folder = validPaths.FirstOrDefault(Directory.Exists);
         if (folder is not null)
         {
-            var ignored = validPaths.Count(path => !string.Equals(path, folder, StringComparison.OrdinalIgnoreCase));
+            var ignored = validPaths.Count(path => !IsSameFolder(path, folder));
             return new(DragDropInputKind.Folder, Normalize(folder), null, ignored,
                 ignored > 0 ? Tr.CoreDragDropOnlyFirstFolder : null);
         }
@@ -52,4 +52,21 @@ public static class DragDropInputService
     }
 
     private static string Normalize(string path) => Path.GetFullPath(path);
+
+    /// <summary>The same folder dropped twice, or spelled with and without a trailing separator, is one folder, not an ignored extra.</summary>
+    private static bool IsSameFolder(string path, string folder)
+    {
+        if (string.Equals(path, folder, StringComparison.OrdinalIgnoreCase)) return true;
+        try
+        {
+            return string.Equals(
+                Path.TrimEndingDirectorySeparator(Normalize(path)),
+                Path.TrimEndingDirectorySeparator(Normalize(folder)),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false; // a path the file system rejects is never the folder
+        }
+    }
 }

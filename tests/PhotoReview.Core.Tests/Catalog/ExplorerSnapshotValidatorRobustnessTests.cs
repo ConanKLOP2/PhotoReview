@@ -100,6 +100,22 @@ public sealed class ExplorerSnapshotValidatorRobustnessTests
         }
     }
 
+    [Fact(DisplayName = "W2-CC-01: a catalog that keeps the extended-length prefix still accepts the Explorer order (validator returns the scanned strings)")]
+    public void ExtendedLengthScannedPaths_AreReturnedVerbatimAndAcceptedByCatalog()
+    {
+        var scanned = Enumerable.Range(0, 5).Select(i => @"\\?\" + Folder + @"\p" + i + ".jpg").ToList();
+        var catalog = new ReviewCatalog();
+        catalog.Reset(scanned);
+        // Explorer reports the same files without the prefix, in a different order.
+        var order = scanned.AsEnumerable().Reverse().Select(p => p[4..]).ToList();
+
+        Assert.True(ExplorerSnapshotValidator.TryValidate(Snapshot(Folder, order), scanned, out var ordered, out _));
+
+        Assert.Equal(scanned.AsEnumerable().Reverse(), ordered);
+        Assert.True(catalog.ReplaceOrder(ordered));
+        Assert.Equal(scanned.AsEnumerable().Reverse(), catalog.Paths);
+    }
+
     [Fact(DisplayName = "ReviewCatalog.ReplaceOrder accepts exactly what the validator returns for a catalog with the same files")]
     public void ValidatorOutput_IsAcceptedByCatalog()
     {

@@ -48,5 +48,17 @@ public class DragDropInputServiceTests
 
         Assert.False(DragDropInputService.Parse([root.Combine("notes.txt")]).IsValid);
     }
-}
 
+    [Fact(DisplayName = "W2-CC-06: the same folder with and without a trailing separator is one folder, not an ignored extra")]
+    public void ParseSameFolderWithTrailingSeparator_IsNotIgnored()
+    {
+        using var root = new TempRoot("dragdrop");
+        var folder = root.Dir("same-folder");
+
+        var parsed = DragDropInputService.Parse([folder, folder + Path.DirectorySeparatorChar, folder.ToUpperInvariant()]);
+
+        Assert.Equal(DragDropInputKind.Folder, parsed.Kind);
+        Assert.Equal(0, parsed.IgnoredPathCount);
+        Assert.Null(parsed.Warning);
+    }
+}
