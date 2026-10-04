@@ -692,12 +692,14 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         public bool SettingsResponse { get; set; } = true;
         public Action? OnShowSettings { get; set; }
         public string? PickedFolderResponse { get; set; }
+        public string? LastPickInitialFolder { get; private set; }
+        public string? LastBenchmarkFolder { get; private set; }
 
         public bool ShowConfirmation(string title, string message) => ConfirmationResponse;
         public void ShowMessage(string title, string message) { }
         public List<(string Title, string Message)> Errors { get; } = [];
         public void ShowError(string title, string message) => Errors.Add((title, message));
-        public string? PickFolder(string? initialFolder = null) => PickedFolderResponse;
+        public string? PickFolder(string? initialFolder = null) { LastPickInitialFolder = initialFolder; return PickedFolderResponse; }
         public bool ShowBatchReview(IReadOnlyList<string> paths)
         {
             BatchReviewCalled = true;
@@ -712,7 +714,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
             OnShowSettings?.Invoke();
             return SettingsResponse;
         }
-        public void ShowBenchmark(string? folder = null) { }
+        public void ShowBenchmark(string? folder = null) => LastBenchmarkFolder = folder;
         public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
     }
 
