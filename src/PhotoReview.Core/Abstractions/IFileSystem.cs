@@ -32,10 +32,20 @@ public interface IFileSystem
     /// xuất hiện giữa lúc kiểm tra và lúc copy). Mặc định (wrapper/fake): kiểm tra tồn tại rồi <see cref="Copy"/> — không
     /// nguyên tử; <see cref="PhotoReview.Core.IO.PhysicalFileSystem"/> ghi đè bằng File.Copy nguyên tử (fail-if-exists).
     /// </summary>
-    bool TryCopyNew(string source, string destination)
+    bool TryCopyNew(string source, string destination) => TryCopyNew(source, destination, new CopyCreationProof());
+
+    /// <summary>
+    /// Như <see cref="TryCopyNew(string, string)"/> nhưng báo bằng chứng sở hữu qua <paramref name="proof"/>: implementation CHỈ
+    /// gọi <see cref="CopyCreationProof.MarkCreated"/> khi chính lần gọi này đã tạo ra tệp đích (kể cả khi sau đó copy dở dang và
+    /// ném ngoại lệ). Ném ngoại lệ mà proof chưa được đánh dấu = chưa chắc chắn đã tạo gì, nên đích (nếu có) không phải của caller.
+    /// Mặc định (wrapper/fake không nguyên tử): chỉ đánh dấu sau khi <see cref="Copy"/> trả về thành công.
+    /// </summary>
+    bool TryCopyNew(string source, string destination, CopyCreationProof proof)
     {
+        ArgumentNullException.ThrowIfNull(proof);
         if (FileExists(destination)) return false;
         Copy(source, destination);
+        proof.MarkCreated();
         return true;
     }
 

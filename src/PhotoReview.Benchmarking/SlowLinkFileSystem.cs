@@ -43,6 +43,7 @@ public sealed class SlowLinkFileSystem : IFileSystem
     // Forwarded, not left to the interface default (exists-check + Copy, not atomic): the ownership proof of a create-new copy
     // must hold behind this decorator too.
     public bool TryCopyNew(string source, string destination) => _inner.TryCopyNew(source, destination);
+    public bool TryCopyNew(string source, string destination, CopyCreationProof proof) => _inner.TryCopyNew(source, destination, proof);
     public void Delete(string path) => _inner.Delete(path);
 
     public Stream OpenReadShared(string path, int bufferSize = 65536)

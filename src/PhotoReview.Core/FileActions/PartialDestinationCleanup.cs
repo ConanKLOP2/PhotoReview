@@ -4,7 +4,8 @@ namespace PhotoReview.Core.FileActions;
 
 /// <summary>
 /// RV-C03 / error-handling review: shared best-effort cleanup for a Copy that failed after possibly creating its
-/// destination. The caller must only invoke it for a destination this operation created (a pre-check proved it absent).
+/// destination. The caller must only invoke it for a destination this operation created, proven by
+/// <see cref="CopyCreationProof.DestinationCreated"/> (a pre-check that found the path free proves nothing: a foreign file may appear later).
 /// </summary>
 internal static class PartialDestinationCleanup
 {

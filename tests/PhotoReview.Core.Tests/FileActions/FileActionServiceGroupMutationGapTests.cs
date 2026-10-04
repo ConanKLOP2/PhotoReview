@@ -376,12 +376,8 @@ public sealed class FileActionServiceGroupMutationGapTests
     public async Task ExecuteGroupAsync_CopyRollbackCannotDeleteThePartialFile_CountsItAsStuckWithoutEscaping(string kind)
     {
         var world = new World();
-        world.Disk.CopyHook = (source, destination) =>
-        {
-            if (source != Raw) return null;
-            world.Disk.AddFile(destination, "par", Stamp); // a half-written copy of the second member
-            return new IOException("simulated");
-        };
+        // a half-written copy of the second member, created by this copy
+        world.Disk.CopyPartialHook = (source, _) => source == Raw ? (3, new IOException("simulated")) : null;
         world.Disk.DeleteHook = path => path == MovedRaw ? Fault(kind) : null;
 
         var result = await world.Service.ExecuteGroupAsync(Req(FileOperationType.Copy));

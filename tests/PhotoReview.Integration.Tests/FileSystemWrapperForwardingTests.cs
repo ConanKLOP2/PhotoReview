@@ -108,7 +108,10 @@ public sealed class FileSystemWrapperForwardingTests
             foreach (var primitive in primitives)
             {
                 calls.Clear();
-                primitive.Invoke(wrapper, [@"C:\a.jpg", @"C:\b.jpg"]);
+                object?[] args = primitive.GetParameters().Length == 3
+                    ? [@"C:\a.jpg", @"C:\b.jpg", new CopyCreationProof()]
+                    : [@"C:\a.jpg", @"C:\b.jpg"];
+                primitive.Invoke(wrapper, args);
                 // Exactly one forwarded call: no FileExists + Copy emulation behind the wrapper.
                 if (!calls.SequenceEqual([primitive.Name])) failures.Add($"{type.FullName}.{primitive.Name} -> inner calls [{string.Join(", ", calls)}]");
             }

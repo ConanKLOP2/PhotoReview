@@ -266,13 +266,17 @@ public sealed class RecoveryRetryService
     private void CopyNewOrRemovePartial(string source, string destination, long sourceSize)
     {
         bool created;
+        var proof = new CopyCreationProof();
         try
         {
-            created = _fileSystem.TryCopyNew(source, destination);
+            created = _fileSystem.TryCopyNew(source, destination, proof);
         }
         catch (Exception copyFailure) when (copyFailure is not OutOfMemoryException)
         {
-            PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize);
+            // R01: only a destination the copy proved it created is ours to clean; a failure before creation (source vanished while a
+            // foreign file appeared at the destination) must leave it alone.
+            if (proof.DestinationCreated)
+                PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize);
             throw;
         }
         if (!created) throw new IOException(Tr.CoreRecoveryDestinationExists);

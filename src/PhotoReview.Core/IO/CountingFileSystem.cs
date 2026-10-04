@@ -21,6 +21,7 @@ public sealed class CountingFileSystem(IFileSystem inner, ReviewMetrics metrics)
     public void Move(string source, string destination) => _inner.Move(source, destination);
     public void Copy(string source, string destination) => _inner.Copy(source, destination);
     public bool TryCopyNew(string source, string destination) => _inner.TryCopyNew(source, destination);
+    public bool TryCopyNew(string source, string destination, CopyCreationProof proof) => _inner.TryCopyNew(source, destination, proof);
     public void Delete(string path) => _inner.Delete(path);
     public Stream OpenReadShared(string path, int bufferSize = 65536) => _inner.OpenReadShared(path, bufferSize);
     public Stream OpenAppend(string path, bool durable) => _inner.OpenAppend(path, durable);
