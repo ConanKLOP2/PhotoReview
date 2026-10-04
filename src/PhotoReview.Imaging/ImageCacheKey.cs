@@ -61,10 +61,6 @@ public readonly record struct ImageCacheKey
         Create(new FileInfo(path), isOriginal, box, orientationApplied, backend, sourceKind);
 
     /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
-    public static ImageCacheKey Create(FileInfo info, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0) =>
-        Create(info, isOriginal, new DecodeBox(targetWidth, 0), orientationApplied, backend, sourceKind);
-
-    /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
     public static ImageCacheKey Create(FileInfo info, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0)
     {
         ArgumentNullException.ThrowIfNull(info);

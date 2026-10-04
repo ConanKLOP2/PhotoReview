@@ -112,7 +112,6 @@ public sealed class PreloadScheduler : IDisposable
         Func<CatalogEntry[]> snapshotEntries,
         long fullFolderRamThresholdBytes,
         double memoryLoadLimit,
-        Func<double, bool>? hasHeadroom = null,
         IMemoryProbe? memoryProbe = null,
         int? workerCountOverride = null,
         ILog? log = null,
@@ -125,9 +124,7 @@ public sealed class PreloadScheduler : IDisposable
                 MemoryLoadLimit: memoryLoadLimit,
                 FullFolderThresholdBytes: fullFolderRamThresholdBytes)
             { Window = window ?? PreloadWindow.Default },
-            memoryProbe ?? (hasHeadroom is not null
-                ? new DelegateMemoryProbe(hasHeadroom)
-                : throw new ArgumentNullException(nameof(memoryProbe), "A real memory probe or an explicit test override is required.")),
+            memoryProbe ?? throw new ArgumentNullException(nameof(memoryProbe), "A memory probe is required."),
             log,
             prefetchSourceBytes,
             pace: null,

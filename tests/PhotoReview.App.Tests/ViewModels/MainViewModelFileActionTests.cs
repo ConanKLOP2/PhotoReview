@@ -103,8 +103,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
 
         _thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "thumbs"),
-            maxRamBytes: 16 * 1024 * 1024,
-            persistNewThumbnails: false);
+            maxRamBytes: 16 * 1024 * 1024);
 
         _hashService = new FileHashService();
     }
@@ -533,7 +532,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         await actionTask;
 
         // The move is real, so it is undoable (it was NOT before APP-03); folder 2 is not touched.
-        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(undo.MoveHistory);
         Assert.Equal([x], vm.Catalog.Paths);
         Assert.Equal(folder2, vm.Session?.Folder);
         Assert.Equal(x, vm.Session?.CurrentPath);
@@ -619,19 +618,19 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         await vm.OpenFolderAsync(folder);
 
         await vm.RunActionAsync(0); // move 1.jpg, registers undo
-        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(undo.MoveHistory);
 
         fs.Block = gate.Task;
         var action = vm.RunActionAsync(0); // move 2.jpg, blocked
         Assert.True(vm.IsFileActionInProgress);
 
         await vm.UndoAsync(); // must be a no-op while the action holds the gate
-        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(undo.MoveHistory);
 
         gate.SetResult();
         await action;
         Assert.False(vm.IsFileActionInProgress);
-        Assert.Equal(2, undo.MoveHistoryCount);
+        Assert.Equal(2, undo.MoveHistory.Count);
     }
 
     [Fact]
@@ -650,7 +649,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
 
         await vm.RunActionAsync(0);
         await vm.RunActionAsync(0);
-        Assert.Equal(2, undo.MoveHistoryCount);
+        Assert.Equal(2, undo.MoveHistory.Count);
         var total = vm.TotalFiles;
 
         fs.Block = gate.Task;
@@ -666,7 +665,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
 
         Assert.False(vm.IsFileActionInProgress);
         Assert.Equal(total + 1, vm.TotalFiles);
-        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(undo.MoveHistory);
         Assert.Single(vm.Catalog.Paths, p => p == img1 || Path.GetFileName(p) == "2.jpg");
     }
 
@@ -739,7 +738,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         // The gate was released: the next file action runs and registers an undo entry.
         await vm.RunActionAsync(0);
         Assert.False(File.Exists(img1));
-        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(undo.MoveHistory);
     }
 
     // --- Q-R8: permanent delete on drives without a Recycle Bin ---
@@ -914,11 +913,9 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         public virtual void Copy(string source, string destination) => inner.Copy(source, destination);
         public virtual void Delete(string path) => inner.Delete(path);
         public virtual Stream OpenReadShared(string path, int bufferSize = 65536) => inner.OpenReadShared(path, bufferSize);
-        public virtual Stream OpenAppendDurable(string path) => inner.OpenAppendDurable(path);
         public virtual Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
         public virtual void WriteAllTextAtomic(string path, string text, bool durable = true) => inner.WriteAllTextAtomic(path, text, durable);
         public virtual string ReadAllText(string path) => inner.ReadAllText(path);
-        public virtual IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);
         public virtual IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
         public virtual IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
         public virtual void CreateDirectory(string path) => inner.CreateDirectory(path);
@@ -961,9 +958,6 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
     {
-        public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken) =>
-            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
-
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout, IProgress<ExplorerQueryProgress>? progress = null, int progressiveBatchSize = 16, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
 

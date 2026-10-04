@@ -19,7 +19,7 @@ namespace PhotoReview.Core.Tests;
 public sealed class OperationJournalTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
-    private readonly OperationJournal _journal = new();
+    private readonly OperationJournal _journal = new(AppPaths.FromEnvironment(), new PhysicalFileSystem(), new SystemClock());
     private readonly string _source;
     private readonly string _destination;
     private readonly string _operationId;
@@ -72,7 +72,7 @@ public sealed class OperationJournalTests : IDisposable
     public void Append_AfterTornLastLine_KeepsTheNewEntry()
     {
         File.AppendAllText(JournalFile, "{\"Id\":\"torn\",\"Type\":\"Mov"); // power loss mid-record: no trailing newline
-        var freshJournal = new OperationJournal(); // a new process: has not checked the tail yet
+        var freshJournal = new OperationJournal(AppPaths.FromEnvironment(), new PhysicalFileSystem(), new SystemClock()); // a new process: has not checked the tail yet
         var id = Guid.NewGuid().ToString("N");
 
         freshJournal.Append(new JournalEntry(id, FileOperationType.Move, JournalState.Prepared, _source, _destination,
@@ -158,7 +158,7 @@ public sealed class OperationJournalTests : IDisposable
 public sealed class JournalReconciliationTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
-    private readonly OperationJournal _journal = new();
+    private readonly OperationJournal _journal = new(AppPaths.FromEnvironment(), new PhysicalFileSystem(), new SystemClock());
 
     public void Dispose() => _data.Dispose();
 
@@ -350,7 +350,7 @@ public sealed class OperationJournalUnitTests
             @"C:\photos\1.jpg", @"C:\photos\2.jpg", 500, _clock.UtcNow, _clock.UtcNow);
         journal.Append(validEntry);
 
-        using (var stream = _fs.OpenAppendDurable(_journalPath))
+        using (var stream = _fs.OpenAppend(_journalPath, durable: true))
         {
             var badContent = Encoding.UTF8.GetBytes("{not json}\r\n\r\n{ incomplete json \r\n");
             stream.Write(badContent, 0, badContent.Length);
@@ -785,11 +785,9 @@ public sealed class OperationJournalUnitTests
         public void Move(string source, string destination) => inner.Move(source, destination);
         public void Copy(string source, string destination) => inner.Copy(source, destination);
         public void Delete(string path) => inner.Delete(path);
-        public Stream OpenAppendDurable(string path) => inner.OpenAppendDurable(path);
         public Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
         public void WriteAllTextAtomic(string path, string text, bool durable = true) => inner.WriteAllTextAtomic(path, text, durable);
         public string ReadAllText(string path) => inner.ReadAllText(path);
-        public IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
         public IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
         public void CreateDirectory(string path) => inner.CreateDirectory(path);

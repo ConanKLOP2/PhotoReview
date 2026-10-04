@@ -65,27 +65,11 @@ public sealed class SourceBytesCache
     public byte[] GetOrRead(string path) => GetOrRead(path, SourceReadPriority.Viewer);
 
     /// <summary>
-    /// Q-R29 option C-2 overload: as <see cref="GetOrRead(string)"/>, but the cache key is built from
-    /// pre-computed <paramref name="length"/> and <paramref name="lastWriteUtcTicks"/> instead of a fresh <see cref="FileInfo"/>.
-    /// Avoids redundant stat allocation when the caller already has file metadata available.
-    /// </summary>
-    public byte[] GetOrRead(string path, long length, long lastWriteUtcTicks) =>
-        GetOrRead(path, length, lastWriteUtcTicks, SourceReadPriority.Viewer);
-
-    /// <summary>
     /// Q-R29 option C-2: <paramref name="priority"/> is metadata only (see <see cref="SourceReadPriority"/>)
     /// for a perf-harness throttling decorator; it never changes which bytes are cached or returned, and
     /// the default (<see cref="PhysicalSourceReader"/>) ignores it -- pure refactor, no behavior change.
     /// </summary>
     public byte[] GetOrRead(string path, SourceReadPriority priority) => GetOrRead(CreateKey(path), priority);
-
-    /// <summary>
-    /// Q-R29 option C-2 overload: as <see cref="GetOrRead(string, SourceReadPriority)"/>, but the cache key is built from
-    /// pre-computed <paramref name="length"/> and <paramref name="lastWriteUtcTicks"/> instead of a fresh <see cref="FileInfo"/>.
-    /// Avoids redundant stat allocation when the caller already has file metadata available.
-    /// </summary>
-    public byte[] GetOrRead(string path, long length, long lastWriteUtcTicks, SourceReadPriority priority) =>
-        GetOrRead(CreateKey(path, length, lastWriteUtcTicks), priority);
 
     /// <summary>
     /// Returns only the requested byte range and caches it under the source identity plus its offset and length.
@@ -132,19 +116,6 @@ public sealed class SourceBytesCache
     {
         var key = CreateKey(path);
         if (!CanCache(key.SourceLength)) return false;
-        GetOrRead(key, SourceReadPriority.Preload);
-        return true;
-    }
-
-    /// <summary>
-    /// Q-R29 option C-2 overload: as <see cref="TryPrefetch(string)"/>, but the cache key is built from
-    /// pre-computed <paramref name="length"/> and <paramref name="lastWriteUtcTicks"/> instead of a fresh <see cref="FileInfo"/>.
-    /// Avoids redundant stat allocation when the caller already has file metadata available.
-    /// </summary>
-    public bool TryPrefetch(string path, long length, long lastWriteUtcTicks)
-    {
-        if (!CanCache(length)) return false;
-        var key = CreateKey(path, length, lastWriteUtcTicks);
         GetOrRead(key, SourceReadPriority.Preload);
         return true;
     }
@@ -258,16 +229,6 @@ public sealed class SourceBytesCache
         var full = Path.GetFullPath(path);
         var info = new FileInfo(full);
         return new RangeKey(full, info.Length, info.LastWriteTimeUtc.Ticks, 0, info.Length);
-    }
-
-    /// <summary>
-    /// Q-R29 option C-2 overload: builds a cache key from pre-computed file stats.
-    /// Avoids allocating a new <see cref="FileInfo"/> when the caller already has Length and LastWriteUtcTicks.
-    /// </summary>
-    private static RangeKey CreateKey(string path, long length, long lastWriteUtcTicks)
-    {
-        var full = Path.GetFullPath(path);
-        return new RangeKey(full, length, lastWriteUtcTicks, 0, length);
     }
 
     private static RangeKey CreateRangeKey(string path, long length, long lastWriteUtcTicks, long offset, int count) =>

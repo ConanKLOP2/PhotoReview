@@ -52,7 +52,7 @@ public sealed class ExifLineViewModelTests : IDisposable
     public ExifLineViewModelTests()
     {
         Directory.CreateDirectory(_tempDir);
-        _thumbnailCache = new ThumbnailCache(diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 1024 * 1024, persistNewThumbnails: false);
+        _thumbnailCache = new ThumbnailCache(diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 1024 * 1024);
     }
 
     public void Dispose()
@@ -277,9 +277,6 @@ public sealed class ExifLineViewModelTests : IDisposable
 
     private sealed class NoExplorerOrder : IExplorerOrderProvider
     {
-        public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken) =>
-            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
-
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout, IProgress<ExplorerQueryProgress>? progress = null, int progressiveBatchSize = 16, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
 

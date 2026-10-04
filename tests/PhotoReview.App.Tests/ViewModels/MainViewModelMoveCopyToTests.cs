@@ -45,7 +45,7 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         _settingsStore.Save(new AppSettings { LoadingMode = LoadingMode.Preview });
         _previewService = new PreviewImageService(_metrics, () => false, () => new DecodeBox(256, 0),
             capacityBytes: 16 * 1024 * 1024, currentBackend: () => DecoderBackend.Wpf, disableDiskCacheOverride: true);
-        _thumbnailCache = new ThumbnailCache(diskDirectory: _root.Combine("thumbs"), maxRamBytes: 4 * 1024 * 1024, persistNewThumbnails: false);
+        _thumbnailCache = new ThumbnailCache(diskDirectory: _root.Combine("thumbs"), maxRamBytes: 4 * 1024 * 1024);
     }
 
     public void Dispose()
@@ -108,7 +108,7 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         Assert.Equal(dest, new SettingsStore(_appPaths, _fileSystem, new NullLog()).Load().LastMoveToFolder);
         Assert.Null(Settings.LastCopyToFolder);
 
-        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(undo.MoveHistory);
         await vm.UndoAsync();
         Assert.True(File.Exists(img1));
         Assert.False(File.Exists(moved));
@@ -131,7 +131,7 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         Assert.Equal(Tr.StatusCopiedToFolder("1.jpg", dest), vm.StatusText);
         Assert.Equal(dest, Settings.LastCopyToFolder);
         Assert.Null(Settings.LastMoveToFolder);
-        Assert.Equal(0, undo.MoveHistoryCount);
+        Assert.Empty(undo.MoveHistory);
     }
 
     [Fact]
@@ -244,7 +244,7 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         Assert.True(File.Exists(img2));
         Assert.Empty(Directory.GetFiles(dest));
         Assert.Equal(2, vm.TotalFiles);
-        Assert.Equal(0, undo.MoveHistoryCount);
+        Assert.Empty(undo.MoveHistory);
         Assert.Equal(Tr.StatusMoveCopyToStateChanged(Tr.ActionMoveToFolderName), vm.StatusText);
         Assert.Null(Settings.LastMoveToFolder);
         Assert.False(vm.IsFileActionInProgress);
@@ -296,7 +296,7 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(existing)); // never overwritten
         Assert.Equal(2, vm.TotalFiles); // INV-5: the source went back into the catalog
         Assert.Equal(img1, vm.Catalog.Paths[0]);
-        Assert.Equal(0, undo.MoveHistoryCount);
+        Assert.Empty(undo.MoveHistory);
         Assert.Equal(StatusFormatter.ActionFailed(Tr.ActionMoveToFolderName, Tr.CoreFileActionDestinationExists(existing)), vm.StatusText);
         Assert.Null(Settings.LastMoveToFolder); // only a successful operation is remembered
     }
@@ -328,7 +328,7 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         var failed = Assert.Single(_journal.ReadFailedOperations());
         Assert.Equal(JournalErrors.VerifySizeChanged, failed.ErrorCode);
         Assert.Equal(img1, failed.Source);
-        Assert.Equal(0, undo.MoveHistoryCount);
+        Assert.Empty(undo.MoveHistory);
         Assert.Null(Settings.LastMoveToFolder); // not a success: the folder is not remembered
         Assert.Equal(Tr.StatusMoveUnverified("1.jpg"), vm.StatusText);
         Assert.Contains(language == "vi" ? "không xác minh được" : "could not be verified", vm.StatusText, StringComparison.Ordinal);
@@ -393,11 +393,8 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
 
     private sealed class NoExplorerOrder : IExplorerOrderProvider
     {
-        public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken) =>
-            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
-
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout, IProgress<ExplorerQueryProgress>? progress = null, int progressiveBatchSize = 16, CancellationToken cancellationToken = default) =>
-            TryGetSnapshotAsync(folder, timeout, cancellationToken);
+            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
 
         public void Dispose() { }
     }

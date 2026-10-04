@@ -23,7 +23,7 @@ public static class EmbeddedThumbnailReader
     /// source has none (wrong format, missing APP1 thumbnail, or any read/decode failure --
     /// all treated the same: nothing to show yet, the full preview decode is already in flight).
     /// </summary>
-    public static IDecodedImage? TryRead(string path, bool applyOrientation = true)
+    public static IDecodedImage? TryRead(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         try
@@ -61,7 +61,7 @@ public static class EmbeddedThumbnailReader
             var materialized = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, buffer, stride);
             materialized.Freeze();
 
-            var orientation = applyOrientation ? ExifOrientation.Read(frame.Metadata as BitmapMetadata) : 1;
+            var orientation = ExifOrientation.Read(frame.Metadata as BitmapMetadata);
             var oriented = ExifOrientation.Apply(materialized, orientation);
 
             // Perf: frame.PixelWidth/PixelHeight (the *main* image's own header dimensions, not

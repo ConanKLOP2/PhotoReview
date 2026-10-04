@@ -33,7 +33,7 @@ public sealed class OrfExifMagicTests
     private static ExifSummary? ReadThroughRawExif(byte[] orf)
     {
         var info = new RawContainerInfo(RawFormat.Orf, 0, 0, 1, [], [new ExifBlock(0, orf.Length, IsTiffHeader: true)]);
-        return RawExif.TryReadExif(new InMemoryRawHeaderSource(orf), info);
+        return RawExif.TryReadExif(new InMemoryRawHeaderSource(orf), info, out _);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public sealed class OrfExifMagicTests
             using var source = new SourceRawHeaderSource(fs);
             var info = new OrfContainerReader().Read(source, CancellationToken.None);
 
-            var exif = RawExif.TryReadExif(source, info);
+            var exif = RawExif.TryReadExif(source, info, out _);
 
             Assert.True(exif is not null, $"{Path.GetFileName(file)}: no EXIF read from the ORF.");
             Assert.False(string.IsNullOrEmpty(exif.CameraMake), $"{Path.GetFileName(file)}: no camera make.");

@@ -182,12 +182,6 @@ internal static class LibRawNativeMethods
     internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int outputColor, int outputBps, int noAutoBright) =>
         TrySetUseCameraWb(handle, outputColor, outputBps, noAutoBright, () => LibRawAvailability.IsExactPinnedVersion, PinnedWhiteBalanceLayout);
 
-    /// <summary>Reads an int at a byte offset of the libraw_data_t (test seam).</summary>
-    internal static int ReadInt32(SafeLibRawHandle handle, int offset) => Marshal.ReadInt32(handle.DangerousGetHandle(), offset);
-
-    /// <summary>Reads use_camera_wb back (test seam); only meaningful for the pinned layout.</summary>
-    internal static int ReadUseCameraWb(SafeLibRawHandle handle) => ReadInt32(handle, PinnedWhiteBalanceLayout.UseCameraWb);
-
     [DllImport(LibraryName, EntryPoint = "libraw_strerror", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern IntPtr LibRawStrError(int errorCode);
 

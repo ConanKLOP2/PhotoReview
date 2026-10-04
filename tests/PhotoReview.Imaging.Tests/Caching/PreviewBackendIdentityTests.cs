@@ -72,7 +72,7 @@ public sealed class PreviewBackendIdentityTests : IAsyncLifetime
         var factory = new RecordingFactory(backend => new FakeDecoder(backend));
         var service = Track(CreateService(Path.Combine(_root, "info"), CurrentBackend, factory, disableDisk: true));
 
-        var dimensions = await service.GetOriginalDimensionsAsync(_source);
+        var dimensions = await service.GetOriginalDimensionsAsync(_source, service.GetCurrentCacheKey(_source));
 
         Assert.Equal((4, 3), dimensions);
         Assert.Equal([DecoderBackend.Wpf], factory.CreatedBackends);

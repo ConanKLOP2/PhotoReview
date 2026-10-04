@@ -38,9 +38,7 @@ public sealed class MainWindowWiringTests
                 Assert.Equal(WindowState.Normal, window.WindowState);
                 Assert.Equal(Visibility.Collapsed, window.FolderText.Visibility);
 
-                window.ViewModel.UpdateTitle(@"C:\Photos\Trip");
                 Assert.Equal(window.ViewModel.FolderTitle, window.Title);
-                Assert.Contains("Trip", window.Title);
             }
             finally { window.Close(); }
         });

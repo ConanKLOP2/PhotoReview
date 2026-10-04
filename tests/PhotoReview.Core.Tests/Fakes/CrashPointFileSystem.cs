@@ -58,11 +58,8 @@ public sealed class CrashPointFileSystem(InMemoryFileSystem inner) : IFileSystem
     public void WriteAllTextAtomic(string path, string text, bool durable = true) { Mutate("write", path); Inner.WriteAllTextAtomic(path, text, durable); }
     public Stream OpenReadShared(string path, int bufferSize = 65536) { Read(); return Inner.OpenReadShared(path, bufferSize); }
     public string ReadAllText(string path) { Read(); return Inner.ReadAllText(path); }
-    public IEnumerable<string> ReadLines(string path) { Read(); return Inner.ReadLines(path); }
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") { Read(); return Inner.EnumerateFiles(directory, pattern); }
     public IEnumerable<string> EnumerateDirectories(string directory) { Read(); return Inner.EnumerateDirectories(directory); }
-    public Stream OpenAppendDurable(string path) => OpenAppend(path, durable: true);
-
     public Stream OpenAppend(string path, bool durable)
     {
         Mutate("append", path);

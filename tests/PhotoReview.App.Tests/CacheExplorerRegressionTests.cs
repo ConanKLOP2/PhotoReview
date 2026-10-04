@@ -60,14 +60,14 @@ public sealed class CacheExplorerRegressionTests : IDisposable
     [Fact(DisplayName = "Preload order prioritizes next images then previous images without duplicates")]
     public void PreloadOrderPrioritizesNextThenPrevious()
     {
-        var partial = PreloadOrderService.Build(1, 5, false).ToArray();
+        var partial = PreloadOrderService.Build(1, 5, false, direction: 1, lead: 0, window: PreloadWindow.Default).ToArray();
         Assert.True(partial.SequenceEqual(new[] { 2, 3, 4, 0 }) && partial.Distinct().Count() == partial.Length);
     }
 
     [Fact(DisplayName = "Full-folder preload schedules every catalog item exactly once")]
     public void FullFolderPreloadSchedulesEveryItemOnce()
     {
-        var full = PreloadOrderService.Build(2, 100, true).ToArray();
+        var full = PreloadOrderService.Build(2, 100, true, direction: 1, lead: 0, window: PreloadWindow.Default).ToArray();
         Assert.True(full.Length == 99 && full.Distinct().Count() == 99 && !full.Contains(2));
     }
 

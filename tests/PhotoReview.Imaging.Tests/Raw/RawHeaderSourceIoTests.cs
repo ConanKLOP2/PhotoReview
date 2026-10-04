@@ -97,7 +97,7 @@ public sealed class RawHeaderSourceIoTests
         using var source = new SourceRawHeaderSource(new FaultyStream(1000, Never, () => new IOException("disk")));
         var info = new RawContainerInfo(RawFormat.Cr2, 10, 10, 1, [], [new ExifBlock(0, 100, true)]);
 
-        Assert.Null(RawExif.TryReadExif(source, info));
+        Assert.Null(RawExif.TryReadExif(source, info, out _));
     }
 
     [Fact]

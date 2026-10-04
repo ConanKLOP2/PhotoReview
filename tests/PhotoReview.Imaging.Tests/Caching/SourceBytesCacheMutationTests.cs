@@ -162,20 +162,6 @@ public sealed class SourceBytesCacheMutationTests : IDisposable
         Assert.Equal(1, reader.Opens);
     }
 
-    [Fact(DisplayName = "GetOrRead of a source of exactly Array.MaxLength bytes is not rejected as too large (fails later on the source), one more is")]
-    public void GetOrRead_LengthAtArrayMaxLength_IsNotRejectedAsTooLarge()
-    {
-        var reader = new FakeReader(() => new ChunkedStream([1], 1));
-        var cache = new SourceBytesCache(1024 * 1024, reader);
-        var path = _root.Combine("never-read.bin");
-
-        Assert.ThrowsAny<IOException>(() => cache.GetOrRead(path, Array.MaxLength, 1));
-        Assert.Equal(1, reader.Opens);
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => cache.GetOrRead(path, Array.MaxLength + 1L, 1));
-        Assert.Equal(1, reader.Opens);
-    }
-
     [Fact(DisplayName = "TryGetRange is a hit for a range cached at offset 0")]
     public void TryGetRange_OffsetZero_IsAHit()
     {
@@ -186,34 +172,6 @@ public sealed class SourceBytesCacheMutationTests : IDisposable
         Assert.True(cache.TryGetRange(f.Path, f.Length, f.Ticks, 0, 128, out var hit));
 
         Assert.Same(read, hit);
-    }
-
-    [Fact(DisplayName = "TryPrefetch with pre-computed stats caches the file and reports true")]
-    public void TryPrefetch_PrecomputedStats_CachesFile()
-    {
-        var f = Fixture("pre.bin", 512);
-        var reader = new FakeReader(() => new ChunkedStream(f.Content, 4096));
-        var cache = new SourceBytesCache(1024 * 1024, reader);
-
-        Assert.True(cache.TryPrefetch(f.Path, f.Length, f.Ticks));
-
-        Assert.Equal(1, reader.Opens);
-        Assert.Equal(1, cache.Count);
-        Assert.Equal(f.Length, cache.CurrentSize);
-        Assert.Same(cache.GetOrRead(f.Path, f.Length, f.Ticks), cache.GetOrRead(f.Path, f.Length, f.Ticks));
-        Assert.Equal(1, reader.Opens);
-    }
-
-    [Fact(DisplayName = "TryPrefetch with pre-computed stats of a file larger than the cache reads nothing and reports false")]
-    public void TryPrefetch_PrecomputedStats_TooLarge_ReadsNothing()
-    {
-        var reader = new FakeReader(() => throw new InvalidOperationException("must not open"));
-        var cache = new SourceBytesCache(1024, reader);
-
-        Assert.False(cache.TryPrefetch(_root.Combine("huge.bin"), cache.CapacityBytes + 1, 1));
-
-        Assert.Equal(0, reader.Opens);
-        Assert.Equal(0, cache.Count);
     }
 
     [Fact(DisplayName = "CanCache and CanCacheRange accept exactly up to the capacity (and a zero-length range), not one byte more")]

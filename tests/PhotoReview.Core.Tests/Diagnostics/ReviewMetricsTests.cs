@@ -37,7 +37,6 @@ public sealed class ReviewMetricsTests
         metrics.RecordPreloadHit();
         metrics.RecordInflightJoin();
         metrics.RecordDiskCacheHit();
-        metrics.RecordQueueWait(5);
         metrics.RecordUiAssign(10);
 
         var snapshot = metrics.Snapshot();
@@ -52,12 +51,11 @@ public sealed class ReviewMetricsTests
         Assert.Equal(1, snapshot.PreloadHits);
         Assert.Equal(1, snapshot.InflightJoins);
         Assert.Equal(1, snapshot.DiskCacheHits);
-        Assert.Equal(5, snapshot.QueueWaitMilliseconds);
         Assert.Equal(10, snapshot.UiAssignMilliseconds);
     }
 
     [Fact]
-    public void FullDecodeSourceReadIsCountedButDoesNotAffectPreloadEwma()
+    public void FullDecodeSourceReadIsCountedInTotalsButDoesNotAffectPreloadEwma()
     {
         var metrics = new ReviewMetrics();
 
@@ -68,44 +66,6 @@ public sealed class ReviewMetricsTests
         Assert.Equal(24_000_000, snapshot.SourceBytesRead);
         Assert.Equal(1_500, snapshot.DecodeMilliseconds);
         Assert.Equal(0, metrics.DecodeMillisecondsEwma);
-    }
-
-    [Fact]
-    public void FullDecodeSourceReads_AreTrackedSeparatelyAsASubsetOfTheTotals()
-    {
-        var metrics = new ReviewMetrics();
-        metrics.RecordSourceRead(1_000, 40);
-        metrics.RecordSourceRead(2_000, 60);
-        metrics.RecordSourceRead(24_000_000, 1_500, includeInDecodeEwma: false);
-
-        var snapshot = metrics.Snapshot();
-
-        Assert.Equal(3, snapshot.SourceReads);
-        Assert.Equal(1_600, snapshot.DecodeMilliseconds);
-        Assert.Equal(1, snapshot.FullDecodeReads);
-        Assert.Equal(1_500, snapshot.FullDecodeMilliseconds);
-        // What the EWMA saw is exactly the total minus the full decodes.
-        Assert.Equal(2, snapshot.SourceReads - snapshot.FullDecodeReads);
-        Assert.Equal(100, snapshot.DecodeMilliseconds - snapshot.FullDecodeMilliseconds);
-    }
-
-    [Fact]
-    public void FullDecodeSubset_LetsAConsumerDeriveTheOrdinaryDecodeAverage()
-    {
-        var metrics = new ReviewMetrics();
-        metrics.RecordSourceRead(1_000, 40);
-        metrics.RecordSourceRead(2_000, 60);
-        metrics.RecordSourceRead(24_000_000, 1_500, includeInDecodeEwma: false);
-        metrics.RecordSourceRead(24_000_000, 2_500, includeInDecodeEwma: false);
-
-        var snapshot = metrics.Snapshot();
-        var ordinaryReads = snapshot.SourceReads - snapshot.FullDecodeReads;
-        var ordinaryAverage = (snapshot.DecodeMilliseconds - snapshot.FullDecodeMilliseconds) / (double)ordinaryReads;
-        var fullAverage = snapshot.FullDecodeMilliseconds / (double)snapshot.FullDecodeReads;
-
-        Assert.Equal(50.0, ordinaryAverage, 6);
-        Assert.Equal(2_000.0, fullAverage, 6);
-        Assert.True(snapshot.FullDecodeReads <= snapshot.SourceReads && snapshot.FullDecodeMilliseconds <= snapshot.DecodeMilliseconds);
     }
 
     [Fact]
@@ -123,7 +83,6 @@ public sealed class ReviewMetricsTests
             metrics.RecordPreloadHit();
             metrics.RecordInflightJoin();
             metrics.RecordDiskCacheHit();
-            metrics.RecordQueueWait(1);
             metrics.RecordUiAssign(1);
         });
 
@@ -139,7 +98,6 @@ public sealed class ReviewMetricsTests
         Assert.Equal(iterations, snapshot.PreloadHits);
         Assert.Equal(iterations, snapshot.InflightJoins);
         Assert.Equal(iterations, snapshot.DiskCacheHits);
-        Assert.Equal(iterations, snapshot.QueueWaitMilliseconds);
         Assert.Equal(iterations, snapshot.UiAssignMilliseconds);
     }
 

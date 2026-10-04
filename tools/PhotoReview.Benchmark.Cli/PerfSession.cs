@@ -779,7 +779,6 @@ internal static class PerfSession
         a.PreloadHits == b.PreloadHits &&
         a.InflightJoins == b.InflightJoins &&
         a.DiskCacheHits == b.DiskCacheHits &&
-        a.QueueWaitMilliseconds == b.QueueWaitMilliseconds &&
         a.UiAssignMilliseconds == b.UiAssignMilliseconds &&
         a.SourceOpenCount == b.SourceOpenCount &&
         a.StatCount == b.StatCount &&

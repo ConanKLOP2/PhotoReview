@@ -32,14 +32,13 @@ public sealed class SessionWritePolicyTests(ITestOutputHelper output) : IDisposa
         public void Copy(string source, string destination) => inner.Copy(source, destination);
         public void Delete(string path) => inner.Delete(path);
         public Stream OpenReadShared(string path, int bufferSize = 65536) => inner.OpenReadShared(path, bufferSize);
-        public Stream OpenAppendDurable(string path) => inner.OpenAppendDurable(path);
+        public Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
         public void WriteAllTextAtomic(string path, string text, bool durable = true)
         {
             AtomicWrites.Add((path, durable));
             inner.WriteAllTextAtomic(path, text, durable);
         }
         public string ReadAllText(string path) => inner.ReadAllText(path);
-        public IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
         public IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
         public void CreateDirectory(string path) => inner.CreateDirectory(path);

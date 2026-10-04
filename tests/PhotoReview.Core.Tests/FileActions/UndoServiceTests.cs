@@ -70,8 +70,8 @@ public sealed class UndoServiceTests
         // register the Move as the in-session path (FileActionService/UndoService.Register) would.
         _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
 
-        Assert.True(_service.CanUndoMove);
-        Assert.Equal(1, _service.MoveHistoryCount);
+        Assert.True(_service.MoveHistory.Count > 0);
+        Assert.Single(_service.MoveHistory);
 
         var result = await _service.UndoMoveAsync();
 
@@ -83,7 +83,7 @@ public sealed class UndoServiceTests
 
         Assert.True(_fs.FileExists(source));
         Assert.False(_fs.FileExists(destination));
-        Assert.False(_service.CanUndoMove);
+        Assert.False(_service.MoveHistory.Count > 0);
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class UndoServiceTests
         Assert.False(result.Succeeded);
         Assert.True(_fs.FileExists(members[0].Source));
         Assert.False(_fs.FileExists(members[1].Source));
-        Assert.True(undo.HasLastAction);
+        Assert.True(undo.LastUndoAction is not null);
         var failed = Assert.Single(_journal.ReadFailedOperations());
         Assert.True(failed.Undo);
         Assert.Equal(2, failed.GroupMembers!.Count);
@@ -215,7 +215,7 @@ public sealed class UndoServiceTests
         var result = await _service.UndoMoveAsync();
 
         Assert.False(result.Succeeded);
-        Assert.True(_service.CanUndoMove);
+        Assert.True(_service.MoveHistory.Count > 0);
         var failed = Assert.Single(_journal.ReadFailedOperations());
         Assert.Equal(destination, failed.Source);
         Assert.True(failed.Undo);
@@ -253,7 +253,7 @@ public sealed class UndoServiceTests
         // Simulates a restart: a brand-new UndoService over the same (now Committed-undo-laden) journal.
         var restarted = new UndoService(_journal, _fs, _recycleBin);
 
-        Assert.False(restarted.CanUndoMove);
+        Assert.False(restarted.MoveHistory.Count > 0);
     }
 
     [Fact(DisplayName = "In-session undo retains more than the startup journal tail")]
@@ -271,12 +271,12 @@ public sealed class UndoServiceTests
                 7 + i, writeTime, null));
         }
 
-        Assert.Equal(250, _service.MoveHistoryCount);
+        Assert.Equal(250, _service.MoveHistory.Count);
         var result = await _service.UndoMoveAsync();
 
         Assert.True(result.Succeeded);
         Assert.Equal(@"C:\photos\source-249.jpg", result.Source);
-        Assert.Equal(249, _service.MoveHistoryCount);
+        Assert.Equal(249, _service.MoveHistory.Count);
     }
 
     [Fact]
@@ -294,7 +294,7 @@ public sealed class UndoServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Contains("Tệp đích đã thay đổi sau khi Di chuyển", result.ErrorMessage);
-        Assert.True(_service.CanUndoMove);
+        Assert.True(_service.MoveHistory.Count > 0);
         Assert.False(_fs.FileExists(source));
         Assert.True(_fs.FileExists(destination));
     }
@@ -314,7 +314,7 @@ public sealed class UndoServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Contains("Nguồn hoặc đích đã thay đổi", result.ErrorMessage);
-        Assert.True(_service.CanUndoMove);
+        Assert.True(_service.MoveHistory.Count > 0);
     }
 
     [Fact(DisplayName = "A Move whose destination was deleted outside the app is reported once and dropped, so older moves stay undoable")]
@@ -334,15 +334,15 @@ public sealed class UndoServiceTests
         var first = await _service.UndoLastAsync();
 
         Assert.False(first.Succeeded);
-        Assert.Equal(1, _service.MoveHistoryCount);
-        Assert.False(_service.HasLastAction);
+        Assert.Single(_service.MoveHistory);
+        Assert.False(_service.LastUndoAction is not null);
 
         var second = await _service.UndoMoveAsync();
 
         Assert.True(second.Succeeded);
         Assert.Equal(oldSource, second.Source);
         Assert.True(_fs.FileExists(oldSource));
-        Assert.Equal(0, _service.MoveHistoryCount);
+        Assert.Empty(_service.MoveHistory);
     }
 
     [Fact(DisplayName = "A Move whose source name is temporarily occupied stays in the history")]
@@ -357,7 +357,7 @@ public sealed class UndoServiceTests
 
         var blocked = await _service.UndoLastAsync();
         Assert.False(blocked.Succeeded);
-        Assert.True(_service.HasLastAction);
+        Assert.True(_service.LastUndoAction is not null);
 
         _fs.Delete(source);
         var retry = await _service.UndoLastAsync();
@@ -400,8 +400,8 @@ public sealed class UndoServiceTests
 
         _service.Register(new FileActionResult(true, FileOperationType.Recycle, source, null, 100, writeTime, null));
 
-        Assert.True(_service.HasLastAction);
-        Assert.False(_service.CanUndoMove);
+        Assert.True(_service.LastUndoAction is not null);
+        Assert.False(_service.MoveHistory.Count > 0);
 
         var result = await _service.UndoLastAsync();
 
@@ -409,7 +409,7 @@ public sealed class UndoServiceTests
         Assert.Equal(FileOperationType.Recycle, result.Operation);
         Assert.Equal(source, result.Source);
         Assert.Equal(source, _recycleBin.LastRestoredPath);
-        Assert.False(_service.HasLastAction);
+        Assert.False(_service.LastUndoAction is not null);
     }
 
     [Fact]
@@ -439,7 +439,7 @@ public sealed class UndoServiceTests
         var result = await _service.UndoLastAsync();
 
         Assert.True(result.Succeeded);
-        Assert.False(_service.HasLastAction);
+        Assert.False(_service.LastUndoAction is not null);
     }
 
     [Fact(DisplayName = "Undo of a Recycle refuses to restore over a newer file at the original path and keeps the action")]
@@ -454,7 +454,7 @@ public sealed class UndoServiceTests
 
         Assert.False(result.Succeeded);
         Assert.Null(_recycleBin.LastRestoredPath);
-        Assert.True(_service.HasLastAction);
+        Assert.True(_service.LastUndoAction is not null);
         Assert.Contains("deleted.jpg", result.ErrorMessage, StringComparison.Ordinal);
     }
 
@@ -564,7 +564,7 @@ public sealed class UndoServiceTests
         Assert.False(result.Succeeded);
         Assert.False(_fs.FileExists(FatSource));
         Assert.True(_fs.FileExists(FatDestination));
-        Assert.True(_service.CanUndoMove);
+        Assert.True(_service.MoveHistory.Count > 0);
     }
 
     [Fact]
@@ -579,7 +579,7 @@ public sealed class UndoServiceTests
         Assert.False(result.Succeeded);
         Assert.False(_fs.FileExists(FatSource));
         Assert.True(_fs.FileExists(FatDestination));
-        Assert.True(_service.CanUndoMove);
+        Assert.True(_service.MoveHistory.Count > 0);
     }
 
     [Fact]
@@ -597,7 +597,7 @@ public sealed class UndoServiceTests
         var move = await _service.UndoMoveAsync();
         Assert.True(move.Succeeded, move.ErrorMessage);
 
-        Assert.True(_service.HasLastAction);
+        Assert.True(_service.LastUndoAction is not null);
         var recycle = await _service.UndoLastAsync();
         Assert.True(recycle.Succeeded, recycle.ErrorMessage);
         Assert.Equal(FileOperationType.Recycle, recycle.Operation);

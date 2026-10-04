@@ -59,8 +59,7 @@ public sealed class ReviewCatalog
     private string[]? _pathsCache;
 
     /// <summary>
-    /// Bumped whenever membership or order changes (Reset/Remove/Restore/ReplaceOrder/
-    /// InsertSorted/MoveToFront). Lets callers that derive an expensive, whole-catalog cache
+    /// Bumped whenever membership or order changes (Reset/Remove/Restore/ReplaceOrder). Lets callers that derive an expensive, whole-catalog cache
     /// (compare-pair index, total source bytes) cheaply detect "nothing changed since I last
     /// built this" instead of recomputing on every navigation or rebuilding a HashSet of paths
     /// to compare membership.
@@ -88,11 +87,6 @@ public sealed class ReviewCatalog
     /// <see cref="PathAt"/> instead of indexing into this.
     /// </summary>
     public IReadOnlyList<string> Paths => _pathsCache ??= _entries.Select(e => e.Path).ToArray();
-
-    /// <summary>
-    /// Gets all catalog entries, for efficient access to metadata (Length, LastWriteUtc).
-    /// </summary>
-    public IReadOnlyList<CatalogEntry> Entries => _entries.AsReadOnly();
 
     /// <summary>Returns the path at <paramref name="index"/> without allocating the full Paths array.</summary>
     public string PathAt(int index) => _entries[index].Path;
@@ -145,33 +139,6 @@ public sealed class ReviewCatalog
         StructuralVersion++;
     }
 
-    /// <summary>
-    /// Resets the catalog with the specified paths. Sets <see cref="CurrentIndex"/> to 0 if non-empty, or -1 if empty.
-    /// </summary>
-    public void Reset(IEnumerable<string> paths)
-    {
-        AssertOwnerThread();
-        ArgumentNullException.ThrowIfNull(paths);
-        // Materialise first: an enumeration that throws (or a live view of this catalog) must not leave the
-        // catalog cleared with a stale index/version.
-        var fresh = new List<CatalogEntry>();
-        foreach (var path in paths)
-        {
-            if (!string.IsNullOrWhiteSpace(path))
-            {
-                fresh.Add(new CatalogEntry(path));
-            }
-        }
-        _entries.Clear();
-        _entries.AddRange(fresh);
-        _rawPairMode = RawPairMode.Separate; // plain paths never form capture groups: forget the previous mode too
-        CurrentIndex = _entries.Count > 0 ? 0 : -1;
-        InvalidateIndex();
-    }
-
-    public void Reset(IEnumerable<CatalogEntry> entries)
-        => Reset(entries, RawPairMode.Separate);
-
     /// <summary>Resets the catalog and optionally collapses matched JPEG+RAW pairs.</summary>
     public void Reset(IEnumerable<CatalogEntry> entries, RawPairMode rawPairMode, IEnumerable<string>? sidecarPaths = null)
     {
@@ -197,28 +164,6 @@ public sealed class ReviewCatalog
         // (representative) path with another member's length/time would make it look changed on the next comparison.
         if (!string.Equals(_entries[index].Path, path, StringComparison.OrdinalIgnoreCase)) return false;
         _entries[index] = _entries[index].WithMetadata(length, lastWriteUtc, width, height);
-        return true;
-    }
-
-    /// <summary>
-    /// Moves the specified item to the front of the catalog (index 0) and sets <see cref="CurrentIndex"/> to 0.
-    /// Returns true if the item was found and moved (or already at front), false otherwise.
-    /// </summary>
-    public bool MoveToFront(string path)
-    {
-        AssertOwnerThread();
-        var index = IndexOf(path);
-        if (index < 0) return false;
-
-        if (index > 0)
-        {
-            var entry = _entries[index];
-            _entries.RemoveAt(index);
-            _entries.Insert(0, entry);
-            InvalidateIndex();
-        }
-
-        CurrentIndex = 0;
         return true;
     }
 
@@ -577,43 +522,7 @@ public sealed class ReviewCatalog
     }
 
     /// <summary>
-    /// Inserts an entry into the catalog preserving sorted order defined by <paramref name="comparison"/>.
-    /// Used for undo operations. Returns the index where the item was inserted.
-    /// </summary>
-    public int InsertSorted(string path, Comparison<string> comparison)
-    {
-        AssertOwnerThread();
-        ArgumentNullException.ThrowIfNull(comparison);
-        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Path cannot be empty.", nameof(path));
-
-        // If duplicate exists, return existing index
-        var existingIndex = IndexOf(path);
-        if (existingIndex >= 0) return existingIndex;
-
-        var targetIndex = 0;
-        while (targetIndex < _entries.Count && comparison(_entries[targetIndex].Path, path) < 0)
-        {
-            targetIndex++;
-        }
-
-        _entries.Insert(targetIndex, new CatalogEntry(path));
-        InvalidateIndex();
-
-        if (CurrentIndex == -1)
-        {
-            CurrentIndex = targetIndex;
-        }
-        else if (targetIndex <= CurrentIndex)
-        {
-            CurrentIndex++;
-        }
-
-        return targetIndex;
-    }
-
-    /// <summary>
-    /// Creates a true copy of all entries (unlike <see cref="Entries"/>, which wraps the live
-    /// list). For consumers -- e.g. the background preload scheduler -- that need a stable
+    /// Creates a true copy of all entries. For consumers -- e.g. the background preload scheduler -- that need a stable
     /// snapshot including each entry's cached Length/LastWriteUtc, safe to read off the UI thread.
     /// </summary>
     public CatalogEntry[] EntriesSnapshot() => _entries.ToArray();

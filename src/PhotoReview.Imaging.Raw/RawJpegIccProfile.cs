@@ -29,8 +29,6 @@ internal static class RawJpegIccProfile
         return result;
     }
 
-    internal static byte[] GetBundledAdobeRgbProfile() => (byte[])s_adobeRgbProfile.Value.Clone();
-
     private static bool HasEmbeddedIcc(ReadOnlySpan<byte> jpeg)
     {
         if (jpeg.Length < 2 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) return false;

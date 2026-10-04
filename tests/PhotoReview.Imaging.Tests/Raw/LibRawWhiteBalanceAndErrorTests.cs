@@ -18,15 +18,15 @@ public sealed class LibRawWhiteBalanceAndErrorTests
         if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
         using var handle = new SafeLibRawHandle(LibRawNativeMethods.LibRawInit(0));
         var layout = LibRawNativeMethods.PinnedWhiteBalanceLayout;
-        Assert.Equal(0, LibRawNativeMethods.ReadUseCameraWb(handle));
+        Assert.Equal(0, ReadUseCameraWb(handle));
 
         Assert.True(LibRawNativeMethods.TrySetUseCameraWb(handle, 1, 8, 1));
 
-        Assert.Equal(1, LibRawNativeMethods.ReadUseCameraWb(handle));
+        Assert.Equal(1, ReadUseCameraWb(handle));
         // The sentinels used for the layout proof must be gone: the real settings are what LibRaw will use.
-        Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, layout.OutputColor));
-        Assert.Equal(8, LibRawNativeMethods.ReadInt32(handle, layout.OutputBps));
-        Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, layout.NoAutoBright));
+        Assert.Equal(1, ReadInt32(handle, layout.OutputColor));
+        Assert.Equal(8, ReadInt32(handle, layout.OutputBps));
+        Assert.Equal(1, ReadInt32(handle, layout.NoAutoBright));
     }
 
     [Theory]
@@ -45,11 +45,11 @@ public sealed class LibRawWhiteBalanceAndErrorTests
         var applied = LibRawNativeMethods.TrySetUseCameraWb(handle, 1, 8, 1, () => true, wrong);
 
         Assert.False(applied);
-        Assert.Equal(0, LibRawNativeMethods.ReadUseCameraWb(handle));
+        Assert.Equal(0, ReadUseCameraWb(handle));
         // The output settings still reach LibRaw through the supported setters (daylight WB, sRGB, 8 bit).
-        Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, real.OutputColor));
-        Assert.Equal(8, LibRawNativeMethods.ReadInt32(handle, real.OutputBps));
-        Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, real.NoAutoBright));
+        Assert.Equal(1, ReadInt32(handle, real.OutputColor));
+        Assert.Equal(8, ReadInt32(handle, real.OutputBps));
+        Assert.Equal(1, ReadInt32(handle, real.NoAutoBright));
     }
 
     [Theory]
@@ -131,4 +131,10 @@ public sealed class LibRawWhiteBalanceAndErrorTests
         var samples = (count + 6) / 7;
         return (r / samples, g / samples, b / samples);
     }
+
+    /// <summary>Reads an int at a byte offset of the libraw_data_t.</summary>
+    private static int ReadInt32(SafeLibRawHandle handle, int offset) => Marshal.ReadInt32(handle.DangerousGetHandle(), offset);
+
+    /// <summary>Reads use_camera_wb back; only meaningful for the pinned layout.</summary>
+    private static int ReadUseCameraWb(SafeLibRawHandle handle) => ReadInt32(handle, LibRawNativeMethods.PinnedWhiteBalanceLayout.UseCameraWb);
 }

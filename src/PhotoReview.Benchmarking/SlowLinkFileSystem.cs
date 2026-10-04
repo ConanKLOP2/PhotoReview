@@ -51,11 +51,9 @@ public sealed class SlowLinkFileSystem : IFileSystem
         return _bandwidth is null ? stream : new ThrottledReadStream(stream, _bandwidth);
     }
 
-    public Stream OpenAppendDurable(string path) => _inner.OpenAppendDurable(path);
     public Stream OpenAppend(string path, bool durable) => _inner.OpenAppend(path, durable);
     public void WriteAllTextAtomic(string path, string text, bool durable = true) => _inner.WriteAllTextAtomic(path, text, durable);
     public string ReadAllText(string path) => _inner.ReadAllText(path);
-    public IEnumerable<string> ReadLines(string path) => _inner.ReadLines(path);
 
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => _inner.EnumerateFiles(directory, pattern);
 

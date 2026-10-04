@@ -259,7 +259,7 @@ public sealed class RawDecoderTests
         var rawPath = Path.Combine(root, "camera.dng");
         try
         {
-            File.WriteAllBytes(profilePath, RawJpegIccProfile.GetBundledAdobeRgbProfile());
+            File.WriteAllBytes(profilePath, BundledAdobeProfile.Load());
             FixtureGenerator.GenerateJpegWithIcc(taggedPath, 128, 96, profilePath);
             var taggedJpeg = AddAdobeRgbHint(File.ReadAllBytes(taggedPath));
             Assert.Same(taggedJpeg, RawJpegIccProfile.EnsureAdobeRgbProfile(taggedJpeg));
@@ -291,7 +291,7 @@ public sealed class RawDecoderTests
         var jpegPath = Path.Combine(root, "profile.jpg");
         try
         {
-            File.WriteAllBytes(profilePath, RawJpegIccProfile.GetBundledAdobeRgbProfile());
+            File.WriteAllBytes(profilePath, BundledAdobeProfile.Load());
             FixtureGenerator.GenerateJpegWithIcc(jpegPath, 32, 24, profilePath);
             var jpeg = File.ReadAllBytes(jpegPath);
             Assert.Same(jpeg, RawJpegIccProfile.EnsureAdobeRgbProfile(jpeg));

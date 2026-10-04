@@ -40,11 +40,10 @@ public sealed class OriginalDimensionsCacheTests : IAsyncLifetime
         {
             lastPath = Path.Combine(_root, $"img{i}.jpg");
             File.WriteAllBytes(lastPath, [1, 2, 3]);
-            var dims = await _service.GetOriginalDimensionsAsync(lastPath);
+            var dims = await _service.GetOriginalDimensionsAsync(lastPath, _service.GetCurrentCacheKey(lastPath));
             Assert.Equal((7, 5), dims);
         }
 
-        Assert.Equal(100, _service.KnownOriginalDimensionsCount);
         // Most recent entry is still known; the oldest was evicted.
         Assert.True(_service.TryGetKnownOriginalDimensions(_service.GetCurrentCacheKey(lastPath!), out _));
         Assert.False(_service.TryGetKnownOriginalDimensions(

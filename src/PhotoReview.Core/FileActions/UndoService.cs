@@ -58,9 +58,6 @@ public sealed class UndoService
         _clock = clock ?? new SystemClock();
     }
 
-    /// <summary>Số lượng thao tác Move hiện có trong lịch sử hoàn tác.</summary>
-    public int MoveHistoryCount => _moveHistory.Count;
-
     /// <summary>Test seam (Q-R small-findings #2): number of cached move fingerprints, to assert this map
     /// does not grow unbounded across register+undo cycles.</summary>
     internal int MoveFingerprintCount => _moveFingerprints.Count;
@@ -70,12 +67,6 @@ public sealed class UndoService
 
     /// <summary>Thao tác vừa hoàn thành gần nhất.</summary>
     public object? LastUndoAction => _lastUndoAction;
-
-    /// <summary>Cho biết có thao tác Move nào để hoàn tác hay không.</summary>
-    public bool CanUndoMove => _moveHistory.Count > 0;
-
-    /// <summary>Cho biết có thao tác gần nhất nào (Move hoặc Recycle) để hoàn tác hay không.</summary>
-    public bool HasLastAction => _lastUndoAction is not null;
 
     /// <summary>Cho biết dịch vụ có đang bận xử lý thao tác hay không.</summary>
     public bool IsBusy => _fileActionService?.IsBusy ?? (Volatile.Read(ref _internalInProgress) != 0);

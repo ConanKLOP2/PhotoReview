@@ -60,11 +60,9 @@ public sealed class FaultableFileSystem(InMemoryFileSystem inner) : IFileSystem
 
     public void Delete(string path) => Inner.Delete(path);
     public Stream OpenReadShared(string path, int bufferSize = 65536) => Inner.OpenReadShared(path, bufferSize);
-    public Stream OpenAppendDurable(string path) => Inner.OpenAppendDurable(path);
     public Stream OpenAppend(string path, bool durable) => Inner.OpenAppend(path, durable);
     public void WriteAllTextAtomic(string path, string text, bool durable = true) => Inner.WriteAllTextAtomic(path, text, durable);
     public string ReadAllText(string path) => Inner.ReadAllText(path);
-    public IEnumerable<string> ReadLines(string path) => Inner.ReadLines(path);
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => Inner.EnumerateFiles(directory, pattern);
     public IEnumerable<string> EnumerateDirectories(string directory) => Inner.EnumerateDirectories(directory);
     public void CreateDirectory(string path) => Inner.CreateDirectory(path);

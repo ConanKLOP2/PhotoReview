@@ -17,12 +17,10 @@ public sealed class RamBudgetPolicyEstimateGapTests
     }
 
     [Fact]
-    public void Estimates_ZeroEntries_AreZeroForEveryOverloadAndBox()
+    public void Estimates_ZeroEntries_AreZeroForEveryBox()
     {
         Assert.Equal(0L, RamBudgetPolicy.EstimateFolderPreviewBytes(Array.Empty<CatalogEntry>(), DecodeBox.Unbounded));
         Assert.Equal(0L, RamBudgetPolicy.EstimateFolderPreviewBytes(Array.Empty<CatalogEntry>(), new DecodeBox(1920, 1080)));
-        Assert.Equal(0L, RamBudgetPolicy.EstimateFolderPreviewBytes(0, new DecodeBox(1920, 1080), totalSourceBytes: 0));
-        Assert.Equal(0L, RamBudgetPolicy.EstimateFolderPreviewBytes(0, DecodeBox.Unbounded, totalSourceBytes: 0));
     }
 
     [Fact]

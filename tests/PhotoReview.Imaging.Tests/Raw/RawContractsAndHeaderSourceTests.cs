@@ -59,10 +59,8 @@ public sealed class RawContractsAndHeaderSourceTests
     [Fact]
     public void RawFileTypes_ContainsExpectedExtensions()
     {
-        Assert.True(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"
-        }.SetEquals(RawFileTypes.Extensions));
+        foreach (var ext in new[] { ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2" })
+            Assert.True(RawFileTypes.IsRawExtension("test" + ext), ext);
         Assert.True(RawFileTypes.IsRawExtension("test.CR3"));
         Assert.False(RawFileTypes.IsRawExtension("test.jpg"));
         Assert.False(RawFileTypes.IsRawExtension("test.nrw"));

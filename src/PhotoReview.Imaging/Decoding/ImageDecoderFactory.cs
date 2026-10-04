@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using PhotoReview.Imaging.Decoding.Wic;
 
 namespace PhotoReview.Imaging.Decoding;
 
@@ -40,20 +39,6 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
         _log = log ?? NullLog.Instance;
         _metrics = metrics;
         _decoderDecorator = decoderDecorator;
-    }
-
-    public ImageDecoderFactory(ILog? log = null, ReviewMetrics? metrics = null)
-        : this(CreateDefaultProviders(), log, metrics)
-    {
-    }
-
-    private static List<(DecoderBackend, Func<IImageDecoder>)> CreateDefaultProviders()
-    {
-        return
-        [
-            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
-            (DecoderBackend.WicDirect, () => new WicDirectDecoder())
-        ];
     }
 
     public bool IsRegistered(DecoderBackend backend) => _registry.ContainsKey(backend);

@@ -133,7 +133,6 @@ public static class PerfStats
         yield return ("t_thumb", n => n.TThumbMs);
         yield return ("t_join", n => n.TJoinMs);
         yield return ("t_disk", n => n.TDiskMs);
-        yield return ("t_open", n => n.TOpenMs);
         yield return ("t_read", n => n.TReadMs);
         yield return ("t_decode", n => n.TDecodeMs);
         yield return ("t_verify", n => n.TVerifyMs);

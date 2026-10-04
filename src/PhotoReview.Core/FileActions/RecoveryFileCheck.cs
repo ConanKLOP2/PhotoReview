@@ -16,7 +16,7 @@ public enum RecoveryPathStatus
     Unreadable,
 }
 
-/// <summary>Overall conclusion for one entry. <see cref="RecoveryFileCheck.Code"/> gives the stable string.</summary>
+/// <summary>Overall conclusion for one entry.</summary>
 public enum RecoveryVerdict
 {
     CanRetry,
@@ -93,22 +93,6 @@ public sealed class RecoveryFileCheck
     {
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     }
-
-    /// <summary>Stable, never-renamed code for a verdict (safe for logs and tests).</summary>
-    public static string Code(RecoveryVerdict verdict) => verdict switch
-    {
-        RecoveryVerdict.CanRetry => "CanRetry",
-        RecoveryVerdict.AlreadyDone => "AlreadyDone",
-        RecoveryVerdict.Conflict => "Conflict",
-        RecoveryVerdict.SourceChanged => "SourceChanged",
-        RecoveryVerdict.DestinationChanged => "DestinationChanged",
-        RecoveryVerdict.Lost => "Lost",
-        RecoveryVerdict.RecycleUnverifiable => "RecycleUnverifiable",
-        RecoveryVerdict.NotRecycled => "NotRecycled",
-        RecoveryVerdict.PermanentlyDeleted => "PermanentlyDeleted",
-        RecoveryVerdict.PartiallyPermanentlyDeleted => "PartiallyPermanentlyDeleted",
-        _ => "Unknown",
-    };
 
     public RecoveryCheckResult Check(JournalEntry entry)
     {

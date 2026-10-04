@@ -10,18 +10,10 @@ namespace PhotoReview.Imaging.Tests;
 /// <summary>perf(preload): direction-aware order and burst lead (PreloadOrderService, NavigationPace).</summary>
 public sealed class PreloadOrderDirectionTests
 {
-    [Fact(DisplayName = "Direction +1 with no lead is exactly the original preload order")]
-    public void ForwardNoLead_MatchesOriginalOrder()
-    {
-        foreach (var fullFolder in new[] { false, true })
-            Assert.Equal(PreloadOrderService.Build(40, 100, fullFolder).ToArray(),
-                PreloadOrderService.Build(40, 100, fullFolder, direction: 1, lead: 0).ToArray());
-    }
-
     [Fact(DisplayName = "After Prev, the 32-image window is behind the user and only a small window stays ahead")]
     public void Backward_PrioritizesLowerIndices()
     {
-        var order = PreloadOrderService.Build(center: 50, count: 100, fullFolder: false, direction: -1, lead: 0).ToArray();
+        var order = PreloadOrderService.Build(center: 50, count: 100, fullFolder: false, direction: -1, lead: 0, window: PreloadWindow.Default).ToArray();
 
         Assert.Equal(Enumerable.Range(18, 32).Reverse(), order.Take(32));
         Assert.Equal(Enumerable.Range(51, PreloadOrderService.BackwardLookahead), order.Skip(32));
@@ -30,7 +22,7 @@ public sealed class PreloadOrderDirectionTests
     [Fact(DisplayName = "A burst lead starts the travel window lead+1 ahead, then the skipped images, then the small window behind")]
     public void Lead_ShiftsTravelWindow()
     {
-        var order = PreloadOrderService.Build(center: 50, count: 200, fullFolder: false, direction: 1, lead: 10).ToArray();
+        var order = PreloadOrderService.Build(center: 50, count: 200, fullFolder: false, direction: 1, lead: 10, window: PreloadWindow.Default).ToArray();
 
         Assert.Equal(61, order[0]);
         Assert.Equal(Enumerable.Range(61, 32), order.Take(32));
@@ -45,7 +37,7 @@ public sealed class PreloadOrderDirectionTests
     [InlineData(-1, 24)]
     public void FullFolder_CoversEveryImageOnce(int direction, int lead)
     {
-        var order = PreloadOrderService.Build(center: 30, count: 90, fullFolder: true, direction, lead).ToArray();
+        var order = PreloadOrderService.Build(center: 30, count: 90, fullFolder: true, direction, lead, window: PreloadWindow.Default).ToArray();
 
         Assert.Equal(89, order.Length);
         Assert.Equal(89, order.Distinct().Count());

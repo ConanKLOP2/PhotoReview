@@ -140,23 +140,3 @@ public sealed class LenientEnumConverter<T> : JsonConverter<T> where T : struct,
         return dict;
     }
 }
-
-/// <summary>
-/// Factory đăng ký <see cref="LenientEnumConverter{T}"/> cho tất cả các kiểu enum khi cấu hình <see cref="JsonSerializerOptions"/>.
-/// </summary>
-public sealed class LenientEnumConverterFactory : JsonConverterFactory
-{
-    public override bool CanConvert(Type typeToConvert)
-    {
-        ArgumentNullException.ThrowIfNull(typeToConvert);
-        return typeToConvert.IsEnum;
-    }
-
-    public override JsonConverter? CreateConverter(Type typeToConvert, JsonSerializerOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(typeToConvert);
-
-        var converterType = typeof(LenientEnumConverter<>).MakeGenericType(typeToConvert);
-        return (JsonConverter?)Activator.CreateInstance(converterType);
-    }
-}

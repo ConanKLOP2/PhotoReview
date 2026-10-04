@@ -73,8 +73,8 @@ public sealed class FileActionControllerGapTests : IDisposable
         Assert.DoesNotContain(first, _catalog.Paths);
         Assert.Equal([second], _catalog.Paths);
         Assert.Equal(Tr.StatusMoveUnverified("a.jpg"), _sink.LastStatus);
-        Assert.False(_undo!.HasLastAction);
-        Assert.Equal(0, _undo.MoveHistoryCount);
+        Assert.False(_undo!.LastUndoAction is not null);
+        Assert.Empty(_undo.MoveHistory);
     }
 
     // RV-T21 (the wasEmpty present itself is pinned by FileActionControllerGroupTests; here the folder switches during it)

@@ -7,12 +7,6 @@ namespace PhotoReview.Core.Abstractions;
 /// </summary>
 public interface IExplorerOrderProvider : IDisposable
 {
-    /// <summary>Lấy snapshot thứ tự Explorer với timeout.</summary>
-    Task<ExplorerViewSnapshot> TryGetSnapshotAsync(
-        string folder,
-        TimeSpan timeout,
-        CancellationToken cancellationToken);
-
     /// <summary>Lấy snapshot thứ tự Explorer với hỗ trợ progressive progress báo cáo tiến độ từng phần.</summary>
     Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(
         string folder,

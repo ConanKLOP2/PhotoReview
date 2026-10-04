@@ -103,16 +103,13 @@ public sealed class ExplorerSnapshotValidatorTests
     {
         IExplorerOrderProvider provider = new FakeExplorerOrderProvider(CreateSnapshot([FileB, FileA]));
 
-        var result = await provider.TryGetSnapshotAsync(Folder, TimeSpan.FromSeconds(2), CancellationToken.None);
+        var result = await provider.TryGetSnapshotProgressiveAsync(Folder, TimeSpan.FromSeconds(2));
 
         Assert.Equal(FileB, result.OrderedPaths[0]);
     }
 
     private sealed class FakeExplorerOrderProvider(ExplorerViewSnapshot snapshot) : IExplorerOrderProvider
     {
-        public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout,
-            CancellationToken cancellationToken) => Task.FromResult(snapshot);
-
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
             IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16, CancellationToken cancellationToken = default)
             => Task.FromResult(snapshot);

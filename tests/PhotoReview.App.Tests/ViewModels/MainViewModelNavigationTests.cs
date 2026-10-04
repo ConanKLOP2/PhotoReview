@@ -85,8 +85,7 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
 
         _thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "thumbs"),
-            maxRamBytes: 16 * 1024 * 1024,
-            persistNewThumbnails: false);
+            maxRamBytes: 16 * 1024 * 1024);
 
         _hashService = new FileHashService();
         var appPaths = new AppPaths(_tempDir);
@@ -116,10 +115,13 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
 
     /// <param name="sharedSessionWriter">Production wiring: the presenter, the folder coordinator and the view model all
     /// write the session through ONE debounced <see cref="SessionWriter"/> (otherwise the presenter saves directly).</param>
+    private SessionWriter? _lastSessionWriter;
+
     private (MainViewModel ViewModel, ImagePresenter Presenter, FolderLoadCoordinator Coordinator) CreateViewModel(bool sharedSessionWriter = false)
     {
         MainViewModel? vm = null;
         var sessionWriter = new SessionWriter(_sessionStore, new NullLog());
+        _lastSessionWriter = sessionWriter;
 
         var presenter = new ImagePresenter(
             _catalog,
@@ -494,12 +496,12 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         await vm.OpenFolderAsync(folder);
         var interaction = _clock.CurrentInteraction;
 
-        await vm.LastImageAsync();
+        await vm.LastAsync();
 
         Assert.Equal(2, vm.CurrentIndex);
         Assert.False(vm.CanNavigateNext);
         Assert.True(_clock.CurrentInteraction > interaction);
-        await vm.FirstImageAsync();
+        await vm.FirstAsync();
         Assert.Equal(0, vm.CurrentIndex);
     }
 
@@ -674,9 +676,6 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
     {
-        public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken) =>
-            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
-
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout, IProgress<ExplorerQueryProgress>? progress = null, int progressiveBatchSize = 16, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
 

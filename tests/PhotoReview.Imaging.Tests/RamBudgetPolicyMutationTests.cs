@@ -21,32 +21,6 @@ public sealed class RamBudgetPolicyMutationTests
         Assert.Equal(123_456_789L, RamBudgetPolicy.ClampSourceBytesToPhysicalMemory(123_456_789L, physical));
     }
 
-    // ---- scalar overload ------------------------------------------------------------------------------------------
-
-    [Theory(DisplayName = "EstimateFolderPreviewBytes(count): a box unbounded on either axis estimates from the compressed size x 10")]
-    [InlineData(256, 0)]
-    [InlineData(0, 256)]
-    [InlineData(0, 0)]
-    public void EstimateScalar_UnboundedBox_UsesCompressedSize(int width, int height)
-    {
-        Assert.Equal(10_000, RamBudgetPolicy.EstimateFolderPreviewBytes(10, new DecodeBox(width, height), totalSourceBytes: 1000));
-    }
-
-    [Fact(DisplayName = "EstimateFolderPreviewBytes(count): a measured mean of 0 is not a measurement; the box bound applies")]
-    public void EstimateScalar_ZeroMeasured_IsIgnored()
-    {
-        Assert.Equal(3 * 40_000, RamBudgetPolicy.EstimateFolderPreviewBytes(3, new DecodeBox(100, 100), 0, measuredMeanPreviewBytes: 0));
-    }
-
-    [Fact(DisplayName = "EstimateFolderPreviewBytes(count): a measured mean exactly at the box bound is capped at it (x1.25 only below)")]
-    public void EstimateScalar_MeasuredAtBoxBound_IsCapped()
-    {
-        var box = new DecodeBox(100, 100); // bound 40,000 bytes per image
-        Assert.Equal(3 * 40_000, RamBudgetPolicy.EstimateFolderPreviewBytes(3, box, 0, measuredMeanPreviewBytes: 40_000));
-        Assert.Equal(3 * 25_000, RamBudgetPolicy.EstimateFolderPreviewBytes(3, box, 0, measuredMeanPreviewBytes: 20_000)); // 20,000 x 1.25
-        Assert.Equal(3 * 60_000, RamBudgetPolicy.EstimateFolderPreviewBytes(3, box, 0, measuredMeanPreviewBytes: 48_000)); // above the bound: 48,000 x 1.25, uncapped
-    }
-
     // ---- entry-list overload --------------------------------------------------------------------------------------
 
     [Theory(DisplayName = "EstimateFolderPreviewBytes(entries): a box unbounded on either axis estimates from each entry's compressed size x 10")]

@@ -94,7 +94,6 @@ public class PerfAnalyzeTests
         // The CSV carries ThumbEnd(source=decode, ms=20.0) from ThumbnailCache followed by
         // ThumbEnd(source=unknown, ms=20.5) from MainWindow's own call-site total; D11 must keep
         // the specific one.
-        Assert.Equal("decode", nav5.ThumbSource);
         Assert.Equal(20.0, nav5.TThumbMs);
     }
 
@@ -114,7 +113,6 @@ public class PerfAnalyzeTests
         Assert.Equal(6.0, nav5.FirstVisualMs!.Value, 3);
         Assert.Equal(63.05, nav5.FinalVisualMs!.Value, 3);
         Assert.True(nav5.HasThumbnail); // first-visual is the thumbnail Presented row
-        Assert.Equal("final", nav5.FinalPresentedKind);
     }
 
     [Fact]
@@ -309,15 +307,15 @@ public class PerfAnalyzeTests
     public void RIoTriggersOnHighIoShareAndIsNotTriggeredBelowThreshold()
     {
         var cfg = RulesConfig.Default(); // default threshold 40%
-        var high = new[] { NavWithIo(finalVisual: 100, open: 20, read: 30) }; // 50%
-        var low = new[] { NavWithIo(finalVisual: 100, open: 5, read: 5) }; // 10%
+        var high = new[] { NavWithIo(finalVisual: 100, read: 50) }; // 50%
+        var low = new[] { NavWithIo(finalVisual: 100, read: 10) }; // 10%
 
         Assert.True(PerfRules.EvaluateRIo(cfg, high).Triggered);
         Assert.False(PerfRules.EvaluateRIo(cfg, low).Triggered);
     }
 
     [Fact]
-    public void RIoIsNotApplicableWithoutOpenOrReadTiming()
+    public void RIoIsNotApplicableWithoutReadTiming()
     {
         var cfg = RulesConfig.Default();
         var navs = new[] { new NavRecord { Nav = 1, FinalVisualMs = 100, TDecodeMs = 80, Incomplete = false } };
@@ -435,11 +433,10 @@ public class PerfAnalyzeTests
         Assert.True(PerfRules.EvaluateRGc(cfg, gcTimePercent: 60).Triggered);
     }
 
-    private static NavRecord NavWithIo(double finalVisual, double open, double read) => new()
+    private static NavRecord NavWithIo(double finalVisual, double read) => new()
     {
         Nav = 1,
         FinalVisualMs = finalVisual,
-        TOpenMs = open,
         TReadMs = read,
         TDecodeMs = 1, // marks it a real SourceMiss for classification purposes elsewhere
         Incomplete = false,

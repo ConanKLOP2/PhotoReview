@@ -92,29 +92,6 @@ public sealed class PreloadEstimateCalibrationTests
     }
 
     [Fact]
-    public void Estimate_BoundedBox_IsCountTimesBoxTimesFour()
-    {
-        Assert.Equal(200L * 1000 * 1000 * 4, RamBudgetPolicy.EstimateFolderPreviewBytes(200, Box, totalSourceBytes: 1));
-    }
-
-    [Fact]
-    public void Estimate_UnboundedAxis_FallsBackToCompressedTimesTen()
-    {
-        Assert.Equal(5_000, RamBudgetPolicy.EstimateFolderPreviewBytes(200, new DecodeBox(1000, 0), totalSourceBytes: 500));
-        Assert.Equal(5_000, RamBudgetPolicy.EstimateFolderPreviewBytes(200, DecodeBox.Unbounded, totalSourceBytes: 500));
-    }
-
-    [Fact]
-    public void Estimate_Measured_AddsMarginButStaysUnderBoxBound()
-    {
-        Assert.Equal(200L * 125_000, RamBudgetPolicy.EstimateFolderPreviewBytes(200, Box, 1, measuredMeanPreviewBytes: 100_000));
-        // 3.6 MB x 1.25 would pass the 4 MB bound: capped at the bound.
-        Assert.Equal(200L * 4_000_000, RamBudgetPolicy.EstimateFolderPreviewBytes(200, Box, 1, measuredMeanPreviewBytes: 3_600_000));
-        // 16-bit images measured above the 4-byte bound: the measurement wins over the bound.
-        Assert.Equal(200L * 10_000_000, RamBudgetPolicy.EstimateFolderPreviewBytes(200, Box, 1, measuredMeanPreviewBytes: 8_000_000));
-    }
-
-    [Fact]
     public void Sampler_NeedsMinimumSamples_AndRestartsOnBoxChange()
     {
         var sampler = new PreviewSizeSampler();

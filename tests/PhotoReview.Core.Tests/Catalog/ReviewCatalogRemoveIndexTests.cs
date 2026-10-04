@@ -37,7 +37,7 @@ public sealed class ReviewCatalogRemoveIndexTests
         Assert.Equal(rebuilds, catalog.IndexRebuildCountForTests);
     }
 
-    [Fact(DisplayName = "Index stays correct through removals, Restore, InsertSorted, MoveToFront and past the rebuild threshold (model check)")]
+    [Fact(DisplayName = "Index stays correct through removals, Restore, ReplaceOrder and past the rebuild threshold (model check)")]
     public void Index_StaysCorrect_AgainstListModel()
     {
         var catalog = Build(300);
@@ -65,15 +65,15 @@ public sealed class ReviewCatalogRemoveIndexTests
                     break;
                 case 4 when model.Count > 1:
                     var front = model[rng.Next(model.Count)];
-                    Assert.True(catalog.MoveToFront(front));
                     model.Remove(front);
                     model.Insert(0, front);
+                    Assert.True(catalog.ReplaceOrder([.. model]));
                     break;
                 case 5 when removed.Count > 0:
                     var ins = removed[0];
                     removed.RemoveAt(0);
-                    var idx = catalog.InsertSorted(ins, StringComparer.OrdinalIgnoreCase.Compare);
-                    Assert.InRange(idx, 0, model.Count);
+                    var idx = rng.Next(model.Count + 1);
+                    Assert.True(catalog.Restore(ins, idx));
                     model.Insert(idx, ins);
                     break;
             }

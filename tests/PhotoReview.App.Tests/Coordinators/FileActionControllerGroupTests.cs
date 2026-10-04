@@ -84,7 +84,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
         await controller.RunActionAsync(0, null, jpeg);
 
         Assert.Equal([before, jpeg, after], _catalog.Paths);
-        var entry = _catalog.Entries[1];
+        var entry = _catalog.EntriesSnapshot()[1];
         Assert.NotNull(entry.CaptureGroup);
         Assert.Equal(raw, entry.CaptureGroup!.RawPath);
         Assert.Equal(1, _catalog.IndexOf(raw));
@@ -316,7 +316,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
         await controller.RecycleAsync(null, jpeg);
 
         Assert.Equal([before, jpeg, after], _catalog.Paths);
-        Assert.NotNull(_catalog.Entries[1].CaptureGroup);
+        Assert.NotNull(_catalog.EntriesSnapshot()[1].CaptureGroup);
         Assert.Empty(_bin.Recycled);
         Assert.True(File.Exists(xmp!));
     }
@@ -350,7 +350,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
         Assert.True(File.Exists(jpeg));
         Assert.True(File.Exists(raw));
         Assert.Equal([before, jpeg, after], _catalog.Paths);
-        Assert.NotNull(_catalog.Entries[1].CaptureGroup);
+        Assert.NotNull(_catalog.EntriesSnapshot()[1].CaptureGroup);
     }
 
     [Theory]
@@ -368,7 +368,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
 
         Assert.True(result!.Succeeded, result.ErrorMessage);
         Assert.Equal([before, representative, after], _catalog.Paths); // not index 0
-        var entry = _catalog.Entries[1];
+        var entry = _catalog.EntriesSnapshot()[1];
         Assert.NotNull(entry.CaptureGroup);
         Assert.Equal(xmp, entry.CaptureGroup!.XmpPath);
         Assert.Equal(-1, _catalog.IndexOf(xmp!));
@@ -390,7 +390,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
         await controller.UndoLastAsync(_root);
 
         Assert.Equal([jpeg, other], _catalog.Paths);
-        Assert.NotNull(_catalog.Entries[0].CaptureGroup);
+        Assert.NotNull(_catalog.EntriesSnapshot()[0].CaptureGroup);
     }
 
     [Fact]
@@ -466,7 +466,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
         Assert.True(File.Exists(jpeg));
         Assert.False(File.Exists(raw));
         Assert.Equal([before, jpeg, after], _catalog.Paths); // the JPEG is back at its position, ungrouped (its partner is not)
-        Assert.Null(_catalog.Entries[1].CaptureGroup);
+        Assert.Null(_catalog.EntriesSnapshot()[1].CaptureGroup);
     }
 
     [Fact]
@@ -483,15 +483,15 @@ public sealed class FileActionControllerGroupTests : IDisposable
         await controller.RunActionAsync(0, null, jpeg);
         var first = await controller.UndoLastAsync(_root);
         Assert.False(first!.Succeeded);
-        Assert.Null(_catalog.Entries[1].CaptureGroup);
+        Assert.Null(_catalog.EntriesSnapshot()[1].CaptureGroup);
 
         failRaw = false;
         var retry = await controller.UndoLastAsync(_root);
 
         Assert.True(retry!.Succeeded);
         Assert.Equal([before, jpeg, after], _catalog.Paths); // one entry for the pair, not two standalone ones
-        Assert.NotNull(_catalog.Entries[1].CaptureGroup);
-        Assert.Equal(raw, _catalog.Entries[1].CaptureGroup!.RawPath);
+        Assert.NotNull(_catalog.EntriesSnapshot()[1].CaptureGroup);
+        Assert.Equal(raw, _catalog.EntriesSnapshot()[1].CaptureGroup!.RawPath);
     }
 
     [Fact]
