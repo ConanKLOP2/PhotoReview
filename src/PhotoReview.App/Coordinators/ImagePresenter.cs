@@ -787,7 +787,10 @@ public sealed class ImagePresenter
         // replaced by preview) sees _presentedFilePath already equal to path (set by the earlier call below) and
         // reports false, so it stays an instant, seamless replacement as today.
         var isFileChange = ImageTransitionDecision.ShouldTransition(_presentedFilePath, image is null ? null : path, _compareViewModel.IsVisible);
-        _presentedFilePath = image is null ? null : path;
+        // R10: a same-source swap (full-resolution bitmap, path unknown here) keeps the file identity; only clearing
+        // the image forgets it. Otherwise the next navigation would see a null previous path and skip the fade.
+        if (image is null) _presentedFilePath = null;
+        else if (path is not null) _presentedFilePath = path;
         _sink.SetCurrentImage(image, isFileChange);
     }
 
