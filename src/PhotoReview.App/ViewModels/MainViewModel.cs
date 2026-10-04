@@ -375,8 +375,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var ownership = FolderOwnership;
         if (ownership is not null)
         {
+            // R14: every open (not only an undo reopen) is superseded by a load that started while its ownership was being
+            // negotiated, so an older request resuming late cannot replace a newer open that already loaded.
+            var epochAtRequest = _folderLoadEpoch;
             var decision = await ownership.BeforeOpenAsync(folder, initialPath);
-            var supersededWhileNegotiating = requiredEpoch is { } negotiated && negotiated != _folderLoadEpoch;
+            var supersededWhileNegotiating = epochAtRequest != _folderLoadEpoch;
             if (_isClosed || (supersededWhileNegotiating && decision == PhotoReview.Core.Instance.FolderOpenDecision.Proceed))
             {
                 // The window closed (or the user opened another folder, R09) while ownership was being negotiated: do not
@@ -387,7 +390,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             }
             if (decision != PhotoReview.Core.Instance.FolderOpenDecision.Proceed)
             {
-                if (supersededWhileNegotiating) return null; // the user's own newer open owns the status line
+                if (supersededWhileNegotiating) return null; // the newer open owns the status line
                 var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
                 StatusText = decision == PhotoReview.Core.Instance.FolderOpenDecision.ForwardedToOtherInstance
                     ? Tr.StatusFolderOpenedInOtherWindow(name)

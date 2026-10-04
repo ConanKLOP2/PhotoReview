@@ -85,6 +85,24 @@ public sealed class GlideFrameClockTests
         Assert.Equal(Period(60) / TicksPerMs, clock.Advance(117, At(1.9, 60), new DisplayTiming(0, Period(60))), 6);
     }
 
+    // APP-P02: timing lost while anchored (query failure, monitor change) and back at the same period must not replay
+    // the frames already stepped by RenderingTime.
+    [Fact]
+    public void Predict_TimingLostThenRecoveredAtTheSamePeriod_DoesNotCountTheLostIntervalTwice()
+    {
+        var clock = new GlideFrameClock();
+        clock.Start(KineticGlideSmoothing.Predict, TicksPerMs);
+        var timing = new DisplayTiming(0, Period(60));
+        var periodMs = Period(60) / TicksPerMs;
+
+        clock.Advance(0, At(0.1, 60), timing);                                   // anchors
+        Assert.Equal(periodMs, clock.Advance(16, At(1.1, 60), timing), 6);       // one refresh on the grid
+        Assert.Equal(17, clock.Advance(33, At(2.1, 60), null), 6);               // timing lost: by RenderingTime
+        Assert.Equal(17, clock.Advance(50, At(3.1, 60), null), 6);
+        var recovered = clock.Advance(66, At(4.1, 60), timing);                  // same period again
+        Assert.Equal(16, recovered, 6);                                          // re-anchors: this frame by RenderingTime
+        Assert.Equal(periodMs, clock.Advance(67, At(5.1, 60), timing), 6);       // then one refresh per refresh
+    }
     [Fact]
     public void Predict_MonitorChangeFrom60To75Hz_ReanchorsOnTheNewGrid()
     {
