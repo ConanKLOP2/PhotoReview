@@ -161,4 +161,18 @@ public sealed class SettingsParseTextTests
             JsonSerializer.Serialize(parsed.Settings, AppSettingsJsonContext.Default.AppSettings));
         Assert.Equal(store.LastLoadRepairs, parsed.Repairs);
     }
+
+    [Theory(DisplayName = "F07: a pre-v3 file that names a UI language keeps it; only an absent property gets the Vietnamese migration default")]
+    [InlineData("""{"UiLanguage":"en"}""", "en")]
+    [InlineData("""{"ConfigVersion":2,"UiLanguage":"en"}""", "en")]
+    [InlineData("""{"ConfigVersion":2,"UiLanguage":"auto"}""", "auto")]
+    [InlineData("""{"ConfigVersion":2}""", "vi")]
+    [InlineData("""{"ConfigVersion":1,"KeyboardZoomStepPercent":40}""", "vi")]
+    public void ParseText_PreV3_LanguageMigrationOnlyWhenAbsent(string json, string expected)
+    {
+        var result = SettingsStore.ParseText(json);
+
+        Assert.Equal(expected, result.Settings.UiLanguage);
+        Assert.Equal(AppSettings.CurrentConfigVersion, result.Settings.ConfigVersion);
+    }
 }

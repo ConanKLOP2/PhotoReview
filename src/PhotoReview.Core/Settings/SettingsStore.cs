@@ -324,7 +324,7 @@ public sealed class SettingsStore
     private static void FinishDeserialize(AppSettings loaded, string json)
     {
         MarkUnversionedAsLegacy(loaded, json);
-        Migrate(loaded);
+        Migrate(loaded, UiLanguageDeclared(json));
         loaded.Shortcuts ??= ShortcutMappings.Default();
         loaded.Actions ??= ReviewAction.Defaults();
     }
@@ -347,17 +347,40 @@ public sealed class SettingsStore
         }
     }
 
+    /// <summary>True when the raw JSON object spells out <c>UiLanguage</c>: a user (or a hand-written import) who named a language
+    /// must keep it even when the file predates the setting, so the pre-v3 "vi" default only fills an absent property.</summary>
+    private static bool UiLanguageDeclared(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            return doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("UiLanguage", out _);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Migrates an in-memory settings object: with no raw text to inspect, a blank or "auto" language counts as not chosen.</summary>
     public static void Migrate(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        Migrate(settings, !string.IsNullOrWhiteSpace(settings.UiLanguage)
+            && !string.Equals(settings.UiLanguage, LanguageLoader.AutoCode, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void Migrate(AppSettings settings, bool uiLanguageDeclared)
+    {
         if (settings.ConfigVersion < 2)
         {
             settings.Actions ??= ReviewAction.Defaults();
         }
         if (settings.ConfigVersion < 3)
         {
-            // Q-L1 (ADR 0006): the UI was Vietnamese-only before version 3; existing users keep it.
-            settings.UiLanguage = "vi";
+            // Q-L1 (ADR 0006): the UI was Vietnamese-only before version 3; existing users keep it. A file that names a
+            // language itself (hand-written or imported) keeps that language.
+            if (!uiLanguageDeclared) settings.UiLanguage = "vi";
         }
         if (settings.ConfigVersion < AppSettings.CurrentConfigVersion)
         {

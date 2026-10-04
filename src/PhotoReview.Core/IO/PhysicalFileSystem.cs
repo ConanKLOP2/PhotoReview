@@ -309,6 +309,9 @@ public sealed class PhysicalFileSystem : IFileSystem
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);
 
+        // A bare root ("C:\") has nothing to resolve; trimming it would hand back the drive-relative "C:" instead.
+        if (segments.Length == 0) return root;
+
         var current = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         foreach (var segment in segments)
         {
