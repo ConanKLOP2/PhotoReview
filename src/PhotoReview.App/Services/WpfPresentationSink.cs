@@ -28,14 +28,15 @@ public sealed class WpfPresentationSink : IPresentationSink
         Action<string>? onPresented = null,
         Action<long, string, long>? onTracePresented = null,
         Dispatcher? dispatcher = null,
-        ReviewMetrics? metrics = null)
+        ReviewMetrics? metrics = null,
+        Func<Dispatcher?>? applicationDispatcher = null)
     {
         _onSetCurrentImage = onSetCurrentImage;
         _onSetStatusText = onSetStatusText;
         _onApplyInitialViewMode = onApplyInitialViewMode;
         _onPresented = onPresented;
         _onTracePresented = onTracePresented;
-        _dispatcher = dispatcher ?? System.Windows.Application.Current?.Dispatcher;
+        _dispatcher = dispatcher ?? (applicationDispatcher ?? AmbientDispatcher.Application)();
         _metrics = metrics;
     }
 

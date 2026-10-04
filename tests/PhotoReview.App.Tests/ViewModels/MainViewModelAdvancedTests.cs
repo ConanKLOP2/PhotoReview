@@ -137,7 +137,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         return filePath;
     }
 
-    internal (MainViewModel ViewModel, FileActionService FileActions) CreateViewModel(IFileSystem? fs = null)
+    internal (MainViewModel ViewModel, FileActionService FileActions) CreateViewModel(IFileSystem? fs = null, Action? resetCaches = null)
     {
         var activeFs = fs ?? _fileSystem;
         var clock = new SystemClock();
@@ -188,6 +188,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
             new SessionWriter(_sessionStore, FileLog.Default),
             preloadController: _preloadController,
             naturalComparer: ManagedNaturalComparer.Instance,
+            resetCachesAction: resetCaches,
             uiScheduler: _uiScheduler);
 
         return (vm, fileActions);
@@ -719,13 +720,22 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
     {
-        public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(
+        /// <summary>When set, the snapshot completes only when this task does (a pending Explorer order).</summary>
+        public Task? Gate { get; set; }
+
+        public async Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(
             string folder,
             TimeSpan timeout,
             IProgress<ExplorerQueryProgress>? progress = null,
             int progressInterval = 16,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
+            await WaitForGateAsync(folder);
+
+        private async Task<ExplorerViewSnapshot> WaitForGateAsync(string folder)
+        {
+            if (Gate is { } gate) await gate;
+            return new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow);
+        }
 
         public void Dispose() { }
     }

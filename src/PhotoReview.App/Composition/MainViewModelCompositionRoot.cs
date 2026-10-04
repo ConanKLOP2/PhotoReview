@@ -61,12 +61,7 @@ internal static class MainViewModelCompositionRoot
             // to PointerInputController.ApplyInitialViewAsync (which does Fit width/Fit height placement -- the pointer
             // controller owns the surface, built after the ViewModel/sink here). Tests that build a MainViewModel
             // without a MainWindow keep getting a correct zoom/mode change, just without the scroll placement.
-            onApplyInitialViewMode: () =>
-            {
-                var (w, h) = viewport.Get();
-                var current = settingsStore.Current;
-                vm?.Viewer.ApplyInitialViewMode(current.InitialViewMode, w, h, current.ClickZoomPercent, current.KeepZoomAcrossImages);
-            },
+            onApplyInitialViewMode: () => ApplyInitialView(vm, viewport, settingsStore),
             onPresented: observer.OnPresented,
             metrics: sp.GetRequiredService<ReviewMetrics>());
 
@@ -90,5 +85,13 @@ internal static class MainViewModelCompositionRoot
             folderPicker: sp.GetService<IFolderPicker>());
 
         return vm;
+    }
+
+    /// <summary>The default initial-view application (no scroll placement): the configured mode at the current viewport size.</summary>
+    internal static void ApplyInitialView(MainViewModel? vm, ViewportSizeSource viewport, SettingsStore settingsStore)
+    {
+        var (w, h) = viewport.Get();
+        var current = settingsStore.Current;
+        vm?.Viewer.ApplyInitialViewMode(current.InitialViewMode, w, h, current.ClickZoomPercent, current.KeepZoomAcrossImages);
     }
 }

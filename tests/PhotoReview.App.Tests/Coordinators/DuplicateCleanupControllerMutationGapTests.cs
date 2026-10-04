@@ -4,6 +4,7 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
 using PhotoReview.Imaging.Caching;
@@ -107,6 +108,66 @@ public sealed class DuplicateCleanupControllerMutationGapTests : IDisposable
         Assert.Equal(Tr.DialogBatchErrorsTitle, error.Title);
         Assert.Contains("a (1).jpg", error.Message, StringComparison.Ordinal);
         Assert.Contains("a (2).jpg", error.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class ThrowingExecutor(Exception toThrow) : IFileActionExecutor
+    {
+        public bool IsBusy => false;
+
+        public bool LacksRecycleBin(string path) => false;
+
+        public Task<FileActionResult> ExecuteAsync(FileActionRequest request, CancellationToken cancellationToken = default)
+            => throw toThrow;
+
+        public Task<CaptureGroupActionResult> ExecuteGroupAsync(CaptureGroupActionRequest request, CancellationToken cancellationToken = default)
+            => throw toThrow;
+    }
+
+    [Fact]
+    public async Task RemoveDuplicatesAsync_AnUnexpectedThrowForOneFile_DoesNotAbortTheBatchAndIsReported()
+    {
+        var controller = NewBatch(withDialog: true);
+        controller.FileActionsOverride = new ThrowingExecutor(new InvalidOperationException("boom"));
+
+        await controller.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Equal(StatusFormatter.BatchDone(0, 2), _sink.Statuses[^1]);
+        var error = Assert.Single(_dialog.Errors);
+        Assert.Contains("a (1).jpg", error.Message, StringComparison.Ordinal);
+        Assert.Contains("a (2).jpg", error.Message, StringComparison.Ordinal); // the second file was still attempted
+        Assert.Equal(0, _sink.Reloads);
+    }
+
+    [Fact]
+    public async Task RemoveDuplicatesAsync_ACancellationFromTheService_IsNotSwallowedAsAFileFailure()
+    {
+        var controller = NewBatch(withDialog: false);
+        controller.FileActionsOverride = new ThrowingExecutor(new OperationCanceledException());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => controller.RemoveDuplicatesAsync(removeNumbered: true));
+        Assert.DoesNotContain(StatusFormatter.BatchDone(0, 2), _sink.Statuses);
+    }
+
+    [Fact]
+    public async Task ClearCacheAsync_AnUnexpectedDiskFailure_IsReportedAsFailedNotAsCleared()
+    {
+        var controller = NewBatch(withDialog: false);
+        controller.ClearDiskCaches = () => throw new InvalidOperationException("disk exploded");
+
+        await controller.ClearCacheAsync();
+
+        var status = Assert.Single(_sink.Statuses);
+        Assert.Equal(StatusFormatter.ActionFailed(Tr.DialogClearCacheTitle, UserFacingError.Describe(new InvalidOperationException("disk exploded"))), status);
+    }
+
+    [Fact]
+    public async Task ClearCacheAsync_ACancelledDiskClear_PropagatesInsteadOfBeingReported()
+    {
+        var controller = NewBatch(withDialog: false);
+        controller.ClearDiskCaches = () => throw new OperationCanceledException();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(controller.ClearCacheAsync);
+        Assert.Empty(_sink.Statuses);
     }
 
     private sealed class FailingBin : IRecycleBin

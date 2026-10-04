@@ -6,13 +6,18 @@ namespace PhotoReview.App.Services;
 /// <summary><see cref="IFolderPicker"/> backed by <see cref="Microsoft.Win32.OpenFolderDialog"/>, owned by the main window.</summary>
 public sealed class WpfFolderPicker : IFolderPicker
 {
-    public string? PickFolder(string title, string? initialFolder)
-    {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = title };
-        if (!string.IsNullOrEmpty(initialFolder) && Directory.Exists(initialFolder)) dialog.InitialDirectory = initialFolder;
+    private readonly IDialogHost _host;
 
-        var owner = System.Windows.Application.Current?.MainWindow;
-        var result = owner is not null ? dialog.ShowDialog(owner) : dialog.ShowDialog();
-        return result == true ? dialog.FolderName : null;
+    public WpfFolderPicker() : this(new WpfDialogHost())
+    {
     }
+
+    internal WpfFolderPicker(IDialogHost host) => _host = host;
+
+    public string? PickFolder(string title, string? initialFolder)
+        => _host.PickFolder(_host.Owner, title, UsableInitialFolder(initialFolder));
+
+    /// <summary>The start folder only when it exists on disk; a blank or missing one lets the dialog choose.</summary>
+    internal static string? UsableInitialFolder(string? initialFolder)
+        => !string.IsNullOrEmpty(initialFolder) && Directory.Exists(initialFolder) ? initialFolder : null;
 }

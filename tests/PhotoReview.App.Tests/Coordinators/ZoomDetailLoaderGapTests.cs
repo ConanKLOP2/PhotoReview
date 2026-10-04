@@ -117,6 +117,7 @@ public sealed partial class ZoomDetailLoaderGapTests : IDisposable
         private readonly Dictionary<string, int> _counts = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, SemaphoreSlim> GateByName { get; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> FailNames { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> CancelNames { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public int OriginalDecodes(string name)
         {
@@ -129,6 +130,7 @@ public sealed partial class ZoomDetailLoaderGapTests : IDisposable
             if (!request.Box.IsUnbounded) return new FakeImage(600, 400, 6000, 4000, downscaled: true);
             lock (_gate) _counts[name] = _counts.GetValueOrDefault(name) + 1;
             if (GateByName.TryGetValue(name, out var gate)) gate.Wait();
+            if (CancelNames.Contains(name)) throw new OperationCanceledException();
             if (FailNames.Contains(name)) throw new InvalidOperationException("original decode failed");
             return new FakeImage(6000, 4000, 6000, 4000, downscaled: false);
         }
