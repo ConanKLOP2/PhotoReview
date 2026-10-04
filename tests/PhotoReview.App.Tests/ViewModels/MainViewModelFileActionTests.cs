@@ -874,8 +874,12 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
             if (File.Exists(path)) File.Delete(path);
         }
 
+        /// <summary>R09: makes the restore "slow" (undo in flight) until the test releases it.</summary>
+        public Task? RestoreGate { get; set; }
+
         public bool TryRestore(string path, long expectedSize, DateTime expectedLastWriteUtc)
         {
+            RestoreGate?.GetAwaiter().GetResult();
             RestoreCalls++;
             File.WriteAllBytes(path, ValidPngBytes);
             return true;

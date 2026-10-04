@@ -357,35 +357,46 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// Mở thư mục ảnh và nạp danh mục ảnh.
     /// </summary>
     public async Task OpenFolderAsync(string folder, string? initialPath = null)
+        => await OpenFolderCoreAsync(folder, initialPath, requiredEpoch: null);
+
+    /// <param name="requiredEpoch">R09: when set, the open is abandoned (nothing loads) if another folder load started since the
+    /// caller read <see cref="_folderLoadEpoch"/> -- an undo reopening its source folder must not override the user's own open.</param>
+    /// <returns>The epoch of the load this call started, or null when nothing was loaded (window closed, forwarded to
+    /// another instance, or superseded per <paramref name="requiredEpoch"/>).</returns>
+    private async Task<long?> OpenFolderCoreAsync(string folder, string? initialPath, long? requiredEpoch)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         // A forwarded open, drop or undo that reaches a window already closed (CloseSession disposed the load coordinator)
         // is dropped instead of throwing out of an async-void handler.
-        if (_isClosed) return;
+        if (_isClosed) return null;
+        if (requiredEpoch is { } required && required != _folderLoadEpoch) return null;
         // Q-R18: every folder open (command line, drop, forwarded, sibling navigation) passes the instance ownership
         // first. The common case completes synchronously, so this adds no dispatcher yield.
         var ownership = FolderOwnership;
         if (ownership is not null)
         {
             var decision = await ownership.BeforeOpenAsync(folder, initialPath);
-            if (_isClosed)
+            var supersededWhileNegotiating = requiredEpoch is { } negotiated && negotiated != _folderLoadEpoch;
+            if (_isClosed || (supersededWhileNegotiating && decision == PhotoReview.Core.Instance.FolderOpenDecision.Proceed))
             {
-                // The window closed while ownership was being negotiated: the load coordinator is disposed, so loading
-                // would throw out of an async-void handler. Keep the AfterOpen contract for a granted open.
+                // The window closed (or the user opened another folder, R09) while ownership was being negotiated: do not
+                // load. Keep the AfterOpen contract for a granted open.
                 if (decision == PhotoReview.Core.Instance.FolderOpenDecision.Proceed)
                     ownership.AfterOpen(folder, _shownFolder);
-                return;
+                return null;
             }
             if (decision != PhotoReview.Core.Instance.FolderOpenDecision.Proceed)
             {
+                if (supersededWhileNegotiating) return null; // the user's own newer open owns the status line
                 var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
                 StatusText = decision == PhotoReview.Core.Instance.FolderOpenDecision.ForwardedToOtherInstance
                     ? Tr.StatusFolderOpenedInOtherWindow(name)
                     : Tr.StatusFolderOpenInOtherWindowNoResponse(name);
                 NotifyNavigationStateChanged();
-                return;
+                return null;
             }
         }
+        var loadEpoch = ++_folderLoadEpoch;
         _statusText = string.Empty;
         // feat/image-crossfade: the new folder's first image must never fade in from whatever the previous
         // folder left on screen.
@@ -400,6 +411,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             ownership?.AfterOpen(folder, _shownFolder);
         }
         NotifyNavigationStateChanged();
+        return loadEpoch;
     }
 
     /// <summary>
@@ -531,20 +543,47 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
     /// </summary>
-    public Task RunActionAsync(int index) => _fileActionGate.RunQueuedAsync(async () =>
+    public Task RunActionAsync(int index)
     {
+        var epoch = _folderLoadEpoch;
+        return _fileActionGate.RunQueuedAsync(async () =>
+        {
+            if (!await WaitForQueuedTurnAsync(epoch)) return;
+            await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path);
+        });
+    }
+
+    /// <summary>
+    /// R02: identity of the folder load the user was looking at. Bumped (synchronously) each time a folder load starts; unlike
+    /// the clock's folder generation it is NOT advanced by file actions, so it distinguishes "another folder was opened" from
+    /// "an earlier action in this folder ran". A queued file command captures it at submission.
+    /// </summary>
+    private long _folderLoadEpoch;
+
+    /// <summary>
+    /// R02: runs at the start of a queued command's turn. The command reads the live selection only when its turn comes, so
+    /// a folder opened while it waited would make it act on a photo of that other folder: such a stale command is dropped
+    /// (returns false). Commands queued in the same folder keep acting on the live selection.
+    /// </summary>
+    private async Task<bool> WaitForQueuedTurnAsync(long submittedEpoch)
+    {
+        if (submittedEpoch != _folderLoadEpoch) return false;
         await WaitForPendingExplorerOrderAsync();
-        await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path);
-    });
+        return submittedEpoch == _folderLoadEpoch;
+    }
 
     /// <summary>
     /// Chuyển ảnh hiện tại vào thùng rác (Recycle Bin).
     /// </summary>
-    public Task RecycleAsync() => _fileActionGate.RunQueuedAsync(async () =>
+    public Task RecycleAsync()
     {
-        await WaitForPendingExplorerOrderAsync();
-        await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path);
-    });
+        var epoch = _folderLoadEpoch;
+        return _fileActionGate.RunQueuedAsync(async () =>
+        {
+            if (!await WaitForQueuedTurnAsync(epoch)) return;
+            await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path);
+        });
+    }
 
     /// <summary>
     /// OC14: single gate shared by file actions and undo. Move/Delete/Copy review actions queue
@@ -581,6 +620,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     private async Task UndoCoreAsync()
     {
         var currentFolder = _currentSession?.Folder;
+        var undoEpoch = _folderLoadEpoch;
         var result = await _fileActionController.UndoLastAsync(currentFolder);
 
         // Recycle undo, or a Move made in a previous folder (R7-2): open the restored file's folder at that file.
@@ -591,9 +631,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             var folder = string.IsNullOrEmpty(reloadPath) ? null : Path.GetDirectoryName(reloadPath);
             if (!string.IsNullOrEmpty(folder))
             {
-                await OpenFolderAsync(folder, reloadPath);
+                // R09: the undo awaited; a folder the user opened meanwhile must not be replaced by the undo's source folder
+                // (the file is restored on disk either way), nor get this undo's status.
+                var reopened = await OpenFolderCoreAsync(folder, reloadPath, requiredEpoch: undoEpoch);
                 // The reload wrote its own status: put back the note of a capture that was only partly restorable.
-                if (!string.IsNullOrEmpty(result!.ErrorMessage)) StatusText = result.ErrorMessage;
+                if (reopened == _folderLoadEpoch && !string.IsNullOrEmpty(result!.ErrorMessage)) StatusText = result.ErrorMessage;
             }
         }
     }
@@ -1190,11 +1232,15 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public Task CopyToFolderAsync(bool forcePicker = false) => MoveOrCopyToFolderAsync(FileOperationType.Copy, forcePicker);
 
     /// <returns>False when an exclusive holder (Undo/duplicate cleanup) held the gate (nothing queued/ran); otherwise queues behind any other running/queued Move-Delete-family action (Q-T1).</returns>
-    private Task<bool> MoveOrCopyToFolderAsync(FileOperationType operation, bool forcePicker) => _fileActionGate.RunQueuedAsync(async () =>
+    private Task<bool> MoveOrCopyToFolderAsync(FileOperationType operation, bool forcePicker)
     {
-        await WaitForPendingExplorerOrderAsync();
-        await _fileActionController.MoveOrCopyToFolderAsync(operation, forcePicker, () => (_compare.SelectedPath, _catalog.Current?.Path));
-    });
+        var epoch = _folderLoadEpoch;
+        return _fileActionGate.RunQueuedAsync(async () =>
+        {
+            if (!await WaitForQueuedTurnAsync(epoch)) return;
+            await _fileActionController.MoveOrCopyToFolderAsync(operation, forcePicker, () => (_compare.SelectedPath, _catalog.Current?.Path));
+        });
+    }
 
     /// <summary>Persists the folder a successful Move-to/Copy-to went to, so the picker starts there next time.</summary>
     private void RememberMoveCopyFolder(FileOperationType operation, string folder)

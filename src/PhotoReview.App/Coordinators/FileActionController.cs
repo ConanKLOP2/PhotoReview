@@ -372,6 +372,8 @@ public sealed class FileActionController
             if (operation == FileOperationType.Move && sourceRemoved && groupResult is null)
             {
                 if (presentTask is not null) await presentTask;
+                // R08: the present awaited; a folder opened meanwhile must not get this old Move's session path or status.
+                if (!_clock.IsFolderCurrent(folderGen)) return false;
                 _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
                 _sink.SetStatusText(Tr.StatusMoveUnverified(Path.GetFileName(source)));
                 return false;
@@ -413,6 +415,8 @@ public sealed class FileActionController
                     AppLog.Error("Present after failed file action threw", presentEx);
                 }
             }
+            // R08: the present awaited; the failure text belongs to the folder the action ran in, not to one opened since.
+            if (!_clock.IsFolderCurrent(folderGen)) return false;
             _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, groupResult?.Error ?? singleResult!.Error));
             return false;
         }
@@ -434,6 +438,7 @@ public sealed class FileActionController
                         AppLog.Error("Present after file action threw", presentEx);
                     }
                 }
+                if (!_clock.IsFolderCurrent(folderGen)) return true; // R08: never write this status into a newly opened folder
                 _sink.SetStatusText(StatusFormatter.ActionCompleted(actionName));
                 return true;
             }
@@ -457,6 +462,7 @@ public sealed class FileActionController
                     AppLog.Error("Present after failed file action threw", presentEx);
                 }
             }
+            if (!_clock.IsFolderCurrent(folderGen)) return false; // R08: never write this status into a newly opened folder
             _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, UserFacingError.Describe(ex)));
             return false;
         }
