@@ -8,15 +8,15 @@ The current Roslyn inventory covers 16,795 callable bodies in 1,068 tracked C# f
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 6,156 `STATIC-ONLY`, 72 `ISSUE`, and 10,567 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 6,197 `STATIC-ONLY`, 72 `ISSUE`, and 10,526 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
 
 The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App, Core/tooling, and Imaging agents are reviewing the remaining current-head rows in separate ownership lanes. No lane may be marked complete until its exact callable coverage and remaining count are reconciled against this inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 3,451 rows reread; 3,004 remaining |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 928 current-head rows reread; stale-snapshot batches excluded |
-| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 3,983 test rows reread; 296 remaining |
+| App + Integration | 1,229 | 5,226 | 6,455 | 3,540 rows reread; 2,915 remaining |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 988 current-head rows reread; stale-snapshot batches excluded |
+| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,114 test rows reread; 165 remaining |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | Not yet assigned to a continuation lane |
 
 [powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
@@ -99,6 +99,8 @@ Remedy: propagate proof of successful creation from the copy implementation; onl
 `src/PhotoReview.Core/FileActions/FileActionService.cs:189,212,283-305,376-381,666-667`; `PartialDestinationCleanup.cs:17-28`.
 
 After a group Copy destination passes `VerifyGroupDestination`, the member is added to `done`. If a later member fails, `RemoveCreatedCopies` deletes each completed destination whenever it still exists and has the expected length. A foreign same-size replacement is therefore treated as operation-owned and can be deleted. On the single-Copy path, `TryCopyNew` leaves a creation-proof bool true after success, but `RemovePartialCopy`/`PartialDestinationCleanup.RemoveIfPartial` later deletes any current destination whose length is smaller than the source. If the completed copy is replaced by a shorter foreign file before verification/journal cleanup, that foreign file can be deleted too. #290 proves the original creation event but does not preserve file identity through cleanup. This is a static race trace; no file was replaced or deleted. Preserve destination identity across cleanup or leave ambiguous destinations for Recovery instead of deciding ownership from length; add deterministic fake replacement-before-rollback regressions for both paths.
+
+Startup reconciliation has the same size-only weakness for a prepared single Move/Copy: `OperationJournal.ReconcileOne` sets `destinationMatches` by comparing only `destinationStat.Length == pending.Size`. An equal-length replacement at the destination can be marked Committed even when its timestamp differs from the prepared fingerprint. Existing tests cover a different-length Copy mismatch but not an equal-size replacement. Static current-source trace; no file was changed.
 
 ### R02 — P1 — Queued file commands act on a newly opened folder
 
