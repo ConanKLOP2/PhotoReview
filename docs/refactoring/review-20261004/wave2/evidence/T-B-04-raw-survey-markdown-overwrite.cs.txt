@@ -1,0 +1,14 @@
+﻿// Evidence for T-B-04 (deterministic sketch, never compiled). Mirrors the existing RawSurveyTests style.
+// RawSurvey.RunAsync (tools/PhotoReview.Benchmark.Cli/RawSurvey.cs:126-131) writes the report with
+// File.WriteAllTextAsync(markdownPath, md, Encoding.UTF8) and TryParseArgs (:62-91) only checks that a value exists.
+[Fact]
+public async Task Markdown_PointingAtAnExistingRaw_OverwritesIt()
+{
+    using var dir = new TempDirectory();
+    var raw = dir.Combine("IMG_0001.CR2");
+    File.WriteAllBytes(raw, [1, 2, 3, 4]);          // stands in for a real RAW
+    var exit = await RawSurvey.RunAsync(["--raw-survey", dir.Path, "--markdown", raw]);
+    // Observed by reading: the file now holds the UTF-8 markdown report, original bytes are gone, exit code is 1 or 0
+    // depending on the survey of the (now unreadable) file. Nothing refuses an existing non-.md target.
+    Assert.NotEqual(new byte[] { 1, 2, 3, 4 }, File.ReadAllBytes(raw));
+}

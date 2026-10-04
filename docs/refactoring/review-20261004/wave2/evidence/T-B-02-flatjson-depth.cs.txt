@@ -1,0 +1,21 @@
+﻿// Evidence for T-B-02 (never compiled as part of the repo). Run as a scratch console project that links
+// src/PhotoReview.Localization.Generator/FlatJsonReader.cs (internal class, same assembly):
+//   <Compile Include="...\src\PhotoReview.Localization.Generator\FlatJsonReader.cs" />
+// Observed output (net10.0, 2026-10-04):
+//   array depth 63 (+root = 64): STJ=accept generator=accept
+//   array depth 64 (+root = 65): STJ=reject generator=accept   <-- mismatch
+//   array depth 65 (+root = 66): STJ=reject generator=accept   <-- mismatch
+//   array depth 66 (+root = 67): STJ=reject generator=reject
+using System.Text.Json;
+using PhotoReview.Localization.Generator;
+
+var o = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+for (var n = 60; n <= 68; n++)
+{
+    var text = "{\"_m\":" + new string('[', n) + new string(']', n) + ",\"a\":\"x\"}";
+    bool stj; try { using var d = JsonDocument.Parse(text, o); stj = true; } catch (JsonException) { stj = false; }
+    bool gen; try { FlatJsonReader.Read(text); gen = true; } catch (FlatJsonException) { gen = false; }
+    Console.WriteLine($"array depth {n} (+root = {n + 1}): STJ={(stj ? "accept" : "reject")} generator={(gen ? "accept" : "reject")}");
+}
+
+// Suggested regression test (FlatJsonReaderDifferentialTests): for n in 60..70 assert Oracle(text) is null == Generator(text) is null.

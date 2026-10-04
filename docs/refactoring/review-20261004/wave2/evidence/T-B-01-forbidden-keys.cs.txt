@@ -1,0 +1,20 @@
+﻿// Evidence for T-B-01 (traced by reading, never compiled). Not executed: the real code path needs a WPF window.
+//
+// PerfSession.CollectForbiddenKeys (tools/PhotoReview.Benchmark.Cli/PerfSession.cs:659-668) builds the set from
+//   Escape, System, SendToRecycleBin, Undo, NextFolder, PreviousFolder, Fullscreen, MoveToFolder2 (+ configured Actions)
+// ShortcutMappings (src/PhotoReview.Core/Settings/ShortcutMappings.cs) also has file-touching defaults that are NOT in the set:
+//   MoveToFolder = "M"   (ShortcutRouter step 14 -> ReviewCommand.MoveToFolder -> FileActionController.PickFolder at :684)
+//   CopyToFolder = "Y"   (same path, copy)
+//   OpenFolder   = "O"   (Ctrl+O, folder picker)
+//
+// Scenario that passes LoadScenario (PerfSession.cs:958-982) and the key pre-check (:338-345):
+//   { "name": "x", "steps": [ { "open": "folder" }, { "key": "M" } ] }
+// No "copy" and no "action" => usesCopy == false => folder == the real source folder (PerfSession.cs:191, 204).
+// SendKey raises PreviewKeyDown for M on the window -> folder picker opens on the user's desktop; choosing a folder
+// MOVES the current real photo there (FileActionController, Move).
+//
+// Suggested regression test (reflection over ShortcutMappings, in PhotoReview.Integration.Tests):
+//   var forbidden = PerfSession.CollectForbiddenKeys(new AppSettings());   // make it internal
+//   foreach (var name in new[] { nameof(ShortcutMappings.MoveToFolder), nameof(ShortcutMappings.CopyToFolder),
+//                                nameof(ShortcutMappings.OpenFolder) })
+//       Assert.Contains(Enum.Parse<Key>(typeof(ShortcutMappings).GetProperty(name)!.GetValue(new ShortcutMappings()) as string), forbidden);
