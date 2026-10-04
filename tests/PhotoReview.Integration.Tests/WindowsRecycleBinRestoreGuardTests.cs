@@ -43,6 +43,7 @@ public sealed class WindowsRecycleBinRestoreGuardTests
     {
         public RecycleBinPolicy ReadPolicy() => throw new InvalidOperationException("not used by TryRestore");
         public string? GetVolumeGuid(string path) => throw new InvalidOperationException("not used by TryRestore");
+        public DriveType? GetVolumeDriveType(string path) => throw new InvalidOperationException("not used by TryRestore");
         public RecycleBinVolumeSettings ReadVolume(string volumeGuid) => throw new InvalidOperationException("not used by TryRestore");
         public long? GetUserQuotaBytes(string path) => throw new InvalidOperationException("not used by TryRestore");
     }
