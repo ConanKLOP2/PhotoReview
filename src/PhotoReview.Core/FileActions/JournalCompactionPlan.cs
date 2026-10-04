@@ -22,7 +22,10 @@ namespace PhotoReview.Core.FileActions;
 /// occurrence is at or after L, the suffix after it is unchanged; otherwise the suffix contains L in both files, and L
 /// (Committed/Dismissed) can never equal a Prepared entry, so both answer false. (4) <c>ReadCommittedMoves</c>: its window of
 /// the last 200 committed-Move lines is kept, so a compacted file still of at least 1 MiB returns the same list; a smaller
-/// one is read in full and returns those same moves plus older ones (a superset, only ever used as Undo's fingerprint fallback).</para>
+/// one is read in full and returns those same moves plus older ones (a superset, only ever used as Undo's fingerprint fallback).
+/// (5) The older-build group repair (<c>OperationJournal.RepairGroupLinesSettledByOlderBuild</c>, W2-FA-04) reads the last
+/// members-carrying line of an Id whose latest line has no members: that one line is never dropped (<c>evidence</c> below), so a
+/// failed repair append cannot lose it.</para>
 /// </summary>
 internal static class JournalCompactionPlan
 {
@@ -72,6 +75,22 @@ internal static class JournalCompactionPlan
                 committedMoveWindow.Add(i);
         }
 
+        // W2-FA-04: the downgrade repair (OperationJournal.RepairGroupLinesSettledByOlderBuild) recognises a group an older build
+        // settled WITHOUT its members by the LAST members-carrying line of the Id, which is the only record of the member list.
+        // When the Id's effective latest line carries no members, that line is the repair's evidence: kept. Once the repair has
+        // appended a line with members (or the Id is Dismissed, which the repair leaves alone) it is droppable again.
+        var evidence = new HashSet<int>();
+        var lastMembersLine = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (entries[i] is { GroupMembers: { Count: > 0 } } withMembers) lastMembersLine[withMembers.Id] = i;
+        }
+        foreach (var (id, index) in lastMembersLine)
+        {
+            var (_, latestEntry) = latest[id];
+            if (latestEntry.GroupMembers is not { Count: > 0 } && latestEntry.State != JournalState.Dismissed) evidence.Add(index);
+        }
+
         var kept = new MemoryStream(snapshot.Length);
         var dropped = 0;
         for (var i = 0; i < entries.Count; i++)
@@ -92,7 +111,8 @@ internal static class JournalCompactionPlan
             var (latestIndex, latestEntry) = latest[entry.Id];
             return latestEntry.State is JournalState.Committed or JournalState.Dismissed
                 && i < latestIndex
-                && !committedMoveWindow.Contains(i);
+                && !committedMoveWindow.Contains(i)
+                && !evidence.Contains(i);
         }
     }
 

@@ -853,6 +853,7 @@
   "recovery.group.retryConfirmPermanent": "Thử lại {operation} cho {count} tệp trong nhóm ảnh? {permanentCount} tệp nằm trên ổ không có Thùng rác sẽ bị XÓA VĨNH VIỄN, không thể hoàn tác. Các tệp đã hoàn tất sẽ được bỏ qua.",
   "recovery.group.retryConfirmRestore": "Khôi phục các tệp của nhóm ảnh từ Thùng rác (tối đa {count} tệp)? Các tệp đã có lại sẽ được bỏ qua.",
   "core.journal.cancelledByUser": "Thao tác đã bị hủy trước khi hoàn tất.",
+  "core.journal.unrepresentablePath": "Đường dẫn tệp chứa một ký tự thay thế UTF-16 lẻ cặp nên không thể ghi chính xác vào nhật ký thao tác. Chưa có gì bị thay đổi.",
   "core.recovery.cancelledNeedsConfirm": "Bạn đã hủy thao tác này trước đó. Thử lại sẽ hoàn tất nó, nên cần xác nhận rõ ràng trong cửa sổ Khôi phục. Chưa có gì bị thay đổi.",
   "recovery.retryConfirmCancelled": "Bạn đã hủy {operation} này trước đó. Thử lại sẽ HOÀN TẤT thao tác cho {count} tệp. Tiếp tục?",
   "image.error.rawDisabled": "Hỗ trợ RAW đang tắt trong Cài đặt nên không thể hiển thị {fileName}.",

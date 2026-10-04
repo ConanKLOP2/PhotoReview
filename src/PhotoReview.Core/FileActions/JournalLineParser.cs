@@ -75,12 +75,17 @@ internal static class JournalLineParser
 
     // A group member without a usable Source (JSON null element, missing or blank Source) would make every later file check
     // throw ArgumentException out of reconcile/Recovery, so such a line is dropped like any other malformed line.
+    // A NUL in a member Source or Destination (W2-FA-07) is the same corruption the entry-level paths reject: the file checks of the
+    // downgrade repair would throw ArgumentException (a blank Destination stays accepted, readers treat it as "none").
     private static bool HasValidGroupMembers(JournalEntry entry) =>
-        entry.GroupMembers is null || entry.GroupMembers.All(member => member is not null && !string.IsNullOrWhiteSpace(member.Source));
+        entry.GroupMembers is null || entry.GroupMembers.All(member => member is not null && IsUsablePath(member.Source)
+            && (member.Destination is null || !member.Destination.Contains('\0', StringComparison.Ordinal)));
 
     private static bool IsKnown<T>(ref Utf8JsonReader reader, string? alias) where T : struct, Enum => reader.TokenType switch
     {
-        JsonTokenType.String => reader.GetString() is { } text
+        // W2-FA-01: Enum.TryParse also accepts a comma list ("Prepared,Committed") and ORs the members, whereas
+        // LenientEnumConverter reads only ONE name or number and would silently return the first member (Move/Prepared).
+        JsonTokenType.String => reader.GetString() is { } text && !text.Contains(',', StringComparison.Ordinal)
             && (Enum.TryParse<T>(text.Trim(), ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
                 || (alias is not null && string.Equals(text.Trim(), alias, StringComparison.OrdinalIgnoreCase))),
         JsonTokenType.Number => reader.TryGetInt32(out var number) && Enum.IsDefined(typeof(T), number),
