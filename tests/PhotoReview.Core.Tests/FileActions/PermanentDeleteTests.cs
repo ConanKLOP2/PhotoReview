@@ -64,6 +64,8 @@ public sealed class PermanentDeleteTests
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
         {
             RestoreCalls++;
+            // R18: a restore puts the recycled file back; the undo checks its identity, not the bin's bare "true".
+            fs.AddFile(originalPath, new string('x', checked((int)expectedSize)), expectedLastWriteUtc);
             return true;
         }
     }

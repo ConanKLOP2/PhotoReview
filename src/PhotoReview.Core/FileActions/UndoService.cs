@@ -219,6 +219,12 @@ public sealed class UndoService
                 try
                 {
                     await tx.BeginAsync().ConfigureAwait(false);
+                    // R18: the preflight ran before Prepared was journaled. Prove again, right before the mutation, that the file at
+                    // Destination is still the one the preflight verified (and the entry just journaled); a replacement is never
+                    // restored under this undo. Fail closed: the undo fails and stays retryable.
+                    if (_fileSystem.GetFileStat(move.Destination) is not { } beforeMove
+                        || beforeMove.Length != destinationStat.Length || beforeMove.LastWriteUtc != destinationStat.LastWriteUtc)
+                        throw new IOException(Tr.CoreUndoDestinationChangedAfterMove);
                     // RV-C07: the original folder may have been removed after the Move (it became empty); the group undo
                     // recreates it too.
                     var sourceFolder = Path.GetDirectoryName(move.Source);
@@ -322,12 +328,12 @@ public sealed class UndoService
                     return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleTargetExists(Path.GetFileName(action.Source)));
                 }
 
-                var restored = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc)).ConfigureAwait(false);
-                // A shell restore can report failure although the file did come back (verb timeout, a racing manual restore):
-                // when the recycled file itself is now at its original path, the undo is done (same rule as the group path).
-                if (!restored && _fileSystem.GetFileStat(action.Source) is { } back
-                    && back.Length == action.Size && back.LastWriteUtc == action.LastWriteUtc)
-                    restored = true;
+                _ = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc)).ConfigureAwait(false);
+                // R18: the bin's verdict is not the proof. A shell restore can report failure although the file did come back (verb
+                // timeout, a racing manual restore) and can report success while something else sits at the path; the undo is done
+                // only when the recycled file itself (size AND write time) is at its original path (same rule as the group path).
+                var restored = _fileSystem.GetFileStat(action.Source) is { } back
+                    && back.Length == action.Size && back.LastWriteUtc == action.LastWriteUtc;
                 if (!restored)
                 {
                     return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(action.Source)));
@@ -403,8 +409,18 @@ public sealed class UndoService
             // Whole loop on the pool (directory creation, moves and verification stats), same order as before.
             await Task.Run(async () =>
             {
+                // R18: the preflight ran before Prepared was journaled. Re-prove every file's identity (journaled size and write
+                // time) before the FIRST move, so a replacement found now fails the undo without restoring a partial capture, and
+                // again right before each move. A replacement is never restored under this undo.
+                void RequireJournaledIdentity(JournalGroupMember member)
+                {
+                    if (_fileSystem.GetFileStat(member.Source) is not { } now || now.Length != member.Size || now.LastWriteUtc != member.LastWriteUtc)
+                        throw new IOException(Tr.CoreUndoDestinationChangedAfterMove);
+                }
+                foreach (var member in pending) RequireJournaledIdentity(member);
                 foreach (var member in pending)
                 {
+                    RequireJournaledIdentity(member);
                     var folder = Path.GetDirectoryName(member.Destination!);
                     if (!string.IsNullOrEmpty(folder)) _fileSystem.CreateDirectory(folder);
                     if (_moveOverride is not null) await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
@@ -597,7 +613,9 @@ public sealed class UndoService
                 {
                     if (!_recycleBin.TryRestore(member.Source, member.Size, member.LastWriteUtc))
                         throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
-                    if (!_fileSystem.FileExists(member.Source)) throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                    // R18: the recycled file itself must be back (size and write time), not merely some file at the path.
+                    if (_fileSystem.GetFileStat(member.Source) is not { } back || back.Length != member.Size || back.LastWriteUtc != member.LastWriteUtc)
+                        throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
                     restored.Add(member.Source);
                     restoredByThisUndo++;
                 }

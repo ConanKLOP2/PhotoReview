@@ -864,7 +864,11 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
             if (HasNoRecycleBin) throw new IOException("no recycle bin");
             SendGate?.GetAwaiter().GetResult();
             RecycledPaths.Add(path);
-            if (File.Exists(path)) File.Delete(path);
+            if (File.Exists(path))
+            {
+                _recycled[path] = File.ReadAllBytes(path);
+                File.Delete(path);
+            }
         }
 
         public void DeletePermanently(string path)
@@ -881,9 +885,14 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         {
             RestoreGate?.GetAwaiter().GetResult();
             RestoreCalls++;
-            File.WriteAllBytes(path, ValidPngBytes);
+            // R18: like the real bin, the restore brings back the recycled file itself (its bytes and write time); the undo
+            // now checks that identity instead of trusting the bin's "true".
+            File.WriteAllBytes(path, _recycled.TryGetValue(path, out var original) ? original : ValidPngBytes);
+            File.SetLastWriteTimeUtc(path, expectedLastWriteUtc);
             return true;
         }
+
+        private readonly Dictionary<string, byte[]> _recycled = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private sealed class FakeDialogService : IDialogService

@@ -418,8 +418,11 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
             if (string.Equals(path, FailSendFor, StringComparison.OrdinalIgnoreCase)) throw new IOException("simulated recycle failure");
             OnMutation?.Invoke();
             Recycled.Add(path);
+            if (File.Exists(path)) _recycledBytes[path] = File.ReadAllBytes(path);
             File.Delete(path);
         }
+
+        private readonly Dictionary<string, byte[]> _recycledBytes = new(StringComparer.OrdinalIgnoreCase);
 
         public void DeletePermanently(string path)
         {
@@ -432,7 +435,9 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         {
             RestoreCalls++;
             if (RestoreOverride is { } over && !over()) return false;
-            File.WriteAllBytes(originalPath, [1, 2, 3, 4]);
+            // R18: the restore brings back the recycled file itself (bytes and write time); the undo checks that identity.
+            File.WriteAllBytes(originalPath, _recycledBytes.TryGetValue(originalPath, out var original) ? original : [1, 2, 3, 4]);
+            File.SetLastWriteTimeUtc(originalPath, expectedLastWriteUtc);
             return true;
         }
     }

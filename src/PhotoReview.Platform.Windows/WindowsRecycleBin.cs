@@ -199,7 +199,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
                     foreach (var verb in verbItems) Release(verb);
                     Release(verbs);
                 }
-                return WaitForRestore(originalPath, expectedLastWriteUtc);
+                return WaitForRestore(originalPath, expectedSize, expectedLastWriteUtc);
             }
             finally
             {
@@ -215,19 +215,24 @@ public sealed class WindowsRecycleBin : IRecycleBin
         finally { Release(recycle); Release(shell); }
     }
 
-    private static bool WaitForRestore(string path, DateTime expectedLastWriteUtc)
+    private static bool WaitForRestore(string path, long expectedSize, DateTime expectedLastWriteUtc)
     {
         for (var i = 0; i < 30; i++) // ~1.8 s: the shell restores asynchronously and can be slow on a busy disk
         {
-            if (IsExpectedFile(path, expectedLastWriteUtc)) return true;
+            if (IsExpectedFile(path, expectedSize, expectedLastWriteUtc)) return true;
             Thread.Sleep(60);
         }
-        return IsExpectedFile(path, expectedLastWriteUtc);
+        return IsExpectedFile(path, expectedSize, expectedLastWriteUtc);
     }
 
-    private static bool IsExpectedFile(string path, DateTime expectedLastWriteUtc)
+    /// <summary>R18: size AND write time. A competing file with the same timestamp but another size must not pass for the restored photo.</summary>
+    internal static bool IsExpectedFile(string path, long expectedSize, DateTime expectedLastWriteUtc)
     {
-        try { return File.Exists(path) && new FileInfo(path).LastWriteTimeUtc == expectedLastWriteUtc; }
+        try
+        {
+            var info = new FileInfo(path);
+            return info.Exists && info.Length == expectedSize && info.LastWriteTimeUtc == expectedLastWriteUtc;
+        }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
     }
