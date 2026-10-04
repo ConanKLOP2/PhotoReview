@@ -1,0 +1,52 @@
+// NOT COMPILED (.cs.txt). Probe for D-01: does a failed File.Copy leave a partial destination?
+// Run once on 2026-10-04 as the equivalent PowerShell script (Windows PowerShell 5.1) in the reviewer's own scratch
+// folder (own temp files only, no user photos, no Recycle Bin). Observed output:
+//
+//   copy threw: IOException "The process cannot access the file because another process has locked a portion of the file."
+//   HResult = 0x80070021 (ERROR_LOCK_VIOLATION)
+//   dest exists after failed copy: False
+//
+// Meaning: Win32 CopyFile (what File.Copy(src, dst) calls) removes the destination it created when a READ fails mid-copy,
+// so PhysicalFileSystem.TryCopyNew not raising CopyCreationProof for a thrown copy does not strand a partial file in
+// this failure mode. The write-side failure (disk full) was NOT provoked: it needs a full volume and is the
+// remaining NEEDS-EVIDENCE part of D-01.
+
+using System;
+using System.IO;
+
+internal static class D01Probe
+{
+    public static void Main()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "d01-probe-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var src = Path.Combine(dir, "src.bin");
+            var dst = Path.Combine(dir, "dst.bin");
+            var bytes = new byte[8 * 1024 * 1024];
+            new Random(1).NextBytes(bytes);
+            File.WriteAllBytes(src, bytes);
+
+            // A byte-range lock on a SECOND handle makes CopyFile's own read of that range fail part-way through.
+            using var locker = new FileStream(src, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+            locker.Lock(6 * 1024 * 1024, 4096);
+            try
+            {
+                File.Copy(src, dst);
+                Console.WriteLine("copy ok");
+            }
+            catch (IOException ex)
+            {
+                Console.WriteLine($"copy threw: {ex.Message} HResult=0x{ex.HResult:X}");
+            }
+
+            Console.WriteLine($"dest exists after failed copy: {File.Exists(dst)}");
+            locker.Unlock(6 * 1024 * 1024, 4096);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+}
