@@ -12,7 +12,7 @@ Pinned comparison head: `origin/master` `18aa6eb64ba48666de620937211e0782dd6131c
 
 ## Full-inventory continuation progress
 
-These are reread callables for the current-head continuation, separate from cumulative ledger statuses. App/Integration's previous overlay has 6,161 rows (5,997 distinct composite identities), leaving 294 rows for semantic review; owned files are unchanged from `5cc7f381` through `18aa6eb6`. Core batches 18–43 contain 2,548 unique normalized keys, but only 921 of 1,560 Core-owned rows had matched during the ownership audit, leaving 378 for explicit review. Imaging reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport reread 298/298. App and Core remain active. No tests/build were run in this continuation.
+These are reread callables for the current-head continuation, separate from cumulative ledger statuses. App/Integration has now reread all 6,455 canonical rows at `18aa6eb6`, with duplicate identity multiplicity preserved; owned files are unchanged from `5cc7f381` through `18aa6eb6`. The Core batch overlay was generated from a scratch checkout at `5d291076`, not current `18aa6eb6`; it is not accepted as current-head coverage. A diff found 100 changed Core/Platform/tooling/test paths with 1,650 callable rows previously marked reviewed. Those rows were invalidated; 98 have since been read directly at `18aa6eb6` (73 STATIC-ONLY, 25 ISSUE), leaving 1,552 pending. Imaging reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport reread 298/298. App/Integration is complete; Core remains active. No tests/build were run in this continuation. Fresh Core batch 01 read 98 callable bodies using `git show 18aa6eb6:<path>`; it confirms current R01, R15 and R18 candidates. The earlier Core overlays for changed files are not counted.
 
 ## Current findings
 
@@ -112,10 +112,16 @@ These are reread callables for the current-head continuation, separate from cumu
 - **R27 — caller-file loss in RAW sample fetch:** `tools/fetch-raw-samples.ps1:397-407,430` removes a pre-existing same-name, hash-mismatched file under arbitrary `-TargetDir` before the replacement download succeeds. A failed download can leave the caller's file lost. Stage first and replace only after verification or constrain the directory to a dedicated owned corpus. Static review; no target path changed.
 - **R28 — fixture unchanged check misses same-size changes:** `Test-FixtureUnchanged` compares fixture count and aggregate bytes; same-count/same-byte replacements or renames pass. Compare paths and per-file fingerprints. Static review; no fixture changed.
 - **R29 — release notes false first-release fallback:** `.github/workflows/release.yml` queries only 100 releases and does not fail closed on query failure. Paginate and check exit status. Workflow read only; no release run.
-- **R30 — benchmark report path collision:** default report path has second-level precision and repeated/concurrent CLI runs can overwrite `summary.json`. Add unique invocation identity or atomic creation and a same-second regression. Static; no report written.
+- **R30 — benchmark report path collision (pending current-head recheck):** default report path has second-level precision and repeated/concurrent CLI runs can overwrite `summary.json`. Add unique invocation identity or atomic creation and a same-second regression. Static; no report written.
 - **APP-T28 — optional ORF corpus silently passes the Native test:** `LibRawPreviewFallbackTests.ReadJpegThumbnail_OrfCorpusFile_ReturnsCompleteJpeg` returns successfully when `RawCorpus.TryGetFile` has no result. Require the fixture or use an explicit skip.
 - **APP-T29 — manual real-photo checks silently pass without usable fixtures:** two `RealPhotosManualTests` facts early-return when `PHOTOREVIEW_FIXTURE_DIR` is missing or has fewer than two images. Report an explicit skip instead.
 
 ## Limits
 
 All current delta findings are based on source/test inspection unless explicitly stated otherwise. This review does not demonstrate that the CLI symlink scenario was executed, that permanent deletion happened, that WPF/native/RAW behavior is correct at runtime, or that any current-head test gate passes. The full-project multi-agent callable review is still in progress.
+
+
+App/Integration current-head completion overlay: 6,455/6,455 rows; 6,416 SEMANTIC-STATIC, 1 ISSUE, 18 TEST-GAP and 20 TEST-RISK. APP-T30 covers native reparse facts that return without explicit skip when link setup is unavailable; APP-T31 flags a fixed elapsed-time assertion in `SlowLinkFileSystemTests`. APP-T10 now includes the Win32 dialog STA workers. Static review only; no tests/native dialog/reparse checks were run.
+
+
+Fresh Core current-head batch 01 (directly read from `git show 18aa6eb6:<path>`): 98 rows across OperationJournal and UndoService; 73 STATIC-ONLY and 25 ISSUE. R15 is confirmed: group Recycle undo reconciliation commits based on source-path existence alone, so a foreign or wrong-fingerprint replacement may be mistaken for a restore. R01 remains after #320: completed group Copy rollback removes same-length replacements; single proved-copy cleanup may remove a shorter foreign replacement. R18 remains in single/group Undo mutation paths after preflight. No tests or Recycle Bin operations were run.

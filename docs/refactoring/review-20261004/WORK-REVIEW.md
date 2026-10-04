@@ -1,21 +1,21 @@
 # Function review — current-head checkpoint (2026-10-04, incomplete)
 
-Current pinned head: `18aa6eb64ba48666de620937211e0782dd6131c1` (`origin/master`). The audit began at `5d291076` and has been reconciled through PRs merged since then. Review branch: `codex/review-all-20261004`; [PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open and not merged. This is a documentation/review PR; it makes no production changes. App/Integration and Core/Platform/tooling lanes are continuing semantic review; Imaging and Architecture/TestSupport are complete. The inherited model names are unavailable.
+Current pinned head: `18aa6eb64ba48666de620937211e0782dd6131c1` (`origin/master`). The audit began at `5d291076` and has been reconciled through PRs merged since then. Review branch: `codex/review-all-20261004`; [PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open and not merged. This is a documentation/review PR; it makes no production changes. Core/Platform/tooling is continuing semantic review; App/Integration, Imaging and Architecture/TestSupport are complete. The inherited model names are unavailable.
 
 ## Coverage contract
 
 The current Roslyn inventory covers 16,799 callable bodies in 1,068 tracked C# files: methods/constructors/operators with bodies, explicit accessors, expression-bodied properties/indexers, local functions and lambdas. Declaration-only interfaces/extern members, implicit record members, XAML event declarations and the outer top-level statement body are excluded. Nested bodies have individual rows. This is an inventory, not semantic sign-off.
 
-The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
+The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress. The Core continuation overlay was discovered to come from a stale source checkout; 1,650 changed-path rows were invalidated and a current-head reread is underway.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 14,886 `STATIC-ONLY`, 112 `ISSUE`, and 1,801 `UNREVIEWED` rows after importing the App/Integration, Core batches 18–43, and Architecture/TestSupport overlays. Review lanes are still running; do not read ledger status counts as full-project completion.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 13,622 `STATIC-ONLY`, 116 `ISSUE`, and 3,061 `UNREVIEWED` rows. A freshness audit found the Core overlay agent checkout remained at `5d291076` while its inventory was at `18aa6eb6`; 1,650 callable rows across 100 affected Core/Platform/tooling/test paths were invalidated; 98 have since been reread directly at the current head (25 ISSUE, 73 STATIC-ONLY), leaving 1,552 pending. The 1,379 rows in unchanged files remain recorded. App/Integration is complete at 6,455/6,455. Core is being reread at the pinned head; do not read ledger status counts as full-project completion.
 
-The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App/Integration and Core/tooling lanes continue in separate ownership areas; Imaging and Architecture/TestSupport are complete. Every status is reconciled against this current inventory. [App baseline details](app.md).
+The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. Core/tooling remains active; App/Integration, Imaging and Architecture/TestSupport are complete. Every status is reconciled against this current inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | Prior overlay covers 6,161 rows (5,997 distinct composite identities); 294 rows remain for semantic review, preserving duplicate inventory identities |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | Batches 18–43 cover 2,548 distinct normalized callable keys (overlap is retained in the ledger); 378 Core-owned rows remain unrepresented |
+| App + Integration | 1,229 | 5,226 | 6,455 | 6,455/6,455 rows reread against current source; 6,416 semantic-static, 1 issue, 18 test gaps, 20 test risks; duplicate identity multiplicity preserved |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | Old batches 18–43 used a stale `5d291076` checkout. 1,650 callable rows across 100 changed paths were invalidated; 98 have now been reread directly from `18aa6eb6` (25 ISSUE, 73 STATIC-ONLY), leaving 1,552 changed-path rows for current-source review. The 1,379 rows in unchanged files remain recorded |
 | Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,279 Imaging.Tests reread; complete; 189 related Integration/App/Architecture rows also read |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | 298/298 reread; two test-fixture cleanup safety candidates (R24–R25) |
 
@@ -90,7 +90,7 @@ The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreV
 ### R25 — P2 candidate — Shared temp sweep deletes matching directories by age alone
 
 `tests/PhotoReview.TestSupport.Windows/Fixtures/PhotoFolderBuilder.cs:210-248`. `PurgeStaleTemporaryFolders` enumerates shared-temp `PhotoReview-TC01-*` directories and recursively removes any older than six hours without an ownership marker or lock. A long-running test or another process using a matching path can lose its files when this helper starts. Static-only review; no directory was swept. Remove cross-run recursive sweeping or require an owned marker/lock and a conservative stale-owner check.
-### R26 — P1 candidate — A file can outgrow Recycle Bin capacity after preflight and be deleted by the shell
+### R26 — P1 candidate, pending current-head recheck — A file can outgrow Recycle Bin capacity after preflight and be deleted by the shell
 
 `src/PhotoReview.Core/FileActions/FileActionService.cs:155-160,204-224,560-594`; `RecoveryRetryService.cs:163-190,222`; `src/PhotoReview.Platform.Windows/WindowsRecycleBin.cs:45-54`; `RecycleBinCapacity.cs:102`.
 
@@ -108,7 +108,7 @@ Single Recycle checks the current file size before journaling, then calls `SendT
 
 `.github/workflows/release.yml` lists only 100 releases and does not fail closed when `gh release list` fails. An older predecessor outside the first page, or a transient API failure, leaves the previous-release value empty and generates first-release text. Paginate/check the command result and distinguish an empty successful result from lookup failure. Workflow read only; no release workflow ran.
 
-### R30 — P2 candidate — Concurrent benchmark CLI runs can overwrite the same report
+### R30 — P2 candidate, pending current-head recheck — Concurrent benchmark CLI runs can overwrite the same report
 
 `tools/PhotoReview.Benchmark.Cli/BenchmarkCliArguments.cs:107-114`; `Program.cs:70-72`. The default report directory uses second-resolution timestamp naming; invocations in the same second share the directory and both write `summary.json`, so one result overwrites the other. Add a unique invocation suffix or atomic directory creation; cover same-second/concurrent calls. Static trace only; no report was written.
 ### Test-only and oracle findings retained at current head
@@ -145,6 +145,8 @@ Ownership is set before `TryCopyNew` has created anything. If another process cr
 Remedy: propagate proof of successful creation from the copy implementation; only clean up a destination owned by this operation. Length or preflight absence cannot establish ownership. Add regressions that assert the foreign file survives.
 
 #### R01 residual — Copy rollback can delete a foreign replacement
+
+Fresh current-head Core review also confirmed the same proof gap in `RecoveryRetryService.cs:274-291`: after `CopyCreationProof` succeeds, catch cleanup delegates to the size-only `PartialDestinationCleanup.RemoveIfPartial`, so a shorter foreign replacement arriving before cleanup can be deleted. Static trace at `18aa6eb6`; no file was changed.
 
 `src/PhotoReview.Core/FileActions/FileActionService.cs:189,212,283-305,376-381,666-667`; `PartialDestinationCleanup.cs:17-28`.
 
