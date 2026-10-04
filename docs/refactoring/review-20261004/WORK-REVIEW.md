@@ -14,9 +14,9 @@ The original baseline ledger reported 1,203 App and 694 Imaging-family source bo
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 1,596 rows reread; 4,859 remaining |
+| App + Integration | 1,229 | 5,226 | 6,455 | 1,851 rows reread; 4,604 remaining |
 | Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,011 rows reread; 4,036 remaining |
-| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 2,407 test rows reread; 1,872 remaining |
+| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 2,551 test rows reread; 1,728 remaining |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | Not yet assigned to a continuation lane |
 
 [powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.

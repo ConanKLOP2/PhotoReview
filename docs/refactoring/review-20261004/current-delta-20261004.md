@@ -69,6 +69,8 @@ These are reread callables for the current-head continuation, separate from the 
 - Grouped Undo-Recycle tests do not gate a foreign file appearing at a pending source path between the initial `RecoveryFileCheck` and retry execution. This is the race extension of R15, not a separate source finding.
 - `LibRawDecoderTests.PrivateMemorySampler.Dispose` disposes its timer and process without waiting for an in-flight callback that reads process memory. A callback may race disposal and throw on a timer thread. This test-harness concern is unverified; native tests were not run.
 - `RawContractsAndHeaderSourceTests.SourceRawHeaderSource_ReadsOnlyRequestedBlocks_AndCaches` checks read counts/lengths but not returned byte contents across cached or cross-block reads; the cache could return wrong bytes and still satisfy the current oracle. Missing DNG corpus fixtures can also cause early returns, so those methods do not validate camera samples when fixtures are absent.
+- `FallbackExceptionCoverageTests` routes an injected `OverflowException` using an ordinary 32x24 JPEG; it does not cover hostile dimensions, arithmetic overflow, or the WPF fallback output-memory bound relevant to R16.
+- `ImagePresenterTests` exercise general cancellation and supersession but do not gate the precise APP-P01 interleave where a later call retrieves `.Token` after the prior CTS has been disposed.
 - Other baseline test-oracle findings remain tagged in the ledger, including a duplicate-cleanup/reload test that fakes the sink result and does not exercise ownership negotiation.
 
 ## Limits
