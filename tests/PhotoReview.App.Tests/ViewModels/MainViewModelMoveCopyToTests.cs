@@ -351,6 +351,39 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         Assert.False(vm.IsFileActionInProgress);
     }
 
+    [Fact(DisplayName = "R02: a Move-to queued in folder A, whose turn comes after folder B was opened, neither asks for a folder nor moves B's photo")]
+    public async Task MoveTo_QueuedInFolderA_FolderChangesBeforeItsTurn_DoesNotMoveNewFolderPhoto()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (vm, _, undo, img1, img2, dest) = await OpenAlbumAsync(async (source, destination) =>
+        {
+            await release.Task;
+            File.Move(source, destination);
+        });
+        var other = _root.File(Path.Combine("other", "x.jpg"), TestImages.OpaquePng);
+        _picker.Result = dest;
+
+        var first = vm.MoveToFolderAsync();
+        Assert.True(vm.IsFileActionInProgress);
+        var queued = vm.MoveToFolderAsync();
+        Assert.False(queued.IsCompleted);
+        try
+        {
+            await vm.OpenFolderAsync(_root.Combine("other"));
+            release.SetResult();
+            await Task.WhenAll(first, queued);
+        }
+        finally { release.TrySetResult(); }
+
+        Assert.True(File.Exists(other), "A Move-to queued in folder A moved folder B's photo.");
+        Assert.False(File.Exists(Path.Combine(dest, "x.jpg")));
+        Assert.Equal([other], vm.Catalog.Paths);
+        Assert.False(File.Exists(img1)); // the command that had started in A completed there
+        Assert.True(File.Exists(img2));
+        Assert.Single(undo.MoveHistory);
+        Assert.Single(_picker.Calls); // the stale queued command never even asked for a folder
+    }
+
     [Fact]
     public async Task MoveTo_SourceStillExistsAfterFailedMove_KeepsSourceInCatalog()
     {
