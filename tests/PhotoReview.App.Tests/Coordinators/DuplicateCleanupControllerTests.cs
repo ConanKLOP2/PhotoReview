@@ -79,7 +79,7 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
     }
 
     /// <summary>a.jpg and "a (1).jpg" are identical: "a (1).jpg" is the numbered copy the batch recycles.</summary>
-    private (DuplicateCleanupController Controller, ReloadingSink Sink, RecordingPreload Preload, string Removed) NewBatch()
+    private (DuplicateCleanupController Controller, ReloadingSink Sink, RecordingPreload Preload, string Removed) NewBatch(bool supersedeReload = false)
     {
         var folder = Path.Combine(_root, "album");
         Directory.CreateDirectory(folder);
@@ -92,7 +92,7 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
         var fs = new PhysicalFileSystem();
         var fileActions = new FileActionService(new OperationJournal(new AppPaths(_root), fs, new SystemClock()), fs, new SystemClock(), new DeletingRecycleBin());
         var preview = new PreviewImageService(new ReviewMetrics(), () => false, () => new DecodeBox(1920, 0), capacityBytes: 16 * 1024 * 1024);
-        var sink = new ReloadingSink();
+        var sink = new ReloadingSink { SupersedeReload = supersedeReload };
         var preload = new RecordingPreload();
         var controller = new DuplicateCleanupController(
             new GenerationClock(), catalog, fileActions, new FileHashService(new SourceBytesCache(1024 * 1024)),
@@ -113,6 +113,19 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
         Assert.Equal(StatusFormatter.BatchDone(1, 0), sink.Current);
     }
 
+    [Fact(DisplayName = "D-03: a folder opened DURING the batch reload gets neither 'Batch done' nor the failure dialog; the result is announced late")]
+    public async Task RemoveDuplicatesAsync_FolderOpenedDuringReload_WritesNothingIntoNewFolder()
+    {
+        var (controller, sink, _, removed) = NewBatch(supersedeReload: true);
+
+        await controller.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.False(File.Exists(removed));
+        Assert.Equal(1, sink.Reloads);
+        Assert.Null(sink.Current); // no "Batch done" written over the folder the user opened meanwhile
+        Assert.Equal([Tr.StatusLateBatchRecycled(1, 0)], sink.LateStatuses);
+    }
+
     [Fact(DisplayName = "Batch duplicate cleanup evicts each recycled file from the preload-key set")]
     public async Task RemoveDuplicatesAsync_EvictsRecycledFilesFromPreloadKeys()
     {
@@ -128,12 +141,22 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
     {
         public string? Current { get; private set; }
         public int Reloads { get; private set; }
+        public bool SupersedeReload { get; init; }
+        public List<string> LateStatuses { get; } = [];
         public void SetStatusText(string status) => Current = status;
+        public void ShowLateActionStatus(string status) => LateStatuses.Add(status);
         public Task OpenFolderAsync(string folder, string? initialPath = null)
         {
             Reloads++;
             Current = null;
             return Task.CompletedTask;
+        }
+
+        // D-03: true unless the test simulates another folder load starting while this reload ran.
+        async Task<bool> IDuplicateCleanupSink.ReloadFolderAsync(string folder)
+        {
+            await OpenFolderAsync(folder);
+            return !SupersedeReload;
         }
     }
 

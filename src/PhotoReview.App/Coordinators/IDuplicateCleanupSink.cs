@@ -17,4 +17,15 @@ public interface IDuplicateCleanupSink
 
     /// <summary>Yêu cầu mở thư mục ảnh.</summary>
     Task OpenFolderAsync(string folder, string? initialPath = null);
+
+    /// <summary>
+    /// Reloads <paramref name="folder"/> after a batch. Returns false when the user (or a forwarded open) started another
+    /// folder load while this one ran: the batch result then belongs to a folder that is no longer shown (D-03). The default
+    /// has no way to tell and reports true.
+    /// </summary>
+    async Task<bool> ReloadFolderAsync(string folder)
+    {
+        await OpenFolderAsync(folder);
+        return true;
+    }
 }
