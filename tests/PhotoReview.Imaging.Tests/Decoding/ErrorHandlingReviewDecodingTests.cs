@@ -97,10 +97,10 @@ public sealed class ErrorHandlingReviewDecodingTests : IDisposable
         Assert.False(DecodeFailureSourceBytes.TryGet(ex, out _)); // nothing was read, so no source bytes ride on the exception
     }
 
-    [Fact(DisplayName = "WicDirect output guard: a huge buffer on a small machine is a clean InvalidDataException; a small buffer never consults memory")]
+    [Fact(DisplayName = "WicDirect output guard: a huge buffer on a small machine is a clean DecoderMemoryAdmissionException; a small buffer never consults memory")]
     public void WicOutputGuard_RefusesOnlyWhenItDoesNotFit()
     {
-        var ex = Assert.Throws<InvalidDataException>(() =>
+        var ex = Assert.Throws<DecoderMemoryAdmissionException>(() =>
             WicDirectDecoder.EnsureOutputFits(20000, 20000, 20000L * 20000 * 4, () => (1 * Gb, 0)));
         Assert.True(UserFacingError.IsLocalized(ex));
 

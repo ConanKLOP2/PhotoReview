@@ -221,7 +221,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
 
         var ex = Catch(() => decoder.Decode(new DecodeRequest("t.jpg", DecodeBox.Unbounded, bytes: bomb)));
 
-        Assert.IsType<InvalidDataException>(ex);
+        Assert.IsType<DecoderMemoryAdmissionException>(ex);
         Assert.Contains("too large for the available memory", ex.Message, StringComparison.Ordinal);
     }
 

@@ -76,6 +76,8 @@ public sealed class FallbackImageDecoder : IImageDecoder
     public static bool IsFallbackable(Exception ex)
     {
         if (ex is FileNotFoundException or DirectoryNotFoundException or OperationCanceledException or OutOfMemoryException
+            // A memory-admission refusal: the file is fine and the WPF fallback has no admission, so it would allocate the refused surface.
+            or DecoderMemoryAdmissionException
             // Transient "queue full" from a gated decoder: the fallback would decode the same file outside that gate.
             or DecoderBusyException)
         {

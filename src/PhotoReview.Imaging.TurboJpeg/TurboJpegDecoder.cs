@@ -200,7 +200,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
                         // The transformed copy needs a second full-size surface on top of the one EnsureOutputFits sized for: the
                         // same "too large for the available memory" verdict as that guard, not a raw allocation failure.
                         throw UserFacingError.Localized(
-                            new InvalidDataException($"TurboJPEG output dimensions are too large for the available memory: {scaledW}x{scaledH} ({bufferLength} bytes)."),
+                            new DecoderMemoryAdmissionException($"TurboJPEG output dimensions are too large for the available memory: {scaledW}x{scaledH} ({bufferLength} bytes)."),
                             () => Tr.ErrDecoderOutputTooLarge(scaledW, scaledH, bufferLength));
                     }
                 }
@@ -515,7 +515,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         var (total, load) = MemoryInfo();
         if (MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load)) return;
         throw UserFacingError.Localized(
-            new InvalidDataException($"TurboJPEG output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
+            new DecoderMemoryAdmissionException($"TurboJPEG output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
             () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
     }
 
