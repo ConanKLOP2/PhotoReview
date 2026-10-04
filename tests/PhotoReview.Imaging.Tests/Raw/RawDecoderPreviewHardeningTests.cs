@@ -16,7 +16,6 @@ public sealed class RawDecoderPreviewHardeningTests
     /// <summary>Container reader returning a fixed <see cref="RawContainerInfo"/> for any .dng.</summary>
     private sealed class FixedContainerReader(RawContainerInfo info) : IRawContainerReader
     {
-        public RawFormat Format => info.Format;
         public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension) => extension.Equals(".dng", StringComparison.OrdinalIgnoreCase);
         public RawContainerInfo Read(IRawHeaderSource source, CancellationToken cancellationToken) => info;
     }
@@ -118,7 +117,6 @@ public sealed class RawDecoderPreviewHardeningTests
 
     private sealed class ThrowingContainerReader : IRawContainerReader
     {
-        public RawFormat Format => RawFormat.Dng;
         public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension) => extension.Equals(".dng", StringComparison.OrdinalIgnoreCase);
         public RawContainerInfo Read(IRawHeaderSource source, CancellationToken cancellationToken) =>
             throw new InvalidDataException("RAW header read exceeded hard limit.");

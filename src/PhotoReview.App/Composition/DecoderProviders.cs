@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding.Wic;

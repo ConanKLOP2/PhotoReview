@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.IO;
+using System.Globalization;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 

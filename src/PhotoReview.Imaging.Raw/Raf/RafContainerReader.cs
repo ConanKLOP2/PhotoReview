@@ -1,5 +1,5 @@
-using System.Buffers.Binary;
 using System.IO;
+using System.Buffers.Binary;
 using System.Text;
 using PhotoReview.Imaging.Metadata;
 
@@ -20,7 +20,6 @@ namespace PhotoReview.Imaging.Raw.Raf;
 /// </summary>
 public sealed class RafContainerReader : IRawContainerReader
 {
-    public RawFormat Format => RawFormat.Raf;
 
     /// <summary>End of the fixed pointer table (JPEG offset/length at 84/88, CFA header offset/length at 92/96): a JPEG may not start inside it.</summary>
     private const int PointerTableEnd = 100;
@@ -75,7 +74,7 @@ public sealed class RafContainerReader : IRawContainerReader
                 ColorSpace: PreviewColorSpace.Unknown));
 
             // EXIF block inside embedded JPEG APP1
-            long exifLength = Math.Min(jpegLength, 128 * 1024);
+            long exifLength = Math.Min(jpegLength, RawContainerLimits.DefaultExifBlockBytes);
             exifBlocks.Add(new ExifBlock(jpegOffset, exifLength, IsTiffHeader: false));
 
             // RAF has no orientation of its own: the camera writes it into the embedded JPEG's EXIF.

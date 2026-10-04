@@ -1,6 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Linq;
-using System.Threading;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Diagnostics;

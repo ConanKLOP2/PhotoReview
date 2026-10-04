@@ -1,9 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using PhotoReview.Core.Localization;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Input;

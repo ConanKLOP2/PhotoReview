@@ -9,7 +9,6 @@ using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Instance;
 using PhotoReview.Core.IO;
-using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.LibRaw;
 

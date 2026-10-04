@@ -11,7 +11,6 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// </summary>
 public sealed class Rw2ContainerReader : IRawContainerReader
 {
-    public RawFormat Format => RawFormat.Rw2;
 
     public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension)
     {
@@ -84,12 +83,12 @@ public sealed class Rw2ContainerReader : IRawContainerReader
                     ColorSpace: PreviewColorSpace.Unknown));
 
                 // RW2 EXIF is inside the preview JPEG
-                exifBlocks.Add(new ExifBlock(offset, Math.Min(length, 128 * 1024), IsTiffHeader: false));
+                exifBlocks.Add(new ExifBlock(offset, Math.Min(length, RawContainerLimits.DefaultExifBlockBytes), IsTiffHeader: false));
 
                 // Orientation is normally in IFD0; some files only carry it in the embedded JPEG's EXIF.
                 if (ifd0Orientation is null)
                 {
-                    int exifLength = (int)Math.Min(Math.Min(length, 128 * 1024), source.Length - offset);
+                    int exifLength = (int)Math.Min(Math.Min(length, RawContainerLimits.DefaultExifBlockBytes), source.Length - offset);
                     if (exifLength > 0)
                         embeddedJpegOrientation = ExifParser.TryReadOrientationFromJpeg(source.Read(offset, exifLength));
                 }

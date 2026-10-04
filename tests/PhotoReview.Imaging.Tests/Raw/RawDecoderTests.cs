@@ -522,7 +522,6 @@ public sealed class RawDecoderTests
 
     private sealed class CountingContainerReader : IRawContainerReader
     {
-        public RawFormat Format => RawFormat.Dng;
         public int ReadCount { get; private set; }
         public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension) => extension.Equals(".dng", StringComparison.OrdinalIgnoreCase);
         public RawContainerInfo Read(IRawHeaderSource source, CancellationToken cancellationToken)

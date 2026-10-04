@@ -1,5 +1,3 @@
-using System.Threading.Tasks;
-
 namespace PhotoReview.App.Coordinators;
 
 /// <summary>

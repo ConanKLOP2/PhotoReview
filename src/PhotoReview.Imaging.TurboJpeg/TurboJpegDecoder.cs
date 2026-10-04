@@ -321,11 +321,11 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// Shared exponential-growth loop behind <see cref="ReadHeaderArea"/> and <see cref="ExtendHeaderArea"/>:
     /// doubles <paramref name="buffer"/> (reading the new bytes from <paramref name="fs"/>, which must already be
     /// positioned right after it) while the marker walk says the header is not finished, up to <paramref name="length"/>
-    /// or, when given, <paramref name="cap"/> (null = no cap beyond the file length and <see cref="MaxSourceBytes"/>).
+    /// and <paramref name="cap"/> (both further bounded by <see cref="MaxSourceBytes"/>).
     /// </summary>
-    private static byte[] GrowHeaderArea(FileStream fs, long length, byte[] buffer, long? cap)
+    private static byte[] GrowHeaderArea(FileStream fs, long length, byte[] buffer, long cap)
     {
-        var limit = Math.Min(cap.HasValue ? Math.Min(length, cap.Value) : length, MaxSourceBytes);
+        var limit = Math.Min(Math.Min(length, cap), MaxSourceBytes);
         while (buffer.Length < length && buffer.Length < limit && HeaderNeedsMoreData(buffer))
         {
             var grown = new byte[(int)Math.Min(limit, (long)buffer.Length * 2)];

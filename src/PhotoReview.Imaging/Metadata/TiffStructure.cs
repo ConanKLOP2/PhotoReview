@@ -10,7 +10,6 @@ namespace PhotoReview.Imaging.Metadata;
 /// </summary>
 public static class TiffStructure
 {
-    public const int MaxIfdEntries = 4096;
     public const int MaxAsciiBytes = 256;
 
     /// <summary>Longest out-of-line non-ASCII value (array or UNDEFINED blob) returned by <see cref="TryGetValueSpan"/>, in bytes.</summary>

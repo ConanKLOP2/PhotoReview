@@ -8,9 +8,7 @@ using PhotoReview.App.Localization;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Updates;
-using PhotoReview.Imaging.Preload;
 
-using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;
 

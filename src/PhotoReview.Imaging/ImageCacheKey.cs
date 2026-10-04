@@ -77,9 +77,6 @@ public readonly record struct ImageCacheKey
         return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, box, orientationApplied, backend, sourceKind);
     }
 
-    public static ImageCacheKey Create(CatalogEntry entry, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0) =>
-        Create(entry, isOriginal, new DecodeBox(targetWidth, 0), orientationApplied, backend, sourceKind);
-
     public static ImageCacheKey Create(CatalogEntry entry, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0)
     {
         ArgumentNullException.ThrowIfNull(entry);

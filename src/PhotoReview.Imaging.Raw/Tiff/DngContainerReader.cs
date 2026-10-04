@@ -12,7 +12,6 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// </summary>
 public sealed class DngContainerReader : IRawContainerReader
 {
-    public RawFormat Format => RawFormat.Dng;
 
     private const uint SecondaryImageMask = 0x1 | 0x4 | 0x8 | 0x10;
 

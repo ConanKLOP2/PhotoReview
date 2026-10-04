@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Globalization;
 
 namespace PhotoReview.PerfAnalysis;
@@ -9,7 +8,6 @@ public sealed class NavRecord
     public long Nav { get; init; }
 
     public string Mode { get; set; } = "";
-    public int Index { get; set; }
 
     public double? TInputMs { get; set; }
     public double? TPreMs { get; set; }
@@ -23,11 +21,8 @@ public sealed class NavRecord
     public double? TOpenMs { get; set; }
     public double? TReadMs { get; set; }
     public double? TDecodeMs { get; set; }
-    public bool DecodeDownscaled { get; set; }
-    public bool DecodeFallback { get; set; }
     public double? TVerifyMs { get; set; }
     public double? TAssignMs { get; set; }
-    public double? TRenderFirstMs { get; set; }
     public double? TRenderMs { get; set; }
 
     /// <summary>
@@ -261,7 +256,6 @@ public static class PerfAnalyzeNavBuilder
         var t0Qpc = showStart?.QpcTicks ?? ordered[0].QpcTicks;
         if (showStart is not null)
         {
-            rec.Index = (int)(showStart.ANum ?? 0);
             rec.Mode = showStart.Text;
 
             var matchedKeyInput = keyInputs.NearestAtOrBefore(showStart.Thread, showStart.QpcTicks);
@@ -317,8 +311,6 @@ public static class PerfAnalyzeNavBuilder
                     break;
                 case "Decode":
                     rec.TDecodeMs = row.ANum;
-                    rec.DecodeDownscaled = row.CNum == 1;
-                    rec.DecodeFallback = row.DNum == 1;
                     break;
                 case "Verify":
                     rec.TVerifyMs = row.ANum;
@@ -335,7 +327,6 @@ public static class PerfAnalyzeNavBuilder
                     {
                         firstPresentedSeen = true;
                         rec.FirstVisualMs = file.QpcToMs(row.QpcTicks - t0Qpc);
-                        rec.TRenderFirstMs = pendingRenderMs;
                     }
                     if (row.Text is "final" or "compare")
                     {

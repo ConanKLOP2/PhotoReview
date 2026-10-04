@@ -23,10 +23,6 @@ public static class PreloadOrderService
     public static IEnumerable<int> Build(int center, int count, bool fullFolder, int direction, int lead) =>
         Build(center, count, fullFolder, direction, lead, PreloadWindow.Default);
 
-    /// <summary>feat/preload-window-setting: same as the (center, count, fullFolder) overload, but with a user-configurable window.</summary>
-    public static IEnumerable<int> Build(int center, int count, bool fullFolder, PreloadWindow window) =>
-        Build(center, count, fullFolder, direction: 1, lead: 0, window);
-
     /// <summary>feat/preload-window-setting: same as <see cref="Build(int, int, bool, int, int)"/>, but with a user-configurable window.</summary>
     public static IEnumerable<int> Build(int center, int count, bool fullFolder, int direction, int lead, PreloadWindow window)
     {
