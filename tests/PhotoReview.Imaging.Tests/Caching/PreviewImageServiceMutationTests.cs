@@ -391,6 +391,5 @@ public sealed class PreviewImageServiceMutationTests : IAsyncLifetime, IDisposab
 
         Assert.False(service.TryGetCachedPreview(missing, out var image));
         Assert.Null(image);
-        Assert.False(service.HasInflightPreview(missing));
     }
 }

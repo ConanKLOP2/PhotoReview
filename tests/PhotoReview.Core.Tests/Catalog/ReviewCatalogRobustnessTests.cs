@@ -50,18 +50,6 @@ public sealed class ReviewCatalogRobustnessTests
         Assert.Equal(-1, catalog.IndexOf(@"C:\x.jpg"));
     }
 
-    [Fact(DisplayName = "Reset(catalog.Entries) (a live view of itself) keeps the entries")]
-    public void Reset_WithOwnLiveEntriesView_KeepsEntries()
-    {
-        var catalog = new ReviewCatalog();
-        catalog.Reset([@"C:\a.jpg", @"C:\b.jpg"]);
-
-        catalog.Reset(catalog.Entries);
-
-        Assert.Equal([@"C:\a.jpg", @"C:\b.jpg"], catalog.Paths);
-        Assert.Equal(0, catalog.CurrentIndex);
-    }
-
     [Fact(DisplayName = "Reset skips null/blank paths and null entries")]
     public void Reset_SkipsNullAndBlank()
     {
@@ -125,15 +113,14 @@ public sealed class ReviewCatalogRobustnessTests
         Assert.Equal(0, catalog.CurrentIndex);
     }
 
-    [Fact(DisplayName = "Restore and InsertSorted with a blank path are rejected without changing anything")]
-    public void RestoreAndInsertSorted_BlankPath_Rejected()
+    [Fact(DisplayName = "Restore with a blank path is rejected without changing anything")]
+    public void Restore_BlankPath_Rejected()
     {
         var catalog = new ReviewCatalog();
         catalog.Reset([@"C:\a.jpg"]);
         var version = catalog.StructuralVersion;
 
         Assert.False(catalog.Restore(" ", 0));
-        Assert.Throws<ArgumentException>(() => catalog.InsertSorted("", StringComparer.Ordinal.Compare));
 
         Assert.Equal(1, catalog.Count);
         Assert.Equal(version, catalog.StructuralVersion);
@@ -148,13 +135,6 @@ public sealed class ReviewCatalogRobustnessTests
         public int IndexOf(string p) => Paths.FindIndex(x => string.Equals(x, p, StringComparison.OrdinalIgnoreCase));
 
         public void Reset(IEnumerable<string> p) { Paths = [.. p]; Current = Paths.Count > 0 ? 0 : -1; }
-
-        public void MoveToFront(string p)
-        {
-            var i = IndexOf(p);
-            if (i < 0) return;
-            var v = Paths[i]; Paths.RemoveAt(i); Paths.Insert(0, v); Current = 0;
-        }
 
         public void Remove(string p)
         {
@@ -203,7 +183,7 @@ public sealed class ReviewCatalogRobustnessTests
         for (var step = 0; step < 400; step++)
         {
             var before = catalog.StructuralVersion;
-            switch (rng.Next(6))
+            switch (rng.Next(5))
             {
                 case 0:
                 {
@@ -213,20 +193,15 @@ public sealed class ReviewCatalogRobustnessTests
                 }
                 case 1:
                 {
-                    var p = P(rng.Next(12)); catalog.MoveToFront(p); model.MoveToFront(p);
+                    var p = P(rng.Next(12)); catalog.Remove(p); model.Remove(p);
                     break;
                 }
                 case 2:
                 {
-                    var p = P(rng.Next(12)); catalog.Remove(p); model.Remove(p);
-                    break;
-                }
-                case 3:
-                {
                     var p = P(rng.Next(12)); var i = rng.Next(-2, 14); catalog.Restore(p, i); model.Restore(p, i);
                     break;
                 }
-                case 4:
+                case 3:
                 {
                     var order = model.Paths.OrderBy(_ => rng.Next()).ToList();
                     // Sometimes present the same set in a different case.

@@ -45,14 +45,6 @@ public static class BenchmarkWorkloadRunner
             ? 1
             : Math.Min(Math.Max(1, profile.Workers), Math.Max(1, fileCount));
 
-    public static async Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> RunIterationAsync(
-        BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, BenchmarkWorkload workload,
-        int iteration, Random random, IRecycleBin recycleBin, CancellationToken ct)
-    {
-        var measure = await PrepareIterationAsync(executor, files, profile, workload, iteration, random, recycleBin, ct).ConfigureAwait(false);
-        return await measure().ConfigureAwait(false);
-    }
-
     /// <summary>
     /// R2-F-14: does the untimed setup of one iteration (scratch-file copy, cold-cache eviction) and returns the measure
     /// step, which is the only part <see cref="BenchmarkEngine.RunPreparedAsync"/> times. The measure step must be invoked

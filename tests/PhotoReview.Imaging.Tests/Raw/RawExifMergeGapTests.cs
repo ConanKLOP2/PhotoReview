@@ -70,7 +70,7 @@ public sealed class RawExifMergeGapTests
             ]);
         var (source, info) = Blocks(FullCameraTiff(t => t != ExifParser.TagFocalLength), other);
 
-        var exif = RawExif.TryReadExif(source, info);
+        var exif = RawExif.TryReadExif(source, info, out _);
 
         Assert.NotNull(exif);
         Assert.Equal("Canon", exif.CameraMake);
@@ -90,7 +90,7 @@ public sealed class RawExifMergeGapTests
         var later = ExifTestData.Tiff(true, [ExifTestData.Ascii(ExifParser.TagDateTimeOriginal, "2000:01:01 00:00:00")], []);
         var (source, info) = Blocks(FullCameraTiff(_ => true), later, secondIsExifIfd: true);
 
-        ExifTestData.AssertFullCamera(RawExif.TryReadExif(source, info));
+        ExifTestData.AssertFullCamera(RawExif.TryReadExif(source, info, out _));
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public sealed class RawExifMergeGapTests
         var other = ExifTestData.Tiff(true, [], [ExifTestData.Rational(ExifParser.TagFocalLength, 85, 1, true)]);
         var (source, info) = Blocks(FullCameraTiff(t => t != ExifParser.TagLensModel), other);
 
-        Assert.Equal(new ExifRational(50, 1), RawExif.TryReadExif(source, info)!.FocalLength);
+        Assert.Equal(new ExifRational(50, 1), RawExif.TryReadExif(source, info, out _)!.FocalLength);
     }
 
     [Fact]

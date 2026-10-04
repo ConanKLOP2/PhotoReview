@@ -205,7 +205,7 @@ public sealed class PreloadSchedulerMutationTests : IDisposable
         var gate = NewGate();
         var target = new Target { OnPreload = (_, token) => gate.Task.WaitAsync(token) };
         var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => entries, fullFolderRamThresholdBytes: -1,
-            memoryLoadLimit: 0.9, hasHeadroom: _ => true, workerCountOverride: 3, window: new PreloadWindow(5, 0));
+            memoryLoadLimit: 0.9, memoryProbe: new DelegateMemoryProbe(_ => true), workerCountOverride: 3, window: new PreloadWindow(5, 0));
         _disposables.Add(scheduler);
 
         var run = scheduler.PreloadAroundAsync(0);
@@ -216,20 +216,20 @@ public sealed class PreloadSchedulerMutationTests : IDisposable
         Assert.Equal(Enumerable.Range(1, 5).Select(i => entries[i].Path), target.Started); // exactly the 5-image window, in order
     }
 
-    [Fact(DisplayName = "The convenience constructor takes its headroom answer from the memory probe, else from the delegate, else it refuses")]
+    [Fact(DisplayName = "The convenience constructor takes its headroom answer from the memory probe (including a delegate probe), else it refuses")]
     public async Task ConvenienceCtor_MemoryProbeOrDelegate()
     {
         var entries = Entries(6);
 
         var probeTarget = new Target();
-        var denied = new PreloadScheduler(probeTarget, new ReviewMetrics(), () => entries, -1, 0.9, hasHeadroom: null,
+        var denied = new PreloadScheduler(probeTarget, new ReviewMetrics(), () => entries, -1, 0.9,
             memoryProbe: new FakeMemoryProbe(false), workerCountOverride: 2, window: new PreloadWindow(3, 0));
         _disposables.Add(denied);
         await denied.PreloadAroundAsync(0).WaitAsync(Guard);
         Assert.Empty(probeTarget.Started); // no headroom: nothing preloaded
 
         var delegateTarget = new Target();
-        var byDelegate = new PreloadScheduler(delegateTarget, new ReviewMetrics(), () => entries, -1, 0.9, hasHeadroom: _ => true,
+        var byDelegate = new PreloadScheduler(delegateTarget, new ReviewMetrics(), () => entries, -1, 0.9, memoryProbe: new DelegateMemoryProbe(_ => true),
             workerCountOverride: 2, window: new PreloadWindow(3, 0));
         _disposables.Add(byDelegate);
         await byDelegate.PreloadAroundAsync(0).WaitAsync(Guard);

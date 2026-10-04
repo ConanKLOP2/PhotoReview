@@ -31,7 +31,7 @@ public sealed partial class MainViewModelFileActionTests
         var moved = Path.Combine(folder1, "Sorted", "1.jpg");
         Assert.False(File.Exists(source));
         Assert.True(File.Exists(moved));
-        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(undo.MoveHistory);
         // Folder 2 idle: the hint is visible. Its catalog, session and gate are untouched.
         Assert.Equal(PhotoReview.Core.Localization.Tr.StatusLateMoveUndoable("1.jpg", Path.Combine(folder1, "Sorted")), vm.StatusText);
         Assert.Equal([x], vm.Catalog.Paths);
@@ -65,7 +65,7 @@ public sealed partial class MainViewModelFileActionTests
         moveGate.SetResult();
         await action;
 
-        Assert.Equal(1, undo.MoveHistoryCount); // still undoable, only the hint is dropped
+        Assert.Single(undo.MoveHistory); // still undoable, only the hint is dropped
         Assert.Equal(statusBefore, vm.StatusText);
     }
 
@@ -121,8 +121,8 @@ public sealed partial class MainViewModelFileActionTests
 
         Assert.True(File.Exists(source));
         Assert.True(File.Exists(Path.Combine(folder1, "Backup", "1.jpg")));
-        Assert.Equal(0, undo.MoveHistoryCount);
-        Assert.False(undo.HasLastAction);
+        Assert.Empty(undo.MoveHistory);
+        Assert.False(undo.LastUndoAction is not null);
         Assert.Equal([x], vm.Catalog.Paths);
         Assert.False(vm.IsFileActionInProgress);
     }
@@ -140,7 +140,7 @@ public sealed partial class MainViewModelFileActionTests
         var (vm, _, undo) = CreateViewModel();
         await vm.OpenFolderAsync(folder1);
         await vm.RunActionAsync(0);
-        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(undo.MoveHistory);
         await vm.OpenFolderAsync(folder2);
 
         await vm.UndoAsync();
@@ -182,7 +182,7 @@ public sealed partial class MainViewModelFileActionTests
 
         Assert.True(File.Exists(only));
         Assert.Equal(1, vm.TotalFiles);
-        Assert.Equal(0, undo.MoveHistoryCount);
+        Assert.Empty(undo.MoveHistory);
         Assert.False(vm.IsFileActionInProgress);
     }
 }

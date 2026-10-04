@@ -75,8 +75,8 @@ public sealed class InstanceScopeTests : IDisposable
         Assert.Equal(photos, InstanceKeys.For(InstanceMode.PerFolder, @"c:\photos\"));
         Assert.NotEqual(photos.MutexName, InstanceKeys.For(InstanceMode.PerFolder, @"C:\Photos2").MutexName);
         Assert.NotEqual(photos.PipeName, InstanceKeys.For(InstanceMode.PerFolder, @"C:\Photos2").PipeName);
-        Assert.Equal(InstanceKeys.MutexNameFor(@"C:\Photos"), photos.MutexName);
-        Assert.Equal(InstanceForwardPipe.NameFor(@"C:\Photos"), photos.PipeName);
+        Assert.Equal(InstanceKeys.MutexNameFor(@"C:\Photos", InstanceKeys.DefaultPrefix), photos.MutexName);
+        Assert.Equal(InstanceKeys.For(InstanceMode.PerFolder, @"C:\Photos").PipeName, photos.PipeName);
     }
 
     [Fact(DisplayName = "A name prefix changes both names (tests never touch the production names)")]

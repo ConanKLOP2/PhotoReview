@@ -95,8 +95,8 @@ public sealed class UndoServiceMutationGapTests
     {
         _undo.Register(Moved(succeeded: false));
 
-        Assert.Equal(0, _undo.MoveHistoryCount);
-        Assert.False(_undo.HasLastAction);
+        Assert.Empty(_undo.MoveHistory);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Fact]
@@ -104,8 +104,8 @@ public sealed class UndoServiceMutationGapTests
     {
         _undo.Register(Moved(rejected: true));
 
-        Assert.Equal(0, _undo.MoveHistoryCount);
-        Assert.False(_undo.HasLastAction);
+        Assert.Empty(_undo.MoveHistory);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public sealed class UndoServiceMutationGapTests
     {
         _undo.Register(Moved(succeeded: false, destination: null, operation: FileOperationType.Recycle));
 
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Fact]
@@ -121,8 +121,8 @@ public sealed class UndoServiceMutationGapTests
     {
         _undo.Register(Moved(operation: FileOperationType.Copy));
 
-        Assert.Equal(0, _undo.MoveHistoryCount);
-        Assert.False(_undo.HasLastAction);
+        Assert.Empty(_undo.MoveHistory);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Theory]
@@ -132,8 +132,8 @@ public sealed class UndoServiceMutationGapTests
     {
         _undo.Register(Moved(destination: destination));
 
-        Assert.Equal(0, _undo.MoveHistoryCount);
-        Assert.False(_undo.HasLastAction);
+        Assert.Empty(_undo.MoveHistory);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Fact]
@@ -141,9 +141,9 @@ public sealed class UndoServiceMutationGapTests
     {
         _undo.Register(Moved());
 
-        Assert.Equal(1, _undo.MoveHistoryCount);
-        Assert.True(_undo.CanUndoMove);
-        Assert.True(_undo.HasLastAction);
+        Assert.Single(_undo.MoveHistory);
+        Assert.True(_undo.MoveHistory.Count > 0);
+        Assert.True(_undo.LastUndoAction is not null);
     }
 
     // ---- single Move undo ----
@@ -157,7 +157,7 @@ public sealed class UndoServiceMutationGapTests
         var result = await _undo.UndoMoveAsync();
 
         Assert.True(result.Succeeded, result.ErrorMessage);
-        Assert.False(_undo.HasLastAction); // the undone Move is no longer something Ctrl+Z could undo again
+        Assert.False(_undo.LastUndoAction is not null); // the undone Move is no longer something Ctrl+Z could undo again
         Assert.True(_fs.FileExists(Jpeg));
     }
 
@@ -171,7 +171,7 @@ public sealed class UndoServiceMutationGapTests
         var result = await _undo.UndoMoveAsync(); // undoes the earlier Move only
 
         Assert.True(result.Succeeded, result.ErrorMessage);
-        Assert.True(_undo.HasLastAction);
+        Assert.True(_undo.LastUndoAction is not null);
     }
     [Fact]
     public async Task UndoMoveAsync_UsesTheMoveOverrideForTheReverseMove()
@@ -233,7 +233,7 @@ public sealed class UndoServiceMutationGapTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(Tr.CoreUndoFailed(Tr.CoreUndoFingerprintMissing), result.ErrorMessage);
-        Assert.Equal(1, _undo.MoveHistoryCount); // pushed back: nothing was proven, nothing was dropped
+        Assert.Single(_undo.MoveHistory); // pushed back: nothing was proven, nothing was dropped
         Assert.True(_fs.FileExists(MovedJpeg));
         Assert.False(_fs.FileExists(Jpeg));
     }
@@ -252,7 +252,7 @@ public sealed class UndoServiceMutationGapTests
         Assert.True(result.Rejected);
         Assert.Equal(Tr.CoreUndoBusy, result.ErrorMessage);
         Assert.Equal(0, _bin.RestoreCalls);
-        Assert.True(_undo.HasLastAction); // still undoable once the gate is free
+        Assert.True(_undo.LastUndoAction is not null); // still undoable once the gate is free
         _service.End();
     }
 
@@ -351,7 +351,7 @@ public sealed class UndoServiceMutationGapTests
 
         Assert.True(result.Succeeded, result.ErrorMessage);
         Assert.Equal(0, _undo.MoveFingerprintCount);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Fact]

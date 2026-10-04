@@ -23,14 +23,8 @@ public static class RawExif
     /// the file change time) while CMT2 carries DateTimeOriginal (0x9003, the capture time), so a date taken from an
     /// <see cref="ExifBlock.IfdIsExif"/> block replaces one that came from a block that is not.
     /// Returns null if no valid EXIF metadata is found or on corrupt input; never throws.
-    /// </summary>
-    public static ExifSummary? TryReadExif(IRawHeaderSource source, RawContainerInfo containerInfo) =>
-        TryReadExif(source, containerInfo, out _);
-
-    /// <summary>
-    /// As <see cref="TryReadExif(IRawHeaderSource, RawContainerInfo)"/>; <paramref name="complete"/> is false when a block could
-    /// not be read (hostile data, exhausted header budget, I/O error), so a null result must not be remembered as "this file
-    /// has no EXIF".
+    /// <paramref name="complete"/> is false when a block could not be read (hostile data, exhausted header budget,
+    /// I/O error), so a null result must not be remembered as "this file has no EXIF".
     /// </summary>
     public static ExifSummary? TryReadExif(IRawHeaderSource source, RawContainerInfo containerInfo, out bool complete)
     {

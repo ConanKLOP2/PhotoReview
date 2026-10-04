@@ -143,7 +143,7 @@ public sealed class CaptureGroupSidecarAndGateTests
         Assert.True(rejected.Rejected);
         Assert.False(rejected.Succeeded);
         Assert.True(_service.IsBusy);
-        Assert.True(undo.HasLastAction);
+        Assert.True(undo.LastUndoAction is not null);
         Assert.False(_fs.FileExists(Jpeg)); // nothing was moved back
         _service.End();
         var ok = await undo.UndoLastAsync();

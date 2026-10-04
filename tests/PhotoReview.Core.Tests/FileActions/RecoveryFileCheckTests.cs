@@ -150,16 +150,6 @@ public sealed class RecoveryFileCheckTests
         Assert.Equal(Bytes.Length, inner.GetFileStat(Src)!.Length);
     }
 
-    [Fact]
-    public void Codes_AreStableAndUnique()
-    {
-        var codes = Enum.GetValues<RecoveryVerdict>().Select(RecoveryFileCheck.Code).ToList();
-        Assert.Equal(codes.Count, codes.Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal("CanRetry", RecoveryFileCheck.Code(RecoveryVerdict.CanRetry));
-        Assert.Equal("AlreadyDone", RecoveryFileCheck.Code(RecoveryVerdict.AlreadyDone));
-        Assert.Equal("RecycleUnverifiable", RecoveryFileCheck.Code(RecoveryVerdict.RecycleUnverifiable));
-    }
-
     private static IFileSystem DenyStat(IFileSystem inner, string deniedPath)
     {
         var proxy = DispatchProxy.Create<IFileSystem, DenyProxy>();

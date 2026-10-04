@@ -102,7 +102,7 @@ public sealed partial class FolderLoadCoordinatorTests
         using var coordinator = await LoadPairFolderAsync(RawPairMode.PreferJpeg, @"C:\photos\a.jpg");
 
         Assert.Equal([@"C:\photos\a.cr2", @"C:\photos\b.jpg"], _catalog.Paths);
-        Assert.Null(_catalog.Entries[0].CaptureGroup);
+        Assert.Null(_catalog.EntriesSnapshot()[0].CaptureGroup);
         Assert.Equal(0, _catalog.CurrentIndex);
         var removal = Assert.Single(_sink.Removals);
         Assert.Equal([@"C:\photos\a.jpg"], removal.Paths);

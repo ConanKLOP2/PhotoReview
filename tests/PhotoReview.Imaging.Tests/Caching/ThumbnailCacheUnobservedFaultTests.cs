@@ -78,7 +78,7 @@ public sealed class ThumbnailCacheUnobservedFaultTests : IDisposable
         cache.SharedLoadForTests = task => shared = task;
         using var cts = new CancellationTokenSource();
 
-        var pending = cache.GetAsync(source, cts.Token);
+        var pending = cache.GetAsync(source, null, cts.Token);
         cts.Cancel();
         Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending).GetAwaiter().GetResult();
 

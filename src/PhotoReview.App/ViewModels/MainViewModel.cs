@@ -271,10 +271,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     public event Action? CatalogChanged;
 
-    public Task FirstImageAsync() => FirstAsync();
-
-    public Task LastImageAsync() => LastAsync();
-
     public bool CurrentHasComparePair =>
         _catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count && _presenter.HasComparePair(_catalog.PathAt(_catalog.CurrentIndex));
 
@@ -861,9 +857,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         else _sessionStore.Save(session);
     }
 
-    /// <summary>Writes any debounced session state now (window close, folder change).</summary>
-    public void FlushSession() => _sessionWriter?.Flush();
-
     /// <summary>
     /// Window close / app exit (Q-R5, R7-3): writes pending session state but waits at most 2 s for a write already
     /// in flight on a slow disk, then skips it instead of hanging shutdown. Later updates are ignored.
@@ -879,8 +872,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _folderCoordinator.Dispose();
         _sessionWriter?.Dispose();
     }
-
-    public void UpdateTitle(string? folder = null) => UpdateFolderTitle(folder);
 
     private string? _instanceLabel;
 

@@ -44,9 +44,9 @@ public sealed class SourceOrientationOverrideTests
     [Fact]
     public void ImageCacheKey_SourceKind_Inequality()
     {
-        var key0 = ImageCacheKey.Create(new FileInfo(typeof(SourceOrientationOverrideTests).Assembly.Location), isOriginal: false, 1000, sourceKind: 0);
-        var key1 = ImageCacheKey.Create(new FileInfo(typeof(SourceOrientationOverrideTests).Assembly.Location), isOriginal: false, 1000, sourceKind: 1);
-        var key2 = ImageCacheKey.Create(new FileInfo(typeof(SourceOrientationOverrideTests).Assembly.Location), isOriginal: false, 1000, sourceKind: 2);
+        var key0 = ImageCacheKey.Create(new FileInfo(typeof(SourceOrientationOverrideTests).Assembly.Location), isOriginal: false, new DecodeBox(1000, 0), sourceKind: 0);
+        var key1 = ImageCacheKey.Create(new FileInfo(typeof(SourceOrientationOverrideTests).Assembly.Location), isOriginal: false, new DecodeBox(1000, 0), sourceKind: 1);
+        var key2 = ImageCacheKey.Create(new FileInfo(typeof(SourceOrientationOverrideTests).Assembly.Location), isOriginal: false, new DecodeBox(1000, 0), sourceKind: 2);
 
         Assert.NotEqual(key0, key1);
         Assert.NotEqual(key1, key2);
@@ -57,7 +57,7 @@ public sealed class SourceOrientationOverrideTests
     public void ImageCacheKey_CreateOriginalCanDistinguishRawFullDecode()
     {
         var source = ImageCacheKey.Create(new FileInfo(typeof(SourceOrientationOverrideTests).Assembly.Location),
-            isOriginal: false, 1000, sourceKind: 1);
+            isOriginal: false, new DecodeBox(1000, 0), sourceKind: 1);
 
         var previewOriginal = ImageCacheKey.CreateOriginal(source);
         var rawFullDecode = ImageCacheKey.CreateOriginal(source, sourceKind: 2);

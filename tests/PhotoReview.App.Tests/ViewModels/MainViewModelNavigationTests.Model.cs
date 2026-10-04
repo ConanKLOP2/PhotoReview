@@ -87,7 +87,7 @@ public sealed partial class MainViewModelNavigationTests
                 case 0: case 1: log.Add("Next"); model.Next(); await vm.NextAsync(); break;
                 case 2: log.Add("Previous"); model.Previous(); await vm.PreviousAsync(); break;
                 case 3: log.Add("First"); model.First(); await vm.FirstAsync(); break;
-                case 4: log.Add("Last"); model.Last(); await vm.LastImageAsync(); break;
+                case 4: log.Add("Last"); model.Last(); await vm.LastAsync(); break;
                 case 5: log.Add("Skip"); model.Skip(); await vm.SkipAsync(); break;
                 case 6:
                 case 7:
@@ -101,7 +101,7 @@ public sealed partial class MainViewModelNavigationTests
                     }
                 default:
                     log.Add("Reopen");
-                    vm.FlushSession();
+                    _lastSessionWriter!.Flush();
                     model.Reopen();
                     await vm.OpenFolderAsync(folder);
                     await vm.ReadabilityProbeTask;
@@ -134,7 +134,7 @@ public sealed partial class MainViewModelNavigationTests
         await vm.NextAsync();
         await vm.PreviousAsync();
         await vm.FirstAsync();
-        await vm.LastImageAsync();
+        await vm.LastAsync();
         await vm.SkipAsync();
         await vm.RecycleAsync();
         await vm.RunActionAsync(0);
@@ -168,7 +168,7 @@ public sealed partial class MainViewModelNavigationTests
             await vm.NextAsync();
             await vm.PreviousAsync();
             await vm.FirstAsync();
-            await vm.LastImageAsync();
+            await vm.LastAsync();
         }
 
         Assert.Equal(0, vm.CurrentIndex);

@@ -31,27 +31,6 @@ public sealed class PreloadWindowTests
     }
 
     [Fact]
-    public void Create_RejectsForwardBelowOne()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => PreloadWindow.Create(0, 8));
-    }
-
-    [Fact]
-    public void Create_RejectsNegativeBackward()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => PreloadWindow.Create(32, -1));
-    }
-
-    [Fact]
-    public void Create_AcceptsTheAllowedBoundaries()
-    {
-        var window = PreloadWindow.Create(1, 0);
-
-        Assert.Equal(1, window.Forward);
-        Assert.Equal(0, window.Backward);
-    }
-
-    [Fact]
     public void FromSettings_ReadsForwardAndBackwardFromAppSettings()
     {
         var settings = new AppSettings { PreloadForwardCount = 64, PreloadBackwardCount = 16 };

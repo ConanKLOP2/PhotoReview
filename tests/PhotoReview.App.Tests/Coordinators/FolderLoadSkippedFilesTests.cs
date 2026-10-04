@@ -229,7 +229,7 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
     private void AssertOnlySkipped(string expectedPath, int expectedCatalogCount)
     {
         Assert.Equal(expectedCatalogCount, _catalog.Count);
-        Assert.DoesNotContain(_catalog.Entries, e => string.Equals(e.Path, expectedPath, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(_catalog.EntriesSnapshot(), e => string.Equals(e.Path, expectedPath, StringComparison.OrdinalIgnoreCase));
         var call = Assert.Single(_sink.SkippedCalls);
         var skipped = Assert.Single(call.Skipped);
         Assert.Equal(expectedPath, skipped.Path, ignoreCase: true);

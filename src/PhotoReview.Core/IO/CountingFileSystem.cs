@@ -23,11 +23,9 @@ public sealed class CountingFileSystem(IFileSystem inner, ReviewMetrics metrics)
     public bool TryCopyNew(string source, string destination) => _inner.TryCopyNew(source, destination);
     public void Delete(string path) => _inner.Delete(path);
     public Stream OpenReadShared(string path, int bufferSize = 65536) => _inner.OpenReadShared(path, bufferSize);
-    public Stream OpenAppendDurable(string path) => _inner.OpenAppendDurable(path);
     public Stream OpenAppend(string path, bool durable) => _inner.OpenAppend(path, durable);
     public void WriteAllTextAtomic(string path, string text, bool durable = true) => _inner.WriteAllTextAtomic(path, text, durable);
     public string ReadAllText(string path) => _inner.ReadAllText(path);
-    public IEnumerable<string> ReadLines(string path) => _inner.ReadLines(path);
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => _inner.EnumerateFiles(directory, pattern);
     public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
         _inner.EnumerateFilesWithStat(directory, include, onSkipped);

@@ -53,9 +53,10 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
         var files = new[] { _root.File($"{profileId}-source.png", TestImages.PreviewPng) };
         var executor = NewExecutor(profile, files);
 
-        var (correct, metrics) = await BenchmarkWorkloadRunner.RunIterationAsync(
+        var measure = await BenchmarkWorkloadRunner.PrepareIterationAsync(
             executor, files, profile, BenchmarkWorkload.FileAction, iteration: 0,
             BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id), _bin, CancellationToken.None);
+        var (correct, metrics) = await measure();
 
         // RunFileActionAsync's own correctness check already fails if the wrong op ran
         // (e.g. delete's op left the source in place, or copy's op removed it), so a true
@@ -96,8 +97,9 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
 
         for (var iteration = 0; iteration < 3; iteration++)
         {
-            var (correct, _) = await BenchmarkWorkloadRunner.RunIterationAsync(
+            var measure = await BenchmarkWorkloadRunner.PrepareIterationAsync(
                 executor, files, profile, BenchmarkWorkload.FileAction, iteration, random, _bin, CancellationToken.None);
+            var (correct, _) = await measure();
             Assert.True(correct, $"iteration {iteration} (op {iteration % 3}) did not match its expected source state");
         }
 

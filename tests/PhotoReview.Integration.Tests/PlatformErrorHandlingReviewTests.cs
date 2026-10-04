@@ -52,7 +52,6 @@ public sealed class PlatformErrorHandlingReviewTests
             var file = new PerfCsvFile
             {
                 Path = Path.Combine(dir, "perf-1.csv"),
-                CommitVersion = "",
                 DiagFlags = new Dictionary<string, string>(),
                 QpcFrequency = 1,
                 DroppedRows = 0,

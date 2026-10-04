@@ -72,11 +72,8 @@ public sealed class ThumbnailCache : IDisposable
         _ramCache = new BoundedLruCache<string, IDecodedImage>(_maxRamBytes, EstimateBytes, StringComparer.OrdinalIgnoreCase);
     }
 
-    public Task<IDecodedImage?> GetAsync(string sourcePath, CancellationToken cancellationToken = default) =>
-        GetAsync(sourcePath, knownStat: null, cancellationToken);
-
     /// <summary>
-    /// Q-R29 option C: as <see cref="GetAsync(string, CancellationToken)"/>, but the cache key is built from
+    /// Q-R29 option C: the cache key is built from
     /// <paramref name="knownStat"/> -- a stat of <paramref name="sourcePath"/> the caller just took (off the UI
     /// thread) -- instead of a fresh <see cref="FileInfo"/> on the calling thread. Null falls back to that stat.
     /// Freshness is the caller's stat's: a key built from it names exactly that Length/LastWriteUtc version.

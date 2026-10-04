@@ -17,7 +17,6 @@ public sealed class FallbackImageDecoder : IImageDecoder
     private readonly ILog _log;
     private readonly ReviewMetrics? _metrics;
 
-    public DecoderBackend PrimaryBackend => _primaryBackend;
     /// <summary>The fallback is always WPF (the only caller, ImageDecoderFactory, never used another backend).</summary>
     public const DecoderBackend FallbackBackend = DecoderBackend.Wpf;
 

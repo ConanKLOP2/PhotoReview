@@ -41,7 +41,7 @@ public sealed class FactoryTests : IDisposable
     [Fact(DisplayName = "ImageDecoderFactory returns Wpf decoder for Wpf backend")]
     public void FactoryReturnsWpfDecoderDirectly()
     {
-        var factory = new ImageDecoderFactory();
+        var factory = new ImageDecoderFactory([]);
         var decoder = factory.Create(DecoderBackend.Wpf);
 
         Assert.IsType<WpfBitmapImageDecoder>(decoder);
@@ -61,7 +61,6 @@ public sealed class FactoryTests : IDisposable
 
         var decoder = factory.Create(backend);
         var fallbackDecoder = Assert.IsType<FallbackImageDecoder>(decoder);
-        Assert.Equal(backend, fallbackDecoder.PrimaryBackend);
         Assert.Equal(DecoderBackend.Wpf, FallbackImageDecoder.FallbackBackend);
 
         // The primary throws NotSupportedException, so the decode is served by the Wpf fallback.
@@ -190,7 +189,7 @@ public sealed class FactoryTests : IDisposable
     [Fact(DisplayName = "ImageDecoderFactory falls back to Wpf decoder for an unregistered backend (AR01)")]
     public void Create_UnregisteredBackend_ReturnsWpfDecoder()
     {
-        var factory = new ImageDecoderFactory();
+        var factory = new ImageDecoderFactory([]);
 
         var decoder = factory.Create(DecoderBackend.TurboJpeg);
 

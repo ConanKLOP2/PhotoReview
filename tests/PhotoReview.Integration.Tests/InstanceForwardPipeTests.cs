@@ -4,6 +4,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using PhotoReview.Core.Instance;
+using PhotoReview.Core.Model;
 using PhotoReview.Platform.Windows;
 
 namespace PhotoReview.Integration.Tests;
@@ -268,9 +269,9 @@ public sealed class InstanceForwardPipeTests : IDisposable
     [Fact(DisplayName = "The pipe name follows the folder key and is scoped per folder")]
     public void PipeName_DerivedFromFolderKey()
     {
-        Assert.Equal(InstanceForwardPipe.NameFor(@"C:\Photos"), InstanceForwardPipe.NameFor(@"c:\photos\"));
-        Assert.NotEqual(InstanceForwardPipe.NameFor(@"C:\Photos"), InstanceForwardPipe.NameFor(@"C:\Photos2"));
-        Assert.NotEqual(InstanceForwardPipe.NameFor(null), InstanceForwardPipe.NameFor(@"C:\Photos"));
+        Assert.Equal(InstanceKeys.For(InstanceMode.PerFolder, @"C:\Photos").PipeName, InstanceKeys.For(InstanceMode.PerFolder, @"c:\photos\").PipeName);
+        Assert.NotEqual(InstanceKeys.For(InstanceMode.PerFolder, @"C:\Photos").PipeName, InstanceKeys.For(InstanceMode.PerFolder, @"C:\Photos2").PipeName);
+        Assert.NotEqual(InstanceKeys.For(InstanceMode.PerFolder, null).PipeName, InstanceKeys.For(InstanceMode.PerFolder, @"C:\Photos").PipeName);
     }
 
     [Fact(DisplayName = "Disposing the server frees the pipe name")]

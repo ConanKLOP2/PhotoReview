@@ -298,9 +298,6 @@ public sealed class PreviewImageService : IPreloadTarget
         }
     }
 
-    /// <summary>Entries in the original-dimensions LRU (test/diagnostic only).</summary>
-    public int KnownOriginalDimensionsCount => _originalDimensions.Count;
-
     public int CacheCount => _cache.Count;
     public long CacheBytes => _cache.CurrentSize;
 
@@ -617,16 +614,6 @@ public sealed class PreviewImageService : IPreloadTarget
         catch (UnauthorizedAccessException) { image = default!; return false; }
     }
 
-    public bool HasInflightPreview(string path)
-    {
-        try
-        {
-            return HasInflightPreview(GetCurrentCacheKey(path));
-        }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-    }
-
     /// <summary>Reuses a key the caller already built instead of stat-ing the path again.</summary>
     public bool HasInflightPreview(ImageCacheKey key) => _previewLoads.ContainsKey((key, Volatile.Read(ref _cacheEpoch)));
 
@@ -790,9 +777,6 @@ public sealed class PreviewImageService : IPreloadTarget
             TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach | TaskCreationOptions.RunContinuationsAsynchronously,
             TaskScheduler.Default);
     }
-
-    public Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path) =>
-        GetOriginalDimensionsAsync(path, ImageCacheKey.Create(path, true, 0, orientationApplied: true, backend: _currentBackend(), sourceKind: SourceKindFor(path)));
 
     /// <summary>Reuses a key the caller already built for this navigation instead of stat-ing the path again.</summary>
     public async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path, ImageCacheKey currentKey)

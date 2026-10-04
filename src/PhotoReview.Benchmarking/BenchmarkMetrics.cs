@@ -35,7 +35,6 @@ internal static class BenchmarkMetrics
             PreloadHits = current.PreloadHits - baseline.PreloadHits,
             InflightJoins = current.InflightJoins - baseline.InflightJoins,
             DiskCacheHits = current.DiskCacheHits - baseline.DiskCacheHits,
-            QueueWaitMilliseconds = current.QueueWaitMilliseconds - baseline.QueueWaitMilliseconds,
             UiAssignMilliseconds = current.UiAssignMilliseconds - baseline.UiAssignMilliseconds,
             DecoderFallbacks = fallbacks,
             SourceOpenCount = current.SourceOpenCount - baseline.SourceOpenCount,

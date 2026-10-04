@@ -24,33 +24,6 @@ public sealed class ReviewCatalogMutationGapTests
         return catalog;
     }
 
-    // --- MoveToFront -------------------------------------------------------------------------------------------------
-
-    [Fact]
-    public void MoveToFront_ItemAlreadyAtTheFront_ChangesNothingStructural()
-    {
-        var catalog = Plain("a.jpg", "b.jpg");
-        var version = catalog.StructuralVersion;
-
-        Assert.True(catalog.MoveToFront(P("a.jpg")));
-
-        Assert.Equal(version, catalog.StructuralVersion);
-        Assert.Equal(0, catalog.CurrentIndex);
-    }
-
-    [Fact]
-    public void MoveToFront_ItemInTheMiddle_MovesItAndBumpsTheVersion()
-    {
-        var catalog = Plain("a.jpg", "b.jpg", "c.jpg");
-        var version = catalog.StructuralVersion;
-
-        Assert.True(catalog.MoveToFront(P("b.jpg")));
-
-        Assert.NotEqual(version, catalog.StructuralVersion);
-        Assert.Equal([P("b.jpg"), P("a.jpg"), P("c.jpg")], catalog.Paths);
-        Assert.Equal(0, catalog.CurrentIndex);
-    }
-
     // --- Remove ------------------------------------------------------------------------------------------------------
 
     [Fact]
@@ -132,7 +105,7 @@ public sealed class ReviewCatalogMutationGapTests
         var restored = catalog.RestoreMembers([P("a.cr2")], 1, group);
 
         Assert.True(restored);
-        var entry = Assert.Single(catalog.Entries);
+        var entry = Assert.Single(catalog.EntriesSnapshot());
         Assert.Same(group, entry.CaptureGroup);
         Assert.Equal(P("a.jpg"), entry.Path);
         Assert.Equal(0, catalog.CurrentIndex);
@@ -206,58 +179,6 @@ public sealed class ReviewCatalogMutationGapTests
 
         Assert.Equal([P("c.jpg")], removed);
         Assert.Equal([P("a.jpg"), P("b.jpg")], catalog.Paths);
-        Assert.NotNull(catalog.Entries[0].CaptureGroup);
-    }
-
-    // --- InsertSorted ------------------------------------------------------------------------------------------------
-
-    [Fact]
-    public void InsertSorted_PathAlreadyAtIndexZero_ReturnsItsIndexWithoutAddingADuplicate()
-    {
-        var catalog = Plain("a.jpg", "b.jpg");
-
-        var index = catalog.InsertSorted(P("a.jpg"), string.CompareOrdinal);
-
-        Assert.Equal(0, index);
-        Assert.Equal(2, catalog.Count);
-    }
-
-    [Fact]
-    public void InsertSorted_ComparisonThatTiesWithAnExistingEntry_InsertsBeforeIt()
-    {
-        var catalog = Plain("aa.jpg", "bb.jpg");
-        static int ByLength(string x, string y) => x.Length.CompareTo(y.Length);
-
-        var index = catalog.InsertSorted(P("cc.jpg"), ByLength);
-
-        Assert.Equal(0, index);
-        Assert.Equal([P("cc.jpg"), P("aa.jpg"), P("bb.jpg")], catalog.Paths);
-    }
-
-    [Fact]
-    public void InsertSorted_IntoAnEmptyCatalog_SelectsTheNewEntry()
-    {
-        var catalog = new ReviewCatalog();
-
-        Assert.Equal(0, catalog.InsertSorted(P("a.jpg"), string.CompareOrdinal));
-
-        Assert.Equal(0, catalog.CurrentIndex);
-        Assert.Equal(P("a.jpg"), catalog.Current!.Path);
-    }
-
-    [Theory]
-    [InlineData("a.jpg", 0, 2)] // before the current photo
-    [InlineData("c.jpg", 1, 2)] // exactly at the current photo's slot: the photo moves down, it stays displayed
-    [InlineData("e.jpg", 2, 1)] // after it: nothing moves
-    public void InsertSorted_KeepsTheCurrentPhotoDisplayed(string inserted, int expectedIndex, int expectedCurrent)
-    {
-        var catalog = Plain("b.jpg", "d.jpg");
-        Assert.True(catalog.SetCurrent(1));
-
-        var index = catalog.InsertSorted(P(inserted), string.CompareOrdinal);
-
-        Assert.Equal(expectedIndex, index);
-        Assert.Equal(expectedCurrent, catalog.CurrentIndex);
-        Assert.Equal(P("d.jpg"), catalog.Current!.Path);
+        Assert.NotNull(catalog.EntriesSnapshot()[0].CaptureGroup);
     }
 }

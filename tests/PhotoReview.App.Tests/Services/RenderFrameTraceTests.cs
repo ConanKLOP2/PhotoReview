@@ -39,7 +39,6 @@ public sealed class RenderFrameTraceTests
 
         Assert.Equal(["first:2:preview", "second:2"], log);
         Assert.Empty(ticks.Handlers);
-        Assert.False(trace.IsPending);
     }
 
     [Fact]

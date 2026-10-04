@@ -12,9 +12,6 @@ internal sealed class RenderFrameTrace(
 {
     private EventHandler? _pending;
 
-    /// <summary>True while a trace waits for its second tick (a handler is subscribed).</summary>
-    public bool IsPending => _pending is not null;
-
     public void Start(long token, string kind, long assignedTimestamp)
     {
         Cancel(); // RV-A17: at most one pending handler; a newer present supersedes an older trace that never ticked

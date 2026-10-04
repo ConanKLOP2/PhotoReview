@@ -48,9 +48,6 @@ public sealed record InstanceKeys(string MutexName, string PipeName)
     /// R2-F-08: one mutex per folder regardless of spelling (<c>C:\Photos</c>, <c>c:\photos\</c>, a relative path), and one
     /// constant mutex for the no-folder launch instead of one that depends on the current directory.
     /// </summary>
-    internal static string MutexNameFor(string? path) => MutexNameFor(path, DefaultPrefix);
-
-    /// <summary>Q-R18: same rule with a name prefix (tests use a unique one so they never meet a real PhotoReview).</summary>
     internal static string MutexNameFor(string? path, string prefix) =>
         "Local\\" + prefix + "_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalKey(path))));
 

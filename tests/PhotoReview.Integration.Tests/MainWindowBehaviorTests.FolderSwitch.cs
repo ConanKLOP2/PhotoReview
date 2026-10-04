@@ -362,12 +362,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
         await (Task)method.Invoke(window, [folder, null])!;
     }
 
-    private static async Task TriggerUndoAsync(MainWindow window)
-    {
-        var method = typeof(MainWindow).GetMethod("UndoLastActionAsync", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-            ?? throw new InvalidOperationException("MainWindow.UndoLastActionAsync no longer exists.");
-        await (Task)method.Invoke(window, null)!;
-    }
+    private static Task TriggerUndoAsync(MainWindow window) => window.ViewModel.UndoAsync();
 
     private static int FileActionInProgress(MainWindow window) => window.IsFileActionInProgress ? 1 : 0;
 

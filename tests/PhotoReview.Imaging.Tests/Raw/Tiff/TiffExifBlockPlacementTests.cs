@@ -46,7 +46,7 @@ public sealed class TiffExifBlockPlacementTests
         var source = new InMemoryRawHeaderSource(Build(310_000, MakeOffset, ExifIfdOffset));
 
         var info = Create(reader).Read(source, CancellationToken.None);
-        var exif = RawExif.TryReadExif(source, info);
+        var exif = RawExif.TryReadExif(source, info, out _);
 
         Assert.NotNull(exif);
         Assert.Equal("Acme", exif!.CameraMake);
@@ -75,7 +75,7 @@ public sealed class TiffExifBlockPlacementTests
         var info = Create(reader).Read(source, CancellationToken.None);
 
         Assert.All(info.ExifBlocks, b => Assert.Equal(RawContainerLimits.DefaultExifBlockBytes, b.Length)); // an extent that cannot fit keeps the default block (was grown to the 4 MiB cap for nothing)
-        Assert.Null(RawExif.TryReadExif(source, info)?.CameraMake);
+        Assert.Null(RawExif.TryReadExif(source, info, out _)?.CameraMake);
     }
 
     private static readonly string CorpusDir = Path.GetFullPath(
@@ -98,7 +98,7 @@ public sealed class TiffExifBlockPlacementTests
             Assert.NotNull(reader);
 
             var info = reader.Read(new InMemoryRawHeaderSource(bytes), CancellationToken.None);
-            var actual = RawExif.TryReadExif(new InMemoryRawHeaderSource(bytes), info);
+            var actual = RawExif.TryReadExif(new InMemoryRawHeaderSource(bytes), info, out _);
             var legacy = PhotoReview.Imaging.Metadata.ExifParser.TryParseTiffBlock(
                 bytes.AsSpan(0, Math.Min(bytes.Length, RawContainerLimits.DefaultExifBlockBytes)));
 

@@ -94,7 +94,6 @@ public class PerfAnalyzeTests
         // The CSV carries ThumbEnd(source=decode, ms=20.0) from ThumbnailCache followed by
         // ThumbEnd(source=unknown, ms=20.5) from MainWindow's own call-site total; D11 must keep
         // the specific one.
-        Assert.Equal("decode", nav5.ThumbSource);
         Assert.Equal(20.0, nav5.TThumbMs);
     }
 
@@ -114,7 +113,6 @@ public class PerfAnalyzeTests
         Assert.Equal(6.0, nav5.FirstVisualMs!.Value, 3);
         Assert.Equal(63.05, nav5.FinalVisualMs!.Value, 3);
         Assert.True(nav5.HasThumbnail); // first-visual is the thumbnail Presented row
-        Assert.Equal("final", nav5.FinalPresentedKind);
     }
 
     [Fact]

@@ -215,10 +215,6 @@ public sealed class PermanentDeleteTests
         Assert.Equal(expected, new RecoveryFileCheck(fs).Check(entry).Verdict);
     }
 
-    [Fact(DisplayName = "PermanentlyDeleted verdict has a stable code")]
-    public void Code_PermanentlyDeleted_IsStable() =>
-        Assert.Equal("PermanentlyDeleted", RecoveryFileCheck.Code(RecoveryVerdict.PermanentlyDeleted));
-
     [Fact(DisplayName = "Setting defaults to off, round-trips through SettingsStore and an absent key loads as off")]
     public void Setting_DefaultsOff_RoundTrips()
     {

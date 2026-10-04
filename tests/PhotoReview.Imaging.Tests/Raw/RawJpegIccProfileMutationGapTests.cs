@@ -69,7 +69,7 @@ public sealed class RawJpegIccProfileMutationGapTests
     {
         var result = RawJpegIccProfile.EnsureAdobeRgbProfile(jpeg);
 
-        var profile = RawJpegIccProfile.GetBundledAdobeRgbProfile();
+        var profile = BundledAdobeProfile.Load();
         Assert.Equal(jpeg.Length + 4 + 12 + 2 + profile.Length, result.Length);
         Assert.Equal([0xFF, 0xD8, 0xFF, 0xE2], result[..4]);
         Assert.Equal(jpeg[2..], result[(20 + profile.Length)..]); // the original stream after its SOI follows the new APP2

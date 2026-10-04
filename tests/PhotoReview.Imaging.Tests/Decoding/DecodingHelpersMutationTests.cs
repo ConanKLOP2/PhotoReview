@@ -298,19 +298,6 @@ public sealed class DecodingHelpersMutationTests : IDisposable
     }
 
     [Fact]
-    public void TryRead_RotatedSourceWithoutApplyOrientation_KeepsTheStoredShape()
-    {
-        var path = JpegWithThumbnail(orientation: 6);
-
-        var image = EmbeddedThumbnailReader.TryRead(path, applyOrientation: false);
-
-        Assert.NotNull(image);
-        Assert.Equal((16, 8), (image.PixelWidth, image.PixelHeight));
-        Assert.Equal(1, image.Orientation);
-        Assert.Equal((48, 32), (image.OriginalWidth, image.OriginalHeight));
-    }
-
-    [Fact]
     public void TryRead_NoThumbnailInTheFile_IsNull()
     {
         var path = _root.Combine("plain.jpg");

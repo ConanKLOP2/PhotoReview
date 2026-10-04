@@ -19,7 +19,6 @@ public sealed partial class FolderLoadCoordinatorTests
 {
     private sealed class FakeFileSystem : IFileSystem
     {
-        private static readonly string[] LineSeparators = ["\r\n", "\n"];
         /// <summary>Fixed LastWriteUtc handed out by the (fake) directory listing, mirroring the fact that
         /// PhysicalFileSystem's real listing gets the stat from the directory entry itself.</summary>
         private static readonly DateTime FixedListingDate = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -99,7 +98,7 @@ public sealed partial class FolderLoadCoordinatorTests
             Interlocked.Increment(ref _openReadCount);
             return new MemoryStream(Files[Path.GetFullPath(path)], writable: false);
         }
-        public Stream OpenAppendDurable(string path) =>
+        public Stream OpenAppend(string path, bool durable) =>
             throw new NotImplementedException();
         public void WriteAllTextAtomic(string path, string text, bool durable = true) =>
             Files[Path.GetFullPath(path)] = System.Text.Encoding.UTF8.GetBytes(text);
@@ -108,8 +107,6 @@ public sealed partial class FolderLoadCoordinatorTests
             if (path.StartsWith(@"C:\data\Sessions", StringComparison.OrdinalIgnoreCase)) SessionReadCount++;
             return System.Text.Encoding.UTF8.GetString(Files[Path.GetFullPath(path)]);
         }
-        public IEnumerable<string> ReadLines(string path) =>
-            ReadAllText(path).Split(LineSeparators, StringSplitOptions.None);
 
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*")
         {
@@ -337,7 +334,7 @@ public sealed partial class FolderLoadCoordinatorTests
         await coordinator.LoadAsync(folder);
         await coordinator.ReadabilityProbe;
 
-        Assert.Single(_catalog.Entries);
+        Assert.Single(_catalog.EntriesSnapshot());
         var group = Assert.IsType<CatalogEntry>(_catalog.Current);
         Assert.Equal(@"C:\photos\a.jpg", group.Path);
         Assert.Equal(@"C:\photos\a.xmp", group.CaptureGroup!.XmpPath);
@@ -365,7 +362,7 @@ public sealed partial class FolderLoadCoordinatorTests
         await coordinator.LoadAsync(folder);
 
         // The RAW was listed under the snapshot (enabled), so it is also paired under the snapshot's mode, not shown separately.
-        var entry = Assert.Single(_catalog.Entries);
+        var entry = Assert.Single(_catalog.EntriesSnapshot());
         Assert.Equal(@"C:\photos\a.jpg", entry.Path);
         Assert.Equal(@"C:\photos\a.cr2", entry.CaptureGroup!.RawPath);
     }

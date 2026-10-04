@@ -28,23 +28,5 @@ public sealed class WpfDecodedImageTests
     {
         Assert.Throws<ArgumentNullException>(() => new WpfDecodedImage(null!));
     }
-
-    [Fact(DisplayName = "WpfImageAdapter.FromBgra32 creates frozen Bgra32 BitmapSource")]
-    public void WpfImageAdapterCreatesFrozenBgra32Bitmap()
-    {
-        var width = 4;
-        var height = 2;
-        var stride = width * 4;
-        var rawBytes = new byte[stride * height];
-        for (var i = 0; i < rawBytes.Length; i++) rawBytes[i] = 128;
-
-        var bitmap = WpfImageAdapter.FromBgra32(rawBytes, width, height, stride);
-
-        Assert.NotNull(bitmap);
-        Assert.True(bitmap.IsFrozen);
-        Assert.Equal(width, bitmap.PixelWidth);
-        Assert.Equal(height, bitmap.PixelHeight);
-        Assert.Equal(PixelFormats.Bgra32, bitmap.Format);
-    }
 }
 

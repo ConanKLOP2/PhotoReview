@@ -144,7 +144,7 @@ public sealed class RawHeaderHostileInputTests
         var source = new InMemoryRawHeaderSource(tiff);
         var info = InfoWith(new ExifBlock(0, tiff.Length + 100_000, IsTiffHeader: true));
 
-        var exif = RawExif.TryReadExif(source, info);
+        var exif = RawExif.TryReadExif(source, info, out _);
 
         Assert.NotNull(exif);
         Assert.Equal("CamA", exif.CameraMake);
@@ -156,7 +156,7 @@ public sealed class RawHeaderHostileInputTests
         var source = new InMemoryRawHeaderSource(new byte[100]);
         var info = InfoWith(new ExifBlock(96, 5_000, IsTiffHeader: true), new ExifBlock(99, long.MaxValue, IsTiffHeader: false));
 
-        Assert.Null(RawExif.TryReadExif(source, info));
+        Assert.Null(RawExif.TryReadExif(source, info, out _));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class RawHeaderHostileInputTests
     {
         var info = InfoWith(new ExifBlock(0, 64, IsTiffHeader: true));
 
-        Assert.Null(RawExif.TryReadExif(new ThrowingSource(), info));
+        Assert.Null(RawExif.TryReadExif(new ThrowingSource(), info, out _));
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public sealed class RawHeaderHostileInputTests
         var source = new FailFirstReadSource(new InMemoryRawHeaderSource(tiff));
         var info = InfoWith(new ExifBlock(0, tiff.Length, IsTiffHeader: true), new ExifBlock(0, tiff.Length, IsTiffHeader: true));
 
-        var exif = RawExif.TryReadExif(source, info);
+        var exif = RawExif.TryReadExif(source, info, out _);
 
         Assert.NotNull(exif);
         Assert.Equal("CamB", exif.CameraMake);

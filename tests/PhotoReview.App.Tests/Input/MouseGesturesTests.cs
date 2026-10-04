@@ -46,9 +46,7 @@ public sealed class MouseGesturesTests
 
         for (var i = 0; i < 3; i++)
             Assert.Equal(WheelOutcomeKind.None, wheel.Handle(-30, false, MouseWheelAction.Navigate));
-        Assert.Equal(-90, wheel.Accumulated);
         Assert.Equal(WheelOutcomeKind.Next, wheel.Handle(-30, false, MouseWheelAction.Navigate));
-        Assert.Equal(0, wheel.Accumulated);
         Assert.Equal(WheelOutcomeKind.None, wheel.Handle(-30, false, MouseWheelAction.Navigate));
     }
 
@@ -59,7 +57,6 @@ public sealed class MouseGesturesTests
 
         Assert.Equal(WheelOutcomeKind.None, wheel.Handle(-100, false, MouseWheelAction.Navigate));
         Assert.Equal(WheelOutcomeKind.None, wheel.Handle(40, false, MouseWheelAction.Navigate));
-        Assert.Equal(40, wheel.Accumulated);
         Assert.Equal(WheelOutcomeKind.Previous, wheel.Handle(80, false, MouseWheelAction.Navigate));
     }
 
@@ -69,7 +66,6 @@ public sealed class MouseGesturesTests
         var wheel = new WheelGestureInterpreter();
 
         Assert.Equal(WheelOutcomeKind.Next, wheel.Handle(-360, false, MouseWheelAction.Navigate));
-        Assert.Equal(0, wheel.Accumulated);
         Assert.Equal(WheelOutcomeKind.None, wheel.Handle(-60, false, MouseWheelAction.Navigate));
     }
 

@@ -8,6 +8,4 @@ namespace PhotoReview.Imaging.Caching;
 public sealed class SourceBytesCachePolicy(SourceBytesCache? cache)
 {
     public SourceBytesCache? Cache { get; } = cache;
-
-    public bool Enabled => Cache is not null;
 }
