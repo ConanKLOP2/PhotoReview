@@ -398,7 +398,15 @@ public sealed class FileActionController
                 }
             }
 
-            if (presentTask is not null) await presentTask;
+            if (presentTask is not null)
+            {
+                // A faulting present must not replace the action's real error text in the status.
+                try { await presentTask; }
+                catch (Exception presentEx) when (presentEx is not OperationCanceledException)
+                {
+                    AppLog.Error("Present after failed file action threw", presentEx);
+                }
+            }
             _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, groupResult?.Error ?? singleResult!.Error));
             return false;
         }
