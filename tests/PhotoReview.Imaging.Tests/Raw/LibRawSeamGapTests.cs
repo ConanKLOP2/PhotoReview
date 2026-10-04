@@ -221,8 +221,24 @@ public sealed class LibRawSeamGapTests
         Assert.Equal(0, LibRawDecoder.CheckCancellation(pointer, 0, 0, 0));
 
         state.Dispose();
+        Assert.True(state.IsFreed); // Free() on a readonly GCHandle field only freed a copy, so the field stayed allocated and a second Dispose freed the slot again
         state.Dispose();
 
+        // A second Dispose must not free the slot again. Had it, the runtime's handle free list would hold that slot twice
+        // and two fresh handles would be handed the same slot (and corrupt each other's targets).
+        var first = GCHandle.Alloc("first");
+        var second = GCHandle.Alloc("second");
+        try
+        {
+            Assert.NotEqual(GCHandle.ToIntPtr(first), GCHandle.ToIntPtr(second));
+            Assert.Equal("first", first.Target);
+            Assert.Equal("second", second.Target);
+        }
+        finally
+        {
+            first.Free();
+            second.Free();
+        }
     }
 
     [Fact]
