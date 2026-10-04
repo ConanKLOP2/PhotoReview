@@ -73,6 +73,11 @@ public sealed class PreviewImageService : IPreloadTarget
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly Task[] _persistWorkers;
 
+    // Newest epoch that started writing each cache path. A worker that went stale mid-write deletes its file only while it is
+    // still the newest writer of that path: a newer-epoch worker may have replaced the file, and deleting that would lose a
+    // current entry. Guarded by itself; entries are removed when the last in-flight writer of the path finishes.
+    private readonly Dictionary<string, (long Epoch, int Writers)> _persistOwnerEpochs = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Width-only overload (height unconstrained), kept for benchmark profiles and tests that pin
     /// a single decode width. The app wires the viewport box overload instead.
@@ -272,16 +277,25 @@ public sealed class PreviewImageService : IPreloadTarget
                 // IMG-01/Q-R7: JPEG would flatten transparency, so alpha-format previews persist only if no pixel is
                 // transparent. Scanned here (background) rather than on the decode path that returns the image.
                 if (!PreviewCacheFile.IsFullyOpaque(request.Bitmap)) continue;
-                await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
-                        request.OriginalWidth, request.OriginalHeight, request.CachePath, opacityVerified: true, exif: request.Exif)
-                    .ConfigureAwait(false);
-                AfterPersistWriteForTests?.Invoke();
-                if (request.Epoch != Volatile.Read(ref _cacheEpoch))
+                ClaimPersistPath(request.CachePath, request.Epoch);
+                try
                 {
-                    // Went stale mid-write (e.g. Clear Cache ran concurrently): don't leave
-                    // a freshly-written file for a cache generation that was just cleared.
-                    DiskCacheStore.TryDelete(request.CachePath);
-                    continue;
+                    await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
+                            request.OriginalWidth, request.OriginalHeight, request.CachePath, opacityVerified: true, exif: request.Exif)
+                        .ConfigureAwait(false);
+                    AfterPersistWriteForTests?.Invoke();
+                    if (request.Epoch != Volatile.Read(ref _cacheEpoch))
+                    {
+                        // Went stale mid-write (e.g. Clear Cache ran concurrently): don't leave
+                        // a freshly-written file for a cache generation that was just cleared.
+                        // Unless a newer-epoch worker has since claimed (and rewritten) the same path.
+                        DeleteStalePersistFile(request.CachePath, request.Epoch);
+                        continue;
+                    }
+                }
+                finally
+                {
+                    ReleasePersistPath(request.CachePath);
                 }
                 // Coalesced per directory in DiskCacheStore: concurrent preload workers
                 // persisting several previews at once must not each scan the whole directory.
@@ -295,6 +309,37 @@ public sealed class PreviewImageService : IPreloadTarget
                 // persistence instead of just failing this one write.
                 _log.Error($"Preview disk cache write failed: {request.CachePath}", ex);
             }
+        }
+    }
+
+    private void ClaimPersistPath(string cachePath, long epoch)
+    {
+        lock (_persistOwnerEpochs)
+        {
+            _persistOwnerEpochs.TryGetValue(cachePath, out var entry);
+            _persistOwnerEpochs[cachePath] = (Math.Max(entry.Epoch, epoch), entry.Writers + 1);
+        }
+    }
+
+    private void ReleasePersistPath(string cachePath)
+    {
+        lock (_persistOwnerEpochs)
+        {
+            if (!_persistOwnerEpochs.TryGetValue(cachePath, out var entry)) return;
+            // The entry outlives its newest writer while an older one is still in flight: that older (stale) writer must still see
+            // that a newer epoch rewrote the path.
+            if (entry.Writers <= 1) _persistOwnerEpochs.Remove(cachePath);
+            else _persistOwnerEpochs[cachePath] = (entry.Epoch, entry.Writers - 1);
+        }
+    }
+
+    /// <summary>Deletes a stale write's file unless a newer epoch claimed the path (check and delete are atomic against a claim).</summary>
+    private void DeleteStalePersistFile(string cachePath, long epoch)
+    {
+        lock (_persistOwnerEpochs)
+        {
+            if (_persistOwnerEpochs.TryGetValue(cachePath, out var entry) && entry.Epoch > epoch) return;
+            DiskCacheStore.TryDelete(cachePath);
         }
     }
 

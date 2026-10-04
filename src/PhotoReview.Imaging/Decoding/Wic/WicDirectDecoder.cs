@@ -295,7 +295,7 @@ public sealed class WicDirectDecoder : IImageDecoder
         var (total, load) = memoryInfo();
         if (MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load)) return;
         throw UserFacingError.Localized(
-            new InvalidDataException($"WicDirect output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
+            new DecoderMemoryAdmissionException($"WicDirect output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
             () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
     }
 

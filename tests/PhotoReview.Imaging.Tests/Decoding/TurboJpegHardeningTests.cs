@@ -124,7 +124,7 @@ public sealed class TurboJpegHardeningTests : IDisposable
     private static string Message(Action act)
     {
         try { act(); return string.Empty; }
-        catch (InvalidDataException ex) { return ex.Message; }
+        catch (Exception ex) when (ex is InvalidDataException or DecoderMemoryAdmissionException) { return ex.Message; }
     }
 
     [Fact(DisplayName = "A tiny JPEG declaring 20000x20000 is refused up front on a machine without the RAM for it (controlled error, nothing allocated)")]

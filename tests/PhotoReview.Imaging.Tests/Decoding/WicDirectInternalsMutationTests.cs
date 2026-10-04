@@ -55,7 +55,7 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
     {
         var consulted = 0;
 
-        Assert.Throws<InvalidDataException>(() => WicDirectDecoder.EnsureOutputFits(
+        Assert.Throws<DecoderMemoryAdmissionException>(() => WicDirectDecoder.EnsureOutputFits(
             8192, 4096, MemoryHeadroom.GuardThresholdBytes, () => { consulted++; return (MemoryHeadroom.GuardThresholdBytes / 2, 0); }));
 
         Assert.Equal(1, consulted);
