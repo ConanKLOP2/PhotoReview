@@ -157,7 +157,8 @@ public sealed class GroupSummary
     public required GroupKey Key { get; init; }
     public int Count { get; set; }
     public int Incomplete { get; set; }
-    public bool LowSampleWarning => Count < 20;
+    /// <summary>The "N&lt;20" marker counts the complete navigations: the percentiles are computed from those only, not from <see cref="Count"/> (PA-02).</summary>
+    public bool LowSampleWarning => Count - Incomplete < 20;
 
     public double FirstP50 { get; set; } = double.NaN;
     public double FirstP95 { get; set; } = double.NaN;

@@ -153,9 +153,9 @@ public static class PerfAnalyzeReport
                 dispatcherLongOpsBeforeStartCount = g.Summary.DispatcherLongOpsBeforeStartCount,
                 gcTimePercent = g.Summary.GcTimePercent,
                 frameTimeP95Ms = g.Summary.FrameTimeP95Ms,
-                folder = g.Summary.FolderGens.Select(f => new { f.Gen, f.T1CatalogReadyMs, f.T2Ms, f.T3Phase, f.T3Ms }),
-                startup = StartupPhases(g.Summary).Select(p => new { p.Phase, p.Median, p.Min, p.Max, p.Count }),
-                rules = g.Rules.Select(r => new { r.Rule, r.Triggered, r.Evidence, r.Note }),
+                folder = g.Summary.FolderGens.Select(f => new { gen = f.Gen, t1CatalogReadyMs = f.T1CatalogReadyMs, t2Ms = f.T2Ms, t3Phase = f.T3Phase, t3Ms = f.T3Ms }),
+                startup = StartupPhases(g.Summary).Select(p => new { phase = p.Phase, median = p.Median, min = p.Min, max = p.Max, count = p.Count }),
+                rules = g.Rules.Select(r => new { rule = r.Rule, triggered = r.Triggered, evidence = r.Evidence, note = r.Note }),
             }),
         };
         File.WriteAllText(path, JsonSerializer.Serialize(payload, DefaultOptions));
