@@ -47,8 +47,10 @@ public sealed class RawSurveyTests
     public async Task RunAsync_ValidDirectory_OutputsMarkdownReport()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"survey-run-{Guid.NewGuid():N}");
-        var mdPath = Path.Combine(tempDir, "SURVEY-TEST.md");
+        var outDir = Path.Combine(Path.GetTempPath(), $"survey-out-{Guid.NewGuid():N}");
+        var mdPath = Path.Combine(outDir, "SURVEY-TEST.md"); // never inside the surveyed folder (T-B-04)
         Directory.CreateDirectory(tempDir);
+        Directory.CreateDirectory(outDir);
 
         try
         {
@@ -72,6 +74,11 @@ public sealed class RawSurveyTests
             if (Directory.Exists(tempDir))
             {
                 Directory.Delete(tempDir, recursive: true);
+            }
+
+            if (Directory.Exists(outDir))
+            {
+                Directory.Delete(outDir, recursive: true);
             }
         }
     }

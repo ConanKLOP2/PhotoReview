@@ -1,3 +1,4 @@
+using PhotoReview.Benchmark.Cli;
 using System.Collections;
 using System.Diagnostics;
 using System.IO;
@@ -170,7 +171,7 @@ internal static class PerfSession
             source = options.Folder;
             dataRoot = Path.Combine(outDir, "data");
             copyRoot = Path.Combine(outDir, "copy");
-            ValidatePaths(source, outDir, dataRoot, copyRoot);
+            ValidatePaths(source, outDir, dataRoot, copyRoot, options.CacheDir);
         }
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or IOException or InvalidOperationException)
         {
@@ -181,6 +182,7 @@ internal static class PerfSession
 
         Directory.CreateDirectory(outDir);
         CreateTempDir(dataRoot);
+        if (options.CacheDir is not null) ToolPathGuard.ClaimCacheDirectory(options.CacheDir);
         // Both must be set before the listener, AppSettings or any window/journal/session object exists.
         Environment.SetEnvironmentVariable("PHOTOREVIEW_PERF_TRACE", outDir);
         Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", dataRoot);
@@ -655,13 +657,32 @@ internal static class PerfSession
     private static Key ParseKey(string value) =>
         Enum.TryParse<Key>(value, true, out var key) && key != Key.None ? key : throw new FormatException($"unknown key '{value}'");
 
-    /// <summary>Keys that touch files, other folders, or the window itself; never sent by a plain key step.</summary>
-    private static HashSet<Key> CollectForbiddenKeys(AppSettings settings)
+    /// <summary>
+    /// Shortcut properties a plain key step may send on a real folder: navigation, zoom and view toggles only. Everything
+    /// else on <see cref="ShortcutMappings"/> is forbidden (fail closed: a shortcut added later is blocked until it is
+    /// listed here on purpose), because Move to / Copy to / Open folder open a folder picker and then move or copy
+    /// the current photo, and the delete, undo, folder-switch and window shortcuts touch files or the window itself.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> SafeKeyShortcuts = new HashSet<string>(StringComparer.Ordinal)
+    {
+        nameof(ShortcutMappings.Next), nameof(ShortcutMappings.Previous), nameof(ShortcutMappings.FirstImage),
+        nameof(ShortcutMappings.LastImage), nameof(ShortcutMappings.Skip), nameof(ShortcutMappings.Compare),
+        nameof(ShortcutMappings.ZoomIn), nameof(ShortcutMappings.ZoomOut), nameof(ShortcutMappings.ToggleFit),
+        nameof(ShortcutMappings.ZoomActualSize), nameof(ShortcutMappings.ClickZoom), nameof(ShortcutMappings.FitWidth),
+        nameof(ShortcutMappings.FitHeight), nameof(ShortcutMappings.ToggleInfoOverlay), nameof(ShortcutMappings.ToggleKeepZoom),
+        nameof(ShortcutMappings.ToggleCaptureMember),
+    };
+
+    /// <summary>Keys that touch files, other folders, dialogs or the window itself; never sent by a plain key step.</summary>
+    internal static HashSet<Key> CollectForbiddenKeys(AppSettings settings)
     {
         var keys = new HashSet<Key> { Key.Escape, Key.System };
         var s = settings.Shortcuts;
-        foreach (var name in new[] { s.SendToRecycleBin, s.Undo, s.NextFolder, s.PreviousFolder, s.Fullscreen, s.MoveToFolder2 })
-            if (Enum.TryParse<Key>(name, true, out var k)) keys.Add(k);
+        foreach (var property in typeof(ShortcutMappings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            if (property.PropertyType != typeof(string) || SafeKeyShortcuts.Contains(property.Name)) continue;
+            if (Enum.TryParse<Key>((string?)property.GetValue(s), true, out var k)) keys.Add(k);
+        }
         foreach (var action in settings.Actions ?? [])
             if (Enum.TryParse<Key>(action.Shortcut, true, out var k)) keys.Add(k);
         return keys;
@@ -834,14 +855,17 @@ internal static class PerfSession
         return images;
     }
 
-    private static void ValidatePaths(string source, string outDir, string dataRoot, string copyRoot)
+    internal static void ValidatePaths(string source, string outDir, string dataRoot, string copyRoot, string? cacheDir = null)
     {
         if (!Directory.Exists(source)) throw new DirectoryNotFoundException(source);
-        if (IsUnder(outDir, source) || IsUnder(source, outDir))
+        // Resolved comparison (T-B-13): an outDir that is a junction into the source must not pass a lexical prefix test.
+        if (ToolPathGuard.Overlaps(outDir, source))
             throw new InvalidOperationException("outDir and the source folder must not contain each other");
-        var appRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview");
-        if (IsUnder(outDir, appRoot) || IsUnder(appRoot, outDir))
+        var appRoot = ToolPathGuard.AppDataFolder();
+        if (ToolPathGuard.Overlaps(outDir, appRoot))
             throw new InvalidOperationException($"outDir must not overlap the real app data folder {appRoot}");
+        if (cacheDir is not null)
+            ToolPathGuard.EnsureCacheDirectory(cacheDir, (source, "source folder"), (outDir, "outDir"), (appRoot, "real app data folder"));
         foreach (var dir in new[] { dataRoot, copyRoot })
         {
             if (Directory.Exists(dir) && !File.Exists(Path.Combine(dir, TempMarker)))
@@ -913,32 +937,32 @@ internal static class PerfSession
             Folder = Path.GetFullPath(args[2]),
             OutDir = Path.GetFullPath(args[3]),
         };
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 4; i < args.Length; i++)
         {
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value");
-            switch (args[i].ToLowerInvariant())
+            var option = args[i].ToLowerInvariant();
+            if (option.StartsWith("--", StringComparison.Ordinal) && !seen.Add(option))
+                throw new ArgumentException($"{args[i]} was given more than once");
+            switch (option)
             {
                 case "--mode":
-                    var mode = Next();
-                    if (!Enum.TryParse<LoadingMode>(mode, true, out var parsedMode)) throw new ArgumentException($"invalid mode '{mode}' (Fast|Preview|Original)");
-                    options.Mode = parsedMode.ToString();
+                    options.Mode = BenchmarkCliArguments.ParseDefinedEnum<LoadingMode>(Next(), "mode").ToString();
                     break;
                 case "--repeat":
-                    options.Repeat = int.TryParse(Next(), out var r) && r is >= 1 and <= 1000 ? r : throw new ArgumentException("--repeat must be 1..1000");
+                    options.Repeat = BenchmarkCliArguments.ParseIntInRange(Next(), "--repeat", 1, 1000);
                     break;
                 case "--decoder":
-                    var decoder = Next();
-                    if (!Enum.TryParse<DecoderBackend>(decoder, true, out var parsedDecoder) || !Enum.IsDefined(parsedDecoder)) throw new ArgumentException($"invalid decoder '{decoder}' ({string.Join('|', Enum.GetNames<DecoderBackend>())})");
-                    options.Decoder = parsedDecoder.ToString();
+                    options.Decoder = BenchmarkCliArguments.ParseDefinedEnum<DecoderBackend>(Next(), "decoder").ToString();
                     break;
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
                 case "--cache-dir": options.CacheDir = Path.GetFullPath(Next()); break;
                 case "--slow-link-latency-ms":
-                    options.SlowLinkLatencyMs = int.TryParse(Next(), out var slm) && slm >= 0 ? slm : throw new ArgumentException("--slow-link-latency-ms must be >= 0");
+                    options.SlowLinkLatencyMs = BenchmarkCliArguments.ParseIntInRange(Next(), "--slow-link-latency-ms", 0, int.MaxValue);
                     break;
                 case "--slow-link-bandwidth-mbps":
-                    options.SlowLinkBandwidthMbps = double.TryParse(Next(), System.Globalization.CultureInfo.InvariantCulture, out var sbw) && sbw > 0 ? sbw : throw new ArgumentException("--slow-link-bandwidth-mbps must be > 0");
+                    options.SlowLinkBandwidthMbps = BenchmarkCliArguments.ParsePositiveFiniteDouble(Next(), "--slow-link-bandwidth-mbps");
                     break;
                 case "--source-bytes-cache":
                     var sbc = Next();

@@ -79,8 +79,9 @@ public static class DecoderBenchmark
     /// <summary>Backends, widths and iterations from args[3..5], with the defaults. Bad numbers throw <see cref="ArgumentException"/> (exit code 2 in Program), like the other modes.</summary>
     internal static (string[] Backends, int[] Widths, int Iterations) ParseOptions(string[] args)
     {
+        // A repeated name ("Wpf,wpf") would double that backend's runs inside one statistics group.
         var backends = args.Length >= 4
-            ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
             : ["Wpf", "WicDirect", "TurboJpeg"];
         var widths = args.Length >= 5 ? BenchmarkCliArguments.ParseWidths(args[4]) : [0, 1920, 2560, 3840];
         var iterations = args.Length >= 6 ? BenchmarkCliArguments.ParsePositiveInt(args[5], "iterations") : 5;
@@ -104,6 +105,31 @@ public static class DecoderBenchmark
         }
     }
 
+    /// <summary>
+    /// The distinct, defined backends named in <paramref name="names"/> (case-insensitive). Numeric spellings such as <c>99</c> parse as an
+    /// enum value but name no backend, and <c>1</c> would name the same backend as its word: both are handled here, not by the caller.
+    /// </summary>
+    internal static List<DecoderBackend> ResolveBackends(IEnumerable<string> names, Action<string>? reportUnknown = null)
+    {
+        var resolved = new List<DecoderBackend>();
+        foreach (var name in names)
+        {
+            if (Enum.TryParse<DecoderBackend>(name, ignoreCase: true, out var backend) && Enum.IsDefined(backend))
+            {
+                if (!resolved.Contains(backend)) resolved.Add(backend);
+            }
+            else
+            {
+                reportUnknown?.Invoke(name);
+            }
+        }
+
+        return resolved;
+    }
+
+    /// <summary>files x iterations x widths x backends as a long: a large <c>--iterations</c> overflowed the int product (negative progress, divide by zero).</summary>
+    internal static long TotalDecodes(int files, int iterations, int widths, int backends) => (long)files * iterations * widths * backends;
+
     /// <returns>0 on success; 1 when usage is wrong or no decode succeeded at all (so a folder of undecodable files never looks like a pass).</returns>
     public static async Task<int> RunAsync(string[] args)
     {
@@ -121,38 +147,32 @@ public static class DecoderBenchmark
             throw new DirectoryNotFoundException($"Image directory not found: {folder}");
         }
 
-        Directory.CreateDirectory(outDir);
-
+        // Everything that can be rejected is rejected before the output directory is created (no empty dir after a bad width).
         var (requestedBackendNames, widths, iterations) = ParseOptions(args);
+        ToolPathGuard.EnsureOutputDirectory(outDir, folder);
+        Directory.CreateDirectory(outDir);
 
         // Resolve available decoders
         var activeDecoders = new List<(DecoderBackend Backend, IImageDecoder Decoder)>();
 
-        foreach (var name in requestedBackendNames)
+        foreach (var backend in ResolveBackends(requestedBackendNames, name => Console.WriteLine($"[DEC-BENCH] Unknown decoder backend name: {name}")))
         {
-            if (Enum.TryParse<DecoderBackend>(name, ignoreCase: true, out var backend))
+            IImageDecoder? decoder = backend switch
             {
-                IImageDecoder? decoder = backend switch
-                {
-                    DecoderBackend.Wpf => new WpfBitmapImageDecoder(),
-                    DecoderBackend.WicDirect => new PhotoReview.Imaging.Decoding.Wic.WicDirectDecoder(),
-                    DecoderBackend.TurboJpeg => new PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder(),
-                    _ => null
-                };
+                DecoderBackend.Wpf => new WpfBitmapImageDecoder(),
+                DecoderBackend.WicDirect => new PhotoReview.Imaging.Decoding.Wic.WicDirectDecoder(),
+                DecoderBackend.TurboJpeg => new PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder(),
+                _ => null
+            };
 
-                if (decoder is not null)
-                {
-                    activeDecoders.Add((backend, decoder));
-                    Console.WriteLine($"[DEC-BENCH] Enabled decoder backend: {backend}");
-                }
-                else
-                {
-                    Console.WriteLine($"[DEC-BENCH] Skipped decoder backend: {name} (not implemented yet)");
-                }
+            if (decoder is not null)
+            {
+                activeDecoders.Add((backend, decoder));
+                Console.WriteLine($"[DEC-BENCH] Enabled decoder backend: {backend}");
             }
             else
             {
-                Console.WriteLine($"[DEC-BENCH] Unknown decoder backend name: {name}");
+                Console.WriteLine($"[DEC-BENCH] Skipped decoder backend: {backend} (not implemented yet)");
             }
         }
 
@@ -196,8 +216,8 @@ public static class DecoderBenchmark
 
         // Interleaved benchmark loop
         var records = new List<BenchmarkRecord>();
-        var totalDecodes = files.Length * iterations * widths.Length * activeDecoders.Count;
-        var completedDecodes = 0;
+        var totalDecodes = TotalDecodes(files.Length, iterations, widths.Length, activeDecoders.Count);
+        long completedDecodes = 0;
         var stopwatch = Stopwatch.StartNew();
 
         Console.WriteLine($"[DEC-BENCH] Running {totalDecodes} total decodes (interleaved per file)...");
@@ -256,7 +276,7 @@ public static class DecoderBenchmark
                         records.Add(record);
                         completedDecodes++;
 
-                        if (completedDecodes % Math.Max(1, totalDecodes / 10) == 0 || completedDecodes == totalDecodes)
+                        if (completedDecodes % Math.Max(1L, totalDecodes / 10) == 0 || completedDecodes == totalDecodes)
                         {
                             var pct = (double)completedDecodes / totalDecodes * 100.0;
                             var elapsedSec = stopwatch.Elapsed.TotalSeconds;
@@ -395,7 +415,7 @@ public static class DecoderBenchmark
     internal static string GenerateMarkdownReport(BenchmarkSummary summary)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# PhotoReview â€” Decoder Benchmark Report");
+        sb.AppendLine("# PhotoReview - Decoder Benchmark Report");
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Timestamp:** {summary.TimestampUtc:yyyy-MM-dd HH:mm:ss} UTC");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Machine:** {summary.MachineName} ({summary.ProcessorCount} cores, {summary.OsVersion})");

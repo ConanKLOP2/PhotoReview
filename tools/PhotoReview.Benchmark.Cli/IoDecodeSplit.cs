@@ -1,3 +1,4 @@
+using PhotoReview.Benchmark.Cli;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -51,37 +52,72 @@ internal static class IoDecodeSplit
         public readonly Dictionary<int, Measurement> DecodeFromFile = new();
     }
 
-    public static async Task RunAsync(string folder, string outDir, int[] widths, int max)
+    /// <summary>
+    /// Runs the measurement and writes <c>raw.csv</c>/<c>summary.md</c> into <paramref name="outDir"/>. Returns 0 only when every
+    /// file was measured; a file whose measurement fails (truncated or undecodable image) becomes an <c>error</c> row in
+    /// raw.csv plus an entry in summary.md, the remaining files are still measured, and the exit code is 1 (T-B-15).
+    /// <paramref name="measure"/> is a test seam (default: the real measurement).
+    /// </summary>
+    public static async Task<int> RunAsync(string folder, string outDir, int[] widths, int max,
+        Func<int, string, int[], StringBuilder, FileResult>? measure = null)
     {
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
         if (widths.Length == 0) throw new ArgumentException("At least one width is required", nameof(widths));
-        Directory.CreateDirectory(outDir);
+        ToolPathGuard.EnsureOutputDirectory(outDir, folder);
+        measure ??= MeasureFile;
         var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
             .Where(ImageFileTypes.IsSupported)
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .Take(Math.Max(1, max))
             .ToArray();
         if (files.Length == 0) throw new InvalidOperationException($"No supported images found in: {folder}");
+        Directory.CreateDirectory(outDir);
 
         var rawCsv = new StringBuilder("index,metric,width,run,ms,bytes\n");
         var results = new List<FileResult>(files.Length);
-        for (var i = 0; i < files.Length; i++)
+        var failures = new List<(int Index, string Error)>();
+        try
         {
-            // Sequential, single-thread, on whatever thread Task.Run schedules us to -- this tool
-            // measures raw decode cost, not UI-thread contention, so no STA/dispatcher is involved.
-            var result = await Task.Run(() => MeasureFile(i, files[i], widths, rawCsv));
-            results.Add(result);
-            Console.WriteLine(FormattableString.Invariant(
-                $"[{i + 1}/{files.Length}] read(warm)={result.Read.WarmP50:F1}ms decodeMem@{widths[0]}(warm)={result.DecodeFromMem[widths[0]].WarmP50:F1}ms {result.OriginalWidth}x{result.OriginalHeight}"));
+            for (var i = 0; i < files.Length; i++)
+            {
+                var rawLengthBefore = rawCsv.Length;
+                try
+                {
+                    // Sequential, single-thread, on whatever thread Task.Run schedules us to -- this tool
+                    // measures raw decode cost, not UI-thread contention, so no STA/dispatcher is involved.
+                    var index = i;
+                    var result = await Task.Run(() => measure(index, files[index], widths, rawCsv));
+                    results.Add(result);
+                    Console.WriteLine(FormattableString.Invariant(
+                        $"[{i + 1}/{files.Length}] read(warm)={result.Read.WarmP50:F1}ms decodeMem@{widths[0]}(warm)={result.DecodeFromMem[widths[0]].WarmP50:F1}ms {result.OriginalWidth}x{result.OriginalHeight}"));
+                }
+                catch (Exception ex) when (RawDecoderBenchmark.IsMeasurementFailure(ex))
+                {
+                    // Drop the half-measured rows of this file; one error row replaces them.
+                    rawCsv.Length = rawLengthBefore;
+                    var error = ex.GetType().Name + ": " + ex.Message;
+                    failures.Add((i, error));
+                    rawCsv.Append(i).Append(",error,0,0,0,0\n");
+                    Console.Error.WriteLine(FormattableString.Invariant($"[{i + 1}/{files.Length}] FAILED {error}"));
+                }
+            }
+        }
+        finally
+        {
+            // Reports are written even when the loop was aborted, so the files measured so far are never lost.
+            var rawPath = Path.Combine(outDir, "raw.csv");
+            await File.WriteAllTextAsync(rawPath, rawCsv.ToString());
+            var summaryPath = Path.Combine(outDir, "summary.md");
+            await File.WriteAllTextAsync(summaryPath, BuildSummary(results, widths, files.Length, max, failures));
+            Console.WriteLine($"RAW: {rawPath}");
+            Console.WriteLine($"REPORT: {summaryPath}");
         }
 
-        var rawPath = Path.Combine(outDir, "raw.csv");
-        await File.WriteAllTextAsync(rawPath, rawCsv.ToString());
-        var summaryPath = Path.Combine(outDir, "summary.md");
-        await File.WriteAllTextAsync(summaryPath, BuildSummary(results, widths, files.Length, max));
-        Console.WriteLine($"RAW: {rawPath}");
-        Console.WriteLine($"REPORT: {summaryPath}");
+        return ComputeExitCode(results.Count, failures.Count);
     }
+
+    /// <summary>1 when any file failed or nothing was measured; 0 only for a fully measured run.</summary>
+    internal static int ComputeExitCode(int measured, int failed) => failed > 0 || measured == 0 ? 1 : 0;
 
     private static FileResult MeasureFile(int index, string path, int[] widths, StringBuilder rawCsv)
     {
@@ -224,7 +260,8 @@ internal static class IoDecodeSplit
         return sorted[idx];
     }
 
-    internal static string BuildSummary(IReadOnlyList<FileResult> results, int[] widths, int fileCount, int max)
+    internal static string BuildSummary(IReadOnlyList<FileResult> results, int[] widths, int fileCount, int max,
+        IReadOnlyList<(int Index, string Error)>? failures = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# io-decode-split summary");
@@ -233,7 +270,23 @@ internal static class IoDecodeSplit
         sb.AppendLine(CultureInfo.InvariantCulture, $"- Files measured: {fileCount} (max={max})");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- Widths: {string.Join(", ", widths)}");
         sb.AppendLine("- Paths are not recorded; files are referenced by index only (see raw.csv).");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- Files failed: {failures?.Count ?? 0} (excluded from every statistic below)");
         sb.AppendLine();
+        if (failures is { Count: > 0 })
+        {
+            sb.AppendLine("## Lỗi đo (file bị bỏ qua)");
+            sb.AppendLine();
+            foreach (var (index, error) in failures)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- index {index}: {error}");
+            sb.AppendLine();
+        }
+
+        if (results.Count == 0)
+        {
+            sb.AppendLine("No file could be measured.");
+            return sb.ToString();
+        }
+
 
         var megapixels = results.Select(r => r.OriginalWidth * (double)r.OriginalHeight / 1_000_000.0).ToArray();
         sb.AppendLine("## Nguồn ảnh");
