@@ -861,6 +861,7 @@
   "recovery.group.retryConfirmPermanent": "Retry {operation} for {count} capture-group members? {permanentCount} of them are on drives without a Recycle Bin and will be deleted PERMANENTLY. This cannot be undone. Completed members will be skipped.",
   "recovery.group.retryConfirmRestore": "Restore capture-group members from the Recycle Bin (up to {count})? Members that are already back will be skipped.",
   "core.journal.cancelledByUser": "The operation was cancelled before it finished.",
+  "core.journal.unrepresentablePath": "A file path contains an unpaired UTF-16 surrogate, which cannot be recorded faithfully in the operation journal. Nothing was changed.",
   "core.recovery.cancelledNeedsConfirm": "You cancelled this operation earlier. Retrying would finish it, so it needs an explicit confirmation in the Recovery window. Nothing was changed.",
   "recovery.retryConfirmCancelled": "You cancelled this {operation} earlier. Retrying will FINISH it for {count} file(s). Continue?",
   "image.error.rawDisabled": "RAW support is turned off in Settings, so {fileName} cannot be shown.",

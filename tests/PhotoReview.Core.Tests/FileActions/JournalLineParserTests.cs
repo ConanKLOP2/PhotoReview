@@ -45,7 +45,8 @@ public sealed class JournalLineParserTests
             if (!root.TryGetProperty(property, out var value)) return false;
             return value.ValueKind switch
             {
-                JsonValueKind.String => value.GetString() is { } text
+                // W2-FA-01: the one deliberate divergence from the original reader - a comma list is not a recognized enum text.
+                JsonValueKind.String => value.GetString() is { } text && !text.Contains(',', StringComparison.Ordinal)
                     && (Enum.TryParse<T>(text.Trim(), ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
                         || (alias is not null && string.Equals(text.Trim(), alias, StringComparison.OrdinalIgnoreCase))),
                 JsonValueKind.Number => value.TryGetInt32(out var number) && Enum.IsDefined(typeof(T), number),
@@ -234,5 +235,19 @@ public sealed class JournalLineParserTests
         var only = Assert.Single(pending);
         Assert.Equal("good", only.Id);
         _ = name; // xUnit theory name only
+    }
+
+    [Theory(DisplayName = "W2-FA-01: a comma list in State or Type is rejected, not read as its first member")]
+    [InlineData("Move", "Prepared,Committed")]
+    [InlineData("Recycle", "Prepared,Committed")]
+    [InlineData("Move,Recycle", "Prepared")]
+    [InlineData("Move", "Committed,Failed")]
+    public void TryParse_CommaListEnumText_IsRejected(string type, string state)
+    {
+        var line = "{\"Id\":\"id1\",\"Type\":\"" + type + "\",\"State\":\"" + state +
+            "\",\"Source\":\"C:\\\\a.jpg\",\"Destination\":null,\"Size\":1,\"LastWriteUtc\":\"2026-01-01T00:00:00Z\",\"TimestampUtc\":\"2026-01-01T00:00:00Z\"}";
+
+        Assert.Null(JournalLineParser.TryParse(line));
+        Assert.Null(JournalLineParser.TryParse(Encoding.UTF8.GetBytes(line)));
     }
 }

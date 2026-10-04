@@ -140,4 +140,38 @@ public sealed class JournalAppendRobustnessTests : IDisposable
         Assert.DoesNotContain(reconciled, entry => entry.Id == leftover.Id);
         Assert.Single(journal.ReconcilePendingOperations());
     }
+
+    [Fact(DisplayName = "W2-FA-03: a path with an unpaired surrogate is refused before journaling instead of being written as U+FFFD")]
+    public void Append_PathWithUnpairedSurrogate_ThrowsCodedErrorAndWritesNothing()
+    {
+        var fs = new InMemoryFileSystem();
+        var paths = new AppPaths(@"C:\Users\test\AppData\Local");
+        var journal = new OperationJournal(paths, fs, new SystemClock());
+        var stamp = new DateTime(2026, 9, 25, 1, 0, 0, DateTimeKind.Utc);
+        var bad = @"C:\photos\a" + '\uD800' + ".jpg";
+
+        var source = Assert.Throws<JournalCodedException>(() => journal.Append(new JournalEntry(
+            "s", FileOperationType.Move, JournalState.Prepared, bad, @"C:\photos\sel\a.jpg", 1, stamp, stamp)));
+        var destination = Assert.Throws<JournalCodedException>(() => journal.Append(new JournalEntry(
+            "d", FileOperationType.Move, JournalState.Prepared, @"C:\photos\a.jpg", bad, 1, stamp, stamp)));
+        var member = Assert.Throws<JournalCodedException>(() => journal.Append(new JournalEntry(
+            "m", FileOperationType.Move, JournalState.Prepared, @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg", 1, stamp, stamp,
+            GroupId: "g", GroupMembers: [new JournalGroupMember(@"C:\photos\a.jpg", bad, 1, stamp)])));
+
+        Assert.All([source, destination, member], ex => Assert.Equal(JournalErrors.UnrepresentablePath, ex.Code));
+        Assert.False(fs.FileExists(paths.JournalFile));
+    }
+
+    [Fact(DisplayName = "W2-FA-03: a valid surrogate pair (non-BMP file name) is still journaled and read back unchanged")]
+    public void Append_PathWithValidSurrogatePair_RoundTrips()
+    {
+        var fs = new InMemoryFileSystem();
+        var journal = new OperationJournal(new AppPaths(@"C:\Users\test\AppData\Local"), fs, new SystemClock());
+        var stamp = new DateTime(2026, 9, 25, 1, 0, 0, DateTimeKind.Utc);
+        var source = @"C:\photos\a" + char.ConvertFromUtf32(0x1F600) + ".jpg";
+
+        journal.Append(new JournalEntry("ok", FileOperationType.Move, JournalState.Prepared, source, @"C:\photos\sel\a.jpg", 1, stamp, stamp));
+
+        Assert.Equal(source, Assert.Single(journal.ReadPendingOperations()).Source);
+    }
 }

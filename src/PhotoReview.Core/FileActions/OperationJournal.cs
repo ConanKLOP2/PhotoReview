@@ -221,8 +221,34 @@ public sealed class OperationJournal
         return stream.ReadByte() is not (-1 or (int)'\n');
     }
 
+    // W2-FA-03: JSON cannot carry an unpaired UTF-16 surrogate (legal in a Windows file name); the serializer would write U+FFFD and
+    // the line would name a file that does not exist. Refused before anything is written (and, since every action journals
+    // Prepared before it touches a file, before anything is mutated).
+    private static void ThrowIfUnrepresentable(IReadOnlyList<JournalEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            if (HasUnpairedSurrogate(entry.Source) || HasUnpairedSurrogate(entry.Destination)
+                || (entry.GroupMembers?.Any(member => member is not null
+                    && (HasUnpairedSurrogate(member.Source) || HasUnpairedSurrogate(member.Destination))) ?? false))
+                throw new JournalCodedException(JournalErrors.UnrepresentablePath);
+        }
+    }
+
+    private static bool HasUnpairedSurrogate(string? text)
+    {
+        if (text is null) return false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) i++;
+            else if (char.IsSurrogate(text[i])) return true;
+        }
+        return false;
+    }
+
     private void AppendLines(IReadOnlyList<JournalEntry> entries)
     {
+        ThrowIfUnrepresentable(entries);
         lock (_gate)
         {
             var dir = Path.GetDirectoryName(_path);
@@ -512,16 +538,30 @@ public sealed class OperationJournal
     {
         foreach (var id in groupHistory.Keys.ToList())
         {
+            try
+            {
+                RepairOne(id);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // W2-FA-07: like ReconcileOne's guard. One group whose file check throws (a path the file system rejects) must not
+                // abort the reconcile of every other entry at every start; its latest line stays as it is and the next start retries.
+                PhotoReview.Core.Diagnostics.FileLog.Default.Warn(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Journal reconcile: skipped group repair of {id}: {ex.Message}"));
+            }
+        }
+
+        void RepairOne(string id)
+        {
             if (!latestEntries.TryGetValue(id, out var latest) || latest.GroupMembers is { Count: > 0 }
-                || latest.State == JournalState.Dismissed) continue;
+                || latest.State == JournalState.Dismissed) return;
             var (groupId, members) = groupHistory[id];
             var restored = latest with { GroupId = groupId, GroupMembers = members };
             if (restored.State == JournalState.Prepared)
             {
                 latestEntries[id] = restored; // reconciled below like any group line; the outcome line carries the members
-                continue;
+                return;
             }
-            if (IsExecuting(id)) continue;
+            if (IsExecuting(id)) return;
             var outcome = restored;
             if (restored.State == JournalState.Committed && !members.All(member => IsGroupMemberCompleted(restored, member)))
                 outcome = restored with
@@ -531,7 +571,7 @@ public sealed class OperationJournal
                     Error = SettledByOlderBuildText,
                     ErrorCode = null,
                 };
-            if (!TryReconcileAppend(() => AppendIfLatestIs(latest, outcome), id)) continue;
+            if (!TryReconcileAppend(() => AppendIfLatestIs(latest, outcome), id)) return;
             latestEntries[id] = outcome;
             if (outcome.State != restored.State) reconciled.Add(outcome);
         }

@@ -40,6 +40,12 @@ public static class JournalErrors
     /// </summary>
     public const string CancelledByUser = "CancelledByUser";
 
+    /// <summary>
+    /// A path holds an unpaired UTF-16 surrogate (legal in a Windows file name): JSON cannot carry it, so the journal line would
+    /// name a different file. Refused before anything is journaled or mutated.
+    /// </summary>
+    public const string UnrepresentablePath = "UnrepresentablePath";
+
     private static readonly FrozenDictionary<string, string> s_keys = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [MoveSourceNotRemoved] = TrKeys.CoreFileActionMoveSourceNotRemoved,
@@ -49,6 +55,7 @@ public static class JournalErrors
         [RetryVerifyFailed] = TrKeys.CoreRecoveryVerifyFailed,
         [DestinationOutsideSource] = TrKeys.CoreFileActionDestinationOutsideSource,
         [CancelledByUser] = TrKeys.CoreJournalCancelledByUser,
+        [UnrepresentablePath] = TrKeys.CoreJournalUnrepresentablePath,
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>True when <paramref name="code"/> is a code this build knows how to describe.</summary>
