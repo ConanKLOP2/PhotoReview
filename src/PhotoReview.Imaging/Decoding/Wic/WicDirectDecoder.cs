@@ -235,9 +235,11 @@ public sealed class WicDirectDecoder : IImageDecoder
 
             currentSource.GetSize(out uint finalW, out uint finalH);
             _ = ToIntSize(finalW, finalH);
+            // R16: admission first, on a saturating byte count. The checked int arithmetic below would otherwise throw an
+            // OverflowException for a hostile size, which the fallback chain treats as fallbackable and hands to WPF.
+            EnsureOutputFits((int)finalW, (int)finalH, OutputByteLength((int)finalW, (int)finalH), memoryInfo);
             var stride = checked((int)finalW * 4);
             var bufferSize = checked(stride * (int)finalH);
-            EnsureOutputFits((int)finalW, (int)finalH, bufferSize, memoryInfo);
 
             // Native scratch buffer: BitmapSource.Create copies it into its own WIC bitmap, so a
             // managed array here would only add a large LOH allocation (GC pressure) per decode.
@@ -288,10 +290,19 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
+    /// <summary>Bytes of a 4-bytes-per-pixel output, saturating at <see cref="long.MaxValue"/> instead of wrapping: two positive int sides
+    /// can multiply past a long, and a wrapped (negative) count would be mistaken for a small buffer by the admission check.</summary>
+    internal static long OutputByteLength(int width, int height)
+    {
+        var pixels = (long)width * height; // two non-negative ints cannot overflow a long
+        return pixels > long.MaxValue / 4 ? long.MaxValue : pixels * 4;
+    }
+
     /// <summary>Refuses an output buffer the machine cannot hold with a clean error instead of an OutOfMemoryException.</summary>
     internal static void EnsureOutputFits(int width, int height, long bufferLength, Func<(long TotalAvailable, long Load)> memoryInfo)
     {
-        if (bufferLength < MemoryHeadroom.GuardThresholdBytes) return;
+        // A negative length is an overflowed count, never a small buffer: it goes through the memory check like any huge one.
+        if (bufferLength >= 0 && bufferLength < MemoryHeadroom.GuardThresholdBytes) return;
         var (total, load) = memoryInfo();
         if (MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load)) return;
         throw UserFacingError.Localized(

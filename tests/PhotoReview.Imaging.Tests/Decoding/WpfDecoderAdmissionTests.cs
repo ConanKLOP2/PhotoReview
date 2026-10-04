@@ -57,6 +57,13 @@ public sealed class WpfDecoderAdmissionTests : IDisposable
         Assert.Equal(0, calls); // 4 MB is below the guard threshold: the memory is not even consulted
     }
 
+    [Fact(DisplayName = "R16: sides whose 4-byte pixel count wraps a long are refused by admission, not treated as a small buffer")]
+    public void EnsureDecodeAdmitted_HostileSidesWhoseByteCountWrapsALong_AreRefused()
+    {
+        Assert.Throws<DecoderMemoryAdmissionException>(
+            () => WpfBitmapImageDecoder.EnsureDecodeAdmitted(int.MaxValue, int.MaxValue, () => (64L * 1024 * Mb, 0)));
+    }
+
     [Fact]
     public void Decode_FullSizeWithEnoughMemory_IsAdmitted()
     {

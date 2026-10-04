@@ -22,7 +22,10 @@ public static class MemoryHeadroom
     /// see <see cref="HasHeadroom"/>).
     /// </summary>
     public static bool OutputHasHeadroom(long bufferLength, long totalAvailableBytes, long memoryLoadBytes) =>
-        HasHeadroom(bufferLength * OutputPeakFactor, totalAvailableBytes, memoryLoadBytes);
+        // A buffer whose doubled peak overflows a long (or a negative, i.e. already-wrapped, length) must not wrap into "fits".
+        bufferLength < 0 || bufferLength > long.MaxValue / OutputPeakFactor
+            ? totalAvailableBytes <= 0
+            : HasHeadroom(bufferLength * OutputPeakFactor, totalAvailableBytes, memoryLoadBytes);
 
     /// <summary>True when <paramref name="estimatedBytes"/> fits into <paramref name="totalAvailableBytes"/> minus <paramref name="memoryLoadBytes"/>. An unknown total (&lt;= 0) never refuses.</summary>
     public static bool HasHeadroom(long estimatedBytes, long totalAvailableBytes, long memoryLoadBytes)

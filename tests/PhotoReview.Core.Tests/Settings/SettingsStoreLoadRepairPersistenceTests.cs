@@ -50,6 +50,33 @@ public sealed class SettingsStoreLoadRepairPersistenceTests
         Assert.Equal(1, changed);
     }
 
+    [Fact(DisplayName = "R23: a Changed handler that throws IOException after a repaired config was written is called once, not misread as a failed write")]
+    public void Load_RepairedConfig_ThrowingChangedHandlerIsInvokedOnce()
+    {
+        _fs.AddFile(_paths.ConfigFile, ConflictingConfig);
+        var store = NewStore();
+        var calls = 0;
+        store.Changed += (_, _) => { calls++; throw new IOException("handler bug"); };
+
+        Assert.Throws<IOException>(() => store.Load());
+
+        Assert.Equal(1, calls);
+        Assert.Equal("", NewStore().Load().Shortcuts.ToggleKeepZoom); // the repair was durably written
+    }
+
+    [Fact(DisplayName = "R23: a Changed handler that throws IOException after the first-run default config was written is called once")]
+    public void Load_FirstRun_ThrowingChangedHandlerIsInvokedOnce()
+    {
+        var store = NewStore();
+        var calls = 0;
+        store.Changed += (_, _) => { calls++; throw new IOException("handler bug"); };
+
+        Assert.Throws<IOException>(() => store.Load());
+
+        Assert.Equal(1, calls);
+        Assert.True(_fs.FileExists(_paths.ConfigFile));
+    }
+
     [Fact]
     public void Load_RepairIsPersistedExactlyOnce_AndChangedIsRaisedOnce()
     {

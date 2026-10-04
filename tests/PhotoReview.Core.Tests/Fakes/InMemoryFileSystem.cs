@@ -500,6 +500,9 @@ public sealed class InMemoryFileSystem : IFileSystem
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);
 
+        // Mirrors PhysicalFileSystem (F02): a bare root ("C:\") comes back WITH its separator, not as the drive-relative "C:".
+        if (segments.Length == 0) return root;
+
         var current = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         lock (_lock)
         {

@@ -115,10 +115,11 @@ public sealed class SettingsStore
                 LastLoadRepairs = parsed.Repairs;
                 _current = loaded;
                 // Write the repaired settings back once so the start-up dialog does not repeat on every launch (the repairs
-                // are recomputed from the file on each Load). Save raises Changed itself; only the default file is rewritten.
-                // A file from a NEWER build is never rewritten: Save would drop its unknown fields and stamp the older version.
-                if (LastLoadRepairs.Count > 0 && path is null && loaded.ConfigVersion <= AppSettings.CurrentConfigVersion
-                    && TryPersistRepairs(loaded)) return _current;
+                // are recomputed from the file on each Load). Only the default file is rewritten; Changed is raised once below, after the
+                // try (R23: a throwing handler must be neither mistaken for a failed write nor invoked twice).
+                // A file from a NEWER build is never rewritten: persisting would drop its unknown fields and stamp the older version.
+                if (LastLoadRepairs.Count > 0 && path is null && loaded.ConfigVersion <= AppSettings.CurrentConfigVersion)
+                    TryPersistRepairs(loaded);
                 ready = _current; // RV-S04: Changed is raised after the try, so a throwing handler cannot be mistaken for an IO failure
             }
         }
@@ -159,15 +160,15 @@ public sealed class SettingsStore
         {
             try
             {
-                Save(settings);
+                Persist(settings);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // First run / corrupt config: a failed default write (disk full, locked or read-only folder) must not fail startup.
                 LogStartupError("Could not write default config.json, using in-memory defaults for this session", ex);
                 _current = settings;
-                Changed?.Invoke(this, _current);
             }
+            Changed?.Invoke(this, _current); // R23: after the try, exactly once, whether or not the write succeeded
         }
         else
         {
@@ -182,7 +183,7 @@ public sealed class SettingsStore
     {
         try
         {
-            Save(repaired);
+            Persist(repaired);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -195,11 +196,18 @@ public sealed class SettingsStore
     public void Save(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        Persist(settings);
+        Changed?.Invoke(this, _current);
+    }
+
+    /// <summary>Writes <paramref name="settings"/> (or keeps them in memory only) and makes them current; never raises <see cref="Changed"/>,
+    /// so a caller can separate the write's own IO failures from a subscriber's exception (R23).</summary>
+    private void Persist(AppSettings settings)
+    {
         if (_keepCorruptFile)
         {
             _log.Warn("Settings kept in memory only: config.json is preserved untouched because it could not be read or backed up");
             _current = settings;
-            Changed?.Invoke(this, _current);
             return;
         }
         var filePath = _appPaths.ConfigFile;
@@ -215,7 +223,6 @@ public sealed class SettingsStore
         _fileSystem.WriteAllTextAtomic(filePath, json, durable: true);
 
         _current = settings;
-        Changed?.Invoke(this, _current);
     }
 
     /// <summary>

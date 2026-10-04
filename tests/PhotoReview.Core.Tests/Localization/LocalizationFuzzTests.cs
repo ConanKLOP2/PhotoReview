@@ -96,6 +96,27 @@ public sealed partial class LocalizationFuzzTests
         Assert.Equal("[] [] [" + decimal.MinValue.ToString(null, CultureInfo.CurrentCulture) + "]", text);
     }
 
+    [Fact(DisplayName = "R21: Render never throws when an argument's ToString or IFormattable.ToString throws; the placeholder is written back")]
+    public void Render_ThrowingFormatter_WritesThePlaceholderBack()
+    {
+        var t = Parse("[{a}] [{b}] [{c}]");
+
+        var text = t.Render([new LocArg("a", new ThrowingToString()), new LocArg("b", new ThrowingFormattable()), new LocArg("c", 7)]);
+
+        Assert.Equal("[{a}] [{b}] [" + 7.ToString(null, CultureInfo.CurrentCulture) + "]", text);
+        Assert.Equal("[ok]", Parse("[{a}]").Render([new LocArg("a", "ok")])); // the thread-local builder survived the failed render
+    }
+
+    private sealed class ThrowingToString
+    {
+        public override string ToString() => throw new InvalidOperationException("boom");
+    }
+
+    private sealed class ThrowingFormattable : IFormattable
+    {
+        public string ToString(string? format, IFormatProvider? formatProvider) => throw new FormatException("boom");
+    }
+
     private sealed class NullToString
     {
         public override string? ToString() => null;
