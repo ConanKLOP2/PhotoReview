@@ -1,0 +1,9 @@
+// NOT COMPILED. Repro sketch for PA-05: mixed JSON key casing in summary.json.
+// After PerfAnalyze.RunAsync on the sample directory:
+using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "summary.json")));
+var g = doc.RootElement.GetProperty("groups")[0];
+Assert.True(g.TryGetProperty("firstVisualMs", out _));                    // camelCase
+Assert.True(g.TryGetProperty("folder", out var folder));
+if (folder.GetArrayLength() > 0)
+    Assert.True(folder[0].TryGetProperty("T1CatalogReadyMs", out _));     // PascalCase (anonymous-type member names)
+Assert.True(g.GetProperty("rules")[0].TryGetProperty("Rule", out _));     // PascalCase

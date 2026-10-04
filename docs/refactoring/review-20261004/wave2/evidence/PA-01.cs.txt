@@ -1,0 +1,19 @@
+// NOT COMPILED. Deterministic repro sketch for PA-01 (tests/PhotoReview.Integration.Tests/PerfAnalyzeTests.cs style).
+// PreviewImageService.DecodeFromSource emits SourceRead(30 ms) BEFORE it takes perfT0, then Decode(40 ms) covers
+// ONLY the decoder call, so the true decode time is 40 ms. PerfAnalyzeNavBuilder subtracts the read anyway.
+[Fact]
+public void DecodeEventIsNotReducedByTheSeparateSourceReadEvent()
+{
+    var f = 1_000_000L; // qpc ticks per second -> 1 tick = 1 us
+    PerfRow R(long t, string ev, string a = "", string text = "") =>
+        new(t, t, 1, ev, "7", "p", a, "", "", "", text);
+    var file = new PerfCsvFile
+    {
+        Path = "perf-x.csv", DiagFlags = new Dictionary<string, string>(), QpcFrequency = f, DroppedRows = 0,
+        Rows = [R(0, "ShowStart", text: "Fast"), R(1, "Lookup", text: "miss"),
+                R(2_000, "SourceRead", a: "30"), R(3_000, "Decode", a: "40"),
+                R(90_000, "Presented", text: "final")],
+    };
+    var nav = PerfAnalyzeNavBuilder.Build(file).Navs.Single();
+    Assert.Equal(40, nav.TDecodeMs); // FAILS on master: actual 10 (= 40 - 30)
+}

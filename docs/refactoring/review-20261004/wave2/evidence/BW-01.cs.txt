@@ -1,0 +1,16 @@
+// NOT COMPILED. Repro sketch for BW-01: public API with an empty file list.
+[Fact]
+public async Task PrepareIterationAsync_EmptyFileList_IsConsistent()
+{
+    // Sequential/Random/...: zero-length selection -> the measure step decodes nothing and reports Correct == true.
+    var seq = BenchmarkProfiles.Find("fast-sequential")!;
+    var measure = await BenchmarkWorkloadRunner.PrepareIterationAsync(executor, [], seq, BenchmarkWorkload.Sequential, 0,
+        new Random(1), recycleBin, CancellationToken.None);
+    var (correct, _) = await measure();
+    Assert.True(correct); // vacuous Pass today (results.All over an empty array)
+
+    // FirstFrame / Preload / WarmNext: SelectIndex does `iteration % 0` or files[0].
+    var first = BenchmarkProfiles.Find("instant-review")!;
+    await Assert.ThrowsAnyAsync<Exception>(() => BenchmarkWorkloadRunner.PrepareIterationAsync(executor, [], first,
+        BenchmarkWorkload.FirstFrame, 0, new Random(1), recycleBin, CancellationToken.None)); // IndexOutOfRangeException
+}
