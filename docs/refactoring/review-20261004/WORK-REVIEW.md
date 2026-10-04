@@ -8,18 +8,18 @@ The current Roslyn inventory covers 16,799 callable bodies in 1,068 tracked C# f
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 14,712 `STATIC-ONLY`, 110 `ISSUE`, and 1,977 `UNREVIEWED` rows after merging the latest App, Core and Architecture/TestSupport batches. It carries forward unchanged-file reviews and applicable wave-two rows; active App/Core lanes still have remaining coverage.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 14,934 `STATIC-ONLY`, 82 `ISSUE`, and 1,783 `UNREVIEWED` rows after importing the App/Integration, Core batches 18–42, and Architecture/TestSupport overlays. Review lanes are still running; do not read ledger status counts as full-project completion.
 
 The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App/Integration and Core/tooling lanes continue in separate ownership areas; Imaging and Architecture/TestSupport are complete. Every status is reconciled against this current inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 6,161 rows reread; 294 remaining |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,966 reread in current-head scan (1,565 Core-owned + 401 overlapping Integration rows; includes batches 29–34) |
+| App + Integration | 1,229 | 5,226 | 6,455 | Prior overlay covers 6,161 rows (5,997 distinct composite identities); 294 rows remain for semantic review, preserving duplicate inventory identities |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | Batches 18–41 cover 2,516 distinct normalized callable keys (overlap is retained in the ledger); 378 Core-owned rows remain unrepresented |
 | Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,279 Imaging.Tests reread; complete; 189 related Integration/App/Architecture rows also read |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | 298/298 reread; two test-fixture cleanup safety candidates (R24–R25) |
 
-[powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
+[powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; all 52 functions were read statically. All 15 scripts and 3 GitHub workflow YAML files were also read; script-level R27 and workflow-level R29 are outside callable rows. R28 identifies a fixture-integrity oracle gap. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
 
 ## Original baseline findings (R02–R10 fixed; R01 has a residual; R11 remains open)
 
@@ -95,6 +95,22 @@ The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreV
 `src/PhotoReview.Core/FileActions/FileActionService.cs:155-160,204-224,560-594`; `RecoveryRetryService.cs:163-190,222`; `src/PhotoReview.Platform.Windows/WindowsRecycleBin.cs:45-54`; `RecycleBinCapacity.cs:102`.
 
 Single Recycle checks the current file size before journaling, then calls `SendToRecycleBin`; group and recovery paths check the volume aggregate before later sending members. The Windows backstop re-evaluates with `fileSize: null`; `RecycleBinCapacityGuard.EvaluateCore` returns `Fits` before the size-capacity arithmetic. If a file grows beyond the configured bin capacity between the size-aware check and the shell call, `FileSystem.DeleteFile(...SendToRecycleBin)` runs without confirmation and may delete it permanently while the journal records Recycle. Static race trace only; no shell or Recycle Bin call ran. Revalidate the captured size/identity immediately before mutation or otherwise prevent the unchecked shell path; add a deterministic fake mutation between capacity preflight and send.
+
+### R27 — P2 candidate — RAW sample fetch removes a caller file before download succeeds
+
+`tools/fetch-raw-samples.ps1:397-407,430`. Arbitrary `-TargetDir` accepts an existing same-name file whose hash differs from the manifest, removes it, then downloads the replacement. A network/download failure after removal loses the caller's file. Restrict the target to a dedicated owned corpus directory or stage and verify the new file before replacing. Static script review only; no target files were touched.
+
+### R28 — P2 candidate — fixture-unchanged guard misses same-size replacements
+
+`Test-FixtureUnchanged` in `tests/PhotoReview.TestSupport.Windows` compares file count and aggregate byte size only. Renaming or replacing fixture files while preserving count and total bytes passes as unchanged. Compare normalized paths and per-file identity/hash metadata. Static review only; no fixture was modified.
+
+### R29 — P3 candidate — Release notes may call an older release the first
+
+`.github/workflows/release.yml` lists only 100 releases and does not fail closed when `gh release list` fails. An older predecessor outside the first page, or a transient API failure, leaves the previous-release value empty and generates first-release text. Paginate/check the command result and distinguish an empty successful result from lookup failure. Workflow read only; no release workflow ran.
+
+### R30 — P2 candidate — Concurrent benchmark CLI runs can overwrite the same report
+
+`tools/PhotoReview.Benchmark.Cli/BenchmarkCliArguments.cs:107-114`; `Program.cs:70-72`. The default report directory uses second-resolution timestamp naming; invocations in the same second share the directory and both write `summary.json`, so one result overwrites the other. Add a unique invocation suffix or atomic directory creation; cover same-second/concurrent calls. Static trace only; no report was written.
 ### Test-only and oracle findings retained at current head
 
 - `TurboJpegGuardMutationTests.ReadAllBytes_LengthExactlyTheLimit_PassesTheLimitCheck` attempts to allocate `MaxSourceBytes` (about 2 GiB) in a default-gate test. Do not run it during this review; replace the allocation with a seam or isolate the resource test.

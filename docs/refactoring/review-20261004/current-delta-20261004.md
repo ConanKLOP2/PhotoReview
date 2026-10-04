@@ -12,7 +12,7 @@ Pinned comparison head: `origin/master` `18aa6eb64ba48666de620937211e0782dd6131c
 
 ## Full-inventory continuation progress
 
-These are reread callables for the current-head continuation, separate from the cumulative ledger statuses above. At the latest checkpoint, App/Integration had read 6,161/6,455 rows (294 remaining); Core/Platform/tooling had read 1,966 rows (1,565 owned + 401 overlapping Integration); Imaging had reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport had read 298/298 rows. App and Core remain active. No builds or tests were run.
+These are reread callables for the current-head continuation, separate from cumulative ledger statuses. App/Integration's previous overlay has 6,161 rows (5,997 distinct composite identities), leaving 294 rows for semantic review; owned files are unchanged from `5cc7f381` through `18aa6eb6`. Core batches 18–42 contain 2,516 unique normalized keys, but only 921 of 1,560 Core-owned rows had matched during the ownership audit, leaving 378 for explicit review. Imaging reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport reread 298/298. App and Core remain active. No tests/build were run in this continuation.
 
 ## Current findings
 
@@ -106,6 +106,15 @@ These are reread callables for the current-head continuation, separate from the 
 - `ImagePresenterTests` exercise general cancellation and supersession but do not gate the precise APP-P01 interleave where a later call retrieves `.Token` after the prior CTS has been disposed.
 - `DecodeOriginal_RunsAtMostOneFullResolutionDecodeAtATime_AndDropsCancelledWaiters` uses a 300 ms negative wait on `SecondEntered` as an absence proof. Slow scheduling can hide an illegal second decode; replace the fixed-delay assertion with a signal proving the second request reached the gate before checking the decoder-entry count. Static only; test not run.
 - Other baseline test-oracle findings remain tagged in the ledger, including a duplicate-cleanup/reload test that fakes the sink result and does not exercise ownership negotiation.
+
+### Tooling and workflow candidates
+
+- **R27 — caller-file loss in RAW sample fetch:** `tools/fetch-raw-samples.ps1:397-407,430` removes a pre-existing same-name, hash-mismatched file under arbitrary `-TargetDir` before the replacement download succeeds. A failed download can leave the caller's file lost. Stage first and replace only after verification or constrain the directory to a dedicated owned corpus. Static review; no target path changed.
+- **R28 — fixture unchanged check misses same-size changes:** `Test-FixtureUnchanged` compares fixture count and aggregate bytes; same-count/same-byte replacements or renames pass. Compare paths and per-file fingerprints. Static review; no fixture changed.
+- **R29 — release notes false first-release fallback:** `.github/workflows/release.yml` queries only 100 releases and does not fail closed on query failure. Paginate and check exit status. Workflow read only; no release run.
+- **R30 — benchmark report path collision:** default report path has second-level precision and repeated/concurrent CLI runs can overwrite `summary.json`. Add unique invocation identity or atomic creation and a same-second regression. Static; no report written.
+- **APP-T28 — optional ORF corpus silently passes the Native test:** `LibRawPreviewFallbackTests.ReadJpegThumbnail_OrfCorpusFile_ReturnsCompleteJpeg` returns successfully when `RawCorpus.TryGetFile` has no result. Require the fixture or use an explicit skip.
+- **APP-T29 — manual real-photo checks silently pass without usable fixtures:** two `RealPhotosManualTests` facts early-return when `PHOTOREVIEW_FIXTURE_DIR` is missing or has fewer than two images. Report an explicit skip instead.
 
 ## Limits
 
