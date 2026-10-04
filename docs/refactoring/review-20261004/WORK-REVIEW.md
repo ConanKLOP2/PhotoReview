@@ -8,16 +8,16 @@ The current Roslyn inventory covers 16,795 callable bodies in 1,068 tracked C# f
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 6,197 `STATIC-ONLY`, 72 `ISSUE`, and 10,526 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 12,818 `STATIC-ONLY`, 78 `ISSUE`, and 3,899 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
 
 The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App, Core/tooling, and Imaging agents are reviewing the remaining current-head rows in separate ownership lanes. No lane may be marked complete until its exact callable coverage and remaining count are reconciled against this inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 3,540 rows reread; 2,915 remaining |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 988 current-head rows reread; stale-snapshot batches excluded |
-| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,114 test rows reread; 165 remaining |
-| Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | Not yet assigned to a continuation lane |
+| App + Integration | 1,229 | 5,226 | 6,455 | 4,441 rows reread; 2,014 remaining |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,562 reread in current-head scan (1,161 Core-owned + 401 overlapping Integration rows) |
+| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,279 Imaging.Tests reread; complete; 189 related Integration/App/Architecture rows also read |
+| Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | 8 Architecture decoder rows read; TestSupport and remaining Architecture rows unreviewed |
 
 [powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
 
@@ -59,6 +59,8 @@ WIC accepts each dimension up to `int.MaxValue`, then checked stride/size arithm
 
 `src/PhotoReview.Core/FileActions/UndoService.cs:153-280,348-437`. Single and group Move Undo validate the moved-to fingerprint and original-path absence, append Prepared, then move without rechecking the moved-to file identity before mutation. A replacement can be restored and committed; the post-move verification is length-only. Static race trace only; no file was changed. Recheck each fingerprint after Prepared and before each move; add gated fake replacements for single and group Undo.
 
+The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreViaShell` waits for any original-path file with the expected last-write timestamp but discards the expected size. Single Undo trusts a successful restore result; group Undo accepts mere path existence. A competing file with the same timestamp but different size can be mistaken for the restored photo if shell restoration does not complete. Existing restore tests cover a blocker already present before invocation, not a post-invocation replacement. Static only; no shell or Recycle Bin call ran.
+
 ### APP-P01 — P2 candidate — Overlapping presentation reads Token from disposed CTS
 
 `src/PhotoReview.App/Coordinators/ImagePresenter.cs:247-253,286,377-378`. `PresentCoreAsync` captures `viewerDecodeToken` but later rereads `viewerDecodeCts.Token`. A second overlapping presentation can exchange and dispose that CTS first, making the later getter throw `ObjectDisposedException`. Existing supersession tests do not cover this exact interleave. Static race trace only; no runtime reproduction. Use the captured token consistently and add a gated overlap regression.
@@ -71,12 +73,19 @@ WIC accepts each dimension up to `int.MaxValue`, then checked stride/size arithm
 
 `src/PhotoReview.Core/Localization/LocTemplate.cs:110-144`. `Render` accepts arbitrary `LocArg.Value` and invokes `IFormattable.ToString`/fallback `ToString` without catching formatter exceptions. A custom object that throws can escape into UI localization. `Render_HostileArguments_DoNotThrowForFormatting` claims the case but its helper only returns null. Current source/test inspected; static only. Use a documented safe fallback for non-fatal formatting exceptions and add a throwing formatter regression.
 
+### R23 — P2 candidate — Settings load can misclassify and repeat a throwing Changed callback
+
+`src/PhotoReview.Core/Settings/SettingsStore.cs:120-122,160-170,181-193,195-218`.
+
+`Save` invokes `Changed` after the durable write, but repaired-config `TryPersistRepairs` catches `IOException`/`UnauthorizedAccessException` around the entire call. A subscriber that throws one of those exceptions is therefore logged as a persistence failure, then `Load` invokes `Changed` again after the try. First-run/default creation wraps `Save` the same way and repeats the callback after treating it as a failed write; the second invocation can escape. The file write may already have succeeded. Static call-flow review only; no test/runtime execution. Restrict the catch to persistence operations or separate notification from write, and add throwing-subscriber tests for repaired and first-run paths.
+
 ### Test-only and oracle findings retained at current head
 
 - `TurboJpegGuardMutationTests.ReadAllBytes_LengthExactlyTheLimit_PassesTheLimitCheck` attempts to allocate `MaxSourceBytes` (about 2 GiB) in a default-gate test. Do not run it during this review; replace the allocation with a seam or isolate the resource test.
 - `SourceBytesCacheTests.GetOrRead_ReadsOnCallingThread` uses an unbounded `Thread.Join()`; a deadlock can outlive its test bound and rely on the outer suite watchdog. Static only; not run.
-- `WarmNavigationReadBoundsTests` claims no duplicate presentations but uses a no-op sink and checks only final state; use a recording sink to assert the sequence/count (APP-T19). Static only; not run.
+- `WarmNavigationReadBoundsTests` claims no duplicate presentations but uses a no-op sink and checks only final state; use a recording sink to assert the sequence/count (APP-T19). Static only; not run.\n- `MainWindowBehaviorTests.Fit` passes `MouseButton.Right` for a negative double-click case, but its helper always raises `PreviewMouseLeftButtonDownEvent`; the case never exercises the right-button route (APP-T20). Route the event from the requested button and cover right/middle behavior per contract. Static only; not run.
 - `BenchmarkCliHardeningTests` supplies `OperationCanceledException` for both cancellation and OOM negative classification cases; use `OutOfMemoryException` for the latter (APP-T18). Static only; not run.
+- `DecoderRegistrationTests.ImageDecoderFactory_HasNoReflectionLoading` scans source text, contrary to the no-source-text-test rule; use behavioral or IL inspection instead. Static only; not run.
 - `PerfCsvListenerMappingTests.Writer_FlushesAfterOneSecond` and Core timing tests use fixed pauses before assertions. This conflicts with the repository's no-fixed-delay-assert rule and can flake under load; static review only.
 - `UpdateCheckerBoundaryTests.DeclaredLengthOverMax_IsRejected` checks only the returned failure with `ByteArrayContent`; it does not prove the body was rejected before consumption. Add a read-counting or throw-on-read body.
 - Two App presentation test helpers create a timeout source but do not pass its token to the barrier await; the requested timeout does not bound a missing presentation.
