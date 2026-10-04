@@ -307,15 +307,15 @@ public class PerfAnalyzeTests
     public void RIoTriggersOnHighIoShareAndIsNotTriggeredBelowThreshold()
     {
         var cfg = RulesConfig.Default(); // default threshold 40%
-        var high = new[] { NavWithIo(finalVisual: 100, open: 20, read: 30) }; // 50%
-        var low = new[] { NavWithIo(finalVisual: 100, open: 5, read: 5) }; // 10%
+        var high = new[] { NavWithIo(finalVisual: 100, read: 50) }; // 50%
+        var low = new[] { NavWithIo(finalVisual: 100, read: 10) }; // 10%
 
         Assert.True(PerfRules.EvaluateRIo(cfg, high).Triggered);
         Assert.False(PerfRules.EvaluateRIo(cfg, low).Triggered);
     }
 
     [Fact]
-    public void RIoIsNotApplicableWithoutOpenOrReadTiming()
+    public void RIoIsNotApplicableWithoutReadTiming()
     {
         var cfg = RulesConfig.Default();
         var navs = new[] { new NavRecord { Nav = 1, FinalVisualMs = 100, TDecodeMs = 80, Incomplete = false } };
@@ -433,11 +433,10 @@ public class PerfAnalyzeTests
         Assert.True(PerfRules.EvaluateRGc(cfg, gcTimePercent: 60).Triggered);
     }
 
-    private static NavRecord NavWithIo(double finalVisual, double open, double read) => new()
+    private static NavRecord NavWithIo(double finalVisual, double read) => new()
     {
         Nav = 1,
         FinalVisualMs = finalVisual,
-        TOpenMs = open,
         TReadMs = read,
         TDecodeMs = 1, // marks it a real SourceMiss for classification purposes elsewhere
         Incomplete = false,

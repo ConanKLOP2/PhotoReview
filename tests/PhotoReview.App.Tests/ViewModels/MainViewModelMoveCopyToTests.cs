@@ -45,7 +45,7 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         _settingsStore.Save(new AppSettings { LoadingMode = LoadingMode.Preview });
         _previewService = new PreviewImageService(_metrics, () => false, () => new DecodeBox(256, 0),
             capacityBytes: 16 * 1024 * 1024, currentBackend: () => DecoderBackend.Wpf, disableDiskCacheOverride: true);
-        _thumbnailCache = new ThumbnailCache(diskDirectory: _root.Combine("thumbs"), maxRamBytes: 4 * 1024 * 1024, persistNewThumbnails: false);
+        _thumbnailCache = new ThumbnailCache(diskDirectory: _root.Combine("thumbs"), maxRamBytes: 4 * 1024 * 1024);
     }
 
     public void Dispose()

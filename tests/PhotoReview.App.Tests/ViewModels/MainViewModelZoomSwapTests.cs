@@ -45,7 +45,7 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
         _settingsStore = new SettingsStore(appPaths, fileSystem, new NullLog());
         _settingsStore.Save(_settings);
         _thumbnailCache = new ThumbnailCache(
-            diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
+            diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 16 * 1024 * 1024);
     }
 
     public void Dispose()

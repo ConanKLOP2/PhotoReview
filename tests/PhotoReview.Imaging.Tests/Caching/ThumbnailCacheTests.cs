@@ -48,7 +48,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     [Fact(DisplayName = "GetAsync returns IDecodedImage and serves from RAM on second call")]
     public async Task GetAsyncReturnsDecodedImageAndCachesInRam()
     {
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: true);
+        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var first = await cache.GetAsync(_jpegWithThumbnailPath, null);
         Assert.NotNull(first);
@@ -59,10 +59,28 @@ public sealed class ThumbnailCacheTests : IDisposable
         Assert.Same(first, second);
     }
 
+    [Fact(DisplayName = "A thumbnail PNG already in the disk cache is served without reading the source's embedded thumbnail")]
+    public async Task GetAsyncServesAnExistingDiskCacheEntry()
+    {
+        ThumbnailCacheFiles.Write(_diskDir, _jpegWithThumbnailPath, ValidPng1x1);
+        var readerCalls = 0;
+        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, embeddedThumbnailReader: (path, ct) =>
+        {
+            Interlocked.Increment(ref readerCalls);
+            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
+        });
+
+        var image = await cache.GetAsync(_jpegWithThumbnailPath, null);
+
+        Assert.NotNull(image);
+        Assert.Equal(1, image!.PixelWidth); // the 1x1 cached PNG, not the 16px embedded thumbnail
+        Assert.Equal(0, readerCalls);
+    }
+
     [Fact(DisplayName = "ClearMemory drops RAM cache entries")]
     public async Task ClearMemoryDropsRamCache()
     {
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
+        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var first = await cache.GetAsync(_jpegWithThumbnailPath, null);
         cache.ClearMemory();
@@ -76,7 +94,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     {
         // The embedded thumbnail (16px) and the main frame (64px) are deliberately different
         // sizes: if this ever fell back to a full source decode, PixelWidth would be 64, not 16.
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
+        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var thumbnail = await cache.GetAsync(_jpegWithThumbnailPath, null);
 
@@ -104,11 +122,8 @@ public sealed class ThumbnailCacheTests : IDisposable
     public async Task CorruptCachedThumbnailThatCannotBeDeleted_LogsTheFailedDelete()
     {
         var log = new RecordingLog();
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: true, log: log);
-        await cache.GetAsync(_jpegWithThumbnailPath, null);
-        await PhotoReview.TestSupport.Wait.UntilAsync(() => Directory.GetFiles(_diskDir, "*.png").Length == 1, "thumbnail persisted to disk");
-        var cached = Directory.GetFiles(_diskDir, "*.png")[0];
-        cache.ClearMemory();
+        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, log: log);
+        var cached = ThumbnailCacheFiles.Write(_diskDir, _jpegWithThumbnailPath, ValidPng1x1);
 
         // Corrupt the file, then hold it open without FileShare.Delete: reading still works (and fails to decode), deleting cannot.
         File.WriteAllBytes(cached, [1, 2, 3, 4]);
@@ -125,7 +140,6 @@ public sealed class ThumbnailCacheTests : IDisposable
         using var cache = new ThumbnailCache(
             _diskDir,
             maxRamBytes: 16 * 1024 * 1024,
-            persistNewThumbnails: false,
             embeddedThumbnailReader: (path, ct) =>
             {
                 Interlocked.Increment(ref readerCalls);
@@ -140,7 +154,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     [Fact(DisplayName = "A source with no embedded EXIF thumbnail produces no thumbnail (not a full decode fallback)")]
     public async Task GetAsyncReturnsNullWhenSourceHasNoEmbeddedThumbnail()
     {
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
+        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var thumbnail = await cache.GetAsync(_jpegWithoutThumbnailPath, null);
 
@@ -150,7 +164,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     [Fact(DisplayName = "A non-JPEG source (no EXIF thumbnails at all) produces no thumbnail")]
     public async Task GetAsyncReturnsNullForNonJpegSource()
     {
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
+        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var thumbnail = await cache.GetAsync(_imagePath, null); // .png fixture from the constructor
 
@@ -164,7 +178,6 @@ public sealed class ThumbnailCacheTests : IDisposable
         using var cache = new ThumbnailCache(
             _diskDir,
             maxRamBytes: 16 * 1024 * 1024,
-            persistNewThumbnails: false,
             embeddedThumbnailReader: (path, ct) =>
             {
                 Interlocked.Increment(ref readerCalls);

@@ -39,7 +39,7 @@ public sealed class RulesConfig
 
 /// <summary>Result of evaluating one R-* rule against one (scenario, mode, cond) group.
 /// Triggered is null when there isn't enough data to decide (N/A) — plan mục 8 explicitly allows
-/// this for R-IO (no file-open counter yet) and R-CONT (needs runs at different worker counts).</summary>
+/// this for R-IO (no per-image source-read timing without PHOTOREVIEW_DIAG_PREREAD) and R-CONT (needs runs at different worker counts).</summary>
 public sealed record RuleResult(string Rule, bool? Triggered, string Evidence, string? Note = null);
 
 /// <summary>
@@ -54,23 +54,22 @@ public static class PerfRules
     private static string FmtMs(double? value) =>
         value is { } v && !double.IsNaN(v) ? FormattableString.Invariant($"{v:F1}ms") : "N/A";
 
-    /// <summary>R-IO: in the SourceMiss group, (t_open+t_read) share of finalVisual is high
-    /// (only sourceMissIoSharePct is evaluated; there is no per-image open-count check). t_open is never emitted by the current app (no
-    /// call site yet) and t_read only exists under PHOTOREVIEW_DIAG_PREREAD, so this is N/A when
-    /// neither is present in the data (D11 spec item 7; see D-diagnosis-REPORT (removed doc, see git history)).</summary>
+    /// <summary>R-IO: in the SourceMiss group, t_read share of finalVisual is high
+    /// (only sourceMissIoSharePct is evaluated; there is no per-image open-count check). t_read only exists under
+    /// PHOTOREVIEW_DIAG_PREREAD, so this is N/A when it is not present in the data (D11 spec item 7; see D-diagnosis-REPORT (removed doc, see git history)).</summary>
     public static RuleResult EvaluateRIo(RulesConfig cfg, IReadOnlyList<NavRecord> sourceMissNavs)
     {
         var sharePct = cfg.Get("R-IO", "sourceMissIoSharePct", 40);
-        var eligible = sourceMissNavs.Where(n => n.FinalVisualMs is > 0 && (n.TOpenMs.HasValue || n.TReadMs.HasValue)).ToList();
+        var eligible = sourceMissNavs.Where(n => n.FinalVisualMs is > 0 && n.TReadMs.HasValue).ToList();
         if (eligible.Count == 0)
         {
             return new RuleResult("R-IO", null,
-                FormattableString.Invariant($"0/{sourceMissNavs.Count} SourceMiss navs have t_open/t_read"),
-                "No source-open counter yet (SourceOpen is never called); only available with PHOTOREVIEW_DIAG_PREREAD. Use the Procmon D02 data to derive open counts.");
+                FormattableString.Invariant($"0/{sourceMissNavs.Count} SourceMiss navs have t_read"),
+                "No source-read timing; only available with PHOTOREVIEW_DIAG_PREREAD. Use the Procmon D02 data to derive open counts.");
         }
-        var avgShare = eligible.Average(n => ((n.TOpenMs ?? 0) + (n.TReadMs ?? 0)) / n.FinalVisualMs!.Value) * 100.0;
+        var avgShare = eligible.Average(n => n.TReadMs!.Value / n.FinalVisualMs!.Value) * 100.0;
         return new RuleResult("R-IO", avgShare >= sharePct,
-            FormattableString.Invariant($"avg((t_open+t_read)/finalVisual)={avgShare:F1}% over {eligible.Count} SourceMiss navs (threshold {sharePct}%)"));
+            FormattableString.Invariant($"avg(t_read/finalVisual)={avgShare:F1}% over {eligible.Count} SourceMiss navs (threshold {sharePct}%)"));
     }
 
     /// <summary>R-DEC: in the SourceMiss/InflightJoin group, t_decode share of finalVisual is high.</summary>

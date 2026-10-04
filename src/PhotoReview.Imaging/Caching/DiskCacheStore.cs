@@ -82,12 +82,6 @@ public sealed class DiskCacheStore
     }
 
     /// <summary>
-    /// Internal atomic write helper for BitmapSource.
-    /// </summary>
-    internal Task WriteAtomicallyAsync(BitmapSource image, string cachePath, CancellationToken cancellationToken = default)
-        => WriteAtomicallyAsync(image, cachePath, _log, cancellationToken);
-
-    /// <summary>
     /// Internal static atomic write helper for BitmapSource.
     /// </summary>
     internal static Task WriteAtomicallyAsync(BitmapSource image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)

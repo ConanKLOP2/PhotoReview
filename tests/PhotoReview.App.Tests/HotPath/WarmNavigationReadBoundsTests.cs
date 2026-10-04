@@ -127,8 +127,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
 
         var thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(tempDir, "thumbs"),
-            maxRamBytes: 16 * 1024 * 1024,
-            persistNewThumbnails: false);
+            maxRamBytes: 16 * 1024 * 1024);
 
         var hashService = new FileHashService();
 

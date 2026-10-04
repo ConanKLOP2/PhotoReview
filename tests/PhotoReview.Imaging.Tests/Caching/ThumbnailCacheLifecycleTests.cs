@@ -16,7 +16,7 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
         var source = _root.File("a.jpg", EmbeddedThumbnailJpegFixture.CreateWithThumbnail(48, 16));
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var cache = new ThumbnailCache(_root.Dir("disk"), persistNewThumbnails: false, embeddedThumbnailReader: async (path, token) =>
+        var cache = new ThumbnailCache(_root.Dir("disk"), embeddedThumbnailReader: async (path, token) =>
         {
             entered.SetResult();
             await release.Task;
@@ -40,7 +40,7 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
         var source = _root.File("b.jpg", EmbeddedThumbnailJpegFixture.CreateWithThumbnail(48, 16));
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var cache = new ThumbnailCache(_root.Dir("disk2"), persistNewThumbnails: false, embeddedThumbnailReader: async (path, token) =>
+        using var cache = new ThumbnailCache(_root.Dir("disk2"), embeddedThumbnailReader: async (path, token) =>
         {
             entered.TrySetResult();
             await release.Task;
@@ -63,7 +63,7 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
     {
         var source = _root.File("c.jpg", EmbeddedThumbnailJpegFixture.CreateWithThumbnail(48, 16));
         var calls = 0;
-        using var cache = new ThumbnailCache(_root.Dir("disk3"), persistNewThumbnails: false, embeddedThumbnailReader: (path, token) =>
+        using var cache = new ThumbnailCache(_root.Dir("disk3"), embeddedThumbnailReader: (path, token) =>
         {
             if (Interlocked.Increment(ref calls) == 1) throw new IOException("transient");
             return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
@@ -76,40 +76,6 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
         Assert.Equal(2, calls);
     }
 
-    [Theory(DisplayName = "RV-I02: a non-IO failure while persisting a new thumbnail still returns the embedded image, cached once")]
-    [InlineData("invalid-operation")]
-    [InlineData("com")]
-    [InlineData("not-supported")]
-    public async Task PersistFailure_ReturnsEmbeddedImage(string kind)
-    {
-        var source = _root.File($"persist-{kind}.jpg", EmbeddedThumbnailJpegFixture.CreateWithThumbnail(48, 16));
-        var reads = 0;
-        var writes = 0;
-        using var cache = new ThumbnailCache(_root.Dir($"disk-persist-{kind}"), persistNewThumbnails: true, embeddedThumbnailReader: (path, token) =>
-        {
-            Interlocked.Increment(ref reads);
-            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
-        });
-        cache.PersistForTests = (bitmap, path, token) =>
-        {
-            Interlocked.Increment(ref writes);
-            throw kind switch
-            {
-                "invalid-operation" => new InvalidOperationException("encoder refused the bitmap"),
-                "com" => System.Runtime.InteropServices.Marshal.GetExceptionForHR(unchecked((int)0x88982F50))!, // WINCODEC_ERR_COMPONENTNOTFOUND -> COMException
-                _ => new NotSupportedException("pixel format"),
-            };
-        };
-
-        var first = await cache.GetAsync(source, null);
-        var second = await cache.GetAsync(source, null);
-
-        Assert.NotNull(first);
-        Assert.Same(first, second); // RAM hit: no faulted load is replayed or retried
-        Assert.Equal(1, reads);
-        Assert.Equal(1, writes);
-    }
-
     [Theory(DisplayName = "A RAW file never reaches the embedded-thumbnail reader (no second open of the file the preview decode already reads)")]
     [InlineData("a.cr2")]
     [InlineData("a.DNG")]
@@ -118,7 +84,7 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
     {
         var source = _root.File(name, [0x49, 0x49, 0x2A, 0x00]);
         var calls = 0;
-        using var cache = new ThumbnailCache(_root.Dir("disk-raw"), persistNewThumbnails: false, embeddedThumbnailReader: (path, token) =>
+        using var cache = new ThumbnailCache(_root.Dir("disk-raw"), embeddedThumbnailReader: (path, token) =>
         {
             Interlocked.Increment(ref calls);
             return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));

@@ -44,8 +44,7 @@ public sealed class ZoomDetailTests : IDisposable
         Directory.CreateDirectory(_tempDir);
         _thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "thumbs"),
-            maxRamBytes: 1024 * 1024,
-            persistNewThumbnails: false);
+            maxRamBytes: 1024 * 1024);
         _sessionStore = new SessionStore(new AppPaths(_tempDir), new PhysicalFileSystem());
     }
 

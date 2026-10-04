@@ -65,8 +65,7 @@ public sealed partial class ImagePresenterTests : IDisposable
 
         _thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "thumbs"),
-            maxRamBytes: 16 * 1024 * 1024,
-            persistNewThumbnails: false);
+            maxRamBytes: 16 * 1024 * 1024);
 
         _hashService = new FileHashService();
         _sessionStore = new SessionStore(new AppPaths(_tempDir), new PhysicalFileSystem());
@@ -554,7 +553,6 @@ public sealed partial class ImagePresenterTests : IDisposable
         var neverCompletes = new TaskCompletionSource<IDecodedImage?>();
         using var thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "never-thumbs"),
-            persistNewThumbnails: false,
             embeddedThumbnailReader: (_, _) => neverCompletes.Task);
 
         var presenter = CreatePresenterWithServices(previewService, thumbnailCache);
@@ -602,7 +600,6 @@ public sealed partial class ImagePresenterTests : IDisposable
 
         using var thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "fast-thumbs"),
-            persistNewThumbnails: false,
             embeddedThumbnailReader: (_, _) => Task.FromResult<IDecodedImage?>(thumbnailImage));
 
         var thumbnailShown = new TaskCompletionSource<bool>();
@@ -641,7 +638,6 @@ public sealed partial class ImagePresenterTests : IDisposable
 
         using var thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "fast-thumbs-crossfade"),
-            persistNewThumbnails: false,
             embeddedThumbnailReader: (_, _) => Task.FromResult<IDecodedImage?>(thumbnailImage));
 
         var thumbnailShown = new TaskCompletionSource<bool>();
@@ -696,7 +692,6 @@ public sealed partial class ImagePresenterTests : IDisposable
         var thumbnailFaulted = new TaskCompletionSource();
         using var thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "faulting-thumbs"),
-            persistNewThumbnails: false,
             embeddedThumbnailReader: (_, _) =>
             {
                 thumbnailFaulted.TrySetResult();
@@ -763,7 +758,6 @@ public sealed partial class ImagePresenterTests : IDisposable
         // The thumbnail wins the race and, while it is being read, a newer navigation supersedes this one.
         using var thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "supersede-thumbs"),
-            persistNewThumbnails: false,
             embeddedThumbnailReader: (_, _) =>
             {
                 _clock.NextNavigation();
