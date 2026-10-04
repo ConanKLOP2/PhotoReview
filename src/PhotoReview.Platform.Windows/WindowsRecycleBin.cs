@@ -16,6 +16,10 @@ public sealed class WindowsRecycleBin : IRecycleBin
     private readonly IRecycleBinSettingsSource _settings;
     private readonly Action<string> _shellRecycle;
     private readonly Func<string, long, DateTime, bool> _shellRestore;
+    private readonly Func<string, DriveType?> _driveTypeOf;
+    private readonly Func<string, string?> _mountPointOf;
+    private readonly Action<string> _fileDelete;
+    private readonly Func<string, long> _fileLength;
 
     public WindowsRecycleBin(ILog? log = null)
         : this(log, WindowsRecycleBinSettingsSource.Instance)
@@ -24,9 +28,19 @@ public sealed class WindowsRecycleBin : IRecycleBin
 
     /// <param name="shellRecycle">Test seam for the shell call, so refusal tests never reach the real Recycle Bin.</param>
     /// <param name="shellRestore">Test seam for the shell restore (bin enumeration + verb), so tests never touch the real Recycle Bin.</param>
+    /// <param name="driveTypeOf">Test seam for the drive-type query (default: GetDriveType).</param>
+    /// <param name="mountPointOf">Test seam for the volume mount-point query (default: GetVolumePathName).</param>
+    /// <param name="fileDelete">Test seam for the permanent delete (default: File.Delete), so tests never delete real files.</param>
+    /// <param name="fileLength">Test seam for the size read right before the shell call (default: FileInfo.Length).</param>
     internal WindowsRecycleBin(ILog? log, IRecycleBinSettingsSource settings, Action<string>? shellRecycle = null,
-        Func<string, long, DateTime, bool>? shellRestore = null)
+        Func<string, long, DateTime, bool>? shellRestore = null,
+        Func<string, DriveType?>? driveTypeOf = null, Func<string, string?>? mountPointOf = null, Action<string>? fileDelete = null,
+        Func<string, long>? fileLength = null)
     {
+        _fileLength = fileLength ?? (path => new FileInfo(path).Length);
+        _driveTypeOf = driveTypeOf ?? RecycleEligibility.QueryDriveType;
+        _mountPointOf = mountPointOf ?? RecycleEligibility.QueryMountPoint;
+        _fileDelete = fileDelete ?? File.Delete;
         _log = log ?? NullLog.Instance;
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _shellRecycle = shellRecycle ?? (path => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
@@ -40,12 +54,21 @@ public sealed class WindowsRecycleBin : IRecycleBin
         // OnlyErrorDialogs maps to SHFileOperation FOF_ALLOWUNDO | FOF_NOCONFIRMATION, which then deletes such a file
         // PERMANENTLY without the usual prompt, while the journal would record a successful "recycle". Refuse instead;
         // fixed drives take exactly the same call as before.
-        if (!RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType, RecycleEligibility.QueryMountPoint))
+        if (!RecycleEligibility.CanRecycle(path, _driveTypeOf, _mountPointOf))
             throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(path)));
         // F-WIN-2 backstop for callers that skipped FitsInRecycleBin: a bin turned off for this volume (or by policy)
-        // or unreadable settings would also delete permanently. The size check needs the file's size, which only
-        // FitsInRecycleBin receives (FileActionService passes its stat), so no extra file-system read happens here.
-        var verdict = RecycleBinCapacityGuard.Evaluate(path, fileSize: null, _settings, _log);
+        // or unreadable settings would also delete permanently. R26: the size is read again here, immediately before the
+        // shell call, because the caller's preflight stat can be stale (a file still being written may have outgrown the bin
+        // meanwhile and the shell would then delete it permanently without asking). One stat of a just-listed file.
+        // An unreadable size fails closed. A growth between this read and the shell call cannot be excluded by any API.
+        long currentSize;
+        try { currentSize = _fileLength(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Warn($"Recycle refused (size unreadable): {Path.GetFileName(path)}");
+            throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleBinCannotHold(Path.GetFileName(path)), ex);
+        }
+        var verdict = RecycleBinCapacityGuard.Evaluate(path, currentSize, _settings, _log);
         if (verdict != RecycleCapacityVerdict.Fits)
         {
             _log.Warn($"Recycle refused ({verdict}): {Path.GetFileName(path)}");
@@ -60,7 +83,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
     public bool CanRecycle(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType, RecycleEligibility.QueryMountPoint);
+        return RecycleEligibility.CanRecycle(path, _driveTypeOf, _mountPointOf);
     }
 
     /// <summary>F-WIN-2: see <see cref="IRecycleBin.FitsInRecycleBin"/>. Reads registry/volume settings only, never file data.</summary>
@@ -73,13 +96,17 @@ public sealed class WindowsRecycleBin : IRecycleBin
         return false;
     }
 
-    /// <summary>Q-R8: permanent delete for drives without a Recycle Bin. Refuses fixed drives so it can never bypass the Recycle Bin there.</summary>
+    /// <summary>
+    /// Q-R8: permanent delete for drives without a Recycle Bin. Refuses fixed drives so it can never bypass the Recycle Bin there,
+    /// and (R11) also refuses a volume whose type is unknown or unresolvable: only a positively identified removable, network,
+    /// optical or RAM volume qualifies, so a transient drive-query failure on a fixed drive can never delete permanently.
+    /// </summary>
     public void DeletePermanently(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        if (CanRecycle(path))
-            throw new InvalidOperationException("DeletePermanently is only for drives without a Recycle Bin.");
-        File.Delete(path);
+        if (!RecycleEligibility.IsPermanentDeleteAllowed(path, _driveTypeOf, _mountPointOf))
+            throw new InvalidOperationException("DeletePermanently is only for volumes positively identified as having no Recycle Bin.");
+        _fileDelete(path);
         if (File.Exists(path))
             throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleNotDeleted(Path.GetFileName(path)));
     }
@@ -259,6 +286,37 @@ internal static class RecycleEligibility
         if (string.IsNullOrEmpty(mount)) return false;
         if (mount.StartsWith(UncPrefix, StringComparison.Ordinal)) return false; // e.g. a network share mounted as a folder
         return driveTypeOf(mount) == DriveType.Fixed;
+    }
+
+    /// <summary>
+    /// R11: the fail-closed counterpart of <see cref="CanRecycle"/> for permanent deletion. True only for a UNC path or a volume
+    /// that <paramref name="driveTypeOf"/> positively reports as Removable, Network, CDRom or Ram. A fixed drive, an unknown or
+    /// NoRootDirectory type, a failed drive query (null) and an unresolvable mount point all answer false.
+    /// </summary>
+    internal static bool IsPermanentDeleteAllowed(string path, Func<string, DriveType?> driveTypeOf, Func<string, string?>? mountPointOf = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(driveTypeOf);
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
+
+        if (full.StartsWith(ExtendedPrefix, StringComparison.Ordinal) && full.Length >= 6 && full[5] == ':') full = full[4..];
+        if (full.StartsWith(UncPrefix, StringComparison.Ordinal)) return true; // UNC share: positively a network location
+        string? mount;
+        if (mountPointOf is null)
+            mount = Path.GetPathRoot(full);
+        else
+        {
+            try { mount = mountPointOf(full); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException) { return false; }
+        }
+        if (string.IsNullOrEmpty(mount)) return false;
+        if (mount.StartsWith(UncPrefix, StringComparison.Ordinal)) return true;
+        DriveType? type;
+        try { type = driveTypeOf(mount); }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { return false; }
+        return type is DriveType.Removable or DriveType.Network or DriveType.CDRom or DriveType.Ram;
     }
 
     /// <summary>Drive type of a volume root or mount-point folder (<c>GetDriveType</c> accepts both; <c>DriveInfo</c> only reads the drive letter).</summary>
