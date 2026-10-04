@@ -12,7 +12,7 @@ Pinned comparison head: `origin/master` `18aa6eb64ba48666de620937211e0782dd6131c
 
 ## Full-inventory continuation progress
 
-These are reread callables for the current-head continuation, separate from the cumulative ledger statuses above. At the latest checkpoint, App/Integration had read 5,800/6,455 rows (655 remaining); Core/Platform/tooling had read 1,943 rows (1,542 owned + 401 overlapping Integration); Imaging had reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport had read 298/298 rows. App and Core remain active. No builds or tests were run.
+These are reread callables for the current-head continuation, separate from the cumulative ledger statuses above. At the latest checkpoint, App/Integration had read 6,161/6,455 rows (294 remaining); Core/Platform/tooling had read 1,966 rows (1,565 owned + 401 overlapping Integration); Imaging had reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport had read 298/298 rows. App and Core remain active. No builds or tests were run.
 
 ## Current findings
 
@@ -94,7 +94,9 @@ These are reread callables for the current-head continuation, separate from the 
 - APP-T24: folder-race tests use unbounded reset-event waits released only on the happy path; a failed assertion can leave a worker blocked. Release in `finally` and bound waits. Static only.
 - APP-T25: skipped-file tests catch ACL setup exceptions then return from `[Fact]`, so xUnit reports a pass without running behavior assertions. Use explicit skip reporting. Static only.
 - APP-T10 risk: the probe-dispose test may leave a foreground worker alive after bounded `Join` times out; releasing the probe does not necessarily unblock the worker. Static only.
+- R26: size-aware Recycle Bin preflight can become stale before the shell call; the null-size Windows backstop bypasses capacity arithmetic, so a newly oversized file can be permanently deleted. Static only; no shell/bin operation ran.
 - R24/R25: Architecture/TestSupport review found caller-owned directory deletion and an unowned age-based temp-folder sweep; see WORK-REVIEW.md. Static only; no directories were created or deleted.
+- APP-T27: `PlatformGapTests` calls `.First()` on supposedly unused D:–Z: drive letters; if all are mounted, it throws before the Unknown assertion instead of skipping. Use an injectable provider or explicit skip. Static only.
 - APP-T26 risk: `RunPowerShell` in the safety-guard tests calls unbounded `WaitForExit`, so a hung child can stall the suite; add timeout and process-tree cleanup. Static only.
 - APP-T20: `MainWindowBehaviorTests.Fit` supplies `MouseButton.Right`, but `RaiseDoubleClick` always raises the left-button event, so the negative case does not exercise right-click routing. Select the preview event based on the requested button and add relevant right/middle cases. Static only; not run.
 - Grouped Undo-Recycle tests do not gate a foreign file appearing at a pending source path between the initial `RecoveryFileCheck` and retry execution. This is the race extension of R15, not a separate source finding.

@@ -8,14 +8,14 @@ The current Roslyn inventory covers 16,799 callable bodies in 1,068 tracked C# f
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 14,411 `STATIC-ONLY`, 103 `ISSUE`, and 2,285 `UNREVIEWED` rows after merging the latest App, Core and Architecture/TestSupport batches. It carries forward unchanged-file reviews and applicable wave-two rows; active App/Core lanes still have remaining coverage.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 14,712 `STATIC-ONLY`, 110 `ISSUE`, and 1,977 `UNREVIEWED` rows after merging the latest App, Core and Architecture/TestSupport batches. It carries forward unchanged-file reviews and applicable wave-two rows; active App/Core lanes still have remaining coverage.
 
 The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App/Integration and Core/tooling lanes continue in separate ownership areas; Imaging and Architecture/TestSupport are complete. Every status is reconciled against this current inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 5,800 rows reread; 655 remaining |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,943 reread in current-head scan (1,542 Core-owned + 401 overlapping Integration rows; includes batches 29–33) |
+| App + Integration | 1,229 | 5,226 | 6,455 | 6,161 rows reread; 294 remaining |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,966 reread in current-head scan (1,565 Core-owned + 401 overlapping Integration rows; includes batches 29–34) |
 | Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,279 Imaging.Tests reread; complete; 189 related Integration/App/Architecture rows also read |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | 298/298 reread; two test-fixture cleanup safety candidates (R24–R25) |
 
@@ -90,6 +90,11 @@ The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreV
 ### R25 — P2 candidate — Shared temp sweep deletes matching directories by age alone
 
 `tests/PhotoReview.TestSupport.Windows/Fixtures/PhotoFolderBuilder.cs:210-248`. `PurgeStaleTemporaryFolders` enumerates shared-temp `PhotoReview-TC01-*` directories and recursively removes any older than six hours without an ownership marker or lock. A long-running test or another process using a matching path can lose its files when this helper starts. Static-only review; no directory was swept. Remove cross-run recursive sweeping or require an owned marker/lock and a conservative stale-owner check.
+### R26 — P1 candidate — A file can outgrow Recycle Bin capacity after preflight and be deleted by the shell
+
+`src/PhotoReview.Core/FileActions/FileActionService.cs:155-160,204-224,560-594`; `RecoveryRetryService.cs:163-190,222`; `src/PhotoReview.Platform.Windows/WindowsRecycleBin.cs:45-54`; `RecycleBinCapacity.cs:102`.
+
+Single Recycle checks the current file size before journaling, then calls `SendToRecycleBin`; group and recovery paths check the volume aggregate before later sending members. The Windows backstop re-evaluates with `fileSize: null`; `RecycleBinCapacityGuard.EvaluateCore` returns `Fits` before the size-capacity arithmetic. If a file grows beyond the configured bin capacity between the size-aware check and the shell call, `FileSystem.DeleteFile(...SendToRecycleBin)` runs without confirmation and may delete it permanently while the journal records Recycle. Static race trace only; no shell or Recycle Bin call ran. Revalidate the captured size/identity immediately before mutation or otherwise prevent the unchecked shell path; add a deterministic fake mutation between capacity preflight and send.
 ### Test-only and oracle findings retained at current head
 
 - `TurboJpegGuardMutationTests.ReadAllBytes_LengthExactlyTheLimit_PassesTheLimitCheck` attempts to allocate `MaxSourceBytes` (about 2 GiB) in a default-gate test. Do not run it during this review; replace the allocation with a seam or isolate the resource test.
@@ -103,6 +108,7 @@ The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreV
 - `FolderLoadSkippedFilesTests` catches ACL setup failures and returns from `[Fact]` methods, so xUnit reports pass although no behavior assertion ran (APP-T25). Use explicit skip reporting with a reason. Static only; not run.
 - `FolderLoadCoordinatorTests.Probe_DoneButNotYetApplied_ThenDisposed_IsDropped` can leave its foreground worker alive after the bounded `Join` times out; releasing the probe does not necessarily unblock that worker (APP-T10 risk). Add deterministic worker shutdown or a process-level hard bound. Static only; not run.
 - `PowerShellSafetyGuardTests.RunPowerShell` uses unbounded `Process.WaitForExit()`; a hung child process can stall the test suite (APP-T26 risk). Add a timeout, kill the process tree, drain output, and fail with diagnostics. Static only; not run.
+- `PlatformGapTests` uses `.First()` over supposedly unused D:–Z: drive letters; if all are mounted, the test throws before its Unknown assertion and does not report an explicit skip (APP-T27). Use an injectable no-volume provider or an explicit skip. Static only; not run.
 - `BenchmarkCliHardeningTests` supplies `OperationCanceledException` for both cancellation and OOM negative classification cases; use `OutOfMemoryException` for the latter (APP-T18). Static only; not run.
 - `DecoderRegistrationTests.ImageDecoderFactory_HasNoReflectionLoading` scans source text, contrary to the no-source-text-test rule; use behavioral or IL inspection instead. Static only; not run.
 - `PerfCsvListenerMappingTests.Writer_FlushesAfterOneSecond` and Core timing tests use fixed pauses before assertions. This conflicts with the repository's no-fixed-delay-assert rule and can flake under load; static review only.
