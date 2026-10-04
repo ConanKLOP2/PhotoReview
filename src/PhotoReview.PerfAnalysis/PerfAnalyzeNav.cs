@@ -341,10 +341,9 @@ public static class PerfAnalyzeNavBuilder
             }
         }
 
-        // D05: with PHOTOREVIEW_DIAG_PREREAD the Decode event (emitted by DecodeAndCacheAsync around
-        // DecodeSource) also covers the in-memory read that SourceRead reports, so split them here.
-        if (rec.TReadMs is { } readMs && rec.TDecodeMs is { } decodeMs)
-            rec.TDecodeMs = Math.Max(0, decodeMs - readMs);
+        // t_read and t_decode are independent: with PHOTOREVIEW_DIAG_PREREAD=1 PreviewImageService.DecodeFromSource logs
+        // SourceRead first and only then starts the clock for the Decode event, so Decode covers the decoder call alone and
+        // must not be reduced by the read time (PA-01).
 
         rec.Kind = ClassifyKind(rec);
         return rec;
