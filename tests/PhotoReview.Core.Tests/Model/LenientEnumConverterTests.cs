@@ -13,11 +13,6 @@ public class LenientEnumConverterTests
         Converters = { new LenientEnumConverter<LoadingMode>(LoadingMode.Preview) }
     };
 
-    private static readonly JsonSerializerOptions FactoryOptions = new()
-    {
-        Converters = { new LenientEnumConverterFactory() }
-    };
-
     private sealed record TestConfig(
         LoadingMode LoadingMode = LoadingMode.Fast,
         ImageSortMode ImageSortMode = ImageSortMode.Name,
@@ -213,20 +208,12 @@ public class LenientEnumConverterTests
     }
 
     [Fact]
-    public void FactoryWhenRegisteredInOptionsAppliesToEnumsWithoutDirectAttribute()
-    {
-        var result = JsonSerializer.Deserialize<LoadingMode>("\"preview\"", FactoryOptions);
-        Assert.Equal(LoadingMode.Preview, result);
-    }
-
-
-    [Fact]
-    public void EnumDictionaryKey_RoundTripsThroughFactory()
+    public void EnumDictionaryKey_RoundTripsThroughTheEnumAttributeConverter()
     {
         var source = new Dictionary<DecoderBackend, long> { [DecoderBackend.TurboJpeg] = 3, [DecoderBackend.WicDirect] = 1 };
 
-        var json = JsonSerializer.Serialize(source, FactoryOptions);
-        var result = JsonSerializer.Deserialize<Dictionary<DecoderBackend, long>>(json, FactoryOptions);
+        var json = JsonSerializer.Serialize(source, DefaultOptions);
+        var result = JsonSerializer.Deserialize<Dictionary<DecoderBackend, long>>(json, DefaultOptions);
 
         Assert.Contains("\"TurboJpeg\":3", json, StringComparison.Ordinal);
         Assert.Equal(source, result);
@@ -240,7 +227,7 @@ public class LenientEnumConverterTests
         var metrics = new PhotoReview.Core.Diagnostics.ReviewMetrics();
         metrics.RecordDecoderFallback(DecoderBackend.WicDirect);
 
-        var json = JsonSerializer.Serialize(metrics.Snapshot(), FactoryOptions);
+        var json = JsonSerializer.Serialize(metrics.Snapshot(), DefaultOptions);
 
         Assert.Contains("\"WicDirect\":1", json, StringComparison.Ordinal);
     }

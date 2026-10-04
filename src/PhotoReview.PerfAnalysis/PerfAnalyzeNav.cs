@@ -14,7 +14,6 @@ public sealed class NavRecord
     public double? TStatMs { get; set; }
     public string LookupResult { get; set; } = "";
     public double? TThumbMs { get; set; }
-    public string ThumbSource { get; set; } = "";
     public bool HasThumbnail { get; set; }
     public double? TJoinMs { get; set; }
     public double? TDiskMs { get; set; }
@@ -37,7 +36,6 @@ public sealed class NavRecord
 
     public double? FirstVisualMs { get; set; }
     public double? FinalVisualMs { get; set; }
-    public string FinalPresentedKind { get; set; } = "";
 
     /// <summary>True until a Presented(kind=final|compare) row is matched for this nav — e.g. the
     /// token was superseded by a newer navigation before it ever rendered. Excluded from
@@ -294,7 +292,6 @@ public static class PerfAnalyzeNavBuilder
                     if (row.Text != "unknown" || rec.TThumbMs is null)
                     {
                         rec.TThumbMs = row.ANum;
-                        rec.ThumbSource = row.Text;
                     }
                     break;
                 case "JoinEnd":
@@ -331,7 +328,6 @@ public static class PerfAnalyzeNavBuilder
                     if (row.Text is "final" or "compare")
                     {
                         rec.FinalVisualMs = file.QpcToMs(row.QpcTicks - t0Qpc);
-                        rec.FinalPresentedKind = row.Text;
                         rec.TRenderMs = pendingRenderMs;
                         rec.Incomplete = false;
                     }

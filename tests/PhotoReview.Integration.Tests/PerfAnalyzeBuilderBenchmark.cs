@@ -21,7 +21,7 @@ public sealed class PerfAnalyzeBuilderBenchmark(ITestOutputHelper output)
         }
         return new PerfCsvFile
         {
-            Path = "synthetic", CommitVersion = "x", DiagFlags = new Dictionary<string, string>(),
+            Path = "synthetic", DiagFlags = new Dictionary<string, string>(),
             QpcFrequency = 1_000_000, DroppedRows = 0, Rows = rows,
         };
     }

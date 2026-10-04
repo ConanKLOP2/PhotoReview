@@ -67,14 +67,6 @@ public sealed class SourceBytesCacheTests : IDisposable
         Assert.Same(kept, cache.GetOrReadRange(path, info.Length, info.LastWriteTimeUtc.Ticks, 0, 128));
     }
 
-    [Fact(DisplayName = "A source larger than a .NET array is rejected cleanly, before any file is opened")]
-    public void GetOrRead_SourceLargerThanArrayLimit_ThrowsArgumentOutOfRangeNotOverflow()
-    {
-        var cache = new SourceBytesCache(1024);
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => cache.GetOrRead(Path.Combine(_root, "never-opened.bin"), 3_000_000_000L, 1));
-    }
-
     [Theory(DisplayName = "An uncacheable range larger than a .NET array is rejected cleanly, before any file is opened")]
     [InlineData(0)]
     [InlineData(1)]

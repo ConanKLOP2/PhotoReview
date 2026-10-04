@@ -47,7 +47,7 @@ public sealed class Cr3ExifMergeTests
     public void TryReadExif_Cr3StyleCmt1PlusCmt2_MergesCameraAndExposure()
     {
         var (source, info) = Layout(cmt2IsExif: true);
-        var exif = RawExif.TryReadExif(source, info);
+        var exif = RawExif.TryReadExif(source, info, out _);
 
         Assert.NotNull(exif);
         Assert.Equal("Canon", exif.CameraMake);
@@ -66,7 +66,7 @@ public sealed class Cr3ExifMergeTests
         // BuildCameraTiff has DateTime 2019:05:06 (0x0132); BuildExposureTiff has DateTimeOriginal 2020:01:02 (0x9003).
         var (source, info) = Layout(cmt2IsExif: true);
 
-        var exif = RawExif.TryReadExif(source, info);
+        var exif = RawExif.TryReadExif(source, info, out _);
 
         Assert.Equal(new DateTime(2020, 1, 2, 3, 4, 5), exif!.DateTaken);
     }
@@ -79,7 +79,7 @@ public sealed class Cr3ExifMergeTests
         byte[] cmt2 = t.ToArray();
         var source = new InMemoryRawHeaderSource([.. cmt1, .. cmt2]);
 
-        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, cmt1.Length, true), new ExifBlock(cmt1.Length, cmt2.Length, true, true)));
+        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, cmt1.Length, true), new ExifBlock(cmt1.Length, cmt2.Length, true, true)), out _);
 
         Assert.Equal(new DateTime(2019, 5, 6, 7, 8, 9), exif!.DateTaken);
     }
@@ -88,7 +88,7 @@ public sealed class Cr3ExifMergeTests
     public void TryReadExif_Cmt2WithoutIfdIsExifFlag_DoesNotReadExposure()
     {
         var (source, info) = Layout(cmt2IsExif: false);
-        var exif = RawExif.TryReadExif(source, info);
+        var exif = RawExif.TryReadExif(source, info, out _);
 
         Assert.NotNull(exif);
         Assert.Equal("Canon", exif.CameraMake);
@@ -102,7 +102,7 @@ public sealed class Cr3ExifMergeTests
         var t = new TiffBytes(true, 128).Header(8).Ifd(8, 0, Short(0x8827, 100));
         byte[] b = t.ToArray();
         var source = new InMemoryRawHeaderSource([.. a, .. b]);
-        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, a.Length, true, true), new ExifBlock(a.Length, b.Length, true, true)));
+        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, a.Length, true, true), new ExifBlock(a.Length, b.Length, true, true)), out _);
 
         Assert.Equal(800, exif!.Iso);
     }
@@ -122,7 +122,7 @@ public sealed class Cr3ExifMergeTests
         byte[] b = BuildDateOnlyExifTiff("2021:06:07 08:09:10");
         var source = new InMemoryRawHeaderSource([.. a, .. b]);
 
-        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, a.Length, true, true), new ExifBlock(a.Length, b.Length, true, true)));
+        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, a.Length, true, true), new ExifBlock(a.Length, b.Length, true, true)), out _);
 
         Assert.Equal(new DateTime(2020, 1, 2, 3, 4, 5), exif!.DateTaken);
     }
@@ -141,7 +141,7 @@ public sealed class Cr3ExifMergeTests
         var exif = RawExif.TryReadExif(source, Info(
             new ExifBlock(0, cam.Length, true),
             new ExifBlock(cam.Length, a.Length, true, true),
-            new ExifBlock(cam.Length + a.Length, b.Length, true, true)));
+            new ExifBlock(cam.Length + a.Length, b.Length, true, true)), out _);
 
         Assert.Equal("Canon", exif!.CameraMake);
         Assert.Equal(new DateTime(2020, 1, 2, 3, 4, 5), exif.DateTaken);
@@ -152,7 +152,7 @@ public sealed class Cr3ExifMergeTests
     {
         byte[] cmt1 = BuildCameraTiff();
         var source = new InMemoryRawHeaderSource([.. cmt1, .. new byte[64]]);
-        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, cmt1.Length, true), new ExifBlock(cmt1.Length, 64, true, true)));
+        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, cmt1.Length, true), new ExifBlock(cmt1.Length, 64, true, true)), out _);
 
         Assert.Equal("Canon", exif!.CameraMake);
     }
@@ -177,7 +177,7 @@ public sealed class Cr3ExifMergeTests
         using var fs = File.OpenRead(path);
         using var source = new SourceRawHeaderSource(fs);
         var info = new PhotoReview.Imaging.Raw.Bmff.Cr3ContainerReader().Read(source, CancellationToken.None);
-        var exif = RawExif.TryReadExif(source, info);
+        var exif = RawExif.TryReadExif(source, info, out _);
 
         Assert.NotNull(exif);
         Assert.Equal("Canon", exif.CameraMake);

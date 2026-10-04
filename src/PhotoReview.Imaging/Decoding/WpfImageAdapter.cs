@@ -1,30 +1,13 @@
 using System.Runtime.InteropServices;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace PhotoReview.Imaging.Decoding;
 
 /// <summary>
-/// Converts raw pixel buffers to WPF <see cref="BitmapSource"/> instances.
-/// Used at the boundary when decoders produce BGRA32 buffers (prepared for WicDirect and TurboJpeg).
+/// WPF <see cref="BitmapSource"/> helpers used at the decoder boundary.
 /// </summary>
 public static class WpfImageAdapter
 {
-    public static BitmapSource FromBgra32(ReadOnlySpan<byte> bgraBytes, int width, int height, int stride)
-    {
-        var bitmap = BitmapSource.Create(
-            width,
-            height,
-            96,
-            96,
-            PixelFormats.Bgra32,
-            null,
-            bgraBytes.ToArray(),
-            stride);
-        bitmap.Freeze();
-        return bitmap;
-    }
-
     /// <summary>
     /// Forces a lazy WPF pipeline (e.g. <see cref="TransformedBitmap"/>, <see cref="FormatConvertedBitmap"/>)
     /// to run now, on the calling (worker) thread, and returns a frozen in-memory bitmap with the same

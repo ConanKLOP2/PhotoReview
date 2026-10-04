@@ -85,7 +85,6 @@ public sealed class RecoveryRecycleGroupTests
         var result = Check(FailedGroup(Member(Jpg, permanent: true), Member(Raw)));
 
         Assert.Equal(RecoveryVerdict.PartiallyPermanentlyDeleted, result.Verdict);
-        Assert.Equal("PartiallyPermanentlyDeleted", RecoveryFileCheck.Code(result.Verdict));
         Assert.Equal(RecoveryVerdict.PermanentlyDeleted, result.GroupMembers![0].Verdict);
         Assert.Equal(RecoveryVerdict.RecycleUnverifiable, result.GroupMembers![1].Verdict);
     }

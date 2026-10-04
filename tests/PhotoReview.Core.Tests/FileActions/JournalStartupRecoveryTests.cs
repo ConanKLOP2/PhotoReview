@@ -50,7 +50,7 @@ public sealed class JournalStartupRecoveryTests
         Assert.Equal("m1", Assert.Single(_journal.ReadCommittedMoves()).Id);
         // P03 (2026-09-27): Undo is limited to the current session; RunAsync does not touch UndoService at all,
         // so a freshly constructed one has nothing to undo even though the journal now has a Committed Move.
-        Assert.False(_undo.CanUndoMove);
+        Assert.False(_undo.MoveHistory.Count > 0);
     }
 
     [Fact(DisplayName = "P03: a journal full of committed Moves from a previous run does not seed the Undo stack, but in-session Moves are still undoable")]
@@ -65,14 +65,14 @@ public sealed class JournalStartupRecoveryTests
 
         Assert.Empty(failed);
         // Mutation-check: re-adding a call that seeds `_undo` from journal history here would make this fail.
-        Assert.False(_undo.CanUndoMove);
-        Assert.Equal(0, _undo.MoveHistoryCount);
+        Assert.False(_undo.MoveHistory.Count > 0);
+        Assert.Empty(_undo.MoveHistory);
 
         // In-session undo still works: a Move registered after startup is undoable regardless of journal history.
         _fs.AddFile(@"C:\photos\sel\new.jpg", "abc", WriteTime);
         _undo.Register(new FileActionResult(true, FileOperationType.Move, @"C:\photos\new.jpg", @"C:\photos\sel\new.jpg", 3, WriteTime, null));
 
-        Assert.True(_undo.CanUndoMove);
+        Assert.True(_undo.MoveHistory.Count > 0);
         Assert.Equal((@"C:\photos\new.jpg", @"C:\photos\sel\new.jpg"), _undo.MoveHistory.Peek());
     }
 

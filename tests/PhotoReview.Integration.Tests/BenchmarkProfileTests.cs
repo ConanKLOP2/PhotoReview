@@ -1,5 +1,4 @@
 using PhotoReview.Benchmarking;
-using System.IO;
 
 namespace PhotoReview.Integration.Tests;
 
@@ -32,23 +31,5 @@ public sealed class BenchmarkRunnableProfileTests
         Assert.DoesNotContain(BenchmarkProfiles.Runnable, p => p.CorrectnessOnly);
         Assert.Contains(BenchmarkProfiles.Runnable, p => p.Id == "recommended-auto");
         Assert.Contains(BenchmarkProfiles.All, p => p.Id == "cache-recovery" && BenchmarkProfiles.IsNotImplemented(p));
-    }
-}
-
-/// <summary>Relative performance harness probe.</summary>
-[Trait("Category", "Slow")]
-public sealed class PerformanceHarnessTests : IDisposable
-{
-    private readonly TempRoot _root = new("performance");
-
-    public void Dispose() => _root.Dispose();
-
-    [Fact(DisplayName = "Relative performance samples complete without hard timing failure")]
-    public async Task RelativePerformanceSamplesCompleteWithoutHardTimingFailure()
-    {
-        var fixture = PerformanceTestHarness.CreateFixture(_root.Path, 30);
-        var report = await PerformanceTestHarness.RunAsync(fixture, 30, workers: 4,
-            reportPath: Path.Combine(_root.Path, "performance-report.json"));
-        Assert.True(report.Samples.All(sample => sample.Status is "PASS" or "WARN"));
     }
 }

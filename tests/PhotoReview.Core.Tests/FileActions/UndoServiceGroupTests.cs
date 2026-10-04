@@ -120,7 +120,7 @@ public sealed class UndoServiceGroupTests
         var second = await _undo.UndoLastAsync();
 
         Assert.False(first.Succeeded);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
         Assert.Equal(Tr.CoreUndoNothingToUndo, second.ErrorMessage);
     }
 
@@ -135,7 +135,7 @@ public sealed class UndoServiceGroupTests
         var second = await _undo.UndoLastAsync();
 
         Assert.False(first.Succeeded);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
         Assert.Equal(Tr.CoreUndoNothingToUndo, second.ErrorMessage);
         Assert.Equal(0, _bin.RestoreCalls);
     }
@@ -152,7 +152,7 @@ public sealed class UndoServiceGroupTests
         Assert.Contains(Tr.CoreUndoRecycleTargetExists("a.jpg"), result.ErrorMessage, StringComparison.Ordinal);
         Assert.Equal(0, _bin.RestoreCalls); // nothing was restored on top of / next to the unrelated file
         Assert.False(_fs.FileExists(Raw));
-        Assert.True(_undo.HasLastAction);
+        Assert.True(_undo.LastUndoAction is not null);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed class UndoServiceGroupTests
         Assert.False(result.Succeeded);
         Assert.Equal([Jpeg], result.RestoredPaths);
         Assert.True(_fs.FileExists(Jpeg));
-        Assert.True(_undo.HasLastAction); // still retryable: the next attempt skips the restored member
+        Assert.True(_undo.LastUndoAction is not null); // still retryable: the next attempt skips the restored member
     }
 
     [Fact]
@@ -224,7 +224,7 @@ public sealed class UndoServiceGroupTests
         Assert.Equal(2, _bin.RestoreCalls);
         Assert.False(_fs.FileExists(Xmp));
         Assert.Equal(Tr.CoreUndoGroupPartiallyRestored(2, 3, "a.xmp"), result.ErrorMessage);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
         Assert.Empty(_journal.ReadPendingAndFailedOperations());
     }
 
@@ -245,7 +245,7 @@ public sealed class UndoServiceGroupTests
 
         Assert.True(retry.Succeeded, retry.ErrorMessage);
         Assert.Equal([Jpeg, Raw], retry.RestoredPaths);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
         Assert.Empty(_journal.ReadFailedOperations()); // the earlier Failed Recovery item is closed
     }
 
@@ -266,7 +266,7 @@ public sealed class UndoServiceGroupTests
         Assert.True(retry.Succeeded, retry.ErrorMessage);
         Assert.Equal([Jpeg, Raw], retry.RestoredPaths);
         Assert.Equal(restoreCallsBefore, _bin.RestoreCalls);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
         Assert.Empty(_journal.ReadFailedOperations());
     }
 
@@ -314,7 +314,7 @@ public sealed class UndoServiceGroupTests
 
         _undo.RegisterGroup(failed);
 
-        Assert.True(_undo.HasLastAction);
+        Assert.True(_undo.LastUndoAction is not null);
         _fs.AddFile(Raw, "raw data", Stamp); // never left the disk
         var result = await _undo.UndoLastAsync();
         Assert.True(result.Succeeded, result.ErrorMessage);
@@ -470,7 +470,7 @@ public sealed class UndoServiceGroupTests
         _undo.RegisterGroup(new CaptureGroupActionResult(false, false, FileOperationType.Move, "g", null,
             [new CaptureGroupMemberResult(Member(Jpeg, MovedJpeg, 4), true, false)], "x"));
 
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Fact]
@@ -484,7 +484,7 @@ public sealed class UndoServiceGroupTests
 
         Assert.False(result.Succeeded);
         Assert.Contains(Tr.CoreRecoveryAlreadyHandled, result.ErrorMessage, StringComparison.Ordinal);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Fact]
@@ -496,7 +496,7 @@ public sealed class UndoServiceGroupTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(Tr.CoreUndoPermanentlyDeleted("a.jpg"), result.ErrorMessage);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
         Assert.Equal(0, _bin.RestoreCalls);
     }
 
@@ -579,7 +579,7 @@ public sealed class UndoServiceGroupTests
         var result = await _undo.UndoLastAsync();
 
         Assert.True(result.Succeeded, result.ErrorMessage);
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
         _fs.OpenAppendHook = null;
         Assert.DoesNotContain(_journal.ReadFailedOperations(), entry => entry.Undo == true); // no tx.Fail after the Commit
     }
@@ -684,7 +684,7 @@ public sealed class UndoServiceGroupTests
         Assert.True(_fs.FileExists(Raw));
         Assert.False(_fs.FileExists(FatJpeg));
         Assert.False(_fs.FileExists(FatRaw));
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
     }
 
     [Fact]

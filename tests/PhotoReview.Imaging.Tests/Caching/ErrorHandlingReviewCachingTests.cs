@@ -45,7 +45,7 @@ public sealed class ErrorHandlingReviewCachingTests : IDisposable
         var missing = _root.Combine("nope.jpg");
 
         Task<IDecodedImage?> task = null!;
-        var thrown = Record.Exception(() => { task = cache.GetAsync(missing); });
+        var thrown = Record.Exception(() => { task = cache.GetAsync(missing, null); });
 
         Assert.Null(thrown);
         await Assert.ThrowsAnyAsync<IOException>(() => task);

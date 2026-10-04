@@ -111,8 +111,8 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         await _controller.RunActionAsync(0, null, moved);
 
         Assert.True(File.Exists(Path.Combine(_folderA, "Sorted", "a.jpg")));
-        Assert.Equal(1, _undo.MoveHistoryCount);
-        Assert.True(_undo.HasLastAction);
+        Assert.Single(_undo.MoveHistory);
+        Assert.True(_undo.LastUndoAction is not null);
         Assert.Equal([bFile], _catalog.Paths);
         // Only the late hint and the navigation notification: no session path, no catalog event, no present, no plain status.
         Assert.Equal(
@@ -165,7 +165,7 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
 
         await _controller.RunActionAsync(0, null, moved);
 
-        Assert.Equal(1, _undo.MoveHistoryCount);
+        Assert.Single(_undo.MoveHistory);
         Assert.Equal([kept], _catalog.Paths); // the optimistic removal made before the I/O is the only change
         Assert.DoesNotContain(_sink.Calls, c => IsCall(c, "Session"));
         Assert.Contains(_sink.Calls, c => IsCall(c, "Late"));
@@ -181,7 +181,7 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         await _controller.RecycleAsync(null, moved);
 
         Assert.Equal([moved], _bin.Recycled);
-        Assert.True(_undo.HasLastAction);
+        Assert.True(_undo.LastUndoAction is not null);
         Assert.Equal([bFile], _catalog.Paths);
         Assert.Equal([$"Late:{Tr.StatusLateRecycleUndoable("a.jpg")}", "Nav"], _sink.Calls);
 
@@ -268,8 +268,8 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
 
         Assert.True(File.Exists(source));
         Assert.True(File.Exists(Path.Combine(_folderA, "Backup", "a.jpg")));
-        Assert.False(_undo.HasLastAction);
-        Assert.Equal(0, _undo.MoveHistoryCount);
+        Assert.False(_undo.LastUndoAction is not null);
+        Assert.Empty(_undo.MoveHistory);
         Assert.Equal([bFile], _catalog.Paths);
         Assert.Equal(["Nav"], _sink.Calls);
     }
@@ -286,7 +286,7 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         await _controller.RunActionAsync(0, null, moved);
 
         Assert.True(File.Exists(moved));
-        Assert.False(_undo.HasLastAction);
+        Assert.False(_undo.LastUndoAction is not null);
         Assert.Equal([bFile], _catalog.Paths);
         Assert.Equal(["Nav"], _sink.Calls);
     }
@@ -367,7 +367,7 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         await _controller.RunActionAsync(0, null, a);
         _catalog.Reset([z, bFile]);
         await _controller.RunActionAsync(0, null, z);
-        Assert.Equal(2, _undo.MoveHistoryCount);
+        Assert.Equal(2, _undo.MoveHistory.Count);
         ClearHooks();
 
         var first = await _controller.UndoLastAsync(_folderB);
@@ -376,7 +376,7 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         Assert.Equal(z, first.Source);
         Assert.True(File.Exists(z));
         Assert.False(File.Exists(a));
-        Assert.Equal(1, _undo.MoveHistoryCount);
+        Assert.Single(_undo.MoveHistory);
     }
 
     private sealed class HookFileSystem(IFileSystem inner) : MainViewModelFileActionTests.DelegatingFileSystem(inner)

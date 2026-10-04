@@ -179,7 +179,7 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         await service.WaitForPruneAsync(TimeSpan.FromSeconds(10));
 
         Assert.Empty(failures);
-        Assert.False(service.HasInflightPreview(_source));
+        Assert.False(service.HasInflightPreview(service.GetCurrentCacheKey(_source)));
     }
 
     [Fact(DisplayName = "Threads hammering more images than the RAM cache holds always get valid images, and the cache never exceeds its byte budget")]
@@ -259,7 +259,7 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         var service2 = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDir, disableDiskCacheOverride: true, decoder: new GatedDecoder(entered, release));
         Assert.True((await service2.GetPreviewAsync(path)).PixelWidth > 0);
-        Assert.False(service.HasInflightPreview(path));
+        Assert.False(service.HasInflightPreview(service.GetCurrentCacheKey(path)));
     }
 
     private sealed class RecordingDecoder : IImageDecoder

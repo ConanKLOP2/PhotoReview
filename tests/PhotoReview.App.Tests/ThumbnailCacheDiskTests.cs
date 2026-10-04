@@ -32,7 +32,7 @@ public sealed class ThumbnailCacheDiskTests : IDisposable
     {
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
 
-        Assert.NotNull(await cache.GetAsync(_jpeg));
+        Assert.NotNull(await cache.GetAsync(_jpeg, null));
         Assert.True(await cache.WaitForPruneAsync(TimeSpan.FromSeconds(10)));
         Assert.NotEmpty(Directory.GetFiles(_diskDir, "*.png"));
 
@@ -64,7 +64,7 @@ public sealed class ThumbnailCacheDiskTests : IDisposable
         // 1 byte is smaller than any PNG, so the quota can only be honoured by evicting the file just written.
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, maxDiskBytes: 1);
 
-        Assert.NotNull(await cache.GetAsync(_jpeg));
+        Assert.NotNull(await cache.GetAsync(_jpeg, null));
         Assert.True(await cache.WaitForPruneAsync(TimeSpan.FromSeconds(10)));
 
         Assert.Empty(Directory.GetFiles(_diskDir, "*.png"));

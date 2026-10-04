@@ -18,11 +18,6 @@ public static class RawFileTypes
     };
 
     /// <summary>
-    /// Set of known camera RAW file extensions (lower-case with leading dot).
-    /// </summary>
-    public static IReadOnlySet<string> Extensions => s_extensions;
-
-    /// <summary>
     /// Returns true if the file path has a recognized camera RAW extension.
     /// </summary>
     public static bool IsRawExtension(string? path)

@@ -25,7 +25,7 @@ public sealed class RawExifTests
             [new EmbeddedPreview(0, 0, jpeg.Length, EmbeddedPreviewKind.Jpeg, 640, 480, PreviewColorSpace.Unknown)],
             [new ExifBlock(0, tiff.Length, IsTiffHeader: true)]);
 
-        var exif = RawExif.TryReadExif(headerSource, containerInfo);
+        var exif = RawExif.TryReadExif(headerSource, containerInfo, out _);
         // Synthetic builder doesn't add Make/Model strings, but parsing succeeds without throwing
         Assert.True(exif is null || !exif.IsEmpty);
     }
@@ -43,7 +43,7 @@ public sealed class RawExifTests
         foreach (var file in files)
         {
             var ext = Path.GetExtension(file).ToLowerInvariant();
-            if (!RawFileTypes.Extensions.Contains(ext))
+            if (!RawFileTypes.IsRawExtension(ext))
                 continue;
 
             using var fs = File.OpenRead(file);
@@ -56,7 +56,7 @@ public sealed class RawExifTests
 
             using var source = new SourceRawHeaderSource(fs);
             var info = reader.Read(source, CancellationToken.None);
-            var exif = RawExif.TryReadExif(source, info);
+            var exif = RawExif.TryReadExif(source, info, out _);
 
             if (exif is not null)
             {

@@ -38,9 +38,6 @@ internal sealed class WheelGestureInterpreter
 
     private int _accumulated;
 
-    /// <summary>Partial navigation delta carried to the next event (test seam).</summary>
-    public int Accumulated => _accumulated;
-
     public WheelOutcomeKind Handle(int delta, bool ctrlPressed, MouseWheelAction mode)
     {
         if (ctrlPressed || mode != MouseWheelAction.Navigate)

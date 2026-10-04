@@ -407,7 +407,6 @@ public class CompositionRootTests
 
         var policy = provider.GetRequiredService<SourceBytesCachePolicy>();
 
-        Assert.False(policy.Enabled);
         Assert.Null(policy.Cache);
     }
 
@@ -441,7 +440,6 @@ public class CompositionRootTests
         settingsStore.Current.UseSourceBytesCache = true;
 
         var policy = provider.GetRequiredService<SourceBytesCachePolicy>();
-        Assert.True(policy.Enabled);
         Assert.NotNull(policy.Cache);
 
         var fileHashService = provider.GetRequiredService<FileHashService>();

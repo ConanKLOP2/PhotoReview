@@ -197,7 +197,7 @@ public class FileSystemContractTests
         var filePath = harness.Combine("shared-read.bin");
 
         var payload = new byte[] { 0x01, 0x02, 0x03, 0x04, 0xAA, 0xBB, 0xCC };
-        using (var append = fs.OpenAppendDurable(filePath))
+        using (var append = fs.OpenAppend(filePath, durable: true))
         {
             append.Write(payload, 0, payload.Length);
         }
@@ -211,25 +211,25 @@ public class FileSystemContractTests
 
     [Theory]
     [MemberData(nameof(GetHarnessFactories))]
-    public void OpenAppendDurableAppendsSequentially(Func<IFileSystemHarness> factory)
+    public void OpenAppendAppendsSequentially(Func<IFileSystemHarness> factory)
     {
         using var harness = factory();
         var fs = harness.FileSystem;
         var filePath = harness.Combine("journal.jsonl");
 
-        using (var stream1 = fs.OpenAppendDurable(filePath))
+        using (var stream1 = fs.OpenAppend(filePath, durable: true))
         {
             var line1 = Encoding.UTF8.GetBytes("Line 1\n");
             stream1.Write(line1, 0, line1.Length);
         }
 
-        using (var stream2 = fs.OpenAppendDurable(filePath))
+        using (var stream2 = fs.OpenAppend(filePath, durable: true))
         {
             var line2 = Encoding.UTF8.GetBytes("Line 2\n");
             stream2.Write(line2, 0, line2.Length);
         }
 
-        var lines = fs.ReadLines(filePath).ToList();
+        var lines = fs.ReadAllText(filePath).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.TrimEnd('\r')).ToList();
         Assert.Equal(2, lines.Count);
         Assert.Equal("Line 1", lines[0]);
         Assert.Equal("Line 2", lines[1]);

@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.FileActions;
@@ -130,11 +129,6 @@ public sealed class OperationJournal
     /// </summary>
     internal const int AppendAttempts = 5;
     private static readonly TimeSpan AppendRetryStep = TimeSpan.FromMilliseconds(10);
-
-    public OperationJournal()
-        : this(PhotoReview.Core.AppPaths.FromEnvironment(), new PhysicalFileSystem(), new SystemClock())
-    {
-    }
 
     /// <param name="appendRetryDelay">
     /// Wait between append attempts after a sharing/lock violation (default <see cref="Thread.Sleep(TimeSpan)"/>).
@@ -380,15 +374,8 @@ public sealed class OperationJournal
     private static bool IsRecycleOrCopyLine(ReadOnlySpan<byte> line) =>
         line.IndexOf("\"Type\":\"Recycle\""u8) >= 0 || line.IndexOf("\"Type\":\"Copy\""u8) >= 0;
 
-    public IReadOnlyList<JournalEntry> ReadPendingOperations() =>
-        ComputeLatestEntries().Values.Where(entry => entry.State == JournalState.Prepared).ToList();
-
-    public IReadOnlyList<JournalEntry> ReadFailedOperations() =>
-        ComputeLatestEntries().Values.Where(entry => entry.State == JournalState.Failed).ToList();
-
     /// <summary>
-    /// R2-F-17: the Recovery window's list (pending first, then failed) from ONE pass over the journal,
-    /// instead of one full parse for <see cref="ReadPendingOperations"/> and another for <see cref="ReadFailedOperations"/>.
+    /// R2-F-17: the Recovery window's list (pending first, then failed) from ONE pass over the journal.
     /// </summary>
     public IReadOnlyList<JournalEntry> ReadPendingAndFailedOperations()
     {

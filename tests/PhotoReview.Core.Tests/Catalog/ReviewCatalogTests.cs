@@ -14,7 +14,7 @@ public class ReviewCatalogTests
         catalog.RestoreMembers([@"C:\photos\raw.cr2", @"C:\photos\jpeg.jpg", @"C:\photos\raw.cr2"], 1);
 
         Assert.Equal([@"C:\photos\before.jpg", @"C:\photos\raw.cr2", @"C:\photos\jpeg.jpg", @"C:\photos\after.jpg"], catalog.Paths);
-        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+        Assert.All(catalog.EntriesSnapshot(), entry => Assert.Null(entry.CaptureGroup));
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class ReviewCatalogTests
         catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1, group, rawEnabled: false);
 
         Assert.Equal([@"C:\photos\before.jpg", @"C:\photos\p.jpg", @"C:\photos\after.jpg"], catalog.Paths);
-        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+        Assert.All(catalog.EntriesSnapshot(), entry => Assert.Null(entry.CaptureGroup));
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class ReviewCatalogTests
         catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1, group);
 
         Assert.Equal([@"C:\photos\before.jpg", @"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\after.jpg"], catalog.Paths);
-        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+        Assert.All(catalog.EntriesSnapshot(), entry => Assert.Null(entry.CaptureGroup));
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class ReviewCatalogTests
         catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1, group);
 
         Assert.Equal(4, catalog.Count);
-        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+        Assert.All(catalog.EntriesSnapshot(), entry => Assert.Null(entry.CaptureGroup));
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public class ReviewCatalogTests
         var applied = catalog.UpdateMetadata(@"C:\photos\p.cr2", 99, stamp, 6000, 4000); // the RAW: not the entry's own file
 
         Assert.False(applied);
-        var entry = Assert.Single(catalog.Entries);
+        var entry = Assert.Single(catalog.EntriesSnapshot());
         Assert.Null(entry.Length);
         Assert.Null(entry.LastWriteUtc);
         Assert.Null(entry.Width);
@@ -82,8 +82,8 @@ public class ReviewCatalogTests
         var applied = catalog.UpdateMetadata(@"C:\photos\P.JPG", 7, stamp);
 
         Assert.True(applied);
-        Assert.Equal(7, catalog.Entries[0].Length);
-        Assert.NotNull(catalog.Entries[0].CaptureGroup);
+        Assert.Equal(7, catalog.EntriesSnapshot()[0].Length);
+        Assert.NotNull(catalog.EntriesSnapshot()[0].CaptureGroup);
     }
 
     private static ReviewCatalog PairCatalog(RawPairMode mode)
@@ -103,7 +103,7 @@ public class ReviewCatalogTests
         catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1);
 
         Assert.Equal([@"C:\photos\before.jpg", representative, @"C:\photos\after.jpg"], catalog.Paths);
-        var entry = catalog.Entries[1];
+        var entry = catalog.EntriesSnapshot()[1];
         Assert.NotNull(entry.CaptureGroup);
         Assert.Equal(@"C:\photos\p.jpg", entry.CaptureGroup!.JpegPath);
         Assert.Equal(@"C:\photos\p.cr2", entry.CaptureGroup.RawPath);
@@ -120,7 +120,7 @@ public class ReviewCatalogTests
 
         Assert.Equal(3, catalog.Count);
         Assert.DoesNotContain(catalog.Paths, path => path.EndsWith(".xmp", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(@"C:\photos\p.xmp", catalog.Entries[1].CaptureGroup!.XmpPath);
+        Assert.Equal(@"C:\photos\p.xmp", catalog.EntriesSnapshot()[1].CaptureGroup!.XmpPath);
         Assert.Equal(-1, catalog.IndexOf(@"C:\photos\p.xmp"));
     }
 
@@ -145,7 +145,7 @@ public class ReviewCatalogTests
         catalog.RestoreMembers(group.ImagePaths, 0, group);
 
         Assert.Equal(@"C:\photos\p.cr2", catalog.PathAt(0));
-        Assert.Same(group, catalog.Entries[0].CaptureGroup);
+        Assert.Same(group, catalog.EntriesSnapshot()[0].CaptureGroup);
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class ReviewCatalogTests
         catalog.RestoreMembers([@"C:\photos\p.cr2"], 1);
 
         Assert.Equal(@"C:\photos\p.cr2", catalog.PathAt(1));
-        Assert.Null(catalog.Entries[1].CaptureGroup);
+        Assert.Null(catalog.EntriesSnapshot()[1].CaptureGroup);
     }
 
     [Fact]
@@ -214,7 +214,6 @@ public class ReviewCatalogTests
         Assert.False(catalog.SetCurrent(0));
         Assert.True(catalog.SetCurrent(-1));
         Assert.Equal(-1, catalog.Remove("anything.jpg"));
-        Assert.False(catalog.MoveToFront("anything.jpg"));
     }
 
     [Fact]
@@ -312,25 +311,6 @@ public class ReviewCatalogTests
         Assert.Equal("img2.jpg", catalog.Paths[2]);
     }
 
-    [Fact]
-    public void MoveToFront_BringsItemToHeadAndSelectsIt()
-    {
-        var catalog = new ReviewCatalog();
-        catalog.Reset(["a.jpg", "b.jpg", "c.jpg"]);
-
-        Assert.False(catalog.MoveToFront("nonexistent.jpg"));
-
-        Assert.True(catalog.MoveToFront("c.jpg"));
-        Assert.Equal(0, catalog.CurrentIndex);
-        Assert.Equal("c.jpg", catalog.Current?.Path);
-        Assert.Equal(["c.jpg", "a.jpg", "b.jpg"], catalog.Paths);
-
-        // Already at front
-        Assert.True(catalog.MoveToFront("c.jpg"));
-        Assert.Equal(0, catalog.CurrentIndex);
-        Assert.Equal(["c.jpg", "a.jpg", "b.jpg"], catalog.Paths);
-    }
-
     [Theory]
     [InlineData("a.jpg", "a.jpg", "c.jpg")]
     [InlineData("A.JPG", "a.jpg", "c.jpg")]
@@ -370,34 +350,6 @@ public class ReviewCatalogTests
         Assert.Equal(0, catalog.CurrentIndex);
         Assert.Equal("c.jpg", catalog.Current?.Path);
         Assert.Equal(["c.jpg", "a.jpg", "b.jpg"], catalog.Paths);
-    }
-
-    [Fact]
-    public void InsertSorted_MaintainsOrder()
-    {
-        var catalog = new ReviewCatalog();
-        catalog.Reset(["10.jpg", "30.jpg"]);
-
-        Comparison<string> comparison = string.CompareOrdinal;
-
-        var idx = catalog.InsertSorted("20.jpg", comparison);
-        Assert.Equal(1, idx);
-        Assert.Equal(["10.jpg", "20.jpg", "30.jpg"], catalog.Paths);
-
-        // Insert at beginning
-        var idxHead = catalog.InsertSorted("05.jpg", comparison);
-        Assert.Equal(0, idxHead);
-        Assert.Equal(["05.jpg", "10.jpg", "20.jpg", "30.jpg"], catalog.Paths);
-
-        // Insert at end
-        var idxTail = catalog.InsertSorted("40.jpg", comparison);
-        Assert.Equal(4, idxTail);
-        Assert.Equal(["05.jpg", "10.jpg", "20.jpg", "30.jpg", "40.jpg"], catalog.Paths);
-
-        // Insert existing duplicate
-        var idxDup = catalog.InsertSorted("20.jpg", comparison);
-        Assert.Equal(2, idxDup);
-        Assert.Equal(5, catalog.Count);
     }
 
     [Fact]
@@ -481,14 +433,14 @@ public class ReviewCatalogTests
         var catalog = PairCatalog(mode);
         var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.xmp");
         catalog.RestoreMembers([firstRestored], 1, group); // partial undo: only one member came back
-        Assert.Null(catalog.Entries[1].CaptureGroup);
+        Assert.Null(catalog.EntriesSnapshot()[1].CaptureGroup);
         catalog.SetCurrent(1);
 
         var restored = catalog.RestoreMembers([laterRestored], 1, group); // retry restores the partner
 
         Assert.True(restored);
         Assert.Equal([@"C:\photos\before.jpg", representative, @"C:\photos\after.jpg"], catalog.Paths);
-        Assert.Equal(group, catalog.Entries[1].CaptureGroup);
+        Assert.Equal(group, catalog.EntriesSnapshot()[1].CaptureGroup);
         Assert.Equal(1, catalog.IndexOf(@"C:\photos\p.jpg"));
         Assert.Equal(1, catalog.IndexOf(@"C:\photos\p.cr2"));
         Assert.Equal(1, catalog.CurrentIndex); // still on the same photo
@@ -507,7 +459,7 @@ public class ReviewCatalogTests
         catalog.RestoreMembers([mode == RawPairMode.PreferJpeg ? @"C:\photos\p.jpg" : @"C:\photos\p.cr2"], 1, group);
 
         Assert.Equal(representative, catalog.PathAt(1));
-        Assert.Equal(group, catalog.Entries[1].CaptureGroup);
+        Assert.Equal(group, catalog.EntriesSnapshot()[1].CaptureGroup);
         Assert.Equal(2, catalog.CurrentIndex);
     }
 
@@ -547,7 +499,7 @@ public class ReviewCatalogTests
 
         Assert.Equal([bad], removed);
         Assert.Equal([survivor, @"C:\photos\z.jpg"], catalog.Paths);
-        Assert.Null(catalog.Entries[0].CaptureGroup);
+        Assert.Null(catalog.EntriesSnapshot()[0].CaptureGroup);
         Assert.Equal(-1, catalog.IndexOf(bad));
         Assert.Equal(1, catalog.CurrentIndex); // z.jpg stays current
     }
@@ -556,14 +508,14 @@ public class ReviewCatalogTests
     public void RemovePaths_UnreadableNonRepresentativeMember_KeepsRepresentativeAndDropsTheGroup()
     {
         var catalog = GroupedCatalog(RawPairMode.PreferJpeg);
-        var before = catalog.Entries[0];
+        var before = catalog.EntriesSnapshot()[0];
 
         var removed = catalog.RemovePaths([@"C:\photos\p.cr2"]);
 
         Assert.Equal([@"C:\photos\p.cr2"], removed);
         Assert.Equal([@"C:\photos\p.jpg"], catalog.Paths);
-        Assert.Null(catalog.Entries[0].CaptureGroup);
-        Assert.Equal(before.Path, catalog.Entries[0].Path);
+        Assert.Null(catalog.EntriesSnapshot()[0].CaptureGroup);
+        Assert.Equal(before.Path, catalog.EntriesSnapshot()[0].Path);
         Assert.Equal(0, catalog.CurrentIndex);
     }
 
@@ -603,7 +555,7 @@ public class ReviewCatalogTests
 
         Assert.False(restored);
         Assert.Equal(3, catalog.Count);
-        Assert.Null(catalog.Entries[1].CaptureGroup);
+        Assert.Null(catalog.EntriesSnapshot()[1].CaptureGroup);
     }
 
     [Fact]

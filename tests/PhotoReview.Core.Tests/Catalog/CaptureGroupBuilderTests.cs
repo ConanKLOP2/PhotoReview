@@ -168,7 +168,7 @@ public sealed class CaptureGroupBuilderTests(ITestOutputHelper output)
         catalog.Reset([@"C:\photos\a.jpg", @"C:\photos\a.cr2"]);
 
         Assert.Equal(2, catalog.Count);
-        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+        Assert.All(catalog.EntriesSnapshot(), entry => Assert.Null(entry.CaptureGroup));
     }
 
     private static List<CatalogEntry> TenThousandPairedEntries()

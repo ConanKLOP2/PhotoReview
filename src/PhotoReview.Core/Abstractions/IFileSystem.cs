@@ -48,15 +48,10 @@ public interface IFileSystem
     Stream OpenReadShared(string path, int bufferSize = 65536);
 
     /// <summary>
-    /// Mở luồng ghi nối tiếp bền vững (Append mode với WriteThrough).
+    /// Mở luồng ghi nối tiếp (Append mode); <paramref name="durable"/> = true thêm WriteThrough (bền vững), false = không
+    /// WriteThrough (dữ liệu chỉ tới cache của OS sau Flush thường; ADR 0007 chế độ Nhanh).
     /// </summary>
-    Stream OpenAppendDurable(string path);
-
-    /// <summary>
-    /// Mở luồng ghi nối tiếp; <paramref name="durable"/> = true giống <see cref="OpenAppendDurable"/>, false = không WriteThrough
-    /// (dữ liệu chỉ tới cache của OS sau Flush thường; ADR 0007 chế độ Nhanh). Mặc định chuyển tiếp sang OpenAppendDurable.
-    /// </summary>
-    Stream OpenAppend(string path, bool durable) => OpenAppendDurable(path);
+    Stream OpenAppend(string path, bool durable);
 
     /// <summary>
     /// Ghi nội dung văn bản ra tệp tin nguyên tử (ghi ra file tạm trước rồi đổi tên đè).
@@ -69,9 +64,6 @@ public interface IFileSystem
 
     /// <summary>Đọc toàn bộ nội dung văn bản trong tệp tin.</summary>
     string ReadAllText(string path);
-
-    /// <summary>Đọc từng dòng văn bản trong tệp tin dưới dạng lười (lazy enumeration).</summary>
-    IEnumerable<string> ReadLines(string path);
 
     /// <summary>Liệt kê các tệp tin trong thư mục khớp với mẫu tìm kiếm.</summary>
     IEnumerable<string> EnumerateFiles(string directory, string pattern = "*");

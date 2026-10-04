@@ -21,7 +21,7 @@ public sealed class RawJpegIccProfileTests
 
     private static void AssertInjected(byte[] original, byte[] result)
     {
-        var profile = RawJpegIccProfile.GetBundledAdobeRgbProfile();
+        var profile = BundledAdobeProfile.Load();
         var segmentLength = 16 + profile.Length;
         Assert.Equal(original.Length + 2 + segmentLength, result.Length);
         Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF, 0xE2, (byte)(segmentLength >> 8), (byte)segmentLength }, result[..6]);

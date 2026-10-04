@@ -27,7 +27,7 @@ public sealed class PreviewImageServiceRawKeyTests : IDisposable
         {
             await service.GetPreviewAsync(raw);
 
-            var dimensions = await service.GetOriginalDimensionsAsync(raw);
+            var dimensions = await service.GetOriginalDimensionsAsync(raw, service.GetCurrentCacheKey(raw));
 
             Assert.True(dimensions.Width > 0);
             Assert.Equal(0, decoder.ReadInfoCalls);

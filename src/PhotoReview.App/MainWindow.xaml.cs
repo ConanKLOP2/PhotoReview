@@ -147,11 +147,6 @@ public partial class MainWindow : Window
 
     public Task LoadFolderAsync(string folder, string? initialPath = null) => _viewModel.OpenFolderAsync(folder, initialPath);
 
-    /// <summary>
-    /// Public test helper: Executes the unified undo operation with proper mutual exclusion guard.
-    /// Used by integration tests via reflection. Routes to MainViewModel.UndoAsync() (gate lives in the ViewModel, OC14).
-    /// </summary>
-    public Task UndoLastActionAsync() => _viewModel.UndoAsync();
     public void ResetFitView() => ApplyFitViewAsync().FireAndLog("Reset fit view failed");
     public void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
 
@@ -638,8 +633,8 @@ public partial class MainWindow : Window
             case ReviewCommandType.Close: Close(); break;
             case ReviewCommandType.NextFolder: await RunGuardedAsync(Tr.MainMenuNextFolder, () => _viewModel.NavigateSiblingFolderAsync(1)); break;
             case ReviewCommandType.PreviousFolder: await RunGuardedAsync(Tr.MainMenuPreviousFolder, () => _viewModel.NavigateSiblingFolderAsync(-1)); break;
-            case ReviewCommandType.FirstImage: await _viewModel.FirstImageAsync(); break;
-            case ReviewCommandType.LastImage: await _viewModel.LastImageAsync(); break;
+            case ReviewCommandType.FirstImage: await _viewModel.FirstAsync(); break;
+            case ReviewCommandType.LastImage: await _viewModel.LastAsync(); break;
             case ReviewCommandType.ToggleInfoOverlay: _viewModel.ToggleInfoOverlay(); break;
             case ReviewCommandType.ZoomActualSize: await _pointer.ZoomActualSizeAsync(); break;
             case ReviewCommandType.Undo: await _viewModel.UndoAsync(); break;

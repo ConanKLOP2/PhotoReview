@@ -1,6 +1,7 @@
 ﻿namespace PhotoReview.Imaging.Tests;
 
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Settings;
 
 [Trait("Category", "HotPath")]
 public sealed class RamBudgetPolicyTests
@@ -8,10 +9,10 @@ public sealed class RamBudgetPolicyTests
     [Fact]
     public void WholeFolderRequiresCapacityAndMemoryHeadroom()
     {
-        Assert.True(RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(1_000, 2_000, new FakeMemoryProbe(true)));
-        Assert.True(RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(1_000, 1_000, new FakeMemoryProbe(true)));
-        Assert.False(RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(1_000, 999, new FakeMemoryProbe(true)));
-        Assert.False(RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(1_000, 2_000, new FakeMemoryProbe(false)));
+        Assert.True(RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(1_000, 2_000, new FakeMemoryProbe(true), PerformanceOptions.MemoryReserveBytes, 0.80));
+        Assert.True(RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(1_000, 1_000, new FakeMemoryProbe(true), PerformanceOptions.MemoryReserveBytes, 0.80));
+        Assert.False(RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(1_000, 999, new FakeMemoryProbe(true), PerformanceOptions.MemoryReserveBytes, 0.80));
+        Assert.False(RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(1_000, 2_000, new FakeMemoryProbe(false), PerformanceOptions.MemoryReserveBytes, 0.80));
     }
 
     [Fact]
@@ -57,7 +58,6 @@ public sealed class RamBudgetPolicyTests
         var fromEntries = RamBudgetPolicy.EstimateFolderPreviewBytes(entries, box, measured);
 
         Assert.Equal(expected, fromEntries);
-        Assert.Equal(RamBudgetPolicy.EstimateFolderPreviewBytes(200, box, totalSourceBytes: 1, measuredMeanPreviewBytes: measured), fromEntries);
     }
 
     [Fact]
@@ -68,7 +68,6 @@ public sealed class RamBudgetPolicyTests
         var fromEntries = RamBudgetPolicy.EstimateFolderPreviewBytes(entries, DecodeBox.Unbounded);
 
         Assert.Equal(200L * 500 * 10, fromEntries);
-        Assert.Equal(RamBudgetPolicy.EstimateFolderPreviewBytes(200, DecodeBox.Unbounded, totalSourceBytes: 200L * 500), fromEntries);
     }
 
     [Fact]

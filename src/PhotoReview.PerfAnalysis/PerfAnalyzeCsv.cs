@@ -33,7 +33,6 @@ public sealed record PerfRow(
 public sealed class PerfCsvFile
 {
     public required string Path { get; init; }
-    public required string CommitVersion { get; init; }
     public required IReadOnlyDictionary<string, string> DiagFlags { get; init; }
     public required long QpcFrequency { get; init; }
     public required long DroppedRows { get; init; }
@@ -51,7 +50,6 @@ public static class PerfCsvReader
 
     public static PerfCsvFile Read(string path)
     {
-        var commit = "unknown";
         var diagFlags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         long qpcFrequency = 0;
         long dropped = 0;
@@ -62,7 +60,7 @@ public static class PerfCsvReader
             if (rawLine.Length == 0) continue;
             if (rawLine[0] == '#')
             {
-                ParseCommentLine(rawLine, ref commit, diagFlags, ref qpcFrequency, ref dropped);
+                ParseCommentLine(rawLine, diagFlags, ref qpcFrequency, ref dropped);
                 continue;
             }
             if (rawLine.StartsWith(HeaderPrefix, StringComparison.Ordinal)) continue;
@@ -80,7 +78,6 @@ public static class PerfCsvReader
         return new PerfCsvFile
         {
             Path = path,
-            CommitVersion = commit,
             DiagFlags = diagFlags,
             QpcFrequency = qpcFrequency > 0 ? qpcFrequency : Stopwatch.Frequency,
             DroppedRows = dropped,
@@ -94,7 +91,7 @@ public static class PerfCsvReader
     ///   # dropped=&lt;n&gt;                                             (trailer, Dispose)
     /// Unknown "# ..." lines (e.g. hand-authored comments in a sample fixture) are ignored.
     /// </summary>
-    private static void ParseCommentLine(string line, ref string commit, Dictionary<string, string> diagFlags,
+    private static void ParseCommentLine(string line, Dictionary<string, string> diagFlags,
         ref long qpcFrequency, ref long dropped)
     {
         var content = line.TrimStart('#', ' ');
@@ -106,9 +103,6 @@ public static class PerfCsvReader
             var value = token[(eq + 1)..];
             switch (key)
             {
-                case "commit":
-                    commit = value;
-                    break;
                 case "qpcFrequency":
                     if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var f)) qpcFrequency = f;
                     break;

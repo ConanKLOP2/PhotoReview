@@ -38,9 +38,9 @@ public class ReviewCatalogThreadGuardTests
         Assert.True(catalog.SetCurrent(2));
         Assert.True(catalog.ReplaceOrder([Paths[2], Paths[1], Paths[0]]));
         Assert.True(catalog.UpdateMetadata(Paths[1], 10, DateTime.UtcNow));
-        Assert.True(catalog.MoveToFront(Paths[1]));
-        Assert.Equal(0, catalog.Remove(Paths[2])); // Paths[2] is after the current entry (MoveToFront made Paths[1] current)
-        Assert.True(catalog.Restore(Paths[2], 0));
+        Assert.True(catalog.SetCurrent(0));
+        Assert.Equal(0, catalog.Remove(Paths[1])); // Paths[1] is after the current entry (index 0)
+        Assert.True(catalog.Restore(Paths[1], 1));
         Assert.Equal(3, catalog.Count);
     }
 

@@ -176,7 +176,7 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
     [Fact(DisplayName = "Original dimensions are read from the real source header")]
     public async Task OriginalDimensionsAreReadFromRealSourceHeader()
     {
-        var dimensions = await _service.GetOriginalDimensionsAsync(_previewPath);
+        var dimensions = await _service.GetOriginalDimensionsAsync(_previewPath, _service.GetCurrentCacheKey(_previewPath));
         Assert.True(dimensions.Width == 1 && dimensions.Height == 1);
     }
 
@@ -276,7 +276,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
         var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_preloadFiles), long.MaxValue,
-            memoryLoadLimit: 1.0, hasHeadroom: hasHeadroom ?? (_ => true),
+            memoryLoadLimit: 1.0, memoryProbe: new DelegateMemoryProbe(hasHeadroom ?? (_ => true)),
             workerCountOverride: workerCount);
         return (metrics, service, scheduler);
     }
@@ -379,7 +379,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
         using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_singleFiles), long.MaxValue,
-            memoryLoadLimit: 1.0, hasHeadroom: _ => true);
+            memoryLoadLimit: 1.0, memoryProbe: new DelegateMemoryProbe(_ => true));
         await scheduler.PreloadAroundAsync(0);
         var warmedKey = service.GetCurrentCacheKey(_singleFiles[1]);
         Assert.True(scheduler.TryConsumePreloadedKey(warmedKey) && !scheduler.TryConsumePreloadedKey(warmedKey));

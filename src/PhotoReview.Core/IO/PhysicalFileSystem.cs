@@ -83,8 +83,6 @@ public sealed class PhysicalFileSystem : IFileSystem
             FileOptions.SequentialScan);
     }
 
-    public Stream OpenAppendDurable(string path) => OpenAppend(path, durable: true);
-
     public Stream OpenAppend(string path, bool durable)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -173,12 +171,6 @@ public sealed class PhysicalFileSystem : IFileSystem
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         return File.ReadAllText(path);
-    }
-
-    public IEnumerable<string> ReadLines(string path)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return File.ReadLines(path);
     }
 
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*")

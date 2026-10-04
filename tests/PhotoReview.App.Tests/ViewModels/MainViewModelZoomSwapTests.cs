@@ -430,12 +430,9 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
 
     private sealed class NoExplorerOrder : IExplorerOrderProvider
     {
-        public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken) =>
-            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
-
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
             IProgress<ExplorerQueryProgress>? progress = null, int progressInterval = 16, CancellationToken cancellationToken = default) =>
-            TryGetSnapshotAsync(folder, timeout, cancellationToken);
+            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
 
         public void Dispose() { }
     }

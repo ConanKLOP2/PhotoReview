@@ -110,8 +110,6 @@ public sealed class SettingsJournalDurabilityTests
             ArgumentNullException.ThrowIfNull(targetMethod);
             if (targetMethod.Name == nameof(IFileSystem.OpenAppend) && args is [string path, bool durable])
                 lock (_appends) _appends.Add((path, durable));
-            else if (targetMethod.Name == nameof(IFileSystem.OpenAppendDurable) && args is [string durablePath])
-                lock (_appends) _appends.Add((durablePath, true));
             try { return targetMethod.Invoke(_inner, args); }
             catch (TargetInvocationException ex) when (ex.InnerException is not null)
             {

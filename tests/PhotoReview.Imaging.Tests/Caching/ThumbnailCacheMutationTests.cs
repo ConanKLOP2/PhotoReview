@@ -48,15 +48,15 @@ public sealed class ThumbnailCacheMutationTests : IDisposable
             return EmbeddedThumbnailReader.TryRead(path);
         });
 
-        var pending = cache.GetAsync(source);
+        var pending = cache.GetAsync(source, null);
         await entered.Task.WaitAsync(Timeout);
         cache.ClearMemory();
         release.SetResult();
         Assert.NotNull(await pending.WaitAsync(Timeout));
 
-        Assert.NotNull(await cache.GetAsync(source).WaitAsync(Timeout));
+        Assert.NotNull(await cache.GetAsync(source, null).WaitAsync(Timeout));
         Assert.Equal(2, reads);
-        Assert.NotNull(await cache.GetAsync(source).WaitAsync(Timeout)); // now cached
+        Assert.NotNull(await cache.GetAsync(source, null).WaitAsync(Timeout)); // now cached
         Assert.Equal(2, reads);
     }
 
@@ -73,7 +73,7 @@ public sealed class ThumbnailCacheMutationTests : IDisposable
             return Task.CompletedTask;
         };
 
-        var image = await cache.GetAsync(source).WaitAsync(Timeout);
+        var image = await cache.GetAsync(source, null).WaitAsync(Timeout);
 
         Assert.NotNull(image);
         Assert.Empty(Directory.GetFiles(disk, "*.png"));
@@ -91,7 +91,7 @@ public sealed class ThumbnailCacheMutationTests : IDisposable
             return Task.CompletedTask;
         };
 
-        Assert.NotNull(await cache.GetAsync(source).WaitAsync(Timeout));
+        Assert.NotNull(await cache.GetAsync(source, null).WaitAsync(Timeout));
         Assert.True(await cache.WaitForPruneAsync(Timeout));
 
         Assert.Empty(Directory.GetFiles(disk, "*.png"));
@@ -126,7 +126,7 @@ public sealed class ThumbnailCacheMutationTests : IDisposable
             return EmbeddedThumbnailReader.TryRead(path);
         });
 
-        var pending = cache.GetAsync(source);
+        var pending = cache.GetAsync(source, null);
         await entered.Task.WaitAsync(Timeout);
         cache.ClearDisk();
         release.SetResult();

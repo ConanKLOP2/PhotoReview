@@ -127,7 +127,7 @@ public sealed class RawContainerFuzzTests
             }
 
             // Documented never-throw consumers must hold on whatever the reader accepted.
-            RawExif.TryReadExif(source, info);
+            RawExif.TryReadExif(source, info, out _);
             PreviewSelector.SelectPreview(source, info.Previews, DecodeBox.Unbounded, info.Orientation);
         }
 

@@ -247,7 +247,6 @@ public sealed partial class MainViewModelAdvancedTests
 
         Assert.Equal(path, vm.Session.CurrentPath);
         Assert.True(vm.Session.UpdatedUtc >= before);
-        vm.FlushSession();
     }
 
     [Fact]

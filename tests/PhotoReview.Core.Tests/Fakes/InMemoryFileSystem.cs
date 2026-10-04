@@ -283,8 +283,6 @@ public sealed class InMemoryFileSystem : IFileSystem
         return true;
     }
 
-    public Stream OpenAppendDurable(string path) => OpenAppend(path, durable: true);
-
     public Stream OpenAppend(string path, bool durable)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

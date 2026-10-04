@@ -10,15 +10,12 @@ public sealed class ReviewMetrics
     private long _sourceBytesRead;
     private long _sourceReads;
     private long _decodeMilliseconds;
-    private long _fullDecodeReads;
-    private long _fullDecodeMilliseconds;
     private long _decodeEwmaBits; // double bits of DecodeMillisecondsEwma (0 = no sample yet)
     private long _presentedImages;
     private long _presentMilliseconds;
     private long _preloadHits;
     private long _inflightJoins;
     private long _diskCacheHits;
-    private long _queueWaitMilliseconds;
     private long _uiAssignMilliseconds;
     private readonly ConcurrentDictionary<DecoderBackend, long> _decoderFallbacks = new();
     private long _sourceOpenCount;
@@ -44,7 +41,6 @@ public sealed class ReviewMetrics
     public void RecordPreloadHit() => Interlocked.Increment(ref _preloadHits);
     public void RecordInflightJoin() => Interlocked.Increment(ref _inflightJoins);
     public void RecordDiskCacheHit() => Interlocked.Increment(ref _diskCacheHits);
-    public void RecordQueueWait(long milliseconds) => Interlocked.Add(ref _queueWaitMilliseconds, Math.Max(0, milliseconds));
     public void RecordUiAssign(long milliseconds) => Interlocked.Add(ref _uiAssignMilliseconds, Math.Max(0, milliseconds));
 
     public void RecordCacheHit() => Interlocked.Increment(ref _cacheHits);
@@ -63,13 +59,6 @@ public sealed class ReviewMetrics
         if (includeInDecodeEwma)
         {
             UpdateDecodeEwma(milliseconds);
-        }
-        else
-        {
-            // Full-resolution (RAW) decodes are part of the totals above but are tracked separately as well, so an average
-            // over ordinary preview decodes can be derived (total minus these) without diverging from the EWMA.
-            Interlocked.Increment(ref _fullDecodeReads);
-            Interlocked.Add(ref _fullDecodeMilliseconds, milliseconds);
         }
     }
 
@@ -151,10 +140,7 @@ public sealed class ReviewMetrics
     {
         PreloadHits = Interlocked.Read(ref _preloadHits),
         InflightJoins = Interlocked.Read(ref _inflightJoins),
-        FullDecodeReads = Interlocked.Read(ref _fullDecodeReads),
-        FullDecodeMilliseconds = Interlocked.Read(ref _fullDecodeMilliseconds),
         DiskCacheHits = Interlocked.Read(ref _diskCacheHits),
-        QueueWaitMilliseconds = Interlocked.Read(ref _queueWaitMilliseconds),
         UiAssignMilliseconds = Interlocked.Read(ref _uiAssignMilliseconds),
         DecoderFallbacks = new Dictionary<DecoderBackend, long>(_decoderFallbacks),
         SourceOpenCount = Interlocked.Read(ref _sourceOpenCount),
@@ -178,20 +164,7 @@ public sealed record ReviewMetricsSnapshot(long CacheHits, long CacheMisses, lon
 {
     public long PreloadHits { get; init; }
     public long InflightJoins { get; init; }
-    /// <summary>
-    /// A SUBSET of <see cref="SourceReads"/>, not an addition to it: every source read is counted in <see cref="SourceReads"/>,
-    /// and the ones recorded with <c>includeInDecodeEwma: false</c> (full-resolution, e.g. RAW, decodes) are counted here as well.
-    /// <c>SourceReads - FullDecodeReads</c> is therefore the number of ordinary (preview) decodes, always non-negative.
-    /// </summary>
-    public long FullDecodeReads { get; init; }
-    /// <summary>
-    /// A SUBSET of <see cref="DecodeMilliseconds"/>: the time of the reads counted in <see cref="FullDecodeReads"/>, which is
-    /// also part of <see cref="DecodeMilliseconds"/>. The mean ordinary decode time is
-    /// <c>(DecodeMilliseconds - FullDecodeMilliseconds) / (SourceReads - FullDecodeReads)</c>.
-    /// </summary>
-    public long FullDecodeMilliseconds { get; init; }
     public long DiskCacheHits { get; init; }
-    public long QueueWaitMilliseconds { get; init; }
     public long UiAssignMilliseconds { get; init; }
     public IReadOnlyDictionary<DecoderBackend, long> DecoderFallbacks { get; init; } = new Dictionary<DecoderBackend, long>();
     /// <summary>Total decoder fallbacks across all backends.</summary>

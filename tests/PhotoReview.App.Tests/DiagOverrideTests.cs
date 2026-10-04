@@ -88,7 +88,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         // avoids the same trap by always using fewer files than PerformanceOptions.PreloadWorkerCount (8).
         var files = MakePreviewFiles(_root, "override-2", 2);
         using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(files), long.MaxValue,
-            memoryLoadLimit: 1.0, hasHeadroom: _ => true, workerCountOverride: 2);
+            memoryLoadLimit: 1.0, memoryProbe: new DelegateMemoryProbe(_ => true), workerCountOverride: 2);
 
         Assert.Equal(2, ReadWorkerCountField(scheduler));
         Assert.Equal(2, ReadPreloadSlotsField(scheduler).CurrentCount);
@@ -108,7 +108,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         var service = Track(new PreviewImageService(metrics, () => false, () => 256,
             diskCacheDirectory: diskDirectory), diskDirectory);
         using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(files), long.MaxValue,
-            memoryLoadLimit: 1.0, hasHeadroom: _ => true, workerCountOverride: 0);
+            memoryLoadLimit: 1.0, memoryProbe: new DelegateMemoryProbe(_ => true), workerCountOverride: 0);
 
         Assert.Equal(0, ReadWorkerCountField(scheduler));
 
@@ -130,7 +130,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         var metrics = new ReviewMetrics();
         var service = Track(new PreviewImageService(metrics, () => false, () => 256, diskCacheDirectory: diskDirectory), diskDirectory);
         using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(files), long.MaxValue,
-            memoryLoadLimit: 1.0, hasHeadroom: _ => true);
+            memoryLoadLimit: 1.0, memoryProbe: new DelegateMemoryProbe(_ => true));
 
         Assert.Equal(DefaultPreloadWorkerCount, ReadWorkerCountField(scheduler));
         Assert.Equal(DefaultPreloadWorkerCount, ReadPreloadSlotsField(scheduler).CurrentCount);

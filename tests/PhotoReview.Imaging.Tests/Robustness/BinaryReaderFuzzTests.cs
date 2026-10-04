@@ -213,7 +213,7 @@ public sealed class BinaryReaderFuzzTests : IDisposable
                         Assert.True(preview.Offset >= 0 && preview.Length > 0 && preview.Length <= bytes.Length - preview.Offset, $"preview {preview.Offset}+{preview.Length} escapes the {bytes.Length}-byte file");
 
                     // Documented never-throw consumers of whatever the reader accepted.
-                    _ = RawExif.TryReadExif(source, info);
+                    _ = RawExif.TryReadExif(source, info, out _);
                     _ = PreviewSelector.SelectPreview(source, info.Previews, new DecodeBox(32, 32), info.Orientation);
                     return true;
                 },

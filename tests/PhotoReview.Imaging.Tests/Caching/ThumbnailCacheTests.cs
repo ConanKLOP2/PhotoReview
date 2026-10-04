@@ -50,12 +50,12 @@ public sealed class ThumbnailCacheTests : IDisposable
     {
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: true);
 
-        var first = await cache.GetAsync(_jpegWithThumbnailPath);
+        var first = await cache.GetAsync(_jpegWithThumbnailPath, null);
         Assert.NotNull(first);
         Assert.True(first!.PixelWidth > 0);
         Assert.True(first.EstimatedBytes > 0);
 
-        var second = await cache.GetAsync(_jpegWithThumbnailPath);
+        var second = await cache.GetAsync(_jpegWithThumbnailPath, null);
         Assert.Same(first, second);
     }
 
@@ -64,9 +64,9 @@ public sealed class ThumbnailCacheTests : IDisposable
     {
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
 
-        var first = await cache.GetAsync(_jpegWithThumbnailPath);
+        var first = await cache.GetAsync(_jpegWithThumbnailPath, null);
         cache.ClearMemory();
-        var second = await cache.GetAsync(_jpegWithThumbnailPath);
+        var second = await cache.GetAsync(_jpegWithThumbnailPath, null);
 
         Assert.NotSame(first, second);
     }
@@ -78,7 +78,7 @@ public sealed class ThumbnailCacheTests : IDisposable
         // sizes: if this ever fell back to a full source decode, PixelWidth would be 64, not 16.
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
 
-        var thumbnail = await cache.GetAsync(_jpegWithThumbnailPath);
+        var thumbnail = await cache.GetAsync(_jpegWithThumbnailPath, null);
 
         Assert.NotNull(thumbnail);
         Assert.Equal(16, thumbnail!.PixelWidth);
@@ -105,7 +105,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     {
         var log = new RecordingLog();
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: true, log: log);
-        await cache.GetAsync(_jpegWithThumbnailPath);
+        await cache.GetAsync(_jpegWithThumbnailPath, null);
         await PhotoReview.TestSupport.Wait.UntilAsync(() => Directory.GetFiles(_diskDir, "*.png").Length == 1, "thumbnail persisted to disk");
         var cached = Directory.GetFiles(_diskDir, "*.png")[0];
         cache.ClearMemory();
@@ -113,7 +113,7 @@ public sealed class ThumbnailCacheTests : IDisposable
         // Corrupt the file, then hold it open without FileShare.Delete: reading still works (and fails to decode), deleting cannot.
         File.WriteAllBytes(cached, [1, 2, 3, 4]);
         using var hold = new FileStream(cached, FileMode.Open, FileAccess.Read, FileShare.Read);
-        await cache.GetAsync(_jpegWithThumbnailPath);
+        await cache.GetAsync(_jpegWithThumbnailPath, null);
 
         Assert.Contains(log.Errors, e => e.Contains("Delete failed", StringComparison.Ordinal));
     }
@@ -132,7 +132,7 @@ public sealed class ThumbnailCacheTests : IDisposable
                 return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
             });
 
-        await cache.GetAsync(_jpegWithThumbnailPath);
+        await cache.GetAsync(_jpegWithThumbnailPath, null);
 
         Assert.Equal(1, readerCalls);
     }
@@ -142,7 +142,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     {
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
 
-        var thumbnail = await cache.GetAsync(_jpegWithoutThumbnailPath);
+        var thumbnail = await cache.GetAsync(_jpegWithoutThumbnailPath, null);
 
         Assert.Null(thumbnail);
     }
@@ -152,7 +152,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     {
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
 
-        var thumbnail = await cache.GetAsync(_imagePath); // .png fixture from the constructor
+        var thumbnail = await cache.GetAsync(_imagePath, null); // .png fixture from the constructor
 
         Assert.Null(thumbnail);
     }
@@ -175,7 +175,7 @@ public sealed class ThumbnailCacheTests : IDisposable
 
         var first = await cache.GetAsync(_jpegWithThumbnailPath, current);
         // The stat-free key equals the fresh-stat key for an unchanged file: RAM (and the disk cache) keep hitting.
-        var viaFreshStat = await cache.GetAsync(_jpegWithThumbnailPath);
+        var viaFreshStat = await cache.GetAsync(_jpegWithThumbnailPath, null);
         Assert.Same(first, viaFreshStat);
         Assert.Equal(1, readerCalls);
 

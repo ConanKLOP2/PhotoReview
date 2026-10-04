@@ -148,7 +148,7 @@ public sealed class RamCachePercentTests
     public void ResolveCapacity_LargeWindow_ClampsToThatWindowsFloor()
     {
         // 200 ahead + 50 behind + current = 251 UHD previews = 8,327,577,600 B = 24.24 % of 32 GiB -> floor 25 %.
-        var window = PreloadWindow.Create(200, 50);
+        var window = new PreloadWindow(200, 50);
         var floor = RamBudgetPolicy.MinimumCachePercent(32 * Gib, window);
         Assert.Equal(25, floor);
 
@@ -163,7 +163,7 @@ public sealed class RamCachePercentTests
     [Fact(DisplayName = "Q-R31: the source-bytes cache leaves the configured window's previews room, not the default's")]
     public void SourceBytesForPercent_LargeWindow_LeavesThatWindowRoom()
     {
-        var window = PreloadWindow.Create(200, 50);
+        var window = new PreloadWindow(200, 50);
         var physical = 32 * Gib;
         var percent = RamBudgetPolicy.MinimumCachePercent(physical, window); // budget just covers the window
         var budget = RamBudgetPolicy.BytesForPercent(percent, physical);

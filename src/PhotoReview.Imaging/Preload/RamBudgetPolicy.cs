@@ -144,45 +144,6 @@ public static class RamBudgetPolicy
     public const double MeasuredPreviewMargin = 1.25;
 
     /// <summary>
-    /// Q-R17: decoded bytes the preview cache needs to hold every one of <paramref name="imageCount"/>
-    /// images at <paramref name="targetBox"/>, without reading any file header.
-    /// <list type="bullet">
-    /// <item>Measured (<paramref name="measuredMeanPreviewBytes"/>, the mean size of previews already
-    /// decoded at this box): mean x <see cref="MeasuredPreviewMargin"/>, capped at the box bound unless the
-    /// measured images themselves exceed it (e.g. 16-bit PNG).</item>
-    /// <item>Not measured yet, bounded box: <c>w x h x 4</c> per image -- previews are only ever
-    /// scaled down into the box, so this is an upper bound for 4-byte pixels.</item>
-    /// <item>Box unbounded on an axis (Original loading mode, width-only box): compressed source
-    /// bytes x <see cref="JpegExpansionFactor"/> (the pre-Q-R17 estimate).</item>
-    /// </list>
-    /// </summary>
-    public static long EstimateFolderPreviewBytes(int imageCount, DecodeBox targetBox, long totalSourceBytes,
-        double? measuredMeanPreviewBytes = null)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(imageCount);
-        ArgumentOutOfRangeException.ThrowIfNegative(totalSourceBytes);
-        var bounded = targetBox.Width > 0 && targetBox.Height > 0;
-        var boxBound = bounded ? (double)targetBox.Width * targetBox.Height * DefaultAverageBytesPerPixel : 0;
-        double perImage;
-        if (measuredMeanPreviewBytes is > 0)
-        {
-            var measured = measuredMeanPreviewBytes.Value;
-            perImage = measured * MeasuredPreviewMargin;
-            // Capped at the 4-byte box bound, unless the images already measure above it (16-bit pixels).
-            if (bounded && measured <= boxBound) perImage = Math.Min(perImage, boxBound);
-        }
-        else if (bounded)
-        {
-            perImage = boxBound;
-        }
-        else
-        {
-            return checked((long)(totalSourceBytes * JpegExpansionFactor));
-        }
-        return checked((long)Math.Ceiling(imageCount * perImage));
-    }
-
-    /// <summary>
     /// Estimates the decoded preview cost of a folder. With a measured mean (previews already decoded at this box) every entry costs the
     /// same, so the catalog is not visited at all (O(1)). Otherwise each entry uses its known dimensions, the decode-box ceiling, or
     /// its compressed length (x <see cref="JpegExpansionFactor"/> for other formats, x <see cref="RawCompressedToPreviewFactor"/> for RAW);
@@ -197,8 +158,7 @@ public static class RamBudgetPolicy
         var boxBound = bounded ? (double)targetBox.Width * targetBox.Height * DefaultAverageBytesPerPixel : 0;
         if (measuredMeanPreviewBytes is > 0)
         {
-            // The measured mean of previews really decoded at this box is the calibration (same rule as the scalar
-            // overload): it also covers 16-bit / 8-byte-per-pixel images that the 4-byte geometry would underestimate.
+            // The measured mean of previews really decoded at this box is the calibration: it also covers 16-bit / 8-byte-per-pixel images that the 4-byte geometry would underestimate.
             var measured = measuredMeanPreviewBytes.Value;
             var calibrated = measured * MeasuredPreviewMargin;
             // Capped at the 4-byte box bound, unless the images already measure above it (16-bit pixels).
@@ -255,19 +215,13 @@ public static class RamBudgetPolicy
 
     /// <summary>Whole-folder preload when an already computed estimate (see <see cref="EstimateFolderPreviewBytes"/>) fits the budget and RAM has headroom.</summary>
     public static bool ShouldPreloadWholeFolderEstimate(long estimatedBytes, long capacityBytes, IMemoryProbe memoryProbe,
-        long reserveBytes = PerformanceOptions.MemoryReserveBytes,
-        double maximumLoad = PerformanceOptionsDefaults.PreloadMemoryLoadLimit)
+        long reserveBytes, double maximumLoad)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(estimatedBytes);
         ArgumentNullException.ThrowIfNull(memoryProbe);
         return estimatedBytes <= capacityBytes && memoryProbe.HasHeadroom(maximumLoad, reserveBytes);
     }
 
-    private static class PerformanceOptionsDefaults
-    {
-        // Deliberately not PerformanceOptions.PreloadMemoryLoadLimit (0.90): this is the whole-folder gate's own, stricter default.
-        public const double PreloadMemoryLoadLimit = 0.80;
-    }
 }
 
 /// <summary>

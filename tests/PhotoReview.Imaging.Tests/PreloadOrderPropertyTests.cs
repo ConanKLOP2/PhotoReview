@@ -83,17 +83,17 @@ public sealed class PreloadOrderPropertyTests
     [Fact(DisplayName = "The direction of travel decides which side gets the long window, and lead shifts it away from the current image")]
     public void Build_DirectionAndLead_ExamplePositions()
     {
-        var next = PreloadOrderService.Build(50, 200, fullFolder: false, direction: 1, lead: 0).ToArray();
+        var next = PreloadOrderService.Build(50, 200, fullFolder: false, direction: 1, lead: 0, window: PreloadWindow.Default).ToArray();
         Assert.Equal(51, next[0]);
         Assert.Equal(82, next[Forward - 1]);
         Assert.Equal(49, next[Forward]);
 
-        var previous = PreloadOrderService.Build(50, 200, fullFolder: false, direction: -1, lead: 0).ToArray();
+        var previous = PreloadOrderService.Build(50, 200, fullFolder: false, direction: -1, lead: 0, window: PreloadWindow.Default).ToArray();
         Assert.Equal(49, previous[0]);
         Assert.Equal(18, previous[Forward - 1]);
         Assert.Equal(51, previous[Forward]);
 
-        var burst = PreloadOrderService.Build(50, 200, fullFolder: false, direction: 1, lead: 3).ToArray();
+        var burst = PreloadOrderService.Build(50, 200, fullFolder: false, direction: 1, lead: 3, window: PreloadWindow.Default).ToArray();
         Assert.Equal(54, burst[0]);                    // starts lead + 1 ahead
         Assert.Equal(SkippedLead, burst.Skip(Forward).Take(3).ToArray()); // the skipped images follow the shifted window
     }

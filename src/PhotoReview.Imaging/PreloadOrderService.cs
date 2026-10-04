@@ -8,9 +8,6 @@ public static class PreloadOrderService
     /// <summary>Size of the small window kept behind the user.</summary>
     public const int BackwardLookahead = 8;
 
-    public static IEnumerable<int> Build(int center, int count, bool fullFolder) =>
-        Build(center, count, fullFolder, direction: 1, lead: 0);
-
     /// <summary>
     /// perf(preload): preload order around <paramref name="center"/>.
     /// <paramref name="direction"/> (+1 Next, -1 Prev) picks which side gets the
@@ -19,11 +16,8 @@ public static class PreloadOrderService
     /// window to start <c>lead + 1</c> images ahead -- the images between would be passed before their
     /// decode finished -- and queues those skipped images right after the shifted window, so they are
     /// still reached first if the user stops. direction = +1, lead = 0 is the original order.
+    /// <paramref name="window"/> is the user-configurable preload window (feat/preload-window-setting).
     /// </summary>
-    public static IEnumerable<int> Build(int center, int count, bool fullFolder, int direction, int lead) =>
-        Build(center, count, fullFolder, direction, lead, PreloadWindow.Default);
-
-    /// <summary>feat/preload-window-setting: same as <see cref="Build(int, int, bool, int, int)"/>, but with a user-configurable window.</summary>
     public static IEnumerable<int> Build(int center, int count, bool fullFolder, int direction, int lead, PreloadWindow window)
     {
         if (center < 0 || center >= count) yield break;
