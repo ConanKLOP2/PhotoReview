@@ -371,9 +371,9 @@ public sealed class RecoveryRetryServiceTests
     }
 
     [Fact]
-    public async Task RetryCopy_FailsMidway_RemovesPartialDestination()
+    public async Task RetryCopy_FailsMidway_KeepsUnclaimedPartialDestinationAsConflict()
     {
-        // RV-C03: the retry's own partial copy must not stay behind (it would turn the entry into a Conflict).
+        // D-01 (decision c): File.Copy gives no proof of creation, so the retry's partial copy is kept and the entry becomes a Conflict.
         var source = @"C:\photos\a.jpg";
         var dest = @"C:\photos\sub\a.jpg";
         _fs.WriteAllTextAtomic(source, "12345");
@@ -386,14 +386,14 @@ public sealed class RecoveryRetryServiceTests
         var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
-        Assert.True(_fs.FileExists(source));
-        Assert.False(_fs.FileExists(dest));
+        Assert.Equal("12345", _fs.ReadAllText(source));
+        Assert.Equal(2, _fs.GetFileStat(dest)!.Length);
         Assert.NotNull(result.Entry);
-        Assert.Equal(RecoveryVerdict.CanRetry, new RecoveryFileCheck(_fs).Check(result.Entry).Verdict);
+        Assert.Equal(RecoveryVerdict.Conflict, new RecoveryFileCheck(_fs).Check(result.Entry).Verdict);
     }
 
     [Fact]
-    public async Task RetryGroupCopy_FailsMidway_RemovesPartialDestinationOfTheFailingMember()
+    public async Task RetryGroupCopy_FailsMidway_KeepsUnclaimedPartialDestinationOfTheFailingMember()
     {
         var jpeg = @"C:\photos\a.jpg";
         var raw = @"C:\photos\a.cr2";
@@ -416,12 +416,12 @@ public sealed class RecoveryRetryServiceTests
         var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
-        Assert.False(_fs.FileExists(@"C:\photos\sub\a.cr2"));
+        Assert.Equal(3, _fs.GetFileStat(@"C:\photos\sub\a.cr2")!.Length); // never deleted: no proof it is ours
         Assert.True(_fs.FileExists(raw));
     }
 
     [Fact]
-    public async Task RetryCopy_FailsAndPartialCleanupThrowsUnexpectedly_ReportsTheOriginalFailure()
+    public async Task RetryCopy_FailsMidway_NeverAttemptsToDeleteThePartial_ReportsTheOriginalFailure()
     {
         var source = @"C:\photos\a.jpg";
         var dest = @"C:\photos\sub\a.jpg";
@@ -431,10 +431,16 @@ public sealed class RecoveryRetryServiceTests
             source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
         _journal.Append(failed);
         _fs.CopyFailsAfterBytes = 2;
-        _fs.DeleteHook = _ => new InvalidOperationException("simulated filter driver failure");
+        var deleteAttempted = false;
+        _fs.DeleteHook = _ =>
+        {
+            deleteAttempted = true;
+            return new InvalidOperationException("simulated filter driver failure");
+        };
 
         var result = await _service.RetryMoveOrCopyAsync(failed);
 
+        Assert.False(deleteAttempted); // no proof of creation: the partial is left alone
         Assert.False(result.Succeeded);
         Assert.Equal("Simulated disk full during copy.", result.Message);
         Assert.NotNull(result.Entry);

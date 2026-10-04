@@ -382,17 +382,23 @@ public sealed class CaptureGroupActionRollbackTests
     }
 
     [Fact]
-    public async Task ExecuteGroupAsync_CopyLeavesPartialFile_PartialFileIsDeleted()
+    public async Task ExecuteGroupAsync_CopyLeavesPartialFile_PartialFileIsKeptAndRecoveryShowsConflict()
     {
         var (fs, journal) = CreateWorld();
-        fs.CopyPartialHook = (source, _) => source == Raw ? (3, new IOException("disk full")) : null; // a half-written copy of ours
+        // D-01 (decision c): a half-written copy is not provably ours (File.Copy gives no proof), so it stays for Recovery.
+        fs.CopyPartialHook = (source, _) => source == Raw ? (3, new IOException("disk full")) : null;
 
         var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Copy));
 
         Assert.False(result.Succeeded);
-        Assert.False(fs.FileExists(MovedRaw));
-        Assert.False(fs.FileExists(MovedJpeg));
-        AssertFullyRolledBackAndNotRetryable(journal, result);
+        Assert.Equal(3, fs.GetFileStat(MovedRaw)!.Length); // the partial stays
+        Assert.False(fs.FileExists(MovedJpeg));            // the fully verified first copy is still rolled back
+        Assert.Equal("raw data", fs.ReadAllText(Raw));     // sources intact
+        Assert.Equal("jpeg", fs.ReadAllText(Jpeg));
+        var failed = Assert.Single(journal.ReadFailedOperations());
+        Assert.Equal(JournalState.Failed, failed.State);
+        Assert.Equal(RecoveryVerdict.Conflict, new RecoveryFileCheck(fs).Check(failed).Verdict);
+        Assert.True(Assert.Single(result.Members, member => member.Member.Source == Raw).Conflict);
     }
 
     [Fact]

@@ -371,19 +371,24 @@ public sealed class FileActionServiceGroupMutationGapTests
         Assert.Single(world.Journal.ReadFailedOperations());
     }
 
-    [Theory]
-    [MemberData(nameof(CaughtFaults))]
-    public async Task ExecuteGroupAsync_CopyRollbackCannotDeleteThePartialFile_CountsItAsStuckWithoutEscaping(string kind)
+    [Fact]
+    public async Task ExecuteGroupAsync_CopyLeavesPartialFile_RollbackNeverTriesToDeleteIt()
     {
         var world = new World();
-        // a half-written copy of the second member, created by this copy
+        // D-01 (decision c): a half-written copy of the second member is not provably ours, so the rollback never touches it.
         world.Disk.CopyPartialHook = (source, _) => source == Raw ? (3, new IOException("simulated")) : null;
-        world.Disk.DeleteHook = path => path == MovedRaw ? Fault(kind) : null;
+        var partialDeleteAttempted = false;
+        world.Disk.DeleteHook = path =>
+        {
+            if (path == MovedRaw) partialDeleteAttempted = true;
+            return null;
+        };
 
         var result = await world.Service.ExecuteGroupAsync(Req(FileOperationType.Copy));
 
+        Assert.False(partialDeleteAttempted);
         Assert.False(result.Succeeded);
-        Assert.Equal(Tr.CoreGroupActionRollbackFailed("simulated", 1), result.Error); // exactly the partial: the JPEG copy was removed
+        Assert.Equal("simulated", result.Error); // no rollback note: nothing the rollback owned is stuck (the JPEG copy was removed)
         Assert.True(world.Disk.FileExists(MovedRaw));
         Assert.False(world.Disk.FileExists(MovedJpeg));
         Assert.Single(world.Journal.ReadFailedOperations());

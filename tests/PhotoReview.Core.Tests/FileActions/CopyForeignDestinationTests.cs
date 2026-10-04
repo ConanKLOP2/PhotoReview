@@ -103,10 +103,10 @@ public sealed class CopyForeignDestinationTests
         Assert.Equal(Foreign, fs.ReadAllText(destination));
     }
 
-    [Fact(DisplayName = "R01 control: a Copy that creates its destination and then fails still removes its own partial file")]
-    public async Task SingleCopy_FailsAfterCreatingDestination_OwnPartialFileIsRemoved()
+    [Fact(DisplayName = "D-01: a Copy that throws after writing a partial destination keeps it (no proof of creation), the entry stays Failed")]
+    public async Task SingleCopy_FailsAfterWritingPartialDestination_PartialFileIsKeptForRecovery()
     {
-        var (fs, _, service) = World();
+        var (fs, journal, service) = World();
         const string source = @"C:\photos\a.jpg";
         fs.AddFile(source, "long source photo");
         fs.CopyFailsAfterBytes = 3;
@@ -114,6 +114,29 @@ public sealed class CopyForeignDestinationTests
         var result = await service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
 
         Assert.False(result.Succeeded);
-        Assert.False(fs.FileExists(@"C:\photos\sel\a.jpg"));
+        Assert.Equal("long source photo", fs.ReadAllText(source));
+        Assert.Equal(3, fs.GetFileStat(@"C:\photos\sel\a.jpg")!.Length);
+        var failed = Assert.Single(journal.ReadPendingAndFailedOperations());
+        Assert.Equal(JournalState.Failed, failed.State);
+        Assert.Equal(RecoveryVerdict.Conflict, new RecoveryFileCheck(fs).Check(failed).Verdict);
+    }
+
+    [Fact(DisplayName = "D-01: a foreign shorter file at the destination is never deleted when the Copy then fails with a generic error")]
+    public async Task SingleCopy_ForeignShorterFileAppearsAndCopyThrowsGenericError_ForeignFileSurvives()
+    {
+        var (fs, _, service) = World();
+        const string source = @"C:\photos\a.jpg";
+        fs.AddFile(source, "long source photo");
+        // Someone else's file lands at the destination after the preflight; the copy then fails with an error that is not "exists".
+        fs.CopyHook = (_, to) =>
+        {
+            fs.AddFile(to, Foreign);
+            return new IOException("simulated disk full");
+        };
+
+        var result = await service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Foreign, fs.ReadAllText(@"C:\photos\sel\a.jpg"));
     }
 }

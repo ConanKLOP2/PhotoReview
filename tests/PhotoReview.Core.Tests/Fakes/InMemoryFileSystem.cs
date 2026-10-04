@@ -51,10 +51,8 @@ public sealed class InMemoryFileSystem : IFileSystem
     public Func<string, DateTime, DateTime>? StampOnMove { get; set; }
 
     /// <summary>
-    /// NOTE (D-01, open): this fake raises <see cref="CopyCreationProof"/> at the partial write, but the real
-    /// <c>PhysicalFileSystem.TryCopyNew</c> raises it only after File.Copy returned, so a real copy that throws after creating its
-    /// destination (disk full) is NOT claimed and its partial file is left for Recovery. Tests relying on partial-copy cleanup
-    /// therefore model a behaviour the production file system does not have yet.
+    /// D-01 (decision c): like the real <c>PhysicalFileSystem.TryCopyNew</c>, a copy that throws after writing a partial destination
+    /// does NOT raise <see cref="CopyCreationProof"/>; only a copy that returned does. The partial file stays for Recovery.
     /// RV-C03: when set, <see cref="Copy"/>/<see cref="TryCopyNew"/> write only the first N bytes of the source to the
     /// (new) destination and then throw an <see cref="IOException"/>, like a copy cut short by a full disk.
     /// </summary>
@@ -188,7 +186,7 @@ public sealed class InMemoryFileSystem : IFileSystem
     /// <summary>Atomic create-new copy (existence check and creation under one lock), like the physical implementation.</summary>
     public bool TryCopyNew(string source, string destination) => CopyCore(source, destination, failIfExists: true, proof: null);
 
-    /// <summary>Raises <paramref name="proof"/> at the moment this call writes the destination (also for a partial write that then throws).</summary>
+    /// <summary>Raises <paramref name="proof"/> only after the copy completed (never for a partial write that then throws), like the real file system.</summary>
     public bool TryCopyNew(string source, string destination, CopyCreationProof proof) =>
         CopyCore(source, destination, failIfExists: true, proof ?? throw new ArgumentNullException(nameof(proof)));
 
@@ -228,14 +226,14 @@ public sealed class InMemoryFileSystem : IFileSystem
             {
                 _files[dstNorm] = bytes.AsSpan(0, Math.Min(partial.Bytes, bytes.Length)).ToArray();
                 _fileWriteTimes[dstNorm] = DateTime.UtcNow;
-                proof?.MarkCreated();
+                // No proof here, like PhysicalFileSystem: File.Copy cannot say whether a throw came after it created the destination, so a
+                // copy that fails leaves its partial file unclaimed (D-01, decision (c)); cleanup must never delete it.
                 throw partial.Error;
             }
 
             if (CopyFailsAfterBytes is { } written)
             {
-                _files[dstNorm] = bytes.AsSpan(0, Math.Min(written, bytes.Length)).ToArray();
-                proof?.MarkCreated();
+                _files[dstNorm] = bytes.AsSpan(0, Math.Min(written, bytes.Length)).ToArray(); // unclaimed, see CopyPartialHook above
                 _fileWriteTimes[dstNorm] = DateTime.UtcNow;
                 throw new IOException("Simulated disk full during copy.");
             }

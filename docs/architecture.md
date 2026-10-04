@@ -84,6 +84,8 @@ Input/action profile
 
 Committed: D exists = `AlreadyDone`, S và D missing = `Lost`, còn lại `Unknown`. Recycle: S missing = `RecycleUnverifiable` (hoặc `PermanentlyDeleted` nếu entry đánh dấu `Permanent`; capture lẫn cả hai = `PartiallyPermanentlyDeleted`), S present = `NotRecycled`. Chi tiết trong comment của `RecoveryFileCheck`.
 
+**Copy lỗi giữa chừng (COPY-PARTIAL-01, quyết định c):** `File.Copy` không chứng minh được file đích do chính lần gọi tạo ra, nên một Copy hết đĩa giữa chừng để lại file đích dở và app không tự xóa (tránh xóa nhầm file lạ). Entry là Failed, Recovery hiện `Conflict`; người dùng tự xóa file dở rồi thử lại.
+
 **Chế độ journal (ADR 0007, IO03, `AppSettings.JournalDurability`, đọc live cho mỗi lần ghi):** *Fast* (mặc định) mở stream không `WriteThrough`, `Flush()` thường sau mỗi bản ghi; *PowerLossSafe* giữ `WriteThrough` + `Flush(true)` và `FileActionService` ghi Prepared trên pool thread (`Task.Run`) rồi mới mutation/Committed — UI không bị chặn. Cả hai: Prepared → mutation → Committed, một bản ghi = một dòng JSON, đọc bỏ qua dòng hỏng.
 
 **Thao tác đang chạy (Q-R27):** `JournalTransaction` giữ một marker `ILiveOperationRegistry` theo Id (app: named event `WindowsLiveOperationRegistry`, `Local\`, theo SID) từ trước Prepared đến sau Committed/Failed; reconcile (kể cả của process khác dùng chung journal) bỏ qua entry có marker sống. Process chết thì Windows đóng handle, nên entry sót lại vẫn được reconcile.
