@@ -1,6 +1,6 @@
 # Active Tasks
 
-**Updated:** 2026-10-04 | **Base:** `origin/master` `5d291076` (#280) | **Open PRs verified:** #281, #282, #283; audit #284 DRAFT (`codex/review-all-20261004`, not merged)
+**Updated:** 2026-10-04 | **Base:** `origin/master` `18aa6eb6` (#320) | **Open PRs verified:** #284 (`codex/review-all-20261004`, open, not draft, not merged)
 
 Finished groups (AR, ST, OC, TS, TC, DF/T89, CQ, WD, IO, D, DT, L, reviews, whole-project review R/P/ledger, SEC, perf night, UI feedback, camera RAW, whole-code review RV-*, error-handling reviews, threading analyzers, dead-code cleanup, mutation testing): one line each in
 [`refactoring/HISTORY.md`](refactoring/HISTORY.md). Decisions: [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md).
