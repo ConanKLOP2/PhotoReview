@@ -12,7 +12,7 @@ Pinned comparison head: `origin/master` `18aa6eb64ba48666de620937211e0782dd6131c
 
 ## Full-inventory continuation progress
 
-These are reread callables for the current-head continuation, separate from cumulative ledger statuses. App/Integration's previous overlay has 6,161 rows (5,997 distinct composite identities), leaving 294 rows for semantic review; owned files are unchanged from `5cc7f381` through `18aa6eb6`. Core batches 18–42 contain 2,516 unique normalized keys, but only 921 of 1,560 Core-owned rows had matched during the ownership audit, leaving 378 for explicit review. Imaging reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport reread 298/298. App and Core remain active. No tests/build were run in this continuation.
+These are reread callables for the current-head continuation, separate from cumulative ledger statuses. App/Integration's previous overlay has 6,161 rows (5,997 distinct composite identities), leaving 294 rows for semantic review; owned files are unchanged from `5cc7f381` through `18aa6eb6`. Core batches 18–43 contain 2,548 unique normalized keys, but only 921 of 1,560 Core-owned rows had matched during the ownership audit, leaving 378 for explicit review. Imaging reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport reread 298/298. App and Core remain active. No tests/build were run in this continuation.
 
 ## Current findings
 

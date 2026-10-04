@@ -8,14 +8,14 @@ The current Roslyn inventory covers 16,799 callable bodies in 1,068 tracked C# f
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 14,934 `STATIC-ONLY`, 82 `ISSUE`, and 1,783 `UNREVIEWED` rows after importing the App/Integration, Core batches 18–42, and Architecture/TestSupport overlays. Review lanes are still running; do not read ledger status counts as full-project completion.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 14,886 `STATIC-ONLY`, 112 `ISSUE`, and 1,801 `UNREVIEWED` rows after importing the App/Integration, Core batches 18–43, and Architecture/TestSupport overlays. Review lanes are still running; do not read ledger status counts as full-project completion.
 
 The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App/Integration and Core/tooling lanes continue in separate ownership areas; Imaging and Architecture/TestSupport are complete. Every status is reconciled against this current inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
 | App + Integration | 1,229 | 5,226 | 6,455 | Prior overlay covers 6,161 rows (5,997 distinct composite identities); 294 rows remain for semantic review, preserving duplicate inventory identities |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | Batches 18–41 cover 2,516 distinct normalized callable keys (overlap is retained in the ledger); 378 Core-owned rows remain unrepresented |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | Batches 18–43 cover 2,548 distinct normalized callable keys (overlap is retained in the ledger); 378 Core-owned rows remain unrepresented |
 | Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,279 Imaging.Tests reread; complete; 189 related Integration/App/Architecture rows also read |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | 298/298 reread; two test-fixture cleanup safety candidates (R24–R25) |
 
