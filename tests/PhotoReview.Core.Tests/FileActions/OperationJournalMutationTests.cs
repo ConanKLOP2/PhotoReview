@@ -497,4 +497,18 @@ public sealed class OperationJournalMutationTests
 
         Assert.Equal(Enumerable.Range(0, 100).Select(i => $"m{i:D4}"), moves.Select(m => m.Id));
     }
+
+    [Fact]
+    public void ReadCommittedMoves_LastLineLongerThanTheFirstWindowAndWithoutATrailingNewline_IsStillRead()
+    {
+        // 300 KB of path in one Move line: the first 256 KB window holds no line break, so the reader must widen it.
+        var longMove = JsonSerializer.Serialize(
+            new JournalEntry("big", FileOperationType.Move, JournalState.Committed, @"C:\photos\" + new string('a', 300_000) + ".jpg", @"C:\sel\big.jpg", 4, Stamp, Stamp));
+        var rest = Concat([MoveLine(1), Encoding.UTF8.GetBytes(longMove)]);
+        _fs.AddFile(Paths.JournalFile, PaddedJournal(OneMiB, rest));
+
+        var moves = NewJournal().ReadCommittedMoves();
+
+        Assert.Equal(["m0001", "big"], moves.Select(m => m.Id));
+    }
 }
