@@ -1,0 +1,34 @@
+// Evidence only (never compiled by the solution). Run from any folder as a .NET 10 file-based app: copy to repro.cs, replace <repo> with the checkout path, then 'dotnet run repro.cs'.
+// Touches only its own temp folders (junction repro removes the junctions before the folder).
+#:property PublishAot=false
+#:property JsonSerializerIsReflectionEnabledByDefault=true
+#:project <repo>\src\PhotoReview.Core\PhotoReview.Core.csproj
+using PhotoReview.Core.IO;
+using PhotoReview.Core.Abstractions;
+using System.Diagnostics;
+var fs = new PhysicalFileSystem();
+Console.WriteLine("ResolveRealPath(C:\\) = [" + fs.ResolveRealPath(@"C:\") + "]");
+Console.WriteLine("ResolveRealPath(C:\\Windows\\) = [" + fs.ResolveRealPath(@"C:\Windows\") + "]");
+// chained junction
+var t = Path.Combine(Path.GetTempPath(), "prrev_" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(Path.Combine(t, "real", "dir_inner_placeholder"));
+var elsewhere = Path.Combine(t, "elsewhere"); Directory.CreateDirectory(Path.Combine(elsewhere, "dir"));
+var jct = Path.Combine(t, "real", "jct");   // junction -> elsewhere
+Run("cmd", "/c mklink /J \"" + jct + "\" \"" + elsewhere + "\"");
+var j1 = Path.Combine(t, "inside_link");     // junction -> t\real\jct\dir  (target path goes THROUGH the second junction)
+Run("cmd", "/c mklink /J \"" + j1 + "\" \"" + Path.Combine(jct, "dir") + "\"");
+var resolved = fs.ResolveRealPath(Path.Combine(j1, "file.jpg"));
+Console.WriteLine("resolved: " + resolved);
+Console.WriteLine("elsewhere: " + elsewhere);
+Console.WriteLine("ESCAPE-UNDETECTED(contains 'real\\jct'): " + resolved.Contains(Path.Combine("real","jct")));
+// cleanup: remove junctions first (does not touch targets)
+Directory.Delete(j1); Directory.Delete(jct); Directory.Delete(t, true);
+// ... segment
+Console.WriteLine("GetFullPath(C:\\a\\b\\...\\c) = " + Path.GetFullPath(@"C:\a\b\...\c"));
+// VBlank
+var e = new VBlankEstimator();
+double p = 10_000_000/60.0; // 60 Hz in 100ns QPC ticks
+long[] ts = { 0, (long)p, (long)(2*p)+ (long)(0.4*p), (long)(3*p) };
+foreach (var x in ts) e.Add(x);
+Console.WriteLine("true period=" + (long)p + " estimated=" + e.Current?.RefreshPeriod + " samples=" + e.Count);
+static void Run(string f, string a){ var pr=Process.Start(new ProcessStartInfo(f,a){CreateNoWindow=true,RedirectStandardOutput=true,UseShellExecute=false})!; pr.WaitForExit(); }

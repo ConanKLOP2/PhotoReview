@@ -1,0 +1,12 @@
+// Evidence only (never compiled by the solution). Run from any folder as a .NET 10 file-based app: copy to repro.cs, replace <repo> with the checkout path, then 'dotnet run repro.cs'.
+// Touches only its own temp folders (junction repro removes the junctions before the folder).
+#:property PublishAot=false
+#:property JsonSerializerIsReflectionEnabledByDefault=true
+#:project <repo>\src\PhotoReview.Core\PhotoReview.Core.csproj
+using PhotoReview.Core.Settings;
+var r = SettingsStore.ParseText("{\"UiLanguage\":\"en\"}");
+Console.WriteLine("no ConfigVersion + UiLanguage=en -> " + r.Settings.UiLanguage + " version=" + r.Settings.ConfigVersion);
+var r2 = SettingsStore.ParseText("{\"ConfigVersion\":2,\"UiLanguage\":\"en\"}");
+Console.WriteLine("ConfigVersion=2 + UiLanguage=en -> " + r2.Settings.UiLanguage);
+var r3 = SettingsStore.ParseText("{\"InfoOverlayFontSize\":\"NaN\"}");
+Console.WriteLine("NaN string -> size=" + r3.Settings.InfoOverlayFontSize + " repairs=" + string.Join(",", r3.Repairs));
