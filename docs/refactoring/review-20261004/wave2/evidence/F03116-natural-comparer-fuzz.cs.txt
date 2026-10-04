@@ -1,0 +1,15 @@
+﻿// OK evidence for WindowsNaturalComparer.Compare (F03116). Never compiled by the repo.
+// Fuzz: 220 random strings (alphabet: a B 0 1 2 9 - _ space . ( ) e-acute 00 01, length 1-5, seed 12345), the exact
+// Compare logic (StrCmpLogicalW, tie-break OrdinalIgnoreCase). Every ordered triple was checked for transitivity and every
+// pair for antisymmetry. Observed on the review machine (Windows PowerShell Add-Type, 2026-10-04):
+//   transitivity violations=0, antisymmetry violations=0
+// Conclusion: no evidence that List.Sort with this comparer can see an inconsistent ordering for ordinary file names.
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+static class NatProbe
+{
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] static extern int StrCmpLogicalW(string x, string y);
+    static int Cmp(string x, string y) { var r = StrCmpLogicalW(x, y); return r != 0 ? r : StringComparer.OrdinalIgnoreCase.Compare(x, y); }
+    // ... triple loop: if Cmp(a,b)<0 && Cmp(b,c)<0 then require Cmp(a,c)<0; count Sign(Cmp(a,b)) != -Sign(Cmp(b,a)).
+}

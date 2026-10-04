@@ -1,0 +1,34 @@
+﻿// P-RB-01 evidence (never compiled by the repo; run by hand with a junction/mount point to a NON-fixed volume).
+// Read-only: prints classifications; it never calls the shell, never touches the Recycle Bin, never deletes.
+//
+// Already observed on the review machine (PowerShell P/Invoke, junction created under the session scratchpad
+// pointing at D:\, removed afterwards with [IO.Directory]::Delete which removes only the link):
+//   GetVolumePathNameW("<junction>\somefile.jpg") = "D:\"      <- RecycleBinCapacityGuard resolves the TARGET volume
+//   Path.GetPathRoot ("<junction>\somefile.jpg") = "C:\"       <- RecycleEligibility.CanRecycle uses the LEXICAL root
+// i.e. the two Recycle-Bin guards classify the same path by two different volumes.
+//
+// To close the open question (what the shell does for such a path), repeat with <junction> -> a USB stick or a
+// mapped network drive and compare DriveInfo results below. Do NOT call SendToRecycleBin on a real file.
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+
+static class P_RB_01
+{
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool GetVolumePathNameW(string file, StringBuilder volume, int len);
+
+    static void Main(string[] args)
+    {
+        var path = args[0]; // e.g. C:\links\usb\photo.jpg  (junction C:\links\usb -> E:\)
+        var lexicalRoot = Path.GetPathRoot(Path.GetFullPath(path));
+        var sb = new StringBuilder(32768);
+        GetVolumePathNameW(Path.GetFullPath(path), sb, sb.Capacity);
+        var resolved = sb.ToString();
+        Console.WriteLine($"lexical root   = {lexicalRoot}  DriveType={new DriveInfo(lexicalRoot).DriveType}   (what CanRecycle sees)");
+        Console.WriteLine($"resolved mount = {resolved}  DriveType={new DriveInfo(resolved).DriveType}   (what the capacity guard resolves)");
+        Console.WriteLine(lexicalRoot.Equals(resolved, StringComparison.OrdinalIgnoreCase)
+            ? "consistent" : "MISMATCH: eligibility and capacity guard look at different volumes");
+    }
+}

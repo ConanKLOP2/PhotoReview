@@ -1,0 +1,7 @@
+﻿// Negative evidence for the "Shell.Application restore runs on the UI thread" suspicion (F03125). Never compiled by the repo.
+// Question: WindowsRecycleBin.RestoreViaShell runs on a pool (MTA) thread; if Shell.Application (apartment-model) were
+// hosted on the process's main STA, every property read would run on the UI thread. Probe (powershell.exe -MTA, so the
+// first STA thread is our own thread A): A creates Shell.Application then blocks in kernel32 Sleep(4000) WITHOUT pumping;
+// MTA thread B creates Shell.Application and reads NameSpace(0).Title (the Desktop folder; nothing to do with the bin).
+// Observed (2026-10-04): "MTA call finished in 8 ms while first STA thread was blocked; title=Desktop".
+// Conclusion: the object is not hosted on the main STA; no UI-thread stall from the restore enumeration. Suspicion dropped.
