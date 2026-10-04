@@ -246,4 +246,37 @@ public sealed class SessionWriterShutdownAndVersionTests
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5.3), $"Dispose took {watch.Elapsed}");
         Assert.Contains(_log.Errors, e => e.Message.Contains("may be lost at shutdown", StringComparison.Ordinal));
     }
+    [Fact]
+    public async Task Dispose_SaveStallsAfterTheLockWasAcquired_StillReturnsWithinTheBoundAndWritesLaterInTheBackground()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var (writer, store) = Create();
+        writer.BoundedWaitForTests = TimeSpan.FromMilliseconds(200); // the shutdown budget, shortened so a regression fails fast
+        _fs.WriteHook = _ =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(60)); // a disk that stalls only now: the writer lock is free, so the lock wait cannot bound this
+            return null;
+        };
+        writer.Update(State(@"C:\photos", "last"));
+
+        // Dispose is what the DI container calls from App.Dispose (APP-01); own thread so a hang cannot starve the pool.
+        var dispose = Task.Factory.StartNew(writer.Dispose, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        var returned = false;
+        try
+        {
+            await dispose.WaitAsync(TimeSpan.FromSeconds(20));
+            returned = true;
+        }
+        catch (TimeoutException) { }
+        finally { release.Set(); } // event-driven release; also frees the stalled thread when the bound was exceeded
+        await dispose;
+
+        Assert.True(entered.IsSet, "the save never started");
+        Assert.True(returned, "Dispose blocked behind a stalled save instead of honouring the shutdown budget");
+        Assert.Contains(_log.Errors, e => e.Message.Contains("may be lost at shutdown", StringComparison.Ordinal));
+        // Durability contract (ADR 0007 s2): the write is only detached, not dropped; once the disk answers the state lands.
+        Assert.True(SpinWait.SpinUntil(() => store.Load(@"C:\photos").CurrentPath == "last", TimeSpan.FromSeconds(20)), "the detached save never completed");
+    }
 }
