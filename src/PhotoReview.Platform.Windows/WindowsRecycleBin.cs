@@ -40,7 +40,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
         // OnlyErrorDialogs maps to SHFileOperation FOF_ALLOWUNDO | FOF_NOCONFIRMATION, which then deletes such a file
         // PERMANENTLY without the usual prompt, while the journal would record a successful "recycle". Refuse instead;
         // fixed drives take exactly the same call as before.
-        if (!RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType))
+        if (!RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType, RecycleEligibility.QueryMountPoint))
             throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(path)));
         // F-WIN-2 backstop for callers that skipped FitsInRecycleBin: a bin turned off for this volume (or by policy)
         // or unreadable settings would also delete permanently. The size check needs the file's size, which only
@@ -60,7 +60,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
     public bool CanRecycle(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType);
+        return RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType, RecycleEligibility.QueryMountPoint);
     }
 
     /// <summary>F-WIN-2: see <see cref="IRecycleBin.FitsInRecycleBin"/>. Reads registry/volume settings only, never file data.</summary>
@@ -231,8 +231,13 @@ internal static class RecycleEligibility
     private const string ExtendedPrefix = @"\\?\";
     private const string UncPrefix = @"\\";
 
-    /// <summary>True only when <paramref name="driveTypeOf"/> reports <see cref="DriveType.Fixed"/> for the path's drive root; UNC paths and unknown roots are refused.</summary>
-    internal static bool CanRecycle(string path, Func<string, DriveType?> driveTypeOf)
+    /// <summary>
+    /// True only when <paramref name="driveTypeOf"/> reports <see cref="DriveType.Fixed"/> for the volume mount point that
+    /// <paramref name="mountPointOf"/> resolves for the path (P-RB-01: <c>GetVolumePathName</c> follows junctions and
+    /// mounted folders, so a path below a junction to a USB stick is judged by the USB volume, not by the textual drive).
+    /// UNC paths, unresolvable mount points and unknown volumes are refused. Without a resolver the textual root is used.
+    /// </summary>
+    internal static bool CanRecycle(string path, Func<string, DriveType?> driveTypeOf, Func<string, string?>? mountPointOf = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(driveTypeOf);
@@ -243,16 +248,35 @@ internal static class RecycleEligibility
         // \\?\C:\dir\file -> C:\dir\file; \\server\share and \\?\UNC\... stay UNC and are refused.
         if (full.StartsWith(ExtendedPrefix, StringComparison.Ordinal) && full.Length >= 6 && full[5] == ':') full = full[4..];
         if (full.StartsWith(UncPrefix, StringComparison.Ordinal)) return false;
-        var root = Path.GetPathRoot(full);
-        if (string.IsNullOrEmpty(root)) return false;
-        return driveTypeOf(root) == DriveType.Fixed;
+        string? mount;
+        if (mountPointOf is null)
+            mount = Path.GetPathRoot(full);
+        else
+        {
+            try { mount = mountPointOf(full); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException) { return false; }
+        }
+        if (string.IsNullOrEmpty(mount)) return false;
+        if (mount.StartsWith(UncPrefix, StringComparison.Ordinal)) return false; // e.g. a network share mounted as a folder
+        return driveTypeOf(mount) == DriveType.Fixed;
     }
 
+    /// <summary>Drive type of a volume root or mount-point folder (<c>GetDriveType</c> accepts both; <c>DriveInfo</c> only reads the drive letter).</summary>
     internal static DriveType? QueryDriveType(string root)
     {
-        try { return new DriveInfo(root).DriveType; }
+        try
+        {
+            var type = (DriveType)GetDriveType(root.EndsWith('\\') ? root : root + "\\");
+            return Enum.IsDefined(type) ? type : DriveType.Unknown;
+        }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { return null; }
     }
+
+    /// <summary>Mount point of the volume that really holds <paramref name="fullPath"/> (follows junctions/mounted folders), or null.</summary>
+    internal static string? QueryMountPoint(string fullPath) => WindowsRecycleBinSettingsSource.GetVolumeMountPoint(fullPath);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetDriveTypeW", ExactSpelling = true)]
+    private static extern uint GetDriveType(string rootPathName);
 }
 
 /// <summary>

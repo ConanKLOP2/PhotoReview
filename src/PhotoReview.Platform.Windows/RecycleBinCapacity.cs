@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using PhotoReview.Core.Diagnostics;
 
@@ -34,6 +34,9 @@ internal interface IRecycleBinSettingsSource
 
     /// <summary>The <c>{guid}</c> of the volume holding <paramref name="path"/> (the BitBucket key name), or null.</summary>
     string? GetVolumeGuid(string path);
+
+    /// <summary>Drive type of the volume that really holds <paramref name="path"/> (mount point resolved through junctions), or null when unresolvable.</summary>
+    DriveType? GetVolumeDriveType(string path);
 
     RecycleBinVolumeSettings ReadVolume(string volumeGuid);
 
@@ -85,6 +88,10 @@ internal static class RecycleBinCapacityGuard
     {
         var policy = source.ReadPolicy();
         if (policy.NoRecycleFiles || policy.LegacyGlobalNukeOnDelete) return RecycleCapacityVerdict.BinDisabled;
+
+        // P-RB-01: only a fixed volume has a Recycle Bin the shell uses without warning. A path reaching a removable/network
+        // volume through a junction or mounted folder has no BitBucket entry and would otherwise pass as a "default" bin.
+        if (source.GetVolumeDriveType(path) != DriveType.Fixed) return RecycleCapacityVerdict.Unknown;
 
         var guid = source.GetVolumeGuid(path);
         if (string.IsNullOrEmpty(guid)) return RecycleCapacityVerdict.Unknown;
@@ -143,6 +150,12 @@ internal sealed class WindowsRecycleBinSettingsSource : IRecycleBinSettingsSourc
         return new RecycleBinPolicy(noRecycle, percent, legacyNuke);
     }
 
+    public DriveType? GetVolumeDriveType(string path)
+    {
+        var mountPoint = GetVolumeMountPoint(path);
+        return mountPoint is null || mountPoint.StartsWith(@"\\", StringComparison.Ordinal) ? null : RecycleEligibility.QueryDriveType(mountPoint);
+    }
+
     public string? GetVolumeGuid(string path)
     {
         var mountPoint = GetVolumeMountPoint(path);
@@ -178,7 +191,7 @@ internal sealed class WindowsRecycleBinSettingsSource : IRecycleBinSettingsSourc
         return Guid.TryParseExact(guid, "B", out _) ? guid : null;
     }
 
-    private static string? GetVolumeMountPoint(string path)
+    internal static string? GetVolumeMountPoint(string path)
     {
         // The mount point is a prefix of the full path (plus a trailing separator), so full length + 2 always suffices.
         var full = Path.GetFullPath(path);

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Localization;
 using PhotoReview.Platform.Windows;
 
@@ -31,6 +31,8 @@ public sealed class RecycleBinCapacityGuardTests
 
         public RecycleBinPolicy ReadPolicy() => Throw is null ? Policy : throw Throw;
         public string? GetVolumeGuid(string path) => VolumeGuid;
+        public DriveType? VolumeDriveType { get; set; } = DriveType.Fixed;
+        public DriveType? GetVolumeDriveType(string path) => VolumeDriveType;
 
         public RecycleBinVolumeSettings ReadVolume(string volumeGuid)
         {
@@ -55,6 +57,30 @@ public sealed class RecycleBinCapacityGuardTests
         Assert.Equal(RecycleCapacityVerdict.Fits, Evaluate(20 * MiB));
         Assert.Equal(Guid, _settings.AskedGuid);
         Assert.Equal(0, _settings.QuotaCalls); // explicit MaxCapacity: no volume-size query
+    }
+
+    [Theory(DisplayName = "P-RB-01: a path whose real volume is not fixed (or unresolvable) is Unknown, with or without a size")]
+    [InlineData(DriveType.Removable)]
+    [InlineData(DriveType.Network)]
+    [InlineData(DriveType.CDRom)]
+    [InlineData(DriveType.Unknown)]
+    [InlineData(null)]
+    public void Evaluate_NonFixedVolume_Unknown(DriveType? type)
+    {
+        _settings.VolumeDriveType = type;
+
+        Assert.Equal(RecycleCapacityVerdict.Unknown, Evaluate(null));
+        Assert.Equal(RecycleCapacityVerdict.Unknown, Evaluate(1));
+        Assert.Null(_settings.AskedGuid);
+    }
+
+    [Fact(DisplayName = "P-RB-01: SendToRecycleBin refuses a path on a non-fixed volume without calling the shell")]
+    public void SendToRecycleBin_NonFixedVolume_RefusedWithoutShell()
+    {
+        _settings.VolumeDriveType = DriveType.Removable;
+        var bin = new WindowsRecycleBin(null, _settings, _ => throw new InvalidOperationException("shell must not be called"));
+
+        Assert.Throws<IOException>(() => bin.SendToRecycleBin(Photo));
     }
 
     [Fact(DisplayName = "A file larger than the volume's maximum bin size is too large")]
