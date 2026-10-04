@@ -619,7 +619,7 @@ public sealed class PreloadScheduler : IDisposable
     public const double WholeFolderCacheFillLimit = 0.9;
 
     // The directional window PreloadOrderService.Build queues first (before the rest of the folder).
-    private static bool InPreloadWindow(int index, int center, (int Direction, int Lead) shape, PreloadWindow window)
+    internal static bool InPreloadWindow(int index, int center, (int Direction, int Lead) shape, PreloadWindow window)
     {
         var ahead = (shape.Direction < 0 ? -1 : 1) * (index - center);
         return ahead > 0 ? ahead <= shape.Lead + window.Forward

@@ -18,6 +18,10 @@ public static class EmbeddedThumbnailReader
     /// <summary>EXIF thumbnails are about 160x120; anything above this many pixels is treated as corrupt (4 MP = 16 MB BGRA).</summary>
     internal const long MaxThumbnailPixels = 4L * 1024 * 1024;
 
+    /// <summary>True when a thumbnail of this size is positive and within <see cref="MaxThumbnailPixels"/>.</summary>
+    internal static bool IsAcceptableSize(int width, int height) =>
+        width > 0 && height > 0 && (long)width * height <= MaxThumbnailPixels;
+
     /// <summary>
     /// Returns the source's embedded EXIF thumbnail with orientation applied, or null if the
     /// source has none (wrong format, missing APP1 thumbnail, or any read/decode failure --
@@ -43,9 +47,8 @@ public static class EmbeddedThumbnailReader
 
             var width = thumbnail.PixelWidth;
             var height = thumbnail.PixelHeight;
-            if (width <= 0 || height <= 0) return null;
             // A hostile/corrupt EXIF thumbnail may claim huge dimensions: refuse before any width*height*4 allocation.
-            if ((long)width * height > MaxThumbnailPixels) return null;
+            if (!IsAcceptableSize(width, height)) return null;
 
             // Force eager pixel materialization (CopyPixels) while the stream is still open,
             // instead of relying on BitmapCacheOption.OnLoad's caching behavior alone -- this
