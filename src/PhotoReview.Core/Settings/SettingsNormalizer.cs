@@ -173,6 +173,14 @@ public static class SettingsNormalizer
             fixedNames.Add(nameof(AppSettings.ArrowPanStepPercent));
         }
 
+        // R05: negative values reversed the keyboard zoom direction and int.MaxValue survived parsing; clamp to the documented [5, 100].
+        var keyboardZoomStep = Math.Clamp(settings.KeyboardZoomStepPercent, AppSettings.MinKeyboardZoomStepPercent, AppSettings.MaxKeyboardZoomStepPercent);
+        if (keyboardZoomStep != settings.KeyboardZoomStepPercent)
+        {
+            settings.KeyboardZoomStepPercent = keyboardZoomStep;
+            fixedNames.Add(nameof(AppSettings.KeyboardZoomStepPercent));
+        }
+
         // feat/ui-dark-chrome-toolbar
         var toolbarDelay = Math.Clamp(settings.ToolbarAutoHideDelayMs, AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs);
         if (toolbarDelay != settings.ToolbarAutoHideDelayMs)
@@ -192,7 +200,11 @@ public static class SettingsNormalizer
             settings.ToolbarOpacityPercent = toolbarOpacity;
             fixedNames.Add(nameof(AppSettings.ToolbarOpacityPercent));
         }
-        var infoFontSize = Math.Clamp(settings.InfoOverlayFontSize, AppSettings.MinInfoOverlayFontSize, AppSettings.MaxInfoOverlayFontSize);
+        // R05: Math.Clamp keeps NaN, and a NaN/Infinity cannot be serialized when the repair is written back, so a non-finite
+        // size is reset to the documented default before clamping (finite out-of-range values still clamp to the nearest bound).
+        var infoFontSize = double.IsFinite(settings.InfoOverlayFontSize)
+            ? Math.Clamp(settings.InfoOverlayFontSize, AppSettings.MinInfoOverlayFontSize, AppSettings.MaxInfoOverlayFontSize)
+            : AppSettings.DefaultInfoOverlayFontSize;
         if (infoFontSize != settings.InfoOverlayFontSize)
         {
             settings.InfoOverlayFontSize = infoFontSize;
