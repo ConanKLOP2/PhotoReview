@@ -1,0 +1,22 @@
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Tests.Fakes;
+namespace PhotoReview.Core.Tests;
+public sealed class CoreReviewSettingsReproTests
+{
+ [Fact] public void ParseText_NonFiniteFontSize_ResultIsNaN()
+ {
+  var parsed=SettingsStore.ParseText("{\"ConfigVersion\":3,\"InfoOverlayFontSize\":\"NaN\"}");
+  Assert.True(double.IsNaN(parsed.Settings.InfoOverlayFontSize));
+  Assert.Contains(nameof(AppSettings.InfoOverlayFontSize),parsed.Repairs);
+  var w=new InMemoryFileSystem();var paths=new AppPaths(@"C:\fake-settings-review");
+  w.WriteAllTextAtomic(paths.ConfigFile,"{\"ConfigVersion\":3,\"InfoOverlayFontSize\":\"NaN\"}");
+  var store=new SettingsStore(paths,w,PhotoReview.Core.Diagnostics.NullLog.Instance);
+  Assert.Throws<ArgumentException>(()=>store.Load());
+ }
+ [Fact] public void ParseText_KeyboardZoomStepAboveMax_RemainsUnnormalized()
+ {
+  var parsed=SettingsStore.ParseText("{\"ConfigVersion\":3,\"KeyboardZoomStepPercent\":2147483647}");
+  Assert.Equal(int.MaxValue,parsed.Settings.KeyboardZoomStepPercent);
+  Assert.DoesNotContain(nameof(AppSettings.KeyboardZoomStepPercent),parsed.Repairs);
+ }
+}
