@@ -47,6 +47,37 @@ public sealed class FileActionControllerConfirmGapTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAction_MoveWithOnlyACompareSelection_StillMovesIt()
+    {
+        var selected = Make("b.jpg");
+        Catalog.Reset([selected]);
+        var controller = NewController(new AppSettings { Actions = [MoveAction()] });
+
+        await controller.RunActionAsync(0, selected, currentPath: null);
+
+        Assert.False(File.Exists(selected));
+        Assert.True(File.Exists(Path.Combine(Root, "Sorted", "b.jpg")));
+    }
+
+    [Fact]
+    public async Task Recycle_ConfirmBeforeDeleteWithCompareSelectionOnDriveWithoutBin_AsksOnlyThePermanentDeletePrompt()
+    {
+        var current = Make("a.jpg");
+        var selected = Make("b.jpg");
+        Catalog.Reset([current, selected]);
+        Bin.NoBinFor.Add(selected);
+        var dialog = new RecordingDialog(response: true);
+        var controller = NewController(new AppSettings { AllowPermanentDeleteWithoutRecycleBin = true, ConfirmBeforeDelete = true }, dialog);
+
+        await controller.RecycleAsync(selected, current);
+
+        Assert.Single(dialog.Confirmations); // the selected file decides: its permanent-delete prompt replaces the generic one
+        Assert.Equal(Tr.DialogConfirmPermanentDeleteTitle, dialog.Confirmations[0].Title);
+        Assert.Contains(selected, Bin.Deleted);
+        Assert.True(File.Exists(current));
+    }
+
+    [Fact]
     public async Task RunAction_RecycleConfirmWithCompareSelectionOnDriveWithoutBin_AsksOnlyThePermanentDeletePrompt()
     {
         var current = Make("a.jpg");
