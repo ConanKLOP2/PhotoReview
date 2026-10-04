@@ -161,6 +161,10 @@ public sealed class FileActionController
     // before writing its final "Moved to" status, so the presenter's own "Ready" status cannot overwrite it (RV-A09).
     private Task? _lastPresentTask;
 
+    // The folder generation the last core run captured (after its own StopForAction bump): Move-to/Copy-to rechecks it after
+    // awaiting the present, so the guard compares against the folder the action ran in, not whatever is open by then (D-02).
+    private long _lastActionFolderGen;
+
     /// <returns>True when the file operation succeeded and the folder is still the current one.</returns>
     private async Task<bool> ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
     {
@@ -246,6 +250,7 @@ public sealed class FileActionController
         }
 
         var folderGen = _clock.CurrentFolder;
+        _lastActionFolderGen = folderGen;
         int nextIndex = -1;
         // The fire-and-forget presenter writes the status line when it finishes; a failure message must be set after it.
         Task? presentTask = null;
@@ -293,8 +298,8 @@ public sealed class FileActionController
             // Stale Folder Guard: the user switched folder while the I/O ran. The new folder's catalog, session path,
             // current image and gate state must not be touched (the file belonged to the previous folder).
             // APP-03 (Q-R25, option B): a SUCCESSFUL action is still real on disk, so it is registered for Undo and
-            // the user is told (see ReportLateCompletion). On failure nothing changed on disk: no undo, and the
-            // INV-5 restore into the (now different) catalog is skipped.
+            // the user is told (see ReportLateCompletion). On failure nothing changed on disk (except an unverified Move whose source was
+            // already removed, announced late): no undo, and the INV-5 restore into the (now different) catalog is skipped.
             if (!_clock.IsFolderCurrent(folderGen))
             {
                 if (groupResult is not null)
@@ -323,6 +328,12 @@ public sealed class FileActionController
                     }
                 }
                 else if (singleResult!.Succeeded) ReportLateCompletion(singleResult);
+                else if (operation == FileOperationType.Move && singleResult.SourceRemoved)
+                {
+                    // D-04: a Move whose destination could not be verified after the source was removed: the journal has a
+                    // Failed entry (Recovery window), but the user left the folder and would otherwise never hear of it.
+                    _sink.ShowLateActionStatus(Tr.StatusMoveUnverified(Path.GetFileName(source)));
+                }
                 if (groupResult is { Succeeded: false } && operation == FileOperationType.Recycle
                     && groupResult.Members.Count(member => member.Completed) is var processed and > 0)
                 {
@@ -438,7 +449,8 @@ public sealed class FileActionController
                         AppLog.Error("Present after file action threw", presentEx);
                     }
                 }
-                if (!_clock.IsFolderCurrent(folderGen)) return true; // R08: never write this status into a newly opened folder
+                // R08/D-02: never write this status into a newly opened folder; the contract says true only while the folder is current.
+                if (!_clock.IsFolderCurrent(folderGen)) return false;
                 _sink.SetStatusText(StatusFormatter.ActionCompleted(actionName));
                 return true;
             }
@@ -718,7 +730,7 @@ public sealed class FileActionController
         // RV-A09: wait for the next photo's present (it writes "Ready" when it finishes) so the final status is ours.
         // Only this already-async action waits (the caller holds the file-action gate, as on every failure path above).
         var presentStillRunning = _lastPresentTask;
-        var folderAfterAction = _clock.CurrentFolder;
+        var folderAfterAction = _lastActionFolderGen;
         if (presentStillRunning is not null)
         {
             await presentStillRunning;

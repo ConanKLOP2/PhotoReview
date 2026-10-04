@@ -256,9 +256,12 @@ public sealed class DuplicateCleanupController
         if (succeeded > 0 && remove.Count > 0)
         {
             var folder = Path.GetDirectoryName(remove[0]);
-            if (!string.IsNullOrEmpty(folder))
+            if (!string.IsNullOrEmpty(folder) && !await _sink.ReloadFolderAsync(folder))
             {
-                await _sink.OpenFolderAsync(folder);
+                // D-03: the reload itself bumps the folder generation, so the guard above cannot see a folder opened DURING
+                // the reload; the sink reports it. The batch is done on disk: tell the user late, never write into the new folder.
+                _sink.ShowLateActionStatus(Tr.StatusLateBatchRecycled(succeeded, failures.Count));
+                return;
             }
         }
 

@@ -1220,6 +1220,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         await OpenFolderAsync(folder, initialPath);
     }
 
+    async Task<bool> IDuplicateCleanupSink.ReloadFolderAsync(string folder)
+    {
+        var epoch = await OpenFolderCoreAsync(folder, initialPath: null, requiredEpoch: null);
+        // null: nothing loaded (window closed, forwarded elsewhere): nothing newer replaced it, keep the batch status.
+        return epoch is null || epoch == _folderLoadEpoch;
+    }
+
     // ---- "Move to… / Copy to…" ----
 
     /// <summary>
