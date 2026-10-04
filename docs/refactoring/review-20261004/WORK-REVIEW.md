@@ -1,6 +1,6 @@
 # Function review — 2026-10-04 (incomplete)
 
-Baseline: `5d2910761f14bd99745b9c4bdcd636b36263e716` (`origin/master`, PR #280). Review branch: `codex/review-all-20261004`. No production fixes in this PR. Three isolated workers reviewed App, Core and Imaging; lead covered integration evidence and tooling. Workers inherited the parent model; its actual model name was unavailable. All three workers stopped at the account usage limit before finishing the test/source review.
+Baseline: `5d2910761f14bd99745b9c4bdcd636b36263e716` (`origin/master`, PR #280). Review branch: `codex/review-all-20261004`; [draft PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open/not merged at handoff. No production fixes in this PR. Three isolated workers reviewed App, Core and Imaging; lead covered integration evidence and tooling. Workers inherited the parent model; its actual model name was unavailable. All three workers stopped at the account usage limit before finishing the test/source review.
 
 ## Coverage contract
 
