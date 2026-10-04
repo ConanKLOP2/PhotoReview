@@ -8,15 +8,15 @@ The current Roslyn inventory covers 16,795 callable bodies in 1,068 tracked C# f
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 5,457 `STATIC-ONLY`, 63 `ISSUE`, and 11,275 `UNREVIEWED` rows after merging available agent ledgers. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 5,374 `STATIC-ONLY`, 68 `ISSUE`, and 11,353 `UNREVIEWED` rows after merging available App and Core continuation rows. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
 
 The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App, Core/tooling, and Imaging agents are reviewing the remaining current-head rows in separate ownership lanes. No lane may be marked complete until its exact callable coverage and remaining count are reconciled against this inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 1,851 rows reread; 4,604 remaining |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,011 rows reread; 4,036 remaining |
-| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 2,551 test rows reread; 1,728 remaining |
+| App + Integration | 1,229 | 5,226 | 6,455 | 2,258 rows reread; 4,197 remaining |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,271 rows reread; 3,776 remaining |
+| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 2,970 test rows reread; 1,309 remaining |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | Not yet assigned to a continuation lane |
 
 [powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
@@ -51,6 +51,18 @@ For a prepared group Recycle undo, `IsGroupMemberCompleted` treats `FileExists(m
 
 WIC accepts each dimension up to `int.MaxValue`, then checked stride/size arithmetic can throw `OverflowException` before `EnsureOutputFits`. The fallback classifier treats `OverflowException` as fallbackable. WPF recomputes bytes as `(long)outW * outH * 4`; sufficiently large positive dimensions can wrap that `long` negative, and `EnsureOutputFits` treats values below its minimum threshold as fitting before `EndInit` attempts full-resolution decode. No cross-backend huge-dimension regression covers this chain. Static arithmetic/control-flow review only; no native decoder or large image ran. Use checked/overflow-safe size admission before either backend allocates or decodes, and ensure admission failures cannot fall back.
 
+### R17 — P2 candidate — Single recovery retry can act on a replacement source
+
+`src/PhotoReview.Core/FileActions/RecoveryRetryService.cs:73-116,300-334`. Single retry validates the failed source size/last-write fingerprint before appending Prepared, then `ExecuteRetry` moves/copies without rechecking identity immediately before mutation. A replacement arriving in that interval can be committed under the old failed operation. Group retry has explicit fingerprint checks around Prepared; the single path does not. Static race trace only; no file was changed. Re-stat and compare the expected fingerprint immediately before mutation and add a gated fake replacement test.
+
+### R18 — P2 candidate — Move Undo can restore a replacement after identity preflight
+
+`src/PhotoReview.Core/FileActions/UndoService.cs:153-280,348-437`. Single and group Move Undo validate the moved-to fingerprint and original-path absence, append Prepared, then move without rechecking the moved-to file identity before mutation. A replacement can be restored and committed; the post-move verification is length-only. Static race trace only; no file was changed. Recheck each fingerprint after Prepared and before each move; add gated fake replacements for single and group Undo.
+
+### APP-P01 — P2 candidate — Overlapping presentation reads Token from disposed CTS
+
+`src/PhotoReview.App/Coordinators/ImagePresenter.cs:247-253,286,377-378`. `PresentCoreAsync` captures `viewerDecodeToken` but later rereads `viewerDecodeCts.Token`. A second overlapping presentation can exchange and dispose that CTS first, making the later getter throw `ObjectDisposedException`. Existing supersession tests do not cover this exact interleave. Static race trace only; no runtime reproduction. Use the captured token consistently and add a gated overlap regression.
+
 ### Test-only and oracle findings retained at current head
 
 - `TurboJpegGuardMutationTests.ReadAllBytes_LengthExactlyTheLimit_PassesTheLimitCheck` attempts to allocate `MaxSourceBytes` (about 2 GiB) in a default-gate test. Do not run it during this review; replace the allocation with a seam or isolate the resource test.
@@ -58,6 +70,10 @@ WIC accepts each dimension up to `int.MaxValue`, then checked stride/size arithm
 - `UpdateCheckerBoundaryTests.DeclaredLengthOverMax_IsRejected` checks only the returned failure with `ByteArrayContent`; it does not prove the body was rejected before consumption. Add a read-counting or throw-on-read body.
 - Two App presentation test helpers create a timeout source but do not pass its token to the barrier await; the requested timeout does not bound a missing presentation.
 - Existing baseline test-oracle gaps APP-T04/APP-T05 and imaging wrapper resource leaks are described in the lane notes; their current status must be reconciled by the active agents before this report is final.
+- `DecodeOriginal_RunsAtMostOneFullResolutionDecodeAtATime_AndDropsCancelledWaiters` uses a 300 ms negative wait as an absence proof; slow scheduling can hide an illegal second decode. Replace it with an explicit signal that the waiter reached the gate. Static only; not run.
+- `FallbackExceptionCoverageTests` routes an injected OverflowException using a 32x24 JPEG; it does not cover hostile dimensions or WPF fallback memory admission for R16.
+- `ImagePresenterTests` cover ordinary cancellation/supersession but do not exercise APP-P01's disposed-CTS Token getter interleave.
+- Core recovery tests do not gate a foreign file appearing at a pending Undo-Recycle source between initial check and retry execution (R15 race extension); an equal-size/different-timestamp fingerprint case is also absent.
 
 ### R01 — P1 — Copy cleanup can delete a foreign destination
 
