@@ -1,0 +1,36 @@
+﻿// NOT COMPILED, NOT EXECUTED. Draft repro for W2CM-01 (FileLog.Drain duplicates already-written lines after a mid-batch failure).
+// Place in tests/PhotoReview.Core.Tests/Diagnostics when fixing; uses the existing internal seams (InternalsVisibleTo).
+using PhotoReview.Core.Diagnostics;
+using Xunit;
+
+public sealed class FileLogPoisonEntryRepro
+{
+    private sealed class ThrowingToString : Exception
+    {
+        public override string ToString() => throw new InvalidOperationException("boom");
+    }
+
+    [Fact]
+    public void ThrowingExceptionToString_DoesNotRepeatEarlierLines_NorBlockLaterOnes()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "w2cm01-" + Guid.NewGuid().ToString("N") + ".log");
+        try
+        {
+            using var log = new FileLog(path);
+            var gate = new ManualResetEventSlim(false);
+            log.DrainHook = () => gate.Wait();      // hold the writer so the three entries land in ONE batch
+            log.Enabled = true;
+            log.Info("first");
+            log.Error("poison", new ThrowingToString());
+            log.Info("after-poison");
+            gate.Set();
+            Thread.Sleep(1000);                      // several 250 ms drain ticks (repro only; a fix test should wait on an event)
+            log.Flush();
+            var text = File.ReadAllText(path);
+            // Observed by reading: "first" is appended once per tick (duplicates) and "after-poison" never appears.
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(text, "first").Count);
+            Assert.Contains("after-poison", text);
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+}
