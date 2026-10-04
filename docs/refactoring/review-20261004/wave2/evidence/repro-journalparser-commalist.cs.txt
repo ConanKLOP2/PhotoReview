@@ -1,0 +1,19 @@
+// W2-FA-01 repro (NOT compiled by the repo; .cs.txt). Run from a scratch console project that references a built
+// PhotoReview.Core.dll (net10.0). Uses reflection because JournalLineParser is internal. No real files are touched.
+// Observed on master fc1d7a53-equivalent Core build:
+//   Type=Move          State=Prepared           -> accepted as Type=Move State=Prepared
+//   Type=Move,Recycle  State=Prepared           -> accepted as Type=Move State=Prepared   (should be REJECTED)
+//   Type=Recycle       State=Prepared,Committed -> accepted as Type=Recycle State=Prepared (should be REJECTED)
+//   Type=Bogus         State=Prepared           -> REJECTED
+//   Type=Move          State=Prepared,Failed    -> accepted as Type=Move State=Prepared   (should be REJECTED)
+using System.Reflection;
+using PhotoReview.Core.FileActions;
+
+var t = typeof(OperationJournal).Assembly.GetType("PhotoReview.Core.FileActions.JournalLineParser")!;
+var m = t.GetMethod("TryParse", BindingFlags.Public | BindingFlags.Static, new[] { typeof(string) })!;
+foreach (var (type, state) in new[] { ("Move", "Prepared"), ("Move,Recycle", "Prepared"), ("Recycle", "Prepared,Committed"), ("Bogus", "Prepared"), ("Move", "Prepared,Failed") })
+{
+    var line = "{\"Id\":\"x\",\"Type\":\"" + type + "\",\"State\":\"" + state + "\",\"Source\":\"C:\\\\a.jpg\",\"Destination\":\"C:\\\\b\\\\a.jpg\",\"Size\":1,\"LastWriteUtc\":\"2026-10-01T08:00:00Z\",\"TimestampUtc\":\"2026-10-01T08:00:00Z\"}";
+    var e = (JournalEntry?)m.Invoke(null, new object[] { line });
+    Console.WriteLine($"Type={type,-14} State={state,-18} -> " + (e is null ? "REJECTED" : $"accepted as Type={e.Type} State={e.State}"));
+}
