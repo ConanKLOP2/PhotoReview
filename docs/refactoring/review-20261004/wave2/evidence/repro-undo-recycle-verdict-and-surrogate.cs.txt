@@ -1,0 +1,33 @@
+// W2-FA-02 and W2-FA-03 repro (NOT compiled by the repo; .cs.txt). Scratch console project referencing a built
+// PhotoReview.Core.dll (net10.0). Uses only an own temp folder (deleted in finally); no Recycle Bin, no real folders.
+// Observed output:
+//   UNDO-RECYCLE all restored: member verdicts=AlreadyDone,AlreadyDone aggregate=RecycleUnverifiable   (expected aggregate AlreadyDone)
+//   surrogate serialize OK: {"Id":"i","Type":"Move","State":"Prepared","Source":"C:\\x\\a\uFFFD.jpg", ...}  (path no longer matches the real name)
+using PhotoReview.Core.FileActions;
+using PhotoReview.Core.IO;
+using PhotoReview.Core.Model;
+using System.Text.Json;
+
+var dir = Path.Combine(Path.GetTempPath(), "pr-review-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(dir);
+try
+{
+    var stamp = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+    var a = Path.Combine(dir, "a.jpg"); var b = Path.Combine(dir, "a.cr2");
+    File.WriteAllText(a, new string('j', 10)); File.WriteAllText(b, new string('r', 10));
+    File.SetLastWriteTimeUtc(a, stamp); File.SetLastWriteTimeUtc(b, stamp);
+    var members = new[] { new JournalGroupMember(a, null, 10, stamp), new JournalGroupMember(b, null, 10, stamp) };
+    var entry = new JournalEntry("undo-delete", FileOperationType.Recycle, JournalState.Failed, a, null, 10, stamp, stamp,
+        Error: "x", Undo: true, GroupId: "g", GroupMembers: members);
+    var r = new RecoveryFileCheck(new PhysicalFileSystem()).Check(entry);
+    Console.WriteLine("UNDO-RECYCLE all restored: member verdicts=" + string.Join(",", r.GroupMembers!.Select(m => m.Verdict)) + " aggregate=" + r.Verdict);
+
+    // Same serializer call OperationJournal.AppendLines uses (JsonSerializer.Serialize(entry), default options).
+    try
+    {
+        var s = JsonSerializer.Serialize(new JournalEntry("i", FileOperationType.Move, JournalState.Prepared, "C:\\x\\a\uD800.jpg", null, 1, stamp, stamp));
+        Console.WriteLine("surrogate serialize OK: " + s);
+    }
+    catch (Exception ex) { Console.WriteLine("surrogate serialize THROWS " + ex.GetType().Name + ": " + ex.Message); }
+}
+finally { Directory.Delete(dir, true); }
