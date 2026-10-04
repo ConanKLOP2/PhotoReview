@@ -1,0 +1,20 @@
+// NOT COMPILED. Repro sketch for BM-01 (BenchmarkMetrics is internal; tests use InternalsVisibleTo).
+[Fact]
+public void Since_TopSourceOpens_OverReportsPathsOutsideTheBaselineTop10()
+{
+    // Warm-up opened 12 paths once each; ReviewMetrics.Snapshot() lists only the top 10 (ties by path).
+    var baseline = new ReviewMetricsSnapshot(0, 0, 0, 0, 0, 0, 0)
+    {
+        SourceOpenCount = 12,
+        TopSourceOpens = Enumerable.Range(0, 10).Select(i => new SourceOpenEntry($"p{i:00}", 1)).ToArray(),
+    };
+    // The measured run opened p10 (opened ONCE during warm-up, but not in the baseline list) one more time.
+    var current = baseline with
+    {
+        SourceOpenCount = 13,
+        TopSourceOpens = [new SourceOpenEntry("p10", 2), .. baseline.TopSourceOpens],
+    };
+    var delta = BenchmarkMetrics.Since(current, baseline);
+    Assert.Equal(1, delta.SourceOpenCount);
+    Assert.Equal(1, delta.TopSourceOpens.Single(e => e.Path == "p10").Count); // FAILS: reports 2
+}

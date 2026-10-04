@@ -1,0 +1,12 @@
+// NOT COMPILED. Repro sketch for PA-02: LowSampleWarning ignores incomplete navs.
+[Fact]
+public void LowSampleWarning_CountsOnlyCompleteNavs()
+{
+    var navs = Enumerable.Range(0, 25)
+        .Select(i => new NavRecord { Nav = i + 1, Incomplete = i >= 10, FinalVisualMs = 10, FirstVisualMs = 5 })
+        .ToList();
+    var s = GroupSummary.Build(new GroupKey("S2", "Fast", "warm", 2), navs);
+    Assert.Equal(25, s.Count);
+    Assert.Equal(15, s.Incomplete);
+    Assert.True(s.LowSampleWarning); // FAILS: Count (25) >= 20, no N<20 warning, although only 10 samples back FinalP95
+}
