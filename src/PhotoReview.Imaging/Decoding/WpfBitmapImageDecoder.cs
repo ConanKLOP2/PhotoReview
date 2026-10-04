@@ -43,18 +43,22 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             // checks of this method ran before the try, so this is a data fault.
             throw WicDirectDecoder.AsInvalidData(ex, "WPF");
         }
-        int orientation;
+        var orientation = ReadOrientationOrDefault(() => ExifOrientation.Read(frame.Metadata as BitmapMetadata));
+        return new ImageInfo(frame.PixelWidth, frame.PixelHeight, orientation);
+    }
+
+    /// <summary>Damaged metadata must not fail a header-only read: the pixel dimensions are still valid, so a metadata fault reads as orientation 1.</summary>
+    internal static int ReadOrientationOrDefault(Func<int> read)
+    {
         try
         {
-            orientation = ExifOrientation.Read(frame.Metadata as BitmapMetadata);
+            return read();
         }
         catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException
             or OverflowException or InvalidCastException or System.Runtime.InteropServices.COMException)
         {
-            // Damaged metadata must not fail a header-only read: the pixel dimensions are still valid.
-            orientation = 1;
+            return 1;
         }
-        return new ImageInfo(frame.PixelWidth, frame.PixelHeight, orientation);
     }
 
     /// <param name="sourceReader">
