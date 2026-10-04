@@ -46,6 +46,29 @@ public sealed class SettingsWindowUserFeedbackBatchTests
         });
     }
 
+    [Theory(DisplayName = "Non-finite info overlay font size (NaN/Infinity) is rejected by Save (R05)")]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    public async Task InfoOverlayFontSize_NonFiniteInput_IsRejected(string text)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var warnings = new List<string>();
+            var window = new SettingsWindow(new AppSettings()) { InvalidSettingsWarning = warnings.Add };
+            try
+            {
+                window.InfoOverlayFontSizeBox.Text = text;
+                InvokeSave(window);
+                Assert.Single(warnings);
+                Assert.Null(window.DialogResult);
+                Assert.Equal(AppSettings.DefaultInfoOverlayFontSize, window.Settings.InfoOverlayFontSize); // untouched
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Theory(DisplayName = "Boundary keyboard zoom steps (min and max) are accepted and stored by Save")]
     [InlineData("5", 5)]
     [InlineData("100", 100)]

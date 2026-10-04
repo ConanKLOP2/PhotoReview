@@ -890,7 +890,7 @@ public partial class SettingsWindow : Window
             return;
         }
         if (!double.TryParse(InfoOverlayFontSizeBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var infoOverlayFontSize)
-            || infoOverlayFontSize < AppSettings.MinInfoOverlayFontSize || infoOverlayFontSize > AppSettings.MaxInfoOverlayFontSize)
+            || !double.IsFinite(infoOverlayFontSize) || infoOverlayFontSize < AppSettings.MinInfoOverlayFontSize || infoOverlayFontSize > AppSettings.MaxInfoOverlayFontSize)
         {
             ShowInvalid(Tr.DialogSettingsInvalidInfoOverlayFontSize(AppSettings.MinInfoOverlayFontSize, AppSettings.MaxInfoOverlayFontSize));
             return;
