@@ -87,6 +87,21 @@ public sealed class FileActionControllerOrderingTests : IDisposable
         Assert.Equal([a, b], _catalog.Paths); // INV-5: the photo is back
     }
 
+    [Fact(DisplayName = "A Move that fails keeps its own error text when the present of the next photo faults")]
+    public async Task FailedMove_WhenThePresentFaults_KeepsTheActionsErrorText()
+    {
+        var a = Make("a.jpg");
+        var b = Make("b.jpg");
+        Make(Path.Combine("Sorted", "a.jpg")); // destination exists: the action fails with a result, no exception
+        _catalog.Reset([a, b]);
+        _sink.PresentFault = new InvalidOperationException("present failed");
+
+        await _controller.RunActionAsync(0, null, a);
+
+        Assert.Equal(StatusFormatter.ActionFailed("MoveToSub", Tr.CoreFileActionDestinationExists(Path.Combine(_root, "Sorted", "a.jpg"))), _sink.LastStatus);
+        Assert.Equal([a, b], _catalog.Paths);
+    }
+
     [Fact(DisplayName = "A throw in the post-processing of a SUCCESSFUL Move does not restore the entry nor report ActionFailed")]
     public async Task SucceededMove_PostProcessingThrows_DoesNotRestoreEntryOrReportFailure()
     {
@@ -271,6 +286,7 @@ public sealed class FileActionControllerOrderingTests : IDisposable
 
         public void HoldPresenter() => _gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         public void ReleasePresenter() => _gate!.SetResult();
+        public Exception? PresentFault { get; set; }
 
         /// <summary>The most recent present started (the fire-and-forget one of an action), to wait for its end.</summary>
         public Task? LastPresent { get; private set; }
@@ -280,6 +296,7 @@ public sealed class FileActionControllerOrderingTests : IDisposable
         private async Task PresentCoreAsync(int index)
         {
             if (_gate is not null) await _gate.Task;
+            if (PresentFault is not null) throw PresentFault;
             LastStatus = "presented:" + index; // like ImagePresenter.UpdateStatus after the decode
         }
     }
