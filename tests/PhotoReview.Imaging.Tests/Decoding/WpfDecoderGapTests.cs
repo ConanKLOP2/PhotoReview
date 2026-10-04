@@ -81,6 +81,20 @@ public sealed class WpfDecoderGapTests : IDisposable
         Assert.Null(decoded.Exif);
     }
 
+    [Fact(DisplayName = "The header pre-read (and with it the EXIF summary) only runs when orientation or a downscale needs it")]
+    public void Decode_ExifFixture_SummaryOnlyFromTheHeaderPreRead()
+    {
+        var path = _root.Combine("exif.jpg");
+        File.WriteAllBytes(path, PhotoReview.Imaging.Tests.Metadata.ExifTestData.EncodeJpegWithExif());
+        var decoder = new WpfBitmapImageDecoder();
+
+        var withHeader = decoder.Decode(new DecodeRequest(path, 0, ApplyOrientation: true));
+        var without = decoder.Decode(new DecodeRequest(path, 0, ApplyOrientation: false));
+
+        Assert.NotNull(withHeader.Exif);
+        Assert.Null(without.Exif);
+    }
+
     // ---- ExifOrientation.Read range ----
 
     /// <summary>Rewrites the value of the EXIF orientation entry (tag 0x0112, SHORT, count 1) in place, in either byte order.</summary>
