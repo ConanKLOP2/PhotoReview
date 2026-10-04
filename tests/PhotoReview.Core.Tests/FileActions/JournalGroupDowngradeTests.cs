@@ -93,8 +93,8 @@ public sealed class JournalGroupDowngradeTests
     public void Reconcile_StaleReconcileFailedFollowsOlderBuildCommitted_StillRepairsTheGroupLine()
     {
         var fileSystem = new InMemoryFileSystem();
-        fileSystem.AddFile(@"C:\selected.jpg", new string('j', 10), Stamp); // the RAW never moved
-        fileSystem.AddFile(@"C:\photos.cr2", new string('r', 100), Stamp);
+        fileSystem.AddFile(@"C:\selected\a.jpg", new string('j', 10), Stamp); // the RAW never moved
+        fileSystem.AddFile(@"C:\photos\a.cr2", new string('r', 100), Stamp);
         var journal = NewJournal(fileSystem);
         journal.Append(GroupPrepared());
         journal.Append(OlderBuildOutcome(GroupPrepared(), JournalState.Committed));

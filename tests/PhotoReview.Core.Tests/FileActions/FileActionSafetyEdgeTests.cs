@@ -158,7 +158,7 @@ public sealed class FileActionSafetyEdgeTests
     {
         var disk = new InMemoryFileSystem();
         var journal = LargeJournal(disk);
-        var prepared = Move("race", @"C:\photos.jpg", @"C:\photos\sel.jpg", JournalState.Prepared);
+        var prepared = Move("race", @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg", JournalState.Prepared);
         journal.Append(prepared);
         journal.Append(prepared with { State = JournalState.Committed });
         journal.Append(prepared with { State = JournalState.Failed, ErrorCode = JournalErrors.PendingUnconfirmed, Error = JournalErrors.EnglishText(JournalErrors.PendingUnconfirmed) });

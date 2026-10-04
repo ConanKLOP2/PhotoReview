@@ -96,7 +96,7 @@ public sealed class RecoveryPresenterTests
     [Fact]
     public void GroupStatusText_NotRecycledMember_SaysStillOnDiskNotMissing()
     {
-        var member = new JournalGroupMember(@"C:.cr2", null, 1, Stamp);
+        var member = new JournalGroupMember(@"C:\a.cr2", null, 1, Stamp);
         var text = RecoveryPresenter.GroupStatusText(RecoveryVerdict.NotRecycled, member, Path(member.Source, RecoveryPathStatus.Exists), null);
 
         Assert.Equal(Tr.RecoveryGroupOnDisk, text);
@@ -106,7 +106,7 @@ public sealed class RecoveryPresenterTests
     [Fact]
     public void GroupStatusText_RecycleUnverifiableMember_StaysMissing()
     {
-        var member = new JournalGroupMember(@"C:.cr2", null, 1, Stamp);
+        var member = new JournalGroupMember(@"C:\a.cr2", null, 1, Stamp);
         var text = RecoveryPresenter.GroupStatusText(RecoveryVerdict.RecycleUnverifiable, member, Path(member.Source, RecoveryPathStatus.Missing), null);
 
         Assert.Equal(Tr.RecoveryGroupMissing, text);
@@ -123,8 +123,8 @@ public sealed class RecoveryPresenterTests
     [Fact]
     public void RetryConfirmText_GroupDeleteWithPendingPermanentMemberAndSettingOn_WarnsItIsPermanent()
     {
-        var jpeg = new JournalGroupMember(@"C:.jpg", null, 1, Stamp);
-        var raw = new JournalGroupMember(@"E:.cr2", null, 1, Stamp, Permanent: true);
+        var jpeg = new JournalGroupMember(@"C:\a.jpg", null, 1, Stamp);
+        var raw = new JournalGroupMember(@"E:\a.cr2", null, 1, Stamp, Permanent: true);
         var entry = GroupDelete(false, jpeg, raw);
         var check = CheckOf(entry, (jpeg, RecoveryVerdict.NotRecycled), (raw, RecoveryVerdict.NotRecycled));
 
@@ -136,8 +136,8 @@ public sealed class RecoveryPresenterTests
     [Fact]
     public void RetryConfirmText_GroupDeleteSettingOff_UsesThePlainGroupConfirmation()
     {
-        var jpeg = new JournalGroupMember(@"C:.jpg", null, 1, Stamp);
-        var raw = new JournalGroupMember(@"E:.cr2", null, 1, Stamp, Permanent: true);
+        var jpeg = new JournalGroupMember(@"C:\a.jpg", null, 1, Stamp);
+        var raw = new JournalGroupMember(@"E:\a.cr2", null, 1, Stamp, Permanent: true);
         var entry = GroupDelete(false, jpeg, raw);
         var check = CheckOf(entry, (jpeg, RecoveryVerdict.NotRecycled), (raw, RecoveryVerdict.NotRecycled));
 
@@ -148,8 +148,8 @@ public sealed class RecoveryPresenterTests
     [Fact]
     public void RetryConfirmText_PermanentMemberAlreadyGone_DoesNotWarnAboutPermanentDeletion()
     {
-        var jpeg = new JournalGroupMember(@"C:.jpg", null, 1, Stamp);
-        var raw = new JournalGroupMember(@"E:.cr2", null, 1, Stamp, Permanent: true);
+        var jpeg = new JournalGroupMember(@"C:\a.jpg", null, 1, Stamp);
+        var raw = new JournalGroupMember(@"E:\a.cr2", null, 1, Stamp, Permanent: true);
         var entry = GroupDelete(false, jpeg, raw);
         var check = CheckOf(entry, (jpeg, RecoveryVerdict.NotRecycled), (raw, RecoveryVerdict.PermanentlyDeleted)); // nothing left to delete for the RAW
 
@@ -160,8 +160,8 @@ public sealed class RecoveryPresenterTests
     [Fact]
     public void RetryConfirmText_UndoOfGroupDelete_UsesRestoreWordingNotDelete()
     {
-        var jpeg = new JournalGroupMember(@"C:.jpg", null, 1, Stamp);
-        var raw = new JournalGroupMember(@"C:.cr2", null, 1, Stamp);
+        var jpeg = new JournalGroupMember(@"C:\a.jpg", null, 1, Stamp);
+        var raw = new JournalGroupMember(@"C:\a.cr2", null, 1, Stamp);
         var entry = GroupDelete(true, jpeg, raw);
 
         var text = RecoveryPresenter.RetryConfirmText(entry, null, allowPermanentDelete: true);
@@ -173,8 +173,8 @@ public sealed class RecoveryPresenterTests
     [Fact]
     public void RetryConfirmText_GroupMove_KeepsTheGenericGroupConfirmation()
     {
-        var entry = new JournalEntry("g", FileOperationType.Move, JournalState.Failed, @"C:.jpg", @"C:\s.jpg", 1, Stamp, Stamp,
-            GroupId: "c", GroupMembers: [new(@"C:.jpg", @"C:\s.jpg", 1, Stamp), new(@"C:.cr2", @"C:\s.cr2", 1, Stamp)]);
+        var entry = new JournalEntry("g", FileOperationType.Move, JournalState.Failed, @"C:\a.jpg", @"C:\s\a.jpg", 1, Stamp, Stamp,
+            GroupId: "c", GroupMembers: [new(@"C:\a.jpg", @"C:\s\a.jpg", 1, Stamp), new(@"C:\a.cr2", @"C:\s\a.cr2", 1, Stamp)]);
 
         Assert.Equal(Tr.RecoveryGroupRetryConfirm(RecoveryPresenter.OperationText(FileOperationType.Move), 2),
             RecoveryPresenter.RetryConfirmText(entry, null, allowPermanentDelete: true));
@@ -214,9 +214,9 @@ public sealed class RecoveryPresenterTests
     [Fact]
     public void RetryConfirmText_EntryCancelledByTheUser_SaysRetryFinishesTheCancelledOperation()
     {
-        var entry = new JournalEntry("g", FileOperationType.Copy, JournalState.Failed, @"C:.jpg", @"C:\o.jpg", 1, Stamp, Stamp,
+        var entry = new JournalEntry("g", FileOperationType.Copy, JournalState.Failed, @"C:\a.jpg", @"C:\o\a.jpg", 1, Stamp, Stamp,
             ErrorCode: JournalErrors.CancelledByUser, GroupId: "c",
-            GroupMembers: [new(@"C:.jpg", @"C:\o.jpg", 1, Stamp), new(@"C:.cr2", @"C:\o.cr2", 1, Stamp)]);
+            GroupMembers: [new(@"C:\a.jpg", @"C:\o\a.jpg", 1, Stamp), new(@"C:\a.cr2", @"C:\o\a.cr2", 1, Stamp)]);
 
         Assert.Equal(Tr.RecoveryRetryConfirmCancelled(RecoveryPresenter.OperationText(FileOperationType.Copy), 2),
             RecoveryPresenter.RetryConfirmText(entry, null, allowPermanentDelete: false));

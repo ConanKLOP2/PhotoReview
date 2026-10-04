@@ -79,11 +79,11 @@ public sealed class RecoveryFileCheckMutationTests
     {
         _fs.AddFile(Jpg, new string('j', 10), Stamp); // S exists, D missing -> CanRetry
         _fs.AddFile(Raw, new string('r', 10), Stamp);
-        _fs.AddFile(@"C:\out.cr2", new string('r', 10), Stamp); // S and D exist on a Move -> Conflict
+        _fs.AddFile(@"C:\out\a.cr2", new string('r', 10), Stamp); // S and D exist on a Move -> Conflict
 
         var result = Check(MoveUndoGroup(
-            new JournalGroupMember(Jpg, @"C:\out.jpg", 10, Stamp),
-            new JournalGroupMember(Raw, @"C:\out.cr2", 10, Stamp)));
+            new JournalGroupMember(Jpg, @"C:\out\a.jpg", 10, Stamp),
+            new JournalGroupMember(Raw, @"C:\out\a.cr2", 10, Stamp)));
 
         Assert.Equal(RecoveryVerdict.CanRetry, result.GroupMembers![0].Verdict);
         Assert.Equal(RecoveryVerdict.Conflict, result.GroupMembers![1].Verdict);

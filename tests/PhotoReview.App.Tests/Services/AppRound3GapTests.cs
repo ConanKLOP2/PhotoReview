@@ -412,14 +412,14 @@ public sealed class AppRound3FormatterGapTests
     [InlineData(typeof(ArgumentException))]
     public void Compare_TryGetFileSize_SwallowsTheExpectedStatFailures(Type exceptionType)
     {
-        Assert.Null(CompareViewModel.TryGetFileSize(@"C:\p.jpg", _ => throw (Exception)Activator.CreateInstance(exceptionType, "nope")!));
+        Assert.Null(CompareViewModel.TryGetFileSize(@"C:\p\a.jpg", _ => throw (Exception)Activator.CreateInstance(exceptionType, "nope")!));
     }
 
     [Fact]
     public void Compare_TryGetFileSize_DoesNotHideABug_AndReturnsTheLength()
     {
-        Assert.Throws<InvalidOperationException>(() => CompareViewModel.TryGetFileSize(@"C:\p.jpg", _ => throw new InvalidOperationException("bug")));
-        Assert.Equal(42, CompareViewModel.TryGetFileSize(@"C:\p.jpg", _ => 42L));
+        Assert.Throws<InvalidOperationException>(() => CompareViewModel.TryGetFileSize(@"C:\p\a.jpg", _ => throw new InvalidOperationException("bug")));
+        Assert.Equal(42, CompareViewModel.TryGetFileSize(@"C:\p\a.jpg", _ => 42L));
         Assert.Null(CompareViewModel.TryGetFileSize(Path.Combine(Path.GetTempPath(), "PhotoReview_missing_" + Guid.NewGuid().ToString("N"))));
     }
 }
