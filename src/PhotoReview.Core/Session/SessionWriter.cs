@@ -197,6 +197,10 @@ public sealed class SessionWriter : IDisposable
         }
     }
 
+    /// <summary>Starts the bounded save worker; a test seam so a failure to start it can be provoked.</summary>
+    internal Func<Action, Task> StartSaveForTests { get; set; } = work =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     private void WriteBatch(List<(SessionState State, long Version)> batch, bool bounded)
     {
         if (batch.Count == 0) return;
@@ -220,11 +224,24 @@ public sealed class SessionWriter : IDisposable
         // The save runs on its own thread, which owns the lock until it is done. If it outlives the budget the caller
         // moves on and the write simply completes later (or is lost if the process exits first, Q-R5: ADR 0007 section 2,
         // a session write is best effort); the state is not requeued because that worker still writes it.
-        var save = Task.Factory.StartNew(() =>
+        Task save;
+        try
         {
-            try { SaveBatch(batch); }
-            finally { _writeLock.Release(); }
-        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            save = StartSaveForTests(() =>
+            {
+                try { SaveBatch(batch); }
+                finally { _writeLock.Release(); }
+            });
+        }
+        catch (Exception ex)
+        {
+            // D-07: the worker's own finally does not exist yet, so a failure to start it (thread creation, a faulted scheduler)
+            // must release the lock here or every later write blocks on it forever; the state goes back for the next flush.
+            _writeLock.Release();
+            _log?.Error("Session write skipped: the save worker could not be started", ex);
+            RequeueSkipped(batch);
+            return;
+        }
         var remaining = BoundedWaitForTests - budget.Elapsed;
         if (!save.Wait(remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining))
             _log?.Error("Session write may be lost at shutdown: the save is still running after the wait budget", null);

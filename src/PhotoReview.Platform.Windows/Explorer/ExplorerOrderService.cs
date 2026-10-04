@@ -308,7 +308,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         {
             shell = Activator.CreateInstance(shellType);
             windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null, CultureInfo.InvariantCulture);
-            return ExplorerWindowSelector.Select(folder, ((IEnumerable)windows!).Cast<object>(),
+            return ExplorerWindowSelector.Select(folder, ComEnumeration.Enumerate(windows!),
                 window => (string?)((dynamic)window).LocationURL,
                 window => TryReadNativeView(window, folder, progress, batchSize, cancellationToken),
                 Release, _log, queryTimer, cancellationToken);
@@ -352,9 +352,9 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             {
                 progress?.Report(new ExplorerQueryProgress(batched.Count, count, 1));
                 var batchedSorts = ReadSortColumns(folderViewPtr);
-                var batchedGrouped = ExplorerNativeVtable.GetGroupBy(folderViewPtr, out var batchedGroupKey, out _) >= 0 && (batchedGroupKey.fmtid != Guid.Empty || batchedGroupKey.pid != 0);
-                _log.Info($"Explorer native-read-complete: count={batched.Count}, mode=batched, elapsedMs={timer.ElapsedMilliseconds}, firstPath={batched[0]}, lastPath={batched[^1]}, sortColumns={batchedSorts.Length}, grouped={batchedGrouped}");
-                return new ExplorerViewSnapshot(folder, batched, batchedSorts, batchedGrouped ? ExplorerGroupState.Active : ExplorerGroupState.None,
+                var batchedGroup = ReadGroupState(folderViewPtr);
+                _log.Info($"Explorer native-read-complete: count={batched.Count}, mode=batched, elapsedMs={timer.ElapsedMilliseconds}, firstPath={batched[0]}, lastPath={batched[^1]}, sortColumns={batchedSorts.Length}, grouped={batchedGroup}");
+                return new ExplorerViewSnapshot(folder, batched, batchedSorts, batchedGroup,
                     ExplorerOrderStatus.Available, null, DateTime.UtcNow);
             }
             _log.Info($"Explorer batched read unavailable, using per-item read: {batchedReason}");
@@ -395,11 +395,11 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                     Thread.Yield();
             }
             var sorts = ReadSortColumns(folderViewPtr);
-            var grouped = ExplorerNativeVtable.GetGroupBy(folderViewPtr, out var groupKey, out _) >= 0 && (groupKey.fmtid != Guid.Empty || groupKey.pid != 0);
+            var grouped = ReadGroupState(folderViewPtr);
             var first = paths.Count > 0 ? paths[0] : string.Empty;
             var last = paths.Count > 0 ? paths[^1] : string.Empty;
             _log.Info($"Explorer native-read-complete: count={paths.Count}, getItemCalls={getItemCalls}, displayNameCalls={displayNameCalls}, elapsedMs={timer.ElapsedMilliseconds}, firstPath={first}, lastPath={last}, sortColumns={sorts.Length}, grouped={grouped}");
-            return new ExplorerViewSnapshot(folder, paths, sorts, grouped ? ExplorerGroupState.Active : ExplorerGroupState.None,
+            return new ExplorerViewSnapshot(folder, paths, sorts, grouped,
                 ExplorerOrderStatus.Available, null, DateTime.UtcNow);
         }
         finally
@@ -479,11 +479,26 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         }
     }
 
-    private static ExplorerSortColumn[] ReadSortColumns(IntPtr view)
+    /// <summary>
+    /// A failed <c>GetGroupBy</c> is <see cref="ExplorerGroupState.Unknown"/>, not "no grouping": the view could not be asked.
+    /// </summary>
+    internal static ExplorerGroupState ReadGroupState(IntPtr view)
+        => ExplorerNativeVtable.GetGroupBy(view, out var key, out _) < 0 ? ExplorerGroupState.Unknown
+         : key.fmtid != Guid.Empty || key.pid != 0 ? ExplorerGroupState.Active
+         : ExplorerGroupState.None;
+
+    /// <summary>
+    /// What <see cref="ReadSortColumns"/> returns when the view could not be asked (or answered nonsense): one column with an
+    /// <see cref="ExplorerSortDirection.Unknown"/> direction, so it is distinguishable from the genuine empty "no sort" answer.
+    /// </summary>
+    internal static readonly ExplorerSortColumn[] UnknownSortColumns = [new ExplorerSortColumn(Guid.Empty, 0, ExplorerSortDirection.Unknown)];
+
+    internal static ExplorerSortColumn[] ReadSortColumns(IntPtr view)
     {
-        if (ExplorerNativeVtable.GetSortColumnCount(view, out var count) < 0 || count <= 0 || count > 32) return [];
+        if (ExplorerNativeVtable.GetSortColumnCount(view, out var count) < 0 || count > 32) return UnknownSortColumns;
+        if (count <= 0) return [];
         var native = new SORTCOLUMN[count];
-        if (ExplorerNativeVtable.GetSortColumns(view, native, count) < 0) return [];
+        if (ExplorerNativeVtable.GetSortColumns(view, native, count) < 0) return UnknownSortColumns;
         return native.Select(c => new ExplorerSortColumn(c.propkey.fmtid, c.propkey.pid,
             c.direction == 1 ? ExplorerSortDirection.Ascending : c.direction == -1 ? ExplorerSortDirection.Descending : ExplorerSortDirection.Unknown)).ToArray();
     }

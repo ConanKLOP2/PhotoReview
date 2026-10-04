@@ -306,16 +306,24 @@ public sealed class WicDirectDecoder : IImageDecoder
         return factory!;
     }
 
-    /// <summary>Test seam for the factory-creation failure path (a real WIC failure cannot be provoked): an HRESULT failure throws its mapped exception.</summary>
+    private const int EFail = unchecked((int)0x80004005);
+
+    /// <summary>
+    /// Test seam for the factory-creation failure path (a real WIC failure cannot be provoked): an HRESULT failure throws its mapped
+    /// exception, and S_OK without a factory throws the mapped E_FAIL <see cref="COMException"/> instead of leaving a null factory
+    /// to surface later as a NullReferenceException (a COMException is a backend failure the WPF fallback can decode around).
+    /// </summary>
     internal static void ThrowIfFactoryFailed(int hr, bool factoryCreated)
     {
-        if (hr < 0 || !factoryCreated)
+        if (hr < 0)
         {
             // IntPtr(-1) = ignore the thread's IErrorInfo: ThrowExceptionForHR would otherwise pick up a stale error object left by an
-            // earlier COM call on this thread, making the exception's message/shape depend on what ran before. S_OK maps to null (no throw).
+            // earlier COM call on this thread, making the exception's message/shape depend on what ran before.
             var exception = Marshal.GetExceptionForHR(hr, new IntPtr(-1));
             if (exception is not null) throw exception;
         }
+        if (!factoryCreated)
+            throw Marshal.GetExceptionForHR(EFail, new IntPtr(-1))!; // E_FAIL always maps to a COMException (CA2201 forbids constructing one)
     }
 
     private static readonly HashSet<Guid> OpaquePixelFormats =

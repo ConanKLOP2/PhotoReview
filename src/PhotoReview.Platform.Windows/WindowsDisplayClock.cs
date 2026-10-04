@@ -37,8 +37,10 @@ public sealed class WindowsDisplayClock : IDisplayClock
         _log = log ?? NullLog.Instance;
     }
 
-    private void MarkFailed(IntPtr monitor)
+    /// <summary>Falls back to DWM timing for <paramref name="monitor"/>; logs once which step failed, so a non-60 Hz secondary display running on primary-display timing is explainable.</summary>
+    internal void MarkFailed(IntPtr monitor, string step)
     {
+        _log.Warn($"Vblank clock unavailable for monitor 0x{monitor.ToInt64():X}, falling back to DWM timing (primary display only) for {RetryFailedAfterMs} ms: {step}");
         lock (_gate)
         {
             _failedMonitor = monitor;
@@ -105,14 +107,15 @@ public sealed class WindowsDisplayClock : IDisplayClock
                     opened = wanted;
                     if (!TryOpen(wanted, out adapter, out source))
                     {
-                        MarkFailed(wanted);
+                        MarkFailed(wanted, "opening the adapter failed (GetMonitorInfo, CreateDC or D3DKMTOpenAdapterFromHdc)");
                         return;
                     }
                 }
                 var wait = new WaitForVerticalBlankEvent { Adapter = adapter, Device = 0, VidPnSourceId = source };
-                if (D3DKMTWaitForVerticalBlankEvent(ref wait) != 0)
+                var waitStatus = D3DKMTWaitForVerticalBlankEvent(ref wait);
+                if (waitStatus != 0)
                 {
-                    MarkFailed(opened);
+                    MarkFailed(opened, $"D3DKMTWaitForVerticalBlankEvent returned 0x{waitStatus:X8}");
                     return;
                 }
                 estimator.Add(Stopwatch.GetTimestamp());
@@ -121,7 +124,7 @@ public sealed class WindowsDisplayClock : IDisplayClock
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
-            MarkFailed(opened);
+            MarkFailed(opened, $"{ex.GetType().Name}: {ex.Message}");
         }
         catch (Exception ex)
         {
@@ -129,7 +132,7 @@ public sealed class WindowsDisplayClock : IDisplayClock
             var failing = opened != IntPtr.Zero ? opened : target;
             if (failing != IntPtr.Zero)
             {
-                MarkFailed(failing);
+                MarkFailed(failing, $"thread failed with {ex.GetType().Name}");
             }
             else
             {

@@ -116,6 +116,24 @@ public sealed class SessionWriterShutdownAndVersionTests
     }
 
     [Fact]
+    public void Flush_SaveWorkerCannotBeStarted_ReleasesTheWriterLockAndTheStateIsWrittenByTheNextFlush()
+    {
+        var (writer, store) = Create();
+        writer.BoundedWaitForTests = TimeSpan.FromMilliseconds(200); // a leaked lock would make the second flush give up after this
+        var defaultStart = writer.StartSaveForTests;
+        writer.StartSaveForTests = _ => throw new InvalidOperationException("cannot start the save worker");
+        writer.Update(State(@"C:\photos", "kept"));
+
+        var ex = Record.Exception(writer.Flush);
+        writer.StartSaveForTests = defaultStart;
+        writer.Flush();
+
+        Assert.Null(ex);
+        Assert.Contains(_log.Errors, e => e.Message.Contains("could not be started", StringComparison.Ordinal));
+        Assert.Equal("kept", store.Load(@"C:\photos").CurrentPath);
+    }
+
+    [Fact]
     public async Task Flush_TimedOutBatchWhoseStateWasSuperseded_IsNotRequeuedOverTheNewerState()
     {
         var (writer, store) = Create();
