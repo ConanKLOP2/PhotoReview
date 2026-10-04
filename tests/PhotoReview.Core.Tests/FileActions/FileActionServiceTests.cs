@@ -568,10 +568,10 @@ public sealed class FileActionServiceTests
         Assert.Equal(JournalErrors.CancelledByUser, failed.ErrorCode);
     }
 
-    // RV-C03: a single Copy cut short (disk full) must not leave its partial file behind: Recovery would call it a Conflict and
-    // the retry would refuse with "destination exists".
+    // D-01 (decision c): a single Copy cut short (disk full) leaves its partial file. File.Copy cannot prove the destination was
+    // created by this call, so it is never deleted; the journal keeps a Failed entry and Recovery shows a Conflict.
     [Fact]
-    public async Task ExecuteAsync_CopyFailsMidway_RemovesPartialDestination()
+    public async Task ExecuteAsync_CopyFailsMidway_KeepsUnclaimedPartialDestinationAndRecoveryShowsConflict()
     {
         var source = @"C:\photos\a.jpg";
         var destination = @"C:\photos\sel\a.jpg";
@@ -581,26 +581,39 @@ public sealed class FileActionServiceTests
         var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
 
         Assert.False(result.Succeeded);
-        Assert.True(_fs.FileExists(source));
-        Assert.False(_fs.FileExists(destination));
+        Assert.Equal("hello photo", _fs.ReadAllText(source)); // the source is intact
+        Assert.Equal(4, _fs.GetFileStat(destination)!.Length); // the partial stays
         var failed = Assert.Single(_journal.ReadPendingAndFailedOperations());
         Assert.Equal(JournalState.Failed, failed.State);
-        Assert.Equal(RecoveryVerdict.CanRetry, new RecoveryFileCheck(_fs).Check(failed).Verdict);
+        Assert.Equal(RecoveryVerdict.Conflict, new RecoveryFileCheck(_fs).Check(failed).Verdict);
     }
 
     [Fact]
-    public async Task ExecuteAsync_CopyFailsAndPartialCleanupThrowsUnexpectedly_StillJournalsTheOriginalFailure()
+    public async Task ExecuteAsync_CopyCompletesButSourceShrankMeanwhile_PartialCleanupThrowing_StillJournalsTheFailure()
     {
         var source = @"C:\photos\a.jpg";
-        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
-        _fs.CopyFailsAfterBytes = 4;
-        // The cleanup is best effort: whatever it throws must not replace the copy failure or skip the journal outcome.
-        _fs.DeleteHook = _ => new InvalidOperationException("simulated filter driver failure");
+        var stamp = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(source, "hello photo", stamp);
+        // The copy returns (so it proved it created the destination) but the source was truncated after the preflight: the
+        // destination is shorter than the journaled size, the verification fails and the best-effort cleanup runs.
+        _fs.CopyHook = (s, _) =>
+        {
+            _fs.AddFile(s, "hello", stamp);
+            return null;
+        };
+        var deleteAttempted = false;
+        // The cleanup is best effort: whatever it throws must not replace the failure or skip the journal outcome.
+        _fs.DeleteHook = _ =>
+        {
+            deleteAttempted = true;
+            return new InvalidOperationException("simulated filter driver failure");
+        };
 
         var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Simulated disk full during copy.", result.Error);
+        Assert.True(deleteAttempted);
+        Assert.NotNull(result.Error);
         var failed = Assert.Single(_journal.ReadPendingAndFailedOperations());
         Assert.Equal(JournalState.Failed, failed.State);
     }
