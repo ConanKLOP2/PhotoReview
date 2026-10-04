@@ -170,6 +170,18 @@ public sealed class JournalGroupEvidenceAndNulMemberTests
         Assert.Contains(reconciled, entry => entry.Id == "good" && entry.State == JournalState.Committed);
     }
 
+    [Theory(DisplayName = "W2-FA-07: a group line with a NUL in a member Source or Destination is rejected like an entry-level NUL path")]
+    [InlineData("a\0.jpg", @"C:\selected\a.jpg")]
+    [InlineData(@"C:\photos\a.jpg", "b\0.jpg")]
+    public void TryParse_NulInMemberPath_IsRejected(string source, string destination)
+    {
+        var members = new JournalGroupMember[] { new(source, destination, 1, Stamp), Members[1] };
+        var line = JsonSerializer.Serialize(GroupPrepared("n", members));
+
+        Assert.Null(JournalLineParser.TryParse(line));
+        Assert.NotNull(JournalLineParser.TryParse(JsonSerializer.Serialize(GroupPrepared("ok"))));
+    }
+
     [Fact(DisplayName = "W2-FA-07: a member path the file system rejects stops only its own repair; other groups are still repaired")]
     public void Reconcile_RepairOfOneGroupThrows_OtherGroupStillRepaired()
     {
