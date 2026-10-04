@@ -8,15 +8,15 @@ The current Roslyn inventory covers 16,795 callable bodies in 1,068 tracked C# f
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 5,967 `STATIC-ONLY`, 72 `ISSUE`, and 10,756 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 6,156 `STATIC-ONLY`, 72 `ISSUE`, and 10,567 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
 
 The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App, Core/tooling, and Imaging agents are reviewing the remaining current-head rows in separate ownership lanes. No lane may be marked complete until its exact callable coverage and remaining count are reconciled against this inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 3,196 rows reread; 3,259 remaining |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 452 current-head rows reread; stale-snapshot batches excluded |
-| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 3,903 test rows reread; 376 remaining |
+| App + Integration | 1,229 | 5,226 | 6,455 | 3,451 rows reread; 3,004 remaining |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 928 current-head rows reread; stale-snapshot batches excluded |
+| Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 3,983 test rows reread; 296 remaining |
 | Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | Not yet assigned to a continuation lane |
 
 [powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
