@@ -311,7 +311,10 @@ public sealed class WicDirectDecoder : IImageDecoder
     {
         if (hr < 0 || !factoryCreated)
         {
-            Marshal.ThrowExceptionForHR(hr);
+            // IntPtr(-1) = ignore the thread's IErrorInfo: ThrowExceptionForHR would otherwise pick up a stale error object left by an
+            // earlier COM call on this thread, making the exception's message/shape depend on what ran before. S_OK maps to null (no throw).
+            var exception = Marshal.GetExceptionForHR(hr, new IntPtr(-1));
+            if (exception is not null) throw exception;
         }
     }
 
