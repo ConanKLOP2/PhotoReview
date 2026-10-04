@@ -82,6 +82,96 @@ public sealed class RecycleBinDeleteGuardTests
         Assert.Equal(@"\\nas\share\a.jpg", Assert.Single(deleted));
     }
 
+    private const string GuidPhoto = @"\\?\Volume{0a089459-c105-4107-99e6-657d2fddd42b}\x\a.jpg";
+    private const string GuidRoot = @"\\?\Volume{0a089459-c105-4107-99e6-657d2fddd42b}\";
+
+    [Theory(DisplayName = "R44: DeletePermanently refuses a volume-GUID / device path on a fixed, unknown or unqueryable volume")]
+    [InlineData(GuidPhoto, DriveType.Fixed)]
+    [InlineData(GuidPhoto, DriveType.Unknown)]
+    [InlineData(GuidPhoto, null)]
+    [InlineData(@"\\?\C:\x\a.jpg", DriveType.Fixed)]
+    [InlineData(@"\\.\Volume{0a089459-c105-4107-99e6-657d2fddd42b}\x\a.jpg", DriveType.Fixed)]
+    public void DeletePermanently_NonUncExtendedPathOnFixedVolume_RefusesWithoutDeleting(string path, DriveType? type)
+    {
+        var deleted = new List<string>();
+        var queried = new List<string>();
+        var bin = new WindowsRecycleBin(null, new Settings(), driveTypeOf: root => { queried.Add(root); return type; },
+            mountPointOf: _ => GuidRoot, fileDelete: deleted.Add);
+
+        Assert.Throws<InvalidOperationException>(() => bin.DeletePermanently(path));
+
+        Assert.Empty(deleted);
+        Assert.Equal(GuidRoot, Assert.Single(queried));
+    }
+
+    [Theory(DisplayName = "R44: DeletePermanently refuses a volume-GUID path whose mount point cannot be resolved")]
+    [InlineData(null)]
+    [InlineData("")]
+    public void DeletePermanently_VolumeGuidPathUnresolvableMount_Refuses(string? mount)
+    {
+        var deleted = new List<string>();
+        var bin = new WindowsRecycleBin(null, new Settings(), driveTypeOf: _ => DriveType.Removable, mountPointOf: _ => mount, fileDelete: deleted.Add);
+
+        Assert.Throws<InvalidOperationException>(() => bin.DeletePermanently(GuidPhoto));
+
+        Assert.Empty(deleted);
+    }
+
+    [Theory(DisplayName = "R44: DeletePermanently still deletes a volume-GUID path on a positively identified no-bin volume")]
+    [InlineData(DriveType.Removable)]
+    [InlineData(DriveType.Network)]
+    public void DeletePermanently_VolumeGuidPathOnNoBinVolume_Deletes(DriveType type)
+    {
+        var deleted = new List<string>();
+        var bin = new WindowsRecycleBin(null, new Settings(), driveTypeOf: _ => type, mountPointOf: _ => GuidRoot, fileDelete: deleted.Add);
+
+        bin.DeletePermanently(GuidPhoto);
+
+        Assert.Equal(GuidPhoto, Assert.Single(deleted));
+    }
+
+    [Theory(DisplayName = "R44: real UNC syntaxes (share and extended UNC) stay permanent-delete eligible without a drive query")]
+    [InlineData(@"\\nas\share\a.jpg")]
+    [InlineData(@"\\?\UNC\nas\share\a.jpg")]
+    [InlineData(@"\\?\unc\nas\share\a.jpg")]
+    public void DeletePermanently_RealUncForms_Delete(string path)
+    {
+        var deleted = new List<string>();
+        var bin = new WindowsRecycleBin(null, new Settings(), driveTypeOf: _ => null, mountPointOf: _ => null, fileDelete: deleted.Add);
+
+        bin.DeletePermanently(path);
+
+        Assert.Equal(path, Assert.Single(deleted));
+    }
+
+    [Theory(DisplayName = "R44: a mount point that is a real UNC share allows permanent delete, a volume-GUID mount is judged by its drive type")]
+    [InlineData(@"\\nas\share\", DriveType.Fixed, true)]
+    [InlineData(@"\\?\UNC\nas\share\", DriveType.Fixed, true)]
+    [InlineData(GuidRoot, DriveType.Fixed, false)]
+    [InlineData(GuidRoot, DriveType.Removable, true)]
+    public void IsPermanentDeleteAllowed_MountPointForms(string mount, DriveType type, bool expected)
+    {
+        Assert.Equal(expected, RecycleEligibility.IsPermanentDeleteAllowed(@"E:\folder\a.jpg", _ => type, _ => mount));
+    }
+
+    [Theory(DisplayName = "R44: CanRecycle never recycles through a volume-GUID/device path (the shell would delete it permanently) nor UNC")]
+    [InlineData(GuidPhoto)]
+    [InlineData(@"\\.\Volume{0a089459-c105-4107-99e6-657d2fddd42b}\x\a.jpg")]
+    [InlineData(@"\\?\UNC\nas\share\a.jpg")]
+    [InlineData(@"\\nas\share\a.jpg")]
+    public void CanRecycle_NonDriveLetterExtendedAndUncPaths_AreRefused(string path)
+    {
+        Assert.False(RecycleEligibility.CanRecycle(path, _ => DriveType.Fixed, _ => GuidRoot));
+    }
+
+    [Fact(DisplayName = "R44: CanRecycle keeps accepting ordinary and extended drive-letter paths on a fixed volume")]
+    public void CanRecycle_DriveLetterForms_OnFixedVolume_Accepted()
+    {
+        Assert.True(RecycleEligibility.CanRecycle(@"E:\x\a.jpg", _ => DriveType.Fixed, _ => @"E:\"));
+        Assert.True(RecycleEligibility.CanRecycle(@"\\?\E:\x\a.jpg", _ => DriveType.Fixed, _ => @"E:\"));
+        Assert.False(RecycleEligibility.IsPermanentDeleteAllowed(@"\\?\E:\x\a.jpg", _ => DriveType.Fixed, _ => @"E:\"));
+    }
+
     [Fact(DisplayName = "R26: SendToRecycleBin re-reads the size and refuses a file that outgrew the bin after the preflight, never calling the shell")]
     public void SendToRecycleBin_FileGrewAfterPreflight_RefusedWithoutShell()
     {
