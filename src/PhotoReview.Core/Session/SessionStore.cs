@@ -48,6 +48,9 @@ public sealed class SessionStore
         StartupSweepTask = Task.Run(() => SweepStaleTempFiles(DateTime.UtcNow));
     }
 
+    /// <summary>Test seam: the diagnostic log used for corrupt-file and failed-write warnings (defaults to <see cref="FileLog.Default"/>).</summary>
+    internal Func<ILog> Log { get; set; } = static () => FileLog.Default;
+
     /// <summary>Test seam: lets a test await the background startup sweep (see R14) deterministically.</summary>
     internal Task StartupSweepTask { get; }
 
@@ -119,7 +122,7 @@ public sealed class SessionStore
         {
             // ADR 0007 section 2: without fsync a power loss can leave an empty/partial session file.
             // That is "no session", not an error for the user.
-            try { FileLog.Default.Warn($"Session file '{path}' is empty or corrupt; starting without a session."); }
+            try { Log().Warn($"Session file '{path}' is empty or corrupt; starting without a session."); }
             catch (Exception ex) when (ex is not OutOfMemoryException) { /* logging must never make Load throw */ }
         }
         catch (IOException) { }
@@ -143,7 +146,7 @@ public sealed class SessionStore
         {
             // Session persistence is best effort (a locked or full disk must not break navigation): callers without a SessionWriter
             // (ImagePresenter / MainViewModel fallback) do not catch.
-            try { FileLog.Default.Warn($"Session write failed for '{state.Folder}': {ex.Message}"); }
+            try { Log().Warn($"Session write failed for '{state.Folder}': {ex.Message}"); }
             catch (Exception logEx) when (logEx is not OutOfMemoryException) { /* logging must never make Save throw */ }
         }
     }

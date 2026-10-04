@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Tests.Fakes;
@@ -20,6 +20,21 @@ public sealed class DuplicateFinderTests
             fileSystem: _fs);
 
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task FindAsync_HashThrowsOperationCanceledWithoutTokenCancellation_PropagatesIt()
+    {
+        var original = @"C:\photos\img.jpg";
+        var copy = @"C:\photos\img (1).jpg";
+        _fs.WriteAllTextAtomic(original, "content");
+        _fs.WriteAllTextAtomic(copy, "content");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => DuplicateFinder.FindAsync(
+            [original, copy],
+            removeNumbered: true,
+            hash: (p, ct) => throw new OperationCanceledException("linked source cancelled"),
+            fileSystem: _fs));
     }
 
     [Fact]
