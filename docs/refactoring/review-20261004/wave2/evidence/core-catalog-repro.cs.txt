@@ -1,0 +1,51 @@
+// Evidence for findings-core-catalog.md. NOT compiled (.cs.txt). Run as a scratch console app (net10.0) that
+// references src/PhotoReview.Core. Observed output on master 3db54da1 is quoted after each probe.
+using System.Diagnostics;
+using System.Text.Json;
+using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Model;
+
+// W2-CC-02: SiblingFolderService includes hidden directories
+var root = Path.Combine(Path.GetTempPath(), "exp_sib_" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(Path.Combine(root, "a"));
+Directory.CreateDirectory(Path.Combine(root, ".hid")).Attributes |= FileAttributes.Hidden;
+Console.WriteLine(string.Join(",", SiblingFolderService.GetSorted(Path.Combine(root, "a")).Select(p => Path.GetFileName(p))));
+Directory.Delete(root, true);
+// observed: .hid,a
+
+// W2-CC-03: flags converters
+var o = new JsonSerializerOptions();
+Console.WriteLine(JsonSerializer.Serialize(ExifInfoFields.Default, o));            // observed: "Default"
+Console.WriteLine(JsonSerializer.Serialize(ExifInfoFields.All, o));                // observed: "All"
+Console.WriteLine(JsonSerializer.Serialize(TitleBarFields.Default, o));            // observed: "FolderName"
+Console.WriteLine(JsonSerializer.Deserialize<ExifInfoFields>("-1", o));            // observed: All
+Console.WriteLine(JsonSerializer.Deserialize<ExifInfoFields>("\"FileName, Foo\"", o)); // observed: Default (FileName lost)
+
+// W2-CC-05: BuildIndex cost (release, no numbered files)
+foreach (var n in new[] { 10_000, 100_000 })
+{
+    var files = Enumerable.Range(0, n).Select(i => $@"C:\photos\set{i / 1000}\IMG_{i:D6}.jpg").ToList();
+    var sw = Stopwatch.StartNew();
+    ComparePairService.BuildIndex(files);
+    Console.WriteLine($"BuildIndex n={n}: {sw.ElapsedMilliseconds} ms");   // observed: 86 ms (10k, incl. JIT), 229 ms (100k)
+}
+
+// W2-CC-01: validator output vs catalog with extended-length scanned paths
+var scanned = new[] { @"\\?\C:\x\a.jpg", @"\\?\C:\x\b.jpg" };
+var snap = new ExplorerViewSnapshot(@"\\?\C:\x", new[] { @"C:\x\b.jpg", @"C:\x\a.jpg" }, [], ExplorerGroupState.None, ExplorerOrderStatus.Available, null, DateTime.UtcNow);
+var ok = ExplorerSnapshotValidator.TryValidate(snap, scanned, out var ordered, out _);
+var cat = new ReviewCatalog();
+cat.Reset(scanned.Select(p => new CatalogEntry(p)), RawPairMode.Separate);
+Console.WriteLine($"validate={ok} ordered={string.Join(";", ordered)} ReplaceOrder={cat.ReplaceOrder(ordered)}");
+// observed: validate=True ordered=C:\x\b.jpg;C:\x\a.jpg ReplaceOrder=False
+
+// W2-CC-06: same folder, two spellings
+var d = Path.Combine(Path.GetTempPath(), "exp_dd_" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(d);
+var r = DragDropInputService.Parse(new[] { d, d + Path.DirectorySeparatorChar });
+Console.WriteLine($"ignored={r.IgnoredPathCount} warning={r.Warning is not null}");  // observed: ignored=1 warning=True
+Directory.Delete(d);
+
+// W2-CC-07: reason round trip with a pipe in a detail
+var p = ExplorerReason.Parse(ExplorerReason.Format("query-failed", "a|b"));
+Console.WriteLine($"{p.Code} details={p.Details.Length}");                            // observed: query-failed details=2 (expected 1)

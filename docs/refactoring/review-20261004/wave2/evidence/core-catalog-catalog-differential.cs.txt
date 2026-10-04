@@ -1,0 +1,120 @@
+// Randomised differential probe of ReviewCatalog (3 pair modes x 300 rounds x 60 ops: Remove/RestoreMembers/Restore/RemovePaths/ReplaceOrder/UpdateMetadata/SetCurrent with capture groups).
+// Checks after every op: Count/CurrentIndex range, Paths cache equals entries, IndexOf(member)==entry index for every entry/group member, IndexOf(absent)==-1, no duplicate members.
+// NOT compiled (.cs.txt). Observed on master 3db54da1: violations=0.
+using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Model;
+
+var rnd = new Random(12345);
+int violations = 0;
+string[] mkNames(int n) => Enumerable.Range(0, n).SelectMany(i => new[] { $@"C:\a\{i:D3}.jpg", $@"C:\a\{i:D3}.cr3" }).ToArray();
+
+void Check(ReviewCatalog c, string op, int seed)
+{
+    var snap = c.EntriesSnapshot();
+    if (c.Count != snap.Length) { Report(op, "count"); return; }
+    if (snap.Length == 0 ? c.CurrentIndex != -1 : (c.CurrentIndex < 0 || c.CurrentIndex >= snap.Length)) { Report(op, $"currentIndex {c.CurrentIndex} of {snap.Length}"); return; }
+    var paths = c.Paths;
+    if (paths.Count != snap.Length) { Report(op, "paths cache count"); return; }
+    var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+    for (int i = 0; i < snap.Length; i++)
+    {
+        if (paths[i] != snap[i].Path) { Report(op, "paths cache content"); return; }
+        var members = snap[i].CaptureGroup?.ImagePaths ?? new[] { snap[i].Path };
+        foreach (var m in members.Append(snap[i].Path).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (seen.TryGetValue(m, out var other) && other != i) { Report(op, $"duplicate member {m} in entries {other} and {i}"); return; }
+            seen[m] = i;
+            if (c.IndexOf(m) != i) { Report(op, $"IndexOf({m})={c.IndexOf(m)} expected {i}"); return; }
+        }
+    }
+    foreach (var gone in mkNames(8))
+        if (!seen.ContainsKey(gone) && c.IndexOf(gone) != -1) { Report(op, $"IndexOf({gone}) should be -1"); return; }
+}
+void Report(string op, string msg) { violations++; if (violations <= 10) Console.WriteLine($"VIOLATION after {op}: {msg}"); }
+
+foreach (var mode in new[] { RawPairMode.Separate, RawPairMode.PreferJpeg, RawPairMode.PreferRaw })
+for (int round = 0; round < 300 && violations < 10; round++)
+{
+    var c = new ReviewCatalog();
+    var all = mkNames(8);
+    c.Reset(all.OrderBy(_ => rnd.Next()).Select(p => new CatalogEntry(p)), mode);
+    Check(c, "reset", round);
+    var removedGroups = new List<(string[] paths, int idx, CaptureGroup? g)>();
+    for (int step = 0; step < 60 && violations < 10; step++)
+    {
+        var op = rnd.Next(8);
+        string desc = "";
+        switch (op)
+        {
+            case 0: // Remove
+            {
+                if (c.Count == 0) break;
+                var e = c.EntriesSnapshot()[rnd.Next(c.Count)];
+                var target = e.CaptureGroup is { } g && rnd.Next(2) == 0 ? g.ImagePaths[rnd.Next(2)] : e.Path;
+                var idx = c.IndexOf(target);
+                desc = "Remove " + target;
+                var members = e.CaptureGroup?.ImagePaths.ToArray() ?? new[] { e.Path };
+                c.Remove(target);
+                removedGroups.Add((members, idx, e.CaptureGroup));
+                break;
+            }
+            case 1: // RestoreMembers a removed one
+            {
+                if (removedGroups.Count == 0) break;
+                var k = rnd.Next(removedGroups.Count);
+                var (paths, idx, g) = removedGroups[k];
+                var subset = rnd.Next(3) == 0 ? paths.Take(1).ToArray() : paths;
+                desc = $"RestoreMembers {string.Join(",", subset)} at {idx} group={(g is null ? "null" : "set")}";
+                c.RestoreMembers(subset, idx, rnd.Next(2) == 0 ? g : null, true);
+                if (subset.Length == paths.Length) removedGroups.RemoveAt(k);
+                break;
+            }
+            case 2: // Restore single
+            {
+                if (removedGroups.Count == 0) break;
+                var (paths, idx, _) = removedGroups[rnd.Next(removedGroups.Count)];
+                desc = "Restore " + paths[0];
+                c.Restore(paths[0], idx);
+                break;
+            }
+            case 3: // RemovePaths
+            {
+                var pick = all.Where(_ => rnd.Next(5) == 0).ToArray();
+                desc = "RemovePaths " + string.Join(",", pick);
+                c.RemovePaths(pick);
+                break;
+            }
+            case 4: // ReplaceOrder: member-level shuffle of present members
+            {
+                var members = c.EntriesSnapshot().SelectMany(e => e.CaptureGroup?.ImagePaths ?? new[] { e.Path }).OrderBy(_ => rnd.Next()).ToArray();
+                desc = "ReplaceOrder(members)";
+                c.ReplaceOrder(members);
+                break;
+            }
+            case 5: // ReplaceOrder representatives
+            {
+                var reps = c.EntriesSnapshot().Select(e => e.Path).OrderBy(_ => rnd.Next()).ToArray();
+                desc = "ReplaceOrder(reps)";
+                c.ReplaceOrder(reps);
+                break;
+            }
+            case 6:
+            {
+                if (c.Count == 0) break;
+                var p = c.PathAt(rnd.Next(c.Count));
+                desc = "UpdateMetadata " + p;
+                c.UpdateMetadata(p, 5, DateTime.UtcNow);
+                break;
+            }
+            case 7:
+            {
+                if (c.Count == 0) break;
+                desc = "SetCurrent";
+                c.SetCurrent(rnd.Next(c.Count));
+                break;
+            }
+        }
+        Check(c, $"[{mode} round {round} step {step}] {desc}", round);
+    }
+}
+Console.WriteLine("violations=" + violations);
