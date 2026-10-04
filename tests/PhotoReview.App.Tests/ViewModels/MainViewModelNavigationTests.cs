@@ -775,6 +775,51 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         Assert.DoesNotContain("raw english message", vm.StatusText);
     }
 
+    // R14: an older open request that resumes after a newer one already loaded must not replace it.
+    [Fact]
+    public async Task OpenFolderAsync_OlderOpenResumesAfterNewerOneLoaded_DoesNotReplaceIt()
+    {
+        var b = Path.Combine(_tempDir, "b");
+        var c = Path.Combine(_tempDir, "c");
+        Directory.CreateDirectory(b);
+        Directory.CreateDirectory(c);
+        CreateImageFile(b, "b1.jpg");
+        CreateImageFile(c, "c1.jpg");
+        CreateImageFile(c, "c2.jpg");
+        var (vm, _, _) = CreateViewModel();
+        var ownership = new PerFolderGatedOwnership();
+        vm.FolderOwnership = ownership;
+
+        var openB = vm.OpenFolderAsync(b); // stays pending in BeforeOpenAsync
+        var openC = vm.OpenFolderAsync(c);
+        ownership.Gate(c).SetResult(PhotoReview.Core.Instance.FolderOpenDecision.Proceed);
+        await openC;
+        ownership.Gate(b).SetResult(PhotoReview.Core.Instance.FolderOpenDecision.Proceed);
+        await openB;
+
+        Assert.Equal(2, vm.TotalFiles);
+        Assert.Contains("c", vm.FolderTitle);
+        Assert.Equal([(c, (string?)c), (b, (string?)c)], ownership.AfterOpens);
+    }
+
+    private sealed class PerFolderGatedOwnership : PhotoReview.Core.Instance.IFolderOwnership
+    {
+        private readonly Dictionary<string, TaskCompletionSource<PhotoReview.Core.Instance.FolderOpenDecision>> _gates = [];
+        public List<(string Folder, string? Shown)> AfterOpens { get; } = [];
+
+        public TaskCompletionSource<PhotoReview.Core.Instance.FolderOpenDecision> Gate(string folder)
+        {
+            if (!_gates.TryGetValue(folder, out var gate))
+                _gates[folder] = gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            return gate;
+        }
+
+        public Task<PhotoReview.Core.Instance.FolderOpenDecision> BeforeOpenAsync(string folder, string? initialPath, CancellationToken cancellationToken = default) => Gate(folder).Task;
+
+        public void OnFolderShown(string folder) { }
+
+        public void AfterOpen(string folder, string? shownFolder) => AfterOpens.Add((folder, shownFolder));
+    }
     private sealed class GatedOwnership : PhotoReview.Core.Instance.IFolderOwnership
     {
         public TaskCompletionSource<PhotoReview.Core.Instance.FolderOpenDecision> Gate { get; } =

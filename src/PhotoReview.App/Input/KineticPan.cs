@@ -338,6 +338,13 @@ internal struct GlideFrameClock
             // the refresh grid starts here.
             Anchor(nowTicks, current);
         }
+        else if (_mode != KineticGlideSmoothing.Off)
+        {
+            // Timing lost (not yet available, query failure, monitor change): this frame steps by RenderingTime and
+            // moves the epoch with it, so the grid is re-anchored when timing returns instead of replaying the
+            // interval already stepped here from the stale anchor.
+            _anchored = false;
+        }
 
         if (!(renderingElapsed > 0)) return 0; // Rendering can fire more than once per frame with the same RenderingTime
         _lastRenderingMs = renderingTimeMs;
