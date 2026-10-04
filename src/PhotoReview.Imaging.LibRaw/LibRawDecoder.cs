@@ -445,7 +445,11 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 
     internal sealed class CancellationState : IDisposable
     {
-        private readonly GCHandle _handle;
+        // Deliberately NOT readonly: GCHandle is a mutable struct, and Free() on a readonly field runs on a defensive copy, so the field
+        // would keep a non-zero handle (IsAllocated stays true) and a second Dispose would free the same slot again. A double free puts
+        // the slot on the runtime's free list twice, two later allocations (WPF stream descriptors, exception handles) then share one
+        // slot, which corrupted unrelated decodes ("Unable to cast FileNotFoundException to StreamAsIStream") and crashed the host.
+        private GCHandle _handle;
 
         internal CancellationState(CancellationToken token)
         {
@@ -455,6 +459,10 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 
         internal CancellationToken Token { get; }
         internal IntPtr Pointer => GCHandle.ToIntPtr(_handle);
-        public void Dispose() { if (_handle.IsAllocated) _handle.Free(); }
+        internal bool IsFreed => !_handle.IsAllocated;
+        public void Dispose()
+        {
+            if (_handle.IsAllocated) _handle.Free();
+        }
     }
 }

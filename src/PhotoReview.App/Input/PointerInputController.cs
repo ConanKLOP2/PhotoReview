@@ -135,7 +135,7 @@ internal sealed class PointerInputController
     /// Applies a zoom change and then scrolls so the image point that was under <paramref name="mouse"/>
     /// (ImageScroll coordinates) stays under it. Shared by the wheel and click-to-zoom.
     /// </summary>
-    private Task ZoomAtPointAsync(Point mouse, Action applyZoom) => ZoomToImagePointAsync(CaptureZoomAnchor(mouse), mouse, applyZoom);
+    private Task<bool> ZoomAtPointAsync(Point mouse, Action applyZoom) => ZoomToImagePointAsync(CaptureZoomAnchor(mouse), mouse, applyZoom);
 
     /// <summary>
     /// General form of <see cref="ZoomAtPointAsync"/> (PR-B, Fit width/Fit height): applies <paramref name="applyZoom"/>
@@ -143,9 +143,10 @@ internal sealed class PointerInputController
     /// <see cref="MainWindowHelpers.ZoomImagePoint"/>) ends up under <paramref name="viewportPoint"/> (ImageScroll
     /// coordinates) instead of always the original cursor position -- e.g. the viewport centre for Fit width/height.
     /// A navigation that starts while the render pass is awaited (<see cref="ViewportOperationVersion"/>) drops the
-    /// scroll, same guard as the original method.
+    /// scroll, same guard as the original method. Returns false when the pass was superseded (or the surface unloaded),
+    /// so a caller that chains a follow-up pass (the Fit scrollbar correction) must not run it.
     /// </summary>
-    private async Task ZoomToImagePointAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, Action applyZoom)
+    private async Task<bool> ZoomToImagePointAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, Action applyZoom)
     {
         var version = _viewportVersion.Next();
         _zoomsAwaitingLayout++;
@@ -153,8 +154,9 @@ internal sealed class PointerInputController
         {
             applyZoom();
             await _surface.YieldToRenderAsync();
-            if (version != _viewportVersion.Current || !_surface.IsLoaded) return;
+            if (version != _viewportVersion.Current || !_surface.IsLoaded) return false;
             ScrollAnchorTo(anchor, viewportPoint);
+            return true;
         }
         finally { _zoomsAwaitingLayout--; }
     }
@@ -220,7 +222,7 @@ internal sealed class PointerInputController
         CancelPan();
         StopKinetic();
         var anchor = MainWindowHelpers.CalculateFitWidthAnchorPoint(_settings().FitWidthAnchor);
-        await ZoomToImagePointAsync(anchor, ViewportCentre, ApplyFitWidth);
+        if (!await ZoomToImagePointAsync(anchor, ViewportCentre, ApplyFitWidth)) return;
         await CorrectForSideScrollbarAsync(anchor, ApplyFitWidth, widthOnly: true);
     }
 
@@ -231,7 +233,7 @@ internal sealed class PointerInputController
         CancelPan();
         StopKinetic();
         var anchor = new MainWindowHelpers.ZoomImagePoint(0.5, 0.5);
-        await ZoomToImagePointAsync(anchor, ViewportCentre, ApplyFitHeight);
+        if (!await ZoomToImagePointAsync(anchor, ViewportCentre, ApplyFitHeight)) return;
         await CorrectForSideScrollbarAsync(anchor, ApplyFitHeight, widthOnly: false);
     }
 
@@ -254,7 +256,7 @@ internal sealed class PointerInputController
             ? MainWindowHelpers.CalculateFitWidthAnchorPoint(settings.FitWidthAnchor)
             : new MainWindowHelpers.ZoomImagePoint(0.5, 0.5);
         // The zoom was already applied by ViewerState above; this pass only places the scroll offsets.
-        await ZoomToImagePointAsync(anchor, ViewportCentre, static () => { });
+        if (!await ZoomToImagePointAsync(anchor, ViewportCentre, static () => { })) return;
         await CorrectForSideScrollbarAsync(anchor, isFitWidth ? ApplyFitWidth : ApplyFitHeight, widthOnly: isFitWidth);
     }
 
@@ -276,6 +278,8 @@ internal sealed class PointerInputController
     /// (by design -- that is how you reach the rest of the image); but that scrollbar eats into the viewport size
     /// the fit was computed against, so the fitted dimension no longer exactly fills it either, leaving a thin,
     /// unwanted scrollbar there too. Re-applying once against the now-current (narrower) viewport settles it.
+    /// Callers run this only when the first pass was not superseded: a newer viewport operation (zoom, navigation)
+    /// must not be overridden by a fresh-versioned re-application of the obsolete Fit (R04).
     /// </summary>
     private async Task CorrectForSideScrollbarAsync(MainWindowHelpers.ZoomImagePoint anchor, Action reapply, bool widthOnly)
     {

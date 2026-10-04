@@ -1,8 +1,13 @@
+using System.IO;
 using PhotoReview.App.Coordinators;
+using PhotoReview.Imaging;
+using PhotoReview.Imaging.Caching;
+using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.App.Tests.Coordinators;
 
 /// <summary>Stryker round 1 (App): a navigation alone (no Reset, same target object) must drop a decode that finishes late.</summary>
+[Collection("GlobalState")] // the log test below swaps the process-wide AppLog
 public sealed partial class ZoomDetailLoaderGapTests
 {
     [Fact]
@@ -40,5 +45,63 @@ public sealed partial class ZoomDetailLoaderGapTests
         Assert.Null(_loader.PendingLoad);
         Assert.False(_loader.IsShowingOriginal);
         Assert.Empty(_shown);
+    }
+
+    [Fact]
+    public async Task ASupersededTarget_OnTheSameNavigation_DropsItsOriginalWhenItFinishesLate()
+    {
+        using var gateA = new SemaphoreSlim(0);
+        using var gateB = new SemaphoreSlim(0);
+        _decoder.GateByName["a.jpg"] = gateA;
+        _decoder.GateByName["b.jpg"] = gateB;
+        _loader.SetZoom(1.0);
+        var token = _clock.NextNavigation();
+        foreach (var name in new[] { "a.jpg", "b.jpg" })
+        {
+            var path = Path.Combine(_tempDir, name);
+            File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF, 0xD9]);
+        }
+        void PresentSameNavigation(string name)
+        {
+            var path = Path.Combine(_tempDir, name);
+            var key = ImageCacheKey.Create(path, false, new DecodeBox(600, 0));
+            _loader.OnPreviewPresented(token, path, key, new FakeImage(600, 400, 6000, 4000, downscaled: true));
+        }
+
+        PresentSameNavigation("a.jpg");
+        var loadA = _loader.PendingLoad;
+        PresentSameNavigation("b.jpg"); // a new target for the SAME navigation token: the navigation is still current
+        var loadB = _loader.PendingLoad;
+        Assert.NotSame(loadA, loadB);
+
+        gateA.Release();
+        await loadA!;
+
+        Assert.False(_loader.IsShowingOriginal); // a.jpg's pixels must never be shown for b.jpg
+        Assert.Empty(_shown);
+        gateB.Release();
+        await loadB!;
+        Assert.True(_loader.IsShowingOriginal);
+    }
+
+    [Fact]
+    public async Task WhenShowingTheOriginalThrows_TheFailureIsLoggedAndTheLoadStillCompletes()
+    {
+        using var capture = new CapturedAppLog();
+        var loader = new ZoomDetailLoader(_service, _clock, (_, _, _) => throw new InvalidOperationException("show failed"));
+        using var gate = new SemaphoreSlim(0);
+        _decoder.GateByName["a.jpg"] = gate;
+        loader.SetZoom(1.0);
+        var path = Path.Combine(_tempDir, "a.jpg");
+        File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF, 0xD9]);
+        var token = _clock.NextNavigation();
+        loader.OnPreviewPresented(token, path, ImageCacheKey.Create(path, false, new DecodeBox(600, 0)), new FakeImage(600, 400, 6000, 4000, downscaled: true));
+        var load = loader.PendingLoad;
+        Assert.NotNull(load);
+
+        gate.Release();
+        await load!;
+
+        Assert.Contains("ZoomDetail update after original decode failed", capture.Text(), StringComparison.Ordinal);
     }
 }
