@@ -43,25 +43,12 @@ public sealed class TitleBarFieldsJsonConverter : JsonConverter<TitleBarFields>
 {
     public override TitleBarFields Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        switch (reader.TokenType)
-        {
-            case JsonTokenType.Number:
-                // A valid number is a real bitmask value (unknown high bits stripped against All), not an error case.
-                return reader.TryGetInt64(out var number) ? (TitleBarFields)(number & (long)TitleBarFields.All) : TitleBarFields.Default;
-            case JsonTokenType.String:
-                var text = reader.GetString();
-                return !string.IsNullOrWhiteSpace(text) && Enum.TryParse<TitleBarFields>(text, ignoreCase: true, out var parsed)
-                    ? parsed & TitleBarFields.All
-                    : TitleBarFields.Default;
-            default:
-                reader.Skip();
-                return TitleBarFields.Default;
-        }
+        return FlagEnumJson.Read(ref reader, TitleBarFields.All, TitleBarFields.Default);
     }
 
     public override void Write(Utf8JsonWriter writer, TitleBarFields value, JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(writer);
-        writer.WriteStringValue((value & TitleBarFields.All).ToString());
+        writer.WriteStringValue(FlagEnumJson.Format(value, TitleBarFields.All)); // single flag names, never the All/Default aliases
     }
 }

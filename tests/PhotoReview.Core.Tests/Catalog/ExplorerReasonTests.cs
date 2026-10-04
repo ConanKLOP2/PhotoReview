@@ -36,4 +36,13 @@ public sealed class ExplorerReasonTests
         Assert.NotEmpty(codes);
         Assert.All(codes, c => Assert.Matches("^[a-z]+(-[a-z]+)*$", c));
     }
+
+    [Fact(DisplayName = "W2-CC-07: a '|' inside a detail cannot split it into two details")]
+    public void Format_PipeInDetail_RoundTripsAsOneDetail()
+    {
+        var (code, details) = ExplorerReason.Parse(ExplorerReason.Format(ExplorerReason.QueryFailed, "a|b", "plain"));
+
+        Assert.Equal(ExplorerReason.QueryFailed, code);
+        Assert.Equal(["a/b", "plain"], details);
+    }
 }

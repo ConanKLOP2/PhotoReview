@@ -41,25 +41,12 @@ public sealed class ExifInfoFieldsJsonConverter : JsonConverter<ExifInfoFields>
 {
     public override ExifInfoFields Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        switch (reader.TokenType)
-        {
-            case JsonTokenType.Number:
-                // A valid number is a real bitmask value (unknown high bits stripped against All), not an error case.
-                return reader.TryGetInt64(out var number) ? (ExifInfoFields)(number & (long)ExifInfoFields.All) : ExifInfoFields.Default;
-            case JsonTokenType.String:
-                var text = reader.GetString();
-                return !string.IsNullOrWhiteSpace(text) && Enum.TryParse<ExifInfoFields>(text, ignoreCase: true, out var parsed)
-                    ? parsed & ExifInfoFields.All
-                    : ExifInfoFields.Default;
-            default:
-                reader.Skip();
-                return ExifInfoFields.Default;
-        }
+        return FlagEnumJson.Read(ref reader, ExifInfoFields.All, ExifInfoFields.Default);
     }
 
     public override void Write(Utf8JsonWriter writer, ExifInfoFields value, JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(writer);
-        writer.WriteStringValue((value & ExifInfoFields.All).ToString());
+        writer.WriteStringValue(FlagEnumJson.Format(value, ExifInfoFields.All)); // single flag names, never the All/Default aliases
     }
 }

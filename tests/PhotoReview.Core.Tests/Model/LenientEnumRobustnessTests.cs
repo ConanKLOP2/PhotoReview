@@ -88,7 +88,7 @@ public sealed class LenientEnumRobustnessTests
             Assert.True(ex is null or JsonException, $"{token}: {ex}");
             Assert.Equal(value & ExifInfoFields.All, value);
         }
-        Assert.Equal(ExifInfoFields.All, JsonSerializer.Deserialize<ExifInfoFields>("-1"));
+        Assert.Equal(ExifInfoFields.Default, JsonSerializer.Deserialize<ExifInfoFields>("-1")); // W2-CC-03: negative = unreadable, not "everything on"
         Assert.Equal(ExifInfoFields.FileName | ExifInfoFields.Camera, JsonSerializer.Deserialize<ExifInfoFields>("\"filename, CAMERA\""));
     }
 
@@ -102,7 +102,7 @@ public sealed class LenientEnumRobustnessTests
             Assert.True(ex is null or JsonException, $"{token}: {ex}");
             Assert.Equal(value & TitleBarFields.All, value);
         }
-        Assert.Equal(TitleBarFields.All, JsonSerializer.Deserialize<TitleBarFields>("-1"));
+        Assert.Equal(TitleBarFields.Default, JsonSerializer.Deserialize<TitleBarFields>("-1")); // W2-CC-03
         Assert.Equal(TitleBarFields.FolderName | TitleBarFields.FileSize, JsonSerializer.Deserialize<TitleBarFields>("\"foldername, FILESIZE\""));
     }
 }
