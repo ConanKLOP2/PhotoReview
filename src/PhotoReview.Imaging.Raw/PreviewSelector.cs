@@ -98,8 +98,8 @@ public static class PreviewSelector
 
         bool isTransposed = ExifOrientation.IsTransposed(orientation);
 
-        // If requestBox is unbounded (or <= 0), pick largest
-        if (requestBox.IsUnbounded || (requestBox.Width <= 0 && requestBox.Height <= 0))
+        // If requestBox is unbounded (both sides <= 0), pick largest
+        if (requestBox.IsUnbounded)
         {
             return resolved.OrderByDescending(Score).ThenByDescending(p => p.Length).First();
         }

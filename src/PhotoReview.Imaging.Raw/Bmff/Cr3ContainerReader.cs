@@ -75,7 +75,7 @@ public sealed class Cr3ContainerReader : IRawContainerReader
             if (!BmffBoxNavigator.TryReadBox(source, offset, out var box))
                 break;
 
-            if ((box.Type == "uuid" && box.Uuid != null && box.Uuid.SequenceEqual(PreviewUuid)))
+            if (box.Uuid is { } boxUuid && boxUuid.SequenceEqual(PreviewUuid)) // Uuid is only set for "uuid" boxes
             {
                 // PRVW box inside preview uuid
                 ParsePreviewUuidBox(source, box, previews);
@@ -207,7 +207,7 @@ public sealed class Cr3ContainerReader : IRawContainerReader
         var children = BmffBoxNavigator.ReadChildBoxes(source, moovBox);
         foreach (var child in children)
         {
-            if (child.Type == "uuid" && child.Uuid != null && child.Uuid.SequenceEqual(CanonMoovUuid))
+            if (child.Uuid is { } childUuid && childUuid.SequenceEqual(CanonMoovUuid)) // Uuid is only set for "uuid" boxes
             {
                 // Canon moov uuid contains CMT1..CMT4 and THMB
                 ParseCanonMoovUuid(source, child, previews, exifBlocks, ref orientation, ref sensorWidth, ref sensorHeight);
