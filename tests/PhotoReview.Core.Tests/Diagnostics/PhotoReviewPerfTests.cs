@@ -8,7 +8,7 @@ namespace PhotoReview.Core.Tests.Diagnostics;
 [Collection("GlobalState")] // switches CurrentCulture
 public sealed class PhotoReviewPerfTests
 {
-    [Theory(DisplayName = "PathId is 8 lower-case hex chars, case-insensitive on the path and independent of the machine culture")]
+    [Theory(DisplayName = "PathId is 16 lower-case hex chars (W2CM-06), case-insensitive on the path and independent of the machine culture")]
     [InlineData("tr-TR")]
     [InlineData("de-DE")]
     [InlineData("ar-SA")]
@@ -24,7 +24,7 @@ public sealed class PhotoReviewPerfTests
             var b = PhotoReviewPerf.PathId(@"c:\PHOTOS\ILHAN\IMG.JPG");
             var c = PhotoReviewPerf.PathId(@"C:\Photos\Ilhan\img2.jpg");
 
-            Assert.Matches("^[0-9a-f]{8}$", a);
+            Assert.Matches("^[0-9a-f]{16}$", a);
             Assert.Equal(a, b);
             Assert.NotEqual(a, c);
         }

@@ -11,7 +11,11 @@ namespace PhotoReview.Core.Diagnostics;
 /// </summary>
 public sealed class FileLog : ILog, IDisposable
 {
-    private sealed record Entry(string Level, string Message, Exception? Exception, DateTime Timestamp, int ThreadId);
+    private sealed record Entry(string Level, string Message, Exception? Exception, DateTime Timestamp, int ThreadId)
+    {
+        /// <summary>True once this entry is on disk but still queued (a later entry of the same batch failed): a retry skips it.</summary>
+        public bool Flushed { get; set; }
+    }
 
     private readonly object _sync = new();
     private readonly ConcurrentQueue<Entry> _queue = new();
@@ -124,6 +128,9 @@ public sealed class FileLog : ILog, IDisposable
 
     /// <summary>Test seam: invoked by the writer after a batch was flushed, before the written entries leave the queue.</summary>
     internal Action? AfterBatchWrittenHook { get; set; }
+
+    /// <summary>Test seam: invoked with the batch index before each entry is written to the stream.</summary>
+    internal Action<int>? BeforeEntryWrittenHook { get; set; }
 
     internal bool IsWriterAlive => _writer is { IsAlive: true };
 
@@ -247,13 +254,45 @@ public sealed class FileLog : ILog, IDisposable
             {
                 var batch = _queue.ToArray();
                 if (batch.Length == 0) break;
-                foreach (var e in batch)
+                // Format every entry BEFORE touching the stream: a throwing Exception.ToString() must not abort the batch
+                // half-way. Entries already on disk from an earlier failed attempt (Flushed) are not written again.
+                var lines = new string?[batch.Length];
+                for (var i = 0; i < batch.Length; i++)
                 {
-                    // Machine-read log (AGENTS.md rule 4): invariant culture, else a th-TH/ar-SA/fa-IR machine writes Buddhist/Hijri years.
-                    writer.WriteLine(FormattableString.Invariant($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}") + (e.Exception is null ? "" : "\n" + e.Exception));
+                    if (!batch[i].Flushed) lines[i] = FormatEntry(batch[i]);
                 }
 
-                writer.Flush();
+                var lastWritten = -1;
+                try
+                {
+                    for (var i = 0; i < batch.Length; i++)
+                    {
+                        if (lines[i] is not { } line) continue;
+                        BeforeEntryWrittenHook?.Invoke(i);
+                        writer.WriteLine(line);
+                        lastWritten = i;
+                    }
+
+                    writer.Flush();
+                }
+                catch
+                {
+                    // Part of the batch may reach the disk when the writer is disposed: flush what was written and remember
+                    // it, so the retry does not append those lines a second time.
+                    try
+                    {
+                        writer.Flush();
+                        for (var i = 0; i <= lastWritten; i++) batch[i].Flushed = true;
+                    }
+                    catch (Exception flushEx) when (flushEx is not OutOfMemoryException)
+                    {
+                        // Still failing: the buffered lines are not on disk, keep them queued unflushed.
+                    }
+
+                    throw;
+                }
+
+                foreach (var e in batch) e.Flushed = true;
                 _lastDrainFailed = false;
                 AfterBatchWrittenHook?.Invoke();
                 foreach (var e in batch)
@@ -278,6 +317,21 @@ public sealed class FileLog : ILog, IDisposable
             {
                 _drained.Set();
             }
+        }
+    }
+
+    private static string FormatEntry(Entry e)
+    {
+        // Machine-read log (AGENTS.md rule 4): invariant culture, else a th-TH/ar-SA/fa-IR machine writes Buddhist/Hijri years.
+        var head = FormattableString.Invariant($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}");
+        if (e.Exception is null) return head;
+        try
+        {
+            return head + "\n" + e.Exception;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return head + "\n[exception text unavailable: " + e.Exception.GetType().FullName + " / " + ex.GetType().Name + "]";
         }
     }
 

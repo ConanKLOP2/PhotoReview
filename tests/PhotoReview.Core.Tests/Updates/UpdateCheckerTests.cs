@@ -65,7 +65,7 @@ public sealed class UpdateCheckerTests
     }
 
     [Theory(DisplayName = "HTTP errors map to a failure code")]
-    [InlineData(HttpStatusCode.Forbidden, UpdateFailure.RateLimited)]
+    [InlineData(HttpStatusCode.Forbidden, UpdateFailure.BadResponse)] // a bare 403 is a refusal, not a rate limit (W2CM-05)
     [InlineData(HttpStatusCode.TooManyRequests, UpdateFailure.RateLimited)]
     [InlineData(HttpStatusCode.NotFound, UpdateFailure.BadResponse)]
     [InlineData(HttpStatusCode.InternalServerError, UpdateFailure.BadResponse)]

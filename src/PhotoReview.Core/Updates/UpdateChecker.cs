@@ -39,8 +39,7 @@ public sealed class UpdateChecker : IUpdateChecker
         try
         {
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutSource.Token).ConfigureAwait(false);
-            if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
-                return UpdateCheckResult.Failed(UpdateFailure.RateLimited);
+            if (IsRateLimited(response)) return UpdateCheckResult.Failed(UpdateFailure.RateLimited);
             if (!response.IsSuccessStatusCode) return UpdateCheckResult.Failed(UpdateFailure.BadResponse);
             if (response.Content.Headers.ContentLength > MaxBodyBytes) return UpdateCheckResult.Failed(UpdateFailure.BadResponse);
             var body = await ReadCappedAsync(response.Content, timeoutSource.Token).ConfigureAwait(false);
@@ -50,9 +49,9 @@ public sealed class UpdateChecker : IUpdateChecker
         {
             return UpdateCheckResult.Failed(UpdateFailure.Timeout);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            return UpdateCheckResult.Failed(UpdateFailure.Offline);
+            return UpdateCheckResult.Failed(Classify(ex.HttpRequestError));
         }
         // Anything else from the handler/stack (e.g. InvalidOperationException) is a failed check, never a crash;
         // a user cancel (OperationCanceledException) still propagates.
@@ -61,6 +60,27 @@ public sealed class UpdateChecker : IUpdateChecker
             return UpdateCheckResult.Failed(UpdateFailure.BadResponse);
         }
     }
+
+    /// <summary>429 is always a rate limit; 403 only when GitHub says so (<c>X-RateLimit-Remaining: 0</c> or a <c>Retry-After</c>), else it is a refusal.</summary>
+    private static bool IsRateLimited(HttpResponseMessage response)
+    {
+        if (response.StatusCode == HttpStatusCode.TooManyRequests) return true;
+        if (response.StatusCode != HttpStatusCode.Forbidden) return false;
+        if (response.Headers.RetryAfter is not null) return true;
+        return response.Headers.TryGetValues("X-RateLimit-Remaining", out var values)
+            && values.Any(v => string.Equals(v.Trim(), "0", StringComparison.Ordinal));
+    }
+
+    /// <summary>No route to the server is Offline; a connection that was made but spoke wrongly (TLS or certificate failure behind an
+    /// intercepting proxy, a malformed or truncated response) is a bad response, not a missing network.</summary>
+    internal static UpdateFailure Classify(HttpRequestError error) => error switch
+    {
+        HttpRequestError.NameResolutionError or HttpRequestError.ConnectionError or HttpRequestError.ProxyTunnelError => UpdateFailure.Offline,
+        HttpRequestError.SecureConnectionError or HttpRequestError.HttpProtocolError or HttpRequestError.InvalidResponse
+            or HttpRequestError.ResponseEnded or HttpRequestError.ConfigurationLimitExceeded or HttpRequestError.UserAuthenticationError
+            or HttpRequestError.VersionNegotiationError or HttpRequestError.ExtendedConnectNotSupported => UpdateFailure.BadResponse,
+        _ => UpdateFailure.Offline, // Unknown (and any value added later): the historical behavior
+    };
 
     /// <summary>Reads at most <see cref="MaxBodyBytes"/> bytes (UTF-8); null when the body is larger.</summary>
     private static async Task<string?> ReadCappedAsync(HttpContent content, CancellationToken cancellationToken)

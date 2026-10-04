@@ -29,6 +29,9 @@ public sealed class PerfCsvListener : EventListener, IDisposable
     private Task? _writerTask;
     private long _dropped;
     private int _disposed;
+    private volatile bool _writerFaulted;
+    private TimeSpan _idleFlushInterval = TimeSpan.FromSeconds(1);
+    private TimeSpan _disposeWait = TimeSpan.FromSeconds(5);
 
     // Only field access needed from OnEventSourceCreated is this constant name check, so it is safe
     // even if this callback fires synchronously from inside the base EventListener constructor
@@ -50,6 +53,12 @@ public sealed class PerfCsvListener : EventListener, IDisposable
     {
         var channel = _channel;
         if (channel is null) return; // construction not finished yet (see OnEventSourceCreated note); drop silently
+        if (_writerFaulted)
+        {
+            // Nobody reads the channel any more: count the row instead of letting it pile up.
+            Interlocked.Increment(ref _dropped);
+            return;
+        }
 
         try
         {
@@ -165,12 +174,16 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         }
     }
 
-    internal long DroppedCount => Interlocked.Read(ref _dropped);
+    internal bool WriterFaulted => _writerFaulted;
+
+    internal long DroppedCount =>Interlocked.Read(ref _dropped);
 
     /// <summary>Test seam: a listener writing to <paramref name="stream"/> with a custom channel capacity.</summary>
-    internal static PerfCsvListener StartForTest(Stream stream, int capacity)
+    internal static PerfCsvListener StartForTest(Stream stream, int capacity, TimeSpan? idleFlush = null, TimeSpan? disposeWait = null)
     {
         var listener = new PerfCsvListener();
+        if (idleFlush is { } idle) listener._idleFlushInterval = idle;
+        if (disposeWait is { } wait) listener._disposeWait = wait;
         listener.Start(stream, capacity);
         return listener;
     }
@@ -212,16 +225,41 @@ public sealed class PerfCsvListener : EventListener, IDisposable
     {
         var reader = _channel!.Reader;
         var lastFlush = Stopwatch.GetTimestamp();
+        long unflushed = 0; // rows handed to the writer since the last successful flush (lost if the writer faults)
         try
         {
-            while (await reader.WaitToReadAsync().ConfigureAwait(false))
+            while (true)
             {
+                bool more;
+                using (var idle = new CancellationTokenSource(_idleFlushInterval))
+                {
+                    try
+                    {
+                        more = await reader.WaitToReadAsync(idle.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Idle for a whole interval: flush the tail of a burst now, so a killed or hung process does not lose it.
+                        if (unflushed > 0)
+                        {
+                            _writer?.Flush();
+                            unflushed = 0;
+                        }
+
+                        lastFlush = Stopwatch.GetTimestamp();
+                        continue;
+                    }
+                }
+
+                if (!more) break;
                 while (reader.TryRead(out var row))
                 {
+                    unflushed++;
                     WriteRow(row);
                     if (PhotoReviewPerf.Ms(lastFlush) >= 1000)
                     {
-                        FlushWriter();
+                        _writer?.Flush();
+                        unflushed = 0;
                         lastFlush = Stopwatch.GetTimestamp();
                     }
                 }
@@ -229,7 +267,11 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         }
         catch
         {
-            // Writer must never crash the process; diagnostics are best-effort.
+            // Writer must never crash the process; diagnostics are best-effort. Rows already handed to the writer but not
+            // flushed, and everything still queued, are abandoned: count them so the "# dropped=" trailer does not under-report.
+            _writerFaulted = true;
+            Interlocked.Add(ref _dropped, unflushed);
+            while (reader.TryRead(out _)) Interlocked.Increment(ref _dropped);
         }
         finally
         {
@@ -285,19 +327,41 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         _channel?.Writer.TryComplete();
-        try { _writerTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* best effort */ }
+        var finished = true;
+        try { finished = _writerTask?.Wait(_disposeWait) ?? true; } catch { /* the loop swallows its own faults; best effort */ }
 
-        try
+        if (finished)
         {
-            if (_writer is not null)
-            {
-                _writer.WriteLine(FormattableString.Invariant($"# dropped={Interlocked.Read(ref _dropped)}"));
-                _writer.Flush();
-                _writer.Dispose();
-            }
+            FinishWriter();
         }
-        catch { /* best effort */ }
+        else
+        {
+            // The writer task may be mid-write: StreamWriter is not thread-safe, so neither the trailer nor the disposal may
+            // touch it now. Finish once the task ends instead.
+            FinishTask = _writerTask!.ContinueWith(_ => FinishWriter(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        }
 
         base.Dispose();
+    }
+
+    /// <summary>Test seam: completes when the trailer was written and the writer disposed (immediately unless Dispose timed out).</summary>
+    internal Task FinishTask { get; private set; } = Task.CompletedTask;
+
+    private void FinishWriter()
+    {
+        try
+        {
+            if (_writer is null) return;
+            // The loop is over: rows still queued after a writer fault were abandoned.
+            if (_writerFaulted && _channel is { } channel)
+            {
+                while (channel.Reader.TryRead(out _)) Interlocked.Increment(ref _dropped);
+            }
+
+            _writer.WriteLine(FormattableString.Invariant($"# dropped={Interlocked.Read(ref _dropped)}"));
+            _writer.Flush();
+            _writer.Dispose();
+        }
+        catch { /* best effort */ }
     }
 }
