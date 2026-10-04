@@ -15,7 +15,7 @@ public sealed class DuplicateCleanupController
 {
     private readonly GenerationClock _clock;
     private readonly ReviewCatalog _catalog;
-    private readonly FileActionService? _fileActionService;
+    private IFileActionExecutor? _fileActions;
     private readonly IFileHasher? _hashService;
     private readonly IFileSystem _fileSystem;
     private readonly IDialogService? _dialogService;
@@ -24,6 +24,15 @@ public sealed class DuplicateCleanupController
     private readonly ThumbnailCache? _thumbnailCache;
     private readonly PreviewImageService? _previewService;
     private readonly IDuplicateCleanupSink _sink;
+
+    /// <summary>Test seam: replaces the file-action executor (the concrete service turns exceptions into results, so an unexpected throw cannot otherwise be provoked).</summary>
+    internal IFileActionExecutor? FileActionsOverride
+    {
+        set => _fileActions = value;
+    }
+
+    /// <summary>Test seam: the disk part of "Clear cache" (the caches log and swallow IO failures themselves, so an unexpected throw cannot otherwise be provoked).</summary>
+    internal Action ClearDiskCaches { get; set; }
 
     public DuplicateCleanupController(
         GenerationClock clock,
@@ -40,7 +49,7 @@ public sealed class DuplicateCleanupController
     {
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-        _fileActionService = fileActionService;
+        _fileActions = fileActionService is null ? null : new FileActionServiceExecutor(fileActionService);
         _hashService = hashService;
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _dialogService = dialogService;
@@ -48,6 +57,11 @@ public sealed class DuplicateCleanupController
         _preloadController = preloadController;
         _thumbnailCache = thumbnailCache;
         _previewService = previewService;
+        ClearDiskCaches = () =>
+        {
+            _thumbnailCache?.ClearDisk();
+            _previewService?.ClearDisk();
+        };
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
     }
 
@@ -77,7 +91,7 @@ public sealed class DuplicateCleanupController
 
     public async Task RemoveDuplicatesAsync(bool removeNumbered)
     {
-        if (_fileActionService is null || _fileActionService.IsBusy) return;
+        if (_fileActions is null || _fileActions.IsBusy) return;
         if (_catalog.Count == 0) return;
 
         var preHashGeneration = _clock.CurrentFolder;
@@ -154,7 +168,7 @@ public sealed class DuplicateCleanupController
         }
 
         // Q-R14: batch cleanup never deletes permanently. Say so once, up front, instead of one refusal per file after the confirmation.
-        var withoutBin = remove.FirstOrDefault(_fileActionService.LacksRecycleBin);
+        var withoutBin = remove.FirstOrDefault(_fileActions.LacksRecycleBin);
         if (withoutBin is not null)
         {
             _sink.SetStatusText(StatusFormatter.BatchCanceled());
@@ -178,7 +192,7 @@ public sealed class DuplicateCleanupController
                 _sink.SetStatusText(StatusFormatter.DuplicateCheckCanceledFolderChanged());
                 return;
             }
-            if (_fileActionService.IsBusy) return;
+            if (_fileActions.IsBusy) return;
             remove = remove.Where(path => _catalog.IndexOf(path) >= 0).ToList();
             if (remove.Count == 0)
             {
@@ -203,7 +217,7 @@ public sealed class DuplicateCleanupController
             FileActionResult result;
             try
             {
-                result = await Task.Run(() => _fileActionService.ExecuteAsync(request));
+                result = await Task.Run(() => _fileActions.ExecuteAsync(request));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -273,11 +287,7 @@ public sealed class DuplicateCleanupController
         // ... then the directory deletes (up to the multi-GB disk quota, thousands of files) off the UI thread.
         try
         {
-            await Task.Run(() =>
-            {
-                _thumbnailCache?.ClearDisk();
-                _previewService?.ClearDisk();
-            });
+            await Task.Run(ClearDiskCaches);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

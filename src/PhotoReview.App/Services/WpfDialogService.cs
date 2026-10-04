@@ -11,53 +11,32 @@ namespace PhotoReview.App.Services;
 /// <summary>
 /// Hiện thực IDialogService bằng hộp thoại WPF và Win32/WPF Window.
 /// </summary>
-public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialogService
+public sealed class WpfDialogService : IDialogService
 {
-    public bool ShowConfirmation(string title, string message)
-    {
-        var owner = System.Windows.Application.Current?.MainWindow;
-        var result = owner is not null
-            ? System.Windows.MessageBox.Show(owner, message, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
-            : System.Windows.MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
+    private readonly IServiceProvider serviceProvider;
+    private readonly IDialogHost _host;
 
-        return result == MessageBoxResult.Yes;
+    public WpfDialogService(IServiceProvider serviceProvider) : this(serviceProvider, new WpfDialogHost())
+    {
     }
+
+    internal WpfDialogService(IServiceProvider serviceProvider, IDialogHost host)
+    {
+        this.serviceProvider = serviceProvider;
+        _host = host;
+    }
+
+    public bool ShowConfirmation(string title, string message)
+        => _host.ShowMessageBox(_host.Owner, message, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
 
     public void ShowMessage(string title, string message)
-    {
-        var owner = System.Windows.Application.Current?.MainWindow;
-        if (owner is not null)
-        {
-            System.Windows.MessageBox.Show(owner, message, title, MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        else
-        {
-            System.Windows.MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-    }
+        => _host.ShowMessageBox(_host.Owner, message, title, MessageBoxButton.OK, MessageBoxImage.Information);
 
     public void ShowError(string title, string message)
-    {
-        var owner = System.Windows.Application.Current?.MainWindow;
-        if (owner is not null)
-        {
-            System.Windows.MessageBox.Show(owner, message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-        else
-        {
-            System.Windows.MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
+        => _host.ShowMessageBox(_host.Owner, message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
 
     public string? PickFolder(string? initialFolder = null)
-    {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = Tr.DialogPickFolderTitle };
-        if (!string.IsNullOrEmpty(initialFolder) && Directory.Exists(initialFolder)) dialog.InitialDirectory = initialFolder;
-
-        var owner = System.Windows.Application.Current?.MainWindow;
-        var res = owner is not null ? dialog.ShowDialog(owner) : dialog.ShowDialog();
-        return res == true ? dialog.FolderName : null;
-    }
+        => _host.PickFolder(_host.Owner, Tr.DialogPickFolderTitle, WpfFolderPicker.UsableInitialFolder(initialFolder));
 
     public bool ShowBatchReview(IReadOnlyList<string> paths)
         => ShowBatchReview(paths.Select(path => new BatchReviewItem(path, null)).ToList());
@@ -66,9 +45,9 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
     {
         var window = new BatchReviewWindow(items)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = _host.Owner
         };
-        return window.ShowDialog() == true;
+        return _host.ShowDialog(window) == true;
     }
 
     public void ShowRecovery()
@@ -84,9 +63,9 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         var window = new RecoveryWindow(entries, retry, dismissed => journal.Dismiss(dismissed), serviceProvider.GetService<IFileSystem>(),
             () => serviceProvider.GetService<SettingsStore>()?.Current.AllowPermanentDeleteWithoutRecycleBin == true)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = _host.Owner
         };
-        window.ShowDialog();
+        _host.ShowDialog(window);
     }
 
     /// <summary>RV-A14: the journal entries for the Recovery window, or null after telling the user why the journal could not be read.</summary>
@@ -110,9 +89,9 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         var snapshot = metrics?.Snapshot() ?? new ReviewMetrics().Snapshot();
         var window = new DiagnosticsWindow(snapshot, serviceProvider.GetService<LatestExplorerSnapshot>()?.Current)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = _host.Owner
         };
-        window.ShowDialog();
+        _host.ShowDialog(window);
     }
 
     public bool ShowSettings()
@@ -123,9 +102,9 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         var decoderFactory = serviceProvider.GetService<IImageDecoderFactory>();
         var window = new SettingsWindow(store, decoderFactory, serviceProvider.GetService<PhotoReview.App.Localization.LocalizationService>())
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = _host.Owner
         };
-        return window.ShowDialog() == true;
+        return _host.ShowDialog(window) == true;
     }
 
     public void ShowBenchmark(string? folder = null)
@@ -133,17 +112,41 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         // RAW files are not benchmarked (the executor has no RAW-routed decoder), whatever RawSupportEnabled says.
         var window = new BenchmarkWindow(folder)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = _host.Owner
         };
-        window.Show();
+        _host.Show(window);
     }
 
     public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries)
     {
         var window = new SkippedFilesWindow(entries)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = _host.Owner
         };
-        window.ShowDialog();
+        _host.ShowDialog(window);
     }
+}
+
+/// <summary>Real <see cref="IDialogHost"/>: forwards to WPF/Win32 (modal, needs a desktop; not unit-testable).</summary>
+// Stryker disable all : one-line forwarders to modal Win32/WPF calls; the decisions around them are tested through IDialogHost.
+internal sealed class WpfDialogHost : IDialogHost
+{
+    public Window? Owner => System.Windows.Application.Current?.MainWindow;
+
+    public MessageBoxResult ShowMessageBox(Window? owner, string message, string title, MessageBoxButton button, MessageBoxImage image)
+        => owner is not null
+            ? System.Windows.MessageBox.Show(owner, message, title, button, image)
+            : System.Windows.MessageBox.Show(message, title, button, image);
+
+    public string? PickFolder(Window? owner, string title, string? initialFolder)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = title };
+        if (initialFolder is not null) dialog.InitialDirectory = initialFolder;
+        var result = owner is not null ? dialog.ShowDialog(owner) : dialog.ShowDialog();
+        return result == true ? dialog.FolderName : null;
+    }
+
+    public bool? ShowDialog(Window window) => window.ShowDialog();
+
+    public void Show(Window window) => window.Show();
 }

@@ -15,7 +15,7 @@ public sealed class FileActionController
 {
     private readonly ReviewCatalog _catalog;
     private readonly GenerationClock _clock;
-    private readonly FileActionService? _fileActionService;
+    private IFileActionExecutor? _fileActions;
     private readonly UndoService? _undoService;
     private readonly IDialogService? _dialogService;
     private readonly IPreloadController? _preloadController;
@@ -26,6 +26,12 @@ public sealed class FileActionController
     private readonly Func<string, bool> _directoryExists;
     private readonly Action<FileOperationType, string>? _rememberFolder;
     private readonly IFileSystem? _fileSystem;
+
+    /// <summary>Test seam: replaces the file-action executor (the concrete service turns exceptions into results, so an unexpected throw cannot otherwise be provoked).</summary>
+    internal IFileActionExecutor? FileActionsOverride
+    {
+        set => _fileActions = value;
+    }
 
     /// <param name="folderPicker">"Move to… / Copy to…" folder picker; null disables those commands unless the last folder is reused.</param>
     /// <param name="fileSystem">Used to check that a picked or remembered folder exists (defaults to the real disk).</param>
@@ -50,7 +56,7 @@ public sealed class FileActionController
         _rememberFolder = rememberFolder;
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
-        _fileActionService = fileActionService;
+        _fileActions = fileActionService is null ? null : new FileActionServiceExecutor(fileActionService);
         _undoService = undoService;
         _dialogService = dialogService;
         _preloadController = preloadController;
@@ -85,7 +91,7 @@ public sealed class FileActionController
             var target = compareSelectedPath ?? currentPath;
             var ok = _dialogService.ShowConfirmation(Tr.DialogConfirmActionTitle, Tr.DialogConfirmActionMessage(action.Name));
             if (!ok) return;
-            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService?.IsBusy == true
+            if (_clock.CurrentFolder != folderBeforeDialog || _fileActions?.IsBusy == true
                 || (target is not null && _catalog.IndexOf(target) < 0)) return;
         }
 
@@ -118,7 +124,7 @@ public sealed class FileActionController
             var folderBeforeDialog = _clock.CurrentFolder;
             var ok = _dialogService.ShowConfirmation(Tr.DialogConfirmActionTitle, Tr.DialogConfirmActionMessage(Tr.ActionRecycleName));
             if (!ok) return;
-            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService?.IsBusy == true
+            if (_clock.CurrentFolder != folderBeforeDialog || _fileActions?.IsBusy == true
                 || (source is not null && _catalog.IndexOf(source) < 0)) return;
         }
 
@@ -132,21 +138,21 @@ public sealed class FileActionController
     /// </summary>
     private bool WillAskGroupConfirmation(FileOperationType operation, string? compareSelectedPath, string? source)
     {
-        if (string.IsNullOrEmpty(source) || _fileActionService is null || _fileSystem is null) return false;
+        if (string.IsNullOrEmpty(source) || _fileActions is null || _fileSystem is null) return false;
         if (_catalog.Find(source)?.CaptureGroup is not { } group) return false;
         if (compareSelectedPath is not null && operation is FileOperationType.Recycle or FileOperationType.Move) return true;
         if (operation != FileOperationType.Recycle) return false;
         var settings = _getSettings();
         return settings.ConfirmBeforeDelete
-            || (settings.AllowPermanentDeleteWithoutRecycleBin && group.Paths.Any(_fileActionService.LacksRecycleBin));
+            || (settings.AllowPermanentDeleteWithoutRecycleBin && group.Paths.Any(_fileActions.LacksRecycleBin));
     }
 
     /// <summary>Q-R8: the setting is on and <paramref name="source"/> is on a drive without a Recycle Bin, so Recycle would delete permanently.</summary>
     private bool WillAskPermanentDelete(string? source) =>
         !string.IsNullOrEmpty(source)
         && _getSettings().AllowPermanentDeleteWithoutRecycleBin
-        && _fileActionService is not null
-        && _fileActionService.LacksRecycleBin(source);
+        && _fileActions is not null
+        && _fileActions.LacksRecycleBin(source);
 
     // The "companion file was missing" warning the last core run wrote (null when none): Move-to/Copy-to appends it to its own status.
     private string? _lastPartnerMissingWarning;
@@ -161,10 +167,10 @@ public sealed class FileActionController
         _lastPartnerMissingWarning = null;
         _lastPresentTask = null;
         if (_catalog.Count == 0) return false;
-        if (_fileActionService is null) return false;
+        if (_fileActions is null) return false;
 
         // INV-4: Gate bận
-        if (_fileActionService.IsBusy) return false;
+        if (_fileActions.IsBusy) return false;
 
         var source = compareSelectedPath ?? currentPath;
         if (string.IsNullOrEmpty(source)) return false;
@@ -182,7 +188,7 @@ public sealed class FileActionController
             if (_dialogService is null
                 || !_dialogService.ShowConfirmation(Tr.DialogConfirmPermanentDeleteTitle, Tr.DialogConfirmPermanentDeleteMessage(Path.GetFileName(source))))
                 return false;
-            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return false;
+            if (_clock.CurrentFolder != folderBeforeDialog || _fileActions.IsBusy || _catalog.IndexOf(source) < 0) return false;
             allowPermanent = true;
         }
 
@@ -191,7 +197,7 @@ public sealed class FileActionController
         // OFF the request stays AllowPermanentDelete=false and the service refuses BEFORE anything is journaled.
         var permanentGroupPaths = operation == FileOperationType.Recycle && selectedGroup is not null
             && _getSettings().AllowPermanentDeleteWithoutRecycleBin
-            ? selectedGroup.Paths.Where(_fileActionService.LacksRecycleBin).ToArray()
+            ? selectedGroup.Paths.Where(_fileActions.LacksRecycleBin).ToArray()
             : [];
         // Q-RAW-COMPARE-GROUP: with Compare open the selected file is ONE member but Delete/Move act on the WHOLE capture, so
         // the user must always be told (and asked), regardless of ConfirmBeforeDelete.
@@ -215,7 +221,7 @@ public sealed class FileActionController
             var title = operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0
                 ? Tr.DialogConfirmPermanentDeleteTitle : Tr.DialogConfirmActionTitle;
             if (_dialogService is null || !_dialogService.ShowConfirmation(title, prompt)) return false;
-            if (_clock.CurrentFolder != folderBeforeGroupDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return false;
+            if (_clock.CurrentFolder != folderBeforeGroupDialog || _fileActions.IsBusy || _catalog.IndexOf(source) < 0) return false;
             allowPermanent = operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0;
         }
 
@@ -275,9 +281,9 @@ public sealed class FileActionController
             CaptureGroupActionResult? groupResult = null;
             FileActionResult? singleResult = null;
             if (group is null)
-                singleResult = await _fileActionService.ExecuteAsync(new FileActionRequest(source, operation, destination, allowPermanent));
+                singleResult = await _fileActions.ExecuteAsync(new FileActionRequest(source, operation, destination, allowPermanent));
             else
-                groupResult = await _fileActionService.ExecuteGroupAsync(new CaptureGroupActionRequest(group, operation, destination, allowPermanent));
+                groupResult = await _fileActions.ExecuteGroupAsync(new CaptureGroupActionRequest(group, operation, destination, allowPermanent));
             var succeeded = groupResult?.Succeeded ?? singleResult!.Succeeded;
             actionSucceeded = succeeded;
             var sourceRemoved = groupResult is not null
@@ -642,7 +648,7 @@ public sealed class FileActionController
         if (operation is not (FileOperationType.Move or FileOperationType.Copy))
             throw new ArgumentOutOfRangeException(nameof(operation), operation, "Only Move and Copy have a destination folder.");
         ArgumentNullException.ThrowIfNull(getSource);
-        if (_catalog.Count == 0 || _fileActionService is null || _fileActionService.IsBusy) return;
+        if (_catalog.Count == 0 || _fileActions is null || _fileActions.IsBusy) return;
 
         var (compareSelectedPath, currentPath) = getSource();
         var source = compareSelectedPath ?? currentPath;
@@ -674,7 +680,7 @@ public sealed class FileActionController
 
             var (compareAfter, currentAfter) = getSource();
             if (_clock.CurrentFolder != folderBeforeDialog
-                || _fileActionService.IsBusy
+                || _fileActions.IsBusy
                 || !string.Equals(compareAfter ?? currentAfter, source, StringComparison.OrdinalIgnoreCase)
                 || _catalog.IndexOf(source) < 0)
             {

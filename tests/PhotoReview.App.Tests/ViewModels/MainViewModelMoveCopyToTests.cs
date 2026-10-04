@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
@@ -113,6 +113,22 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         Assert.True(File.Exists(img1));
         Assert.False(File.Exists(moved));
         Assert.Equal(2, vm.TotalFiles);
+    }
+
+    [Fact]
+    public async Task MoveTo_WhenRememberingTheFolderFails_StillMovesAndKeepsTheFolderInMemory()
+    {
+        var (vm, _, _, img1, _, dest) = await OpenAlbumAsync();
+        _picker.Result = dest;
+        var config = _appPaths.ConfigFile;
+        if (File.Exists(config)) File.Delete(config);
+        Directory.CreateDirectory(config); // config.json can no longer be written
+
+        await vm.MoveToFolderAsync();
+
+        Assert.True(File.Exists(Path.Combine(dest, "1.jpg")));
+        Assert.False(File.Exists(img1));
+        Assert.Equal(dest, Settings.LastMoveToFolder);
     }
 
     [Fact]

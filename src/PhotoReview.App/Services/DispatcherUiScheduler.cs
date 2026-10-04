@@ -10,9 +10,10 @@ public sealed class DispatcherUiScheduler : IUiScheduler
 {
     private readonly Dispatcher _dispatcher;
 
-    public DispatcherUiScheduler(Dispatcher? dispatcher = null)
+    /// <param name="applicationDispatcher">Seam for the application dispatcher (default: <c>Application.Current?.Dispatcher</c>).</param>
+    public DispatcherUiScheduler(Dispatcher? dispatcher = null, Func<Dispatcher?>? applicationDispatcher = null)
     {
-        _dispatcher = dispatcher ?? (System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher);
+        _dispatcher = dispatcher ?? (applicationDispatcher ?? AmbientDispatcher.Application)() ?? Dispatcher.CurrentDispatcher;
     }
 
     public void Post(Action action)

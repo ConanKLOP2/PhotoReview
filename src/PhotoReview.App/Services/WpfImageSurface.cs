@@ -14,9 +14,11 @@ namespace PhotoReview.App.Services;
 /// AR13: the WPF side of the main window's image view (ImageScroll + MainImage) for
 /// <see cref="PointerInputController"/> and <see cref="FitViewController"/>. Each member is the WPF call the
 /// controllers used to make directly in MainWindow. Holds the two elements, never the window
-/// (<paramref name="isLoaded"/> reads the window's IsLoaded, <paramref name="updateFitSize"/> is MainWindow.UpdateFitSize).
+/// (<paramref name="mouse"/> is a test seam for the pointer position and capture, default the real <see cref="Mouse"/>;
+/// <paramref name="isLoaded"/> reads the window's IsLoaded, <paramref name="updateFitSize"/> is MainWindow.UpdateFitSize).
 /// </summary>
-internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerState viewer, Func<bool> isLoaded, Action updateFitSize, IDisplayClock? displayClock = null)
+internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerState viewer, Func<bool> isLoaded, Action updateFitSize, IDisplayClock? displayClock = null,
+    IMouseAccess? mouse = null)
     : IImageSurface, IFitSurface
 {
     public bool IsLoaded => isLoaded();
@@ -82,7 +84,8 @@ internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerSt
 
     public void ReleaseMouseCapture()
     {
-        if (Mouse.Captured == image) Mouse.Capture(null);
+        var access = mouse ?? RealMouse.Instance;
+        if (access.Captured == image) access.Capture(null);
     }
 
     public void SetPanCursor(bool panning) => image.Cursor = panning ? Cursors.SizeAll : Cursors.Arrow;
@@ -100,10 +103,32 @@ internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerSt
     {
         get
         {
-            var position = Mouse.GetPosition(scroll);
+            var position = (mouse ?? RealMouse.Instance).GetPosition(scroll);
             return position.X >= 0 && position.Y >= 0 && position.X <= scroll.ViewportWidth && position.Y <= scroll.ViewportHeight
                 ? position
                 : null;
         }
     }
+}
+
+/// <summary>Seam over <see cref="Mouse"/>: pointer position and capture (a real capture needs an input desktop, which a headless test run has not).</summary>
+internal interface IMouseAccess
+{
+    Point GetPosition(IInputElement relativeTo);
+
+    IInputElement? Captured { get; }
+
+    void Capture(IInputElement? element);
+}
+
+// Stryker disable all : forwards to the Mouse statics (needs an input desktop); the surface's decisions are tested with a fake IMouseAccess.
+internal sealed class RealMouse : IMouseAccess
+{
+    public static readonly RealMouse Instance = new();
+
+    public Point GetPosition(IInputElement relativeTo) => Mouse.GetPosition(relativeTo);
+
+    public IInputElement? Captured => Mouse.Captured;
+
+    public void Capture(IInputElement? element) => Mouse.Capture(element);
 }
