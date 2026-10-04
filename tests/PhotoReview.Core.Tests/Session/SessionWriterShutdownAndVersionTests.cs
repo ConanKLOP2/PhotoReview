@@ -168,8 +168,13 @@ public sealed class SessionWriterShutdownAndVersionTests
         await flush1.WaitAsync(TimeSpan.FromSeconds(20)); // bounded wait on the held lock times out; "s1" is obsolete and must be dropped
         release.Set();
         await flush2.WaitAsync(TimeSpan.FromSeconds(20));
-        writer.Flush();
 
+        // flush2's caller may have given up waiting (the bounded wait is 100 ms) while its save is parked in the write hook:
+        // that save then finishes in the background once released, so wait for it instead of assuming it already landed.
+        await Wait.UntilAsync(() => store.Load(@"C:\photos").CurrentPath == "s2", "the superseding state s2 to be written");
+
+        // A further flush must not requeue the obsolete "s1" over the newer state.
+        writer.Flush();
         Assert.Equal("s2", store.Load(@"C:\photos").CurrentPath);
     }
 
