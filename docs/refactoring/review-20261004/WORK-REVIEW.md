@@ -1,6 +1,6 @@
 # Function review — current-head checkpoint (2026-10-04, incomplete)
 
-Current pinned head: `18aa6eb64ba48666de620937211e0782dd6131c1` (`origin/master`). The audit began at `5d291076` and has been reconciled through PRs merged since then. Review branch: `codex/review-all-20261004`; [PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open and not merged. This is a documentation/review PR; it makes no production changes. App/Integration and Core/Platform/tooling lanes are continuing semantic review; Imaging is complete and Architecture/TestSupport remains unassigned. The inherited model names are unavailable.
+Current pinned head: `18aa6eb64ba48666de620937211e0782dd6131c1` (`origin/master`). The audit began at `5d291076` and has been reconciled through PRs merged since then. Review branch: `codex/review-all-20261004`; [PR #284](https://github.com/ConanKLOP2/PhotoReview/pull/284), open and not merged. This is a documentation/review PR; it makes no production changes. App/Integration and Core/Platform/tooling lanes are continuing semantic review; Imaging and Architecture/TestSupport are complete. The inherited model names are unavailable.
 
 ## Coverage contract
 
@@ -8,16 +8,16 @@ The current Roslyn inventory covers 16,799 callable bodies in 1,068 tracked C# f
 
 The merged-PR reconciliation and bounded source/test delta findings through the pinned head are summarized in [current-delta-20261004.md](current-delta-20261004.md). The current complete callable review remains in progress.
 
-[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 13,144 `STATIC-ONLY`, 86 `ISSUE`, and 3,569 `UNREVIEWED` rows after merging available App and current-head Core batches. It carries forward unchanged-file reviews, applicable wave-two rows and completed current-head batches; active review lanes have not yet contributed all of their remaining coverage.
+[functions.tsv](functions.tsv) records ID, path, current line/end line, kind, signature, status and rationale. `STATIC-ONLY` means a saved semantic source review, including inherited enclosing-function rationale for small helpers/lambdas; it does not mean runtime PASS. `ISSUE` identifies affected source bodies, not a count of independent bugs. `UNREVIEWED` includes partially read functions whose completed rationale was not saved. Broad-suite pass does not change these statuses. The current ledger has 14,411 `STATIC-ONLY`, 103 `ISSUE`, and 2,285 `UNREVIEWED` rows after merging the latest App, Core and Architecture/TestSupport batches. It carries forward unchanged-file reviews and applicable wave-two rows; active App/Core lanes still have remaining coverage.
 
-The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App, Core/tooling, and Imaging agents are reviewing the remaining current-head rows in separate ownership lanes. No lane may be marked complete until its exact callable coverage and remaining count are reconciled against this inventory. [App baseline details](app.md).
+The original baseline ledger reported 1,203 App and 694 Imaging-family source bodies reviewed. Those figures are historical and are not current-head coverage. App/Integration and Core/tooling lanes continue in separate ownership areas; Imaging and Architecture/TestSupport are complete. Every status is reconciled against this current inventory. [App baseline details](app.md).
 
 | Area | Production bodies | Test bodies | Total | Status |
 |---|---:|---:|---:|---|
-| App + Integration | 1,229 | 5,226 | 6,455 | 4,629 rows reread; 1,826 remaining |
-| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,834 reread in current-head scan (1,433 Core-owned + 401 overlapping Integration rows) |
+| App + Integration | 1,229 | 5,226 | 6,455 | 5,800 rows reread; 655 remaining |
+| Core + Platform + tooling | 1,560 | 3,487 | 5,047 | 1,943 reread in current-head scan (1,542 Core-owned + 401 overlapping Integration rows; includes batches 29–33) |
 | Imaging + Raw + LibRaw + TurboJpeg | 716 | 4,279 | 4,995 | 716 production + 4,279 Imaging.Tests reread; complete; 189 related Integration/App/Architecture rows also read |
-| Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | 8 Architecture decoder rows read; TestSupport and remaining Architecture rows unreviewed |
+| Architecture.Tests / TestSupport / TestSupport.Windows | — | 298 | 298 | 298/298 reread; two test-fixture cleanup safety candidates (R24–R25) |
 
 [powershell-functions.tsv](powershell-functions.tsv) additionally inventories 52 named PowerShell functions in 15 scripts; script-level statements and CI YAML are not callable rows. The ancestor-junction finding in `Publish-Guard.ps1` was fixed by #292 and must not be carried as open. Exhaustive tooling/CI/docs semantic coverage is pending. Native ABI, real WPF interaction, RAW corpus, NAS/performance, actual Recycle Bin, and full mutation campaign are not validated by this review.
 
@@ -83,6 +83,13 @@ The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreV
 
 `Save` invokes `Changed` after the durable write, but repaired-config `TryPersistRepairs` catches `IOException`/`UnauthorizedAccessException` around the entire call. A subscriber that throws one of those exceptions is therefore logged as a persistence failure, then `Load` invokes `Changed` again after the try. First-run/default creation wraps `Save` the same way and repeats the callback after treating it as a failed write; the second invocation can escape. The file write may already have succeeded. Static call-flow review only; no test/runtime execution. Restrict the catch to persistence operations or separate notification from write, and add throwing-subscriber tests for repaired and first-run paths.
 
+### R24 — P2 candidate — Test fixture cleanup can recursively delete a caller-owned directory
+
+`tests/PhotoReview.TestSupport.Windows/Fixtures/PhotoFolderBuilder.cs:46,60-62,251-273`. `BuildFolder` accepts `tempDir` and stores that path as `_cachedFolder`; process-exit cleanup and `Dispose` later recursively delete the whole path. Passing an existing directory can therefore remove files that the helper did not create. Static-only review; no directory was created or deleted. Always create a unique owned child or track created files, and delete only paths proven to belong to this helper.
+
+### R25 — P2 candidate — Shared temp sweep deletes matching directories by age alone
+
+`tests/PhotoReview.TestSupport.Windows/Fixtures/PhotoFolderBuilder.cs:210-248`. `PurgeStaleTemporaryFolders` enumerates shared-temp `PhotoReview-TC01-*` directories and recursively removes any older than six hours without an ownership marker or lock. A long-running test or another process using a matching path can lose its files when this helper starts. Static-only review; no directory was swept. Remove cross-run recursive sweeping or require an owned marker/lock and a conservative stale-owner check.
 ### Test-only and oracle findings retained at current head
 
 - `TurboJpegGuardMutationTests.ReadAllBytes_LengthExactlyTheLimit_PassesTheLimitCheck` attempts to allocate `MaxSourceBytes` (about 2 GiB) in a default-gate test. Do not run it during this review; replace the allocation with a seam or isolate the resource test.
@@ -90,6 +97,12 @@ The same R18 identity weakness affects Recycle Undo: `WindowsRecycleBin.RestoreV
 - `WarmNavigationReadBoundsTests` claims no duplicate presentations but uses a no-op sink and checks only final state; use a recording sink to assert the sequence/count (APP-T19). Static only; not run.
 - `MainWindowBehaviorTests.Fit` passes `MouseButton.Right` for a negative double-click case, but its helper always raises `PreviewMouseLeftButtonDownEvent`; the case never exercises the right-button route (APP-T20). Route the event from the requested button and cover right/middle behavior per contract. Static only; not run.
 - `FolderLoadCoordinatorTests.PerfMarks.LoadAsync_WithRawSupportOff_TheListingNeverAcceptsSidecarFiles` has a bell control character embedded in the would-be sidecar path, so it is not a child of the scanned folder and the count assertion cannot prove sidecar exclusion (APP-T21). Use a normal child path and assert that the fake contains it. Static only; not run.
+- `InstanceForwardPipeTests.Client_OwnerAnswersTooLate_ReportsUnknown` has no latch proving the server handler began before the client deadline; `Unknown` can pass without a late owner answer (APP-T22). Signal handler entry, hold the response until after timeout, then release it and assert the outcome. Static only; not run.
+- `ImagePresenterTests.Adversarial.PerPathGatedDecoder.Decode` ignores the boolean result of `Task.Wait(20s)`, so a never-opened gate becomes a successful fake image instead of failing the test (APP-T23). Assert the wait result or throw a timeout exception. Static only; not run.
+- `FolderLoadCoordinatorTests.Races` uses unbounded `ManualResetEventSlim.Wait` gates released only along the happy assertion path; an earlier failure can leave a worker blocked (APP-T24). Release gates in `finally` and bound waits. Static only; not run.
+- `FolderLoadSkippedFilesTests` catches ACL setup failures and returns from `[Fact]` methods, so xUnit reports pass although no behavior assertion ran (APP-T25). Use explicit skip reporting with a reason. Static only; not run.
+- `FolderLoadCoordinatorTests.Probe_DoneButNotYetApplied_ThenDisposed_IsDropped` can leave its foreground worker alive after the bounded `Join` times out; releasing the probe does not necessarily unblock that worker (APP-T10 risk). Add deterministic worker shutdown or a process-level hard bound. Static only; not run.
+- `PowerShellSafetyGuardTests.RunPowerShell` uses unbounded `Process.WaitForExit()`; a hung child process can stall the test suite (APP-T26 risk). Add a timeout, kill the process tree, drain output, and fail with diagnostics. Static only; not run.
 - `BenchmarkCliHardeningTests` supplies `OperationCanceledException` for both cancellation and OOM negative classification cases; use `OutOfMemoryException` for the latter (APP-T18). Static only; not run.
 - `DecoderRegistrationTests.ImageDecoderFactory_HasNoReflectionLoading` scans source text, contrary to the no-source-text-test rule; use behavioral or IL inspection instead. Static only; not run.
 - `PerfCsvListenerMappingTests.Writer_FlushesAfterOneSecond` and Core timing tests use fixed pauses before assertions. This conflicts with the repository's no-fixed-delay-assert rule and can flake under load; static review only.

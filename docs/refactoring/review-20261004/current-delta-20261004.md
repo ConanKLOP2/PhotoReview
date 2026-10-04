@@ -1,6 +1,6 @@
 # Current-head delta review — 2026-10-04
 
-Pinned comparison head: `origin/master` `18aa6eb64ba48666de620937211e0782dd6131c1`. The intervening #320 delta is docs plus a Core-test fake/expectation update for COPY-PARTIAL-01; no production C# changed. Core lane is checking the remaining R01 implications. Static review only. No builds, tests, destructive operations, real Recycle Bin calls, large allocations, RAW corpus, native decoder execution, or GUI checks were run for this delta.
+Pinned comparison head: `origin/master` `18aa6eb64ba48666de620937211e0782dd6131c1`. The intervening #320 delta is docs plus a Core-test fake/expectation update for COPY-PARTIAL-01; no production C# changed. Core lane confirmed the R01 post-proof replacement residual remains. Static review only. No builds, tests, destructive operations, real Recycle Bin calls, large allocations, RAW corpus, native decoder execution, or GUI checks were run for this delta.
 
 ## Changes reconciled
 
@@ -12,7 +12,7 @@ Pinned comparison head: `origin/master` `18aa6eb64ba48666de620937211e0782dd6131c
 
 ## Full-inventory continuation progress
 
-These are reread callables for the current-head continuation, separate from the cumulative ledger statuses above. At the latest checkpoint, App/Integration had read 4,629/6,455 rows (1,826 remaining); Core/Platform/tooling had read 1,834 current-head rows (1,433 owned + 401 overlapping Integration); Imaging had reread all 716/716 production rows and 4,279/4,279 Imaging test rows. The Architecture/TestSupport lane has read 8/298 rows and remains unassigned. App and Core remain active; no builds or tests were run.
+These are reread callables for the current-head continuation, separate from the cumulative ledger statuses above. At the latest checkpoint, App/Integration had read 5,800/6,455 rows (655 remaining); Core/Platform/tooling had read 1,943 rows (1,542 owned + 401 overlapping Integration); Imaging had reread all 716/716 production and 4,279/4,279 Imaging test rows; Architecture/TestSupport had read 298/298 rows. App and Core remain active. No builds or tests were run.
 
 ## Current findings
 
@@ -86,10 +86,16 @@ These are reread callables for the current-head continuation, separate from the 
 - Core `LocalizationFuzzTests.Render_HostileArguments_DoNotThrowForFormatting` does not supply a throwing formatter despite its name/display text; its current `NullToString` returns null. This oracle gap accompanies R21; no test was run.
 - Core generator tests accept missing English `_meta.code` as valid and do not diagnose malformed English metadata, although runtime built-in loading rejects it. This is the test gap for R22; static only, no generator build/run was performed in this continuation.
 - Architecture `DecoderRegistrationTests.ImageDecoderFactory_HasNoReflectionLoading` is a source-text scan despite the project rule against source-text tests; comments/formatting can trigger false positives and alternate reflection paths can evade it. Replace with behavioral or IL-level verification. Static only; not run.
-- Continuation reread checkpoints at this update: App/Integration 4,629/6,455 (1,826 remaining); Core/Platform/tooling 1,834 (1,433 owned + 401 Integration overlap); Imaging production 716/716 and Imaging.Tests 4,279/4,279 complete, plus 189 related rows. Architecture has 8/298 reviewed and is unassigned. These are cumulative rereads, not ledger status totals.
 - R23: `SettingsStore.Load` wraps `Save` together with its post-write `Changed` invocation in IOException catches for repaired/default settings. A throwing subscriber is mislabeled as a persistence error and notified again; first-run catch path can then rethrow on the second notification. Static only; test the repaired and first-run paths with an IOException-throwing subscriber.
 - APP-P02: loss of a previously available display timing signal after glide anchoring can apply the elapsed interval again when the same-period timing returns; see WORK-REVIEW.md. Static trace only.
 - APP-T21: the RawSupport-off sidecar test uses a path with U+0007, so its fixture does not target a child sidecar; its count assertion is not proof of filtering. Static only.
+- APP-T22: the late-owner integration test does not signal that the server handler began before the client deadline; `Unknown` can pass without exercising a late answer. Add an entry latch and release only after timeout. Static only.
+- APP-T23: a gated fake decoder ignores `Task.Wait(20s)`'s result; a closed gate returns a successful image after the timeout instead of failing the test. Static only.
+- APP-T24: folder-race tests use unbounded reset-event waits released only on the happy path; a failed assertion can leave a worker blocked. Release in `finally` and bound waits. Static only.
+- APP-T25: skipped-file tests catch ACL setup exceptions then return from `[Fact]`, so xUnit reports a pass without running behavior assertions. Use explicit skip reporting. Static only.
+- APP-T10 risk: the probe-dispose test may leave a foreground worker alive after bounded `Join` times out; releasing the probe does not necessarily unblock the worker. Static only.
+- R24/R25: Architecture/TestSupport review found caller-owned directory deletion and an unowned age-based temp-folder sweep; see WORK-REVIEW.md. Static only; no directories were created or deleted.
+- APP-T26 risk: `RunPowerShell` in the safety-guard tests calls unbounded `WaitForExit`, so a hung child can stall the suite; add timeout and process-tree cleanup. Static only.
 - APP-T20: `MainWindowBehaviorTests.Fit` supplies `MouseButton.Right`, but `RaiseDoubleClick` always raises the left-button event, so the negative case does not exercise right-click routing. Select the preview event based on the requested button and add relevant right/middle cases. Static only; not run.
 - Grouped Undo-Recycle tests do not gate a foreign file appearing at a pending source path between the initial `RecoveryFileCheck` and retry execution. This is the race extension of R15, not a separate source finding.
 - `LibRawDecoderTests.PrivateMemorySampler.Dispose` disposes its timer and process without waiting for an in-flight callback that reads process memory. A callback may race disposal and throw on a timer thread. This test-harness concern is unverified; native tests were not run.
