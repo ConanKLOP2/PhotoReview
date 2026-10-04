@@ -21,6 +21,16 @@ Rules:
 - `native\x64\*.dll` must exist in the worktree (`tools/fetch-native.ps1`).
 - Reports (json/html) go under `--output`; `StrykerOutput/` is git-ignored.
 
+## Faster iteration
+
+Flags verified against `dotnet tool run dotnet-stryker -- --help` (`--since[:<committish>]`, `-m|--mutate`, `--with-baseline[:<committish>]`, `-c|--concurrency`).
+
+- **Re-runs after adding tests:** use `--since:master` (diff-based, mutates and re-tests only files changed against `master`) and/or narrow `--mutate` globs to the files you touched, instead of re-mutating the whole area.
+- **Final score:** run the full area once with the standard config and filter; that is the number to quote.
+- **Narrowing the test set per mutated file** (running only the tests that cover it) is a dev-loop trick only. Final numbers always use the standard filter, and the App's UI tests are never skipped.
+- **`--with-baseline`** is EXPERIMENTAL and untested here; do not rely on it.
+- **No extra parallel Stryker processes beyond the 12 logical cores** (sum of all `--concurrency` values across running processes): load makes timing tests flaky, and Stryker counts those timeouts as kills.
+
 ## Scores 2026-10-03/04 (master `20011b45` -> `3ab763f9`, Basic level)
 
 "Before" is the first measurement; "after" is the re-run once the gap tests (#269, #271-#275, ~1,700 tests in all) were added. Four ACL tests that deny `ListDirectory` and the two `mklink` junction tests are `Category=Native` (a killed host could leave a Deny ACE behind), so the filter above does not count them. Values with "about" are estimates from partial re-runs.
