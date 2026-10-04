@@ -78,7 +78,6 @@ public sealed class RawReadInfoAndHeaderSourceParityTests
 
     private sealed class FixedRafReader(RawContainerInfo info) : IRawContainerReader
     {
-        public RawFormat Format => info.Format;
         public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension) => extension.Equals(".raf", StringComparison.OrdinalIgnoreCase);
         public RawContainerInfo Read(IRawHeaderSource source, CancellationToken cancellationToken) => info;
     }

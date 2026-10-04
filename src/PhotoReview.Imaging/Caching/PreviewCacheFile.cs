@@ -1,9 +1,7 @@
-using System.Buffers.Binary;
 using System.IO;
-using System.Threading.Tasks;
+using System.Buffers.Binary;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Caching;
@@ -245,10 +243,6 @@ public static class PreviewCacheFile
         return new ReadResult(native, backendValue, orientation, fileBytes, originalWidth, originalHeight, exif);
     }
 
-    /// <summary>
-    /// True when <paramref name="bmp"/> can carry transparency (alpha pixel format, or an indexed
-    /// format whose palette has a non-opaque color). Such previews must not go through the JPEG cache.
-    /// </summary>
     /// <summary>Framework-agnostic form of <see cref="HasAlpha(BitmapSource)"/> for a decoded preview.</summary>
     public static bool HasAlpha(IDecodedImage image)
     {
@@ -256,6 +250,10 @@ public static class PreviewCacheFile
         return image.PlatformImage is BitmapSource bitmap && HasAlpha(bitmap);
     }
 
+    /// <summary>
+    /// True when <paramref name="bmp"/> can carry transparency (alpha pixel format, or an indexed
+    /// format whose palette has a non-opaque color). Such previews must not go through the JPEG cache.
+    /// </summary>
     internal static bool HasAlpha(BitmapSource bmp)
     {
         ArgumentNullException.ThrowIfNull(bmp);

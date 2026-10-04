@@ -1,9 +1,7 @@
 ﻿using System.Diagnostics;
-using System.Globalization;
 using System.IO;
+using System.Globalization;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Core.Model;
-using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Preload;
 

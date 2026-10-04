@@ -1,7 +1,5 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.Model;
 
 namespace PhotoReview.Imaging.Decoding;
 

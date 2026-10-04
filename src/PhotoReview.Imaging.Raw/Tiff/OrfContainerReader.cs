@@ -10,7 +10,6 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// </summary>
 public sealed class OrfContainerReader : IRawContainerReader
 {
-    public RawFormat Format => RawFormat.Orf;
 
     public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension)
     {

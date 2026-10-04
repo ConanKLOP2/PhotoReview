@@ -50,8 +50,6 @@ internal static class ExplorerNativeVtable
     internal static int GetGroupBy(IntPtr self, out PROPERTYKEY key, out bool ascending) => Get<GetGroupByDelegate>(self, 18)(self, out key, out ascending);
     internal static int GetSortColumnCount(IntPtr self, out int count) => Get<GetSortColumnCountDelegate>(self, 26)(self, out count);
     internal static int GetSortColumns(IntPtr self, SORTCOLUMN[] columns, int count) => Get<GetSortColumnsDelegate>(self, 28)(self, columns, count);
-    internal static int GetItem(IntPtr self, int index, ref Guid iid, out IntPtr item) => Get<GetItemDelegate>(self, 29)(self, index, ref iid, out item);
-    internal static int GetDisplayName(IntPtr self, uint kind, out IntPtr name) => Get<GetDisplayNameDelegate>(self, 5)(self, kind, out name);
     internal static GetItemDelegate ResolveGetItem(IntPtr self) => Get<GetItemDelegate>(self, 29);
     internal static GetDisplayNameDelegate ResolveGetDisplayName(IntPtr self) => Get<GetDisplayNameDelegate>(self, 5);
 

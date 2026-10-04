@@ -106,7 +106,7 @@ public static class BmffBoxNavigator
             if (!TryReadBox(source, current, out var child, limit))
                 break;
 
-            if (child.TotalSize <= 0 || child.TotalSize > limit - current)
+            if (child.TotalSize > limit - current)
                 break; // Corrupt box size
 
             list.Add(child);

@@ -1,12 +1,10 @@
 ﻿using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.IO;
+using System.Diagnostics;
 using PhotoReview.Core.Catalog;
 using System.Threading.Channels;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Caching;
-using PhotoReview.Imaging.Decoding;
-using PhotoReview.Imaging.Preload;
 using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Imaging.Caching;
@@ -35,7 +33,6 @@ public sealed class PreviewImageService : IPreloadTarget
     private readonly Func<bool> _isOriginalLoadingMode;
     private readonly Func<DecodeBox> _targetDecodeBox;
     private readonly string _diskCacheDirectory;
-    private readonly long _diskCacheCapacityBytes;
 
     /// <summary>Effective (post-clamp) RAM budget of the preview cache; use it for full-folder preload decisions.</summary>
     public long CapacityBytes { get; }
@@ -144,10 +141,9 @@ public sealed class PreviewImageService : IPreloadTarget
         _currentBackend = currentBackend ?? (() => DecoderBackend.Wpf);
         _diskCacheDirectory = diskCacheDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
-        _diskCacheCapacityBytes = diskCacheCapacityBytes;
         _log = log ?? NullLog.Instance;
         // perf(cache) v4: single-file entries (see PreviewCacheFile), no ".meta" companion.
-        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.pv4", _diskCacheCapacityBytes, _log);
+        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.pv4", diskCacheCapacityBytes, _log);
         // F-IMG-4: a capacity of 0 (or less) means "preview disk cache off": no reads, writes or prunes (a 0-byte quota
         // would otherwise write every entry and immediately prune it). An explicit override still wins.
         _disableDiskCache = disableDiskCacheOverride

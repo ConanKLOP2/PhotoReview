@@ -1,9 +1,7 @@
-using System.Collections.Concurrent;
 using System.IO;
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
-using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Imaging.Caching;
 
@@ -45,9 +43,6 @@ public sealed class DiskCacheStore
 
     /// <summary>Number of full directory enumerations performed so far (test/diagnostic).</summary>
     internal int FullScanCount => Volatile.Read(ref _fullScanCount);
-
-    public string Directory => _directory;
-    public ILog Log => _log;
 
     public DiskCacheStore(string directory, string searchPattern = "*.png", long maxBytes = 0, ILog? log = null, Func<DateTime>? utcNow = null)
     {

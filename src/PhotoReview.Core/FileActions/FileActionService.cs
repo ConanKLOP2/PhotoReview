@@ -54,8 +54,6 @@ public sealed class FileActionService
     /// </summary>
     public bool LacksRecycleBin(string path) => !_recycleBin.CanRecycle(path);
 
-    public bool FileExists(string path) => _fileSystem.FileExists(path);
-
     /// <summary>
     /// Executes one capture-group operation. Every member is preflighted before the group manifest is journaled;
     /// the manifest is Prepared before the first mutation and remains one Recovery item if any member fails.

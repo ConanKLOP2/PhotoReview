@@ -12,7 +12,6 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// </summary>
 public sealed class Cr2ContainerReader : IRawContainerReader
 {
-    public RawFormat Format => RawFormat.Cr2;
 
     public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension)
     {
@@ -133,7 +132,7 @@ public sealed class Cr2ContainerReader : IRawContainerReader
         int sensorWidth = exifWidth > 0 ? exifWidth : largestWidth;
         int sensorHeight = exifWidth > 0 ? exifHeight : largestHeight;
 
-        if (exifBlocks.Count == 0 && source.Length > 0)
+        if (exifBlocks.Count == 0)
         {
             exifBlocks.Add(TiffHeaderNavigator.ComputeExifBlock(source, littleEndian, ifd0Offset));
         }

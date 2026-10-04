@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
@@ -8,8 +6,6 @@ using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.Core.Settings;
-using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.App.ViewModels;
 

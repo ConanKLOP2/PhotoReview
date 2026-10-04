@@ -133,7 +133,6 @@ public sealed class RawContractsAndHeaderSourceTests
 
     private sealed class TestRawReader(RawFormat format, string ext) : IRawContainerReader
     {
-        public RawFormat Format => format;
         public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension) =>
             string.Equals(extension, ext, StringComparison.OrdinalIgnoreCase);
 

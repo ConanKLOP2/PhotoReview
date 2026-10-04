@@ -19,7 +19,6 @@ public sealed class RawDecoderResolvedInfoCacheTests
     private sealed class FixedContainerReader(RawContainerInfo info) : IRawContainerReader
     {
         public int ReadCount { get; private set; }
-        public RawFormat Format => info.Format;
         public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension) => extension.Equals(".dng", StringComparison.OrdinalIgnoreCase);
 
         public RawContainerInfo Read(IRawHeaderSource source, CancellationToken cancellationToken)

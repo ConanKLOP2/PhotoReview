@@ -1,7 +1,6 @@
-using System.Buffers;
 using System.IO;
+using System.Buffers;
 using System.Runtime.InteropServices;
-using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 

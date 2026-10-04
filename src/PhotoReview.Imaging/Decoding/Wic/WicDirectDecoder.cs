@@ -2,7 +2,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Core.Localization;
 
@@ -335,10 +334,6 @@ public sealed class WicDirectDecoder : IImageDecoder
     ];
 
     /// <summary>
-    /// True when the WIC pixel format cannot carry transparency. Unknown and indexed formats
-    /// (palettes may contain transparent entries) are conservatively treated as having alpha.
-    /// </summary>
-    /// <summary>
     /// The colour transform is evaluated lazily inside CopyPixels, so a COM failure there on an
     /// ICC-bearing image must still route the file to the colour-managed WPF fallback. Only this
     /// call is treated as an ICC failure (IMG-04): converter/rotator failures elsewhere propagate
@@ -359,6 +354,10 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
+    /// <summary>
+    /// True when the WIC pixel format cannot carry transparency. Unknown and indexed formats
+    /// (palettes may contain transparent entries) are conservatively treated as having alpha.
+    /// </summary>
     internal static bool IsOpaqueFormat(Guid pixelFormat) => OpaquePixelFormats.Contains(pixelFormat);
 
     private static bool TryGetNativeReducedSize(

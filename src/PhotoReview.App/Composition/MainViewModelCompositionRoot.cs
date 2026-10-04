@@ -5,10 +5,6 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
-using PhotoReview.Core.Session;
-using PhotoReview.Core.Settings;
-using PhotoReview.Imaging.Caching;
-using PhotoReview.Imaging.Preload;
 
 namespace PhotoReview.App.Composition;
 

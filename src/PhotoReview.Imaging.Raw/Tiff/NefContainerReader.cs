@@ -10,7 +10,6 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// </summary>
 public sealed class NefContainerReader : IRawContainerReader
 {
-    public RawFormat Format => RawFormat.Nef;
 
     public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension)
     {

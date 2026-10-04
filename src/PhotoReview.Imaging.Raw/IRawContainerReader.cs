@@ -5,9 +5,6 @@ namespace PhotoReview.Imaging.Raw;
 /// </summary>
 public interface IRawContainerReader
 {
-    /// <summary>Target RAW format handled by this reader.</summary>
-    RawFormat Format { get; }
-
     /// <summary>Returns true if the first 64 bytes and file extension match this reader.</summary>
     bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension);
 

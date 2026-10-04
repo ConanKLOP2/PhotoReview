@@ -1,9 +1,6 @@
 using System.Diagnostics;
-using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using PhotoReview.Imaging.Caching;
-using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.App.Coordinators;
 

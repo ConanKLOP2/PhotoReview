@@ -47,7 +47,6 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                 _queue.Add(() =>
                 {
                     try { completion.TrySetResult(work()); }
-                    catch (OperationCanceledException ex) { completion.TrySetException(ex); }
                     catch (Exception ex) { completion.TrySetException(ex); }
                 });
             }

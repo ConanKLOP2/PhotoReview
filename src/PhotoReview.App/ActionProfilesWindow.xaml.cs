@@ -4,7 +4,6 @@ using System.Windows.Input;
 using System.Text.Json;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
-using PhotoReview.App.Services;
 
 namespace PhotoReview.App;
 

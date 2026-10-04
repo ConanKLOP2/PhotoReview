@@ -1,8 +1,4 @@
 using System.Collections.Concurrent;
-using System.Threading;
-using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.Diagnostics;
-using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding.Wic;
 
 namespace PhotoReview.Imaging.Decoding;

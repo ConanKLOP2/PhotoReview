@@ -1,5 +1,5 @@
-using System.Buffers.Binary;
 using System.IO;
+using System.Buffers.Binary;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.Raw.Tiff;
 
@@ -16,7 +16,6 @@ namespace PhotoReview.Imaging.Raw.Bmff;
 /// </summary>
 public sealed class Cr3ContainerReader : IRawContainerReader
 {
-    public RawFormat Format => RawFormat.Cr3;
 
     // Canon UUID: 85c0b687-820f-11e0-8111-f4ce462b6a48
     private static readonly byte[] CanonMoovUuid =
@@ -75,8 +74,6 @@ public sealed class Cr3ContainerReader : IRawContainerReader
             ct.ThrowIfCancellationRequested();
             if (!BmffBoxNavigator.TryReadBox(source, offset, out var box))
                 break;
-
-            if (box.TotalSize <= 0) break;
 
             if ((box.Type == "uuid" && box.Uuid != null && box.Uuid.SequenceEqual(PreviewUuid)))
             {
