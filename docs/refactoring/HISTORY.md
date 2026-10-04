@@ -34,6 +34,7 @@ Open work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md). Decisions: [`OPEN-DECISIO
 | **Error-handling review round 2 (2026-10-02/03)** | Second pass over the same findings class: journal parser/reconcile guards, settings read retry, recovery/session/undo hardening, observed fire-and-forget tasks, forwarded-open guard, guarded `async void` handlers, `libraw.dll` search path restricted, decoder `ArgumentException`/OOM/header-cap/size fixes, `PreloadScheduler` guard. | #263 |
 | **Threading analyzers + reader fuzzing (2026-10-03)** | `Microsoft.VisualStudio.Threading.Analyzers` VSTHRD100/VSTHRD110 and CA2012 are errors for `src/`; `BinaryFuzz` harness + 6 binary-reader fuzz tests (`BinaryReaderFuzzTests`). | #264 |
 | **Dead-code cleanup (2026-10-03)** | Unused usings, dead members/params, orphaned `SourceSizeTracker`, unused i18n keys and 4 unused scripts removed. | #265, #266 |
+| **Mutation testing (Stryker.NET) 2026-10-03/04** | Stryker.NET (Basic level) on Core, Imaging, Imaging.Raw, LibRaw and App: mutation scores 57-82% -> 78-97%, ~1,700 tests added, a handful of internal test seams (TurboJpeg/WIC/PhysicalFileSystem/OperationJournal/DiskCacheStore/PreviewImageService/PreloadScheduler), `JournalTransaction.Commit` clock fix, `AsRational` type-test fix, Settings > Import on the shared `ParseText` pipeline. Recipe, scores, remaining seam-needing survivors: [`../MUTATION-TESTING.md`](../MUTATION-TESTING.md). | #268-#275 |
 
 ## Handoff log (older detail dropped)
 
