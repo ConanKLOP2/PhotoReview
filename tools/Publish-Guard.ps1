@@ -61,6 +61,41 @@ function Resolve-FinalTarget {
     throw "Refusing to wipe '$Path': too many reparse-point hops while resolving the real target (possible loop)."
 }
 
+function Resolve-RealPath {
+    # Resolves EVERY existing path component (R03): Resolve-FinalTarget alone only follows a link at the leaf, so an
+    # ANCESTOR junction (approved\linked-build -> <elsewhere>, candidate approved\linked-build\publish) kept the
+    # lexical approved-root prefix while the deletion would land in <elsewhere>\publish. Walks root -> leaf, replaces a
+    # component that is a reparse point by its (recursively resolved) target, and appends the not-yet-existing tail verbatim.
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [int]$Depth = 0
+    )
+    if ($Depth -gt 32) {
+        throw "Refusing to wipe '$Path': too many nested reparse points while resolving the real path (possible loop)."
+    }
+    $full = [System.IO.Path]::GetFullPath($Path)
+    $root = [System.IO.Path]::GetPathRoot($full)
+    $current = $root.TrimEnd([char]92, [char]47)
+    $segments = @(Get-PathSegments $full)
+    $skip = @(Get-PathSegments $root).Count
+    for ($i = $skip; $i -lt $segments.Count; $i++) {
+        $next = $current + [char]92 + $segments[$i]
+        if (-not (Test-Path -LiteralPath $next)) {
+            # Nothing at or below this point exists, so nothing can be a link: keep the rest lexically.
+            $current = $next
+            for ($j = $i + 1; $j -lt $segments.Count; $j++) { $current = $current + [char]92 + $segments[$j] }
+            return $current
+        }
+        $final = Resolve-FinalTarget -Path $next
+        if (-not [string]::Equals($final, $next, [System.StringComparison]::OrdinalIgnoreCase)) {
+            # The link target may itself sit below another link: resolve it fully too.
+            $final = Resolve-RealPath -Path $final -Depth ($Depth + 1)
+        }
+        $current = $final.TrimEnd([char]92, [char]47)
+    }
+    return $current
+}
+
 function Assert-ReleaseDirectoryOwned {
     param(
         [Parameter(Mandatory)][string]$Directory,
@@ -77,16 +112,16 @@ function Assert-ReleaseDirectoryOwned {
     # Resolve any reparse point (symlink/junction/mount point) at or above the target so the
     # containment check below sees where the deletion would *actually* land, not just the name
     # of a link pointing somewhere else entirely.
-    $resolved = Resolve-FinalTarget -Path $full
+    $resolved = Resolve-RealPath -Path $full
 
     foreach ($approved in $ApprovedRoots) {
-        $rootFull = [System.IO.Path]::GetFullPath($approved).TrimEnd([char]92, [char]47)
+        # The approved root is resolved the same way, so a root that is itself reached through a junction still matches.
+        $rootFull = Resolve-RealPath -Path ([System.IO.Path]::GetFullPath($approved).TrimEnd([char]92, [char]47))
         if (Test-PathUnderRoot -FullPath $resolved -RootFull $rootFull) { return }
     }
     # Outside every approved output root: only a directory a previous publish created (marker) may be replaced.
-    # Read the marker via the original path -- the filesystem already follows any reparse point transparently,
-    # so this checks the same real location that $resolved points at.
-    if (Test-Path -LiteralPath (Join-Path $full $script:PublishMarkerName) -PathType Leaf) { return }
+    # Read the marker from the resolved real location (the directory the deletion would actually empty).
+    if (Test-Path -LiteralPath (Join-Path $resolved $script:PublishMarkerName) -PathType Leaf) { return }
 
     throw "Refusing to wipe '$Directory': it is outside the approved output roots and has no '$($script:PublishMarkerName)' marker left by a previous publish."
 }
@@ -220,6 +255,59 @@ function Invoke-PublishGuardSelfTest {
             $cases += $junctionCase
         }
 
+        # R03: ANCESTOR junction (a link above the 'publish' leaf, not at it). Fixtures are this self-test's own temp dirs.
+        $ancestorForeign = Join-Path $tempRoot 'ancestor-foreign'
+        $ancestorForeignPublish = Join-Path $ancestorForeign 'publish'
+        New-Item -ItemType Directory -Path $ancestorForeignPublish -Force | Out-Null
+        $ancestorMarkedForeign = Join-Path $tempRoot 'ancestor-foreign-marked'
+        $ancestorMarkedPublish = Join-Path $ancestorMarkedForeign 'publish'
+        New-Item -ItemType Directory -Path $ancestorMarkedPublish -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $ancestorMarkedPublish $script:PublishMarkerName) -Value 'test marker'
+        $ancestorInside = Join-Path $approvedRoot 'inside-real'
+        New-Item -ItemType Directory -Path (Join-Path $ancestorInside 'publish') -Force | Out-Null
+        $ancestorLinks = @()
+        try {
+            $ancestorLink = Join-Path $approvedRoot 'linked-build'
+            New-Item -ItemType Junction -Path $ancestorLink -Target $ancestorForeign -ErrorAction Stop | Out-Null
+            $ancestorLinks += $ancestorLink
+            $ancestorMarkedLink = Join-Path $approvedRoot 'linked-marked'
+            New-Item -ItemType Junction -Path $ancestorMarkedLink -Target $ancestorMarkedForeign -ErrorAction Stop | Out-Null
+            $ancestorLinks += $ancestorMarkedLink
+            $ancestorInsideLink = Join-Path $approvedRoot 'linked-inside'
+            New-Item -ItemType Junction -Path $ancestorInsideLink -Target $ancestorInside -ErrorAction Stop | Out-Null
+            $ancestorLinks += $ancestorInsideLink
+            $rootLink = Join-Path $tempRoot 'approved-root-link'
+            New-Item -ItemType Junction -Path $rootLink -Target $approvedRoot -ErrorAction Stop | Out-Null
+            $ancestorLinks += $rootLink
+            $cases += [pscustomobject]@{
+                Name = 'AncestorJunction_PointsOutside_NoMarker_Refused'
+                Directory = (Join-Path $ancestorLink 'publish')
+                Roots = @($approvedRoot)
+                ExpectThrow = $true
+            }
+            $cases += [pscustomobject]@{
+                Name = 'AncestorJunction_PointsOutside_WithMarker_Allowed'
+                Directory = (Join-Path $ancestorMarkedLink 'publish')
+                Roots = @($approvedRoot)
+                ExpectThrow = $false
+            }
+            $cases += [pscustomobject]@{
+                Name = 'AncestorJunction_PointsInsideApprovedRoot_Allowed'
+                Directory = (Join-Path $ancestorInsideLink 'publish')
+                Roots = @($approvedRoot)
+                ExpectThrow = $false
+            }
+            $cases += [pscustomobject]@{
+                Name = 'ApprovedRootReachedThroughJunction_RealPathStillApproved'
+                Directory = $approvedPublish
+                Roots = @($rootLink)
+                ExpectThrow = $false
+            }
+        }
+        catch {
+            Write-Output "AncestorJunction cases: skipped (could not create a junction in this environment: $($_.Exception.Message))"
+        }
+
         $allOk = $true
         foreach ($c in $cases) {
             $threw = $false
@@ -254,6 +342,13 @@ function Invoke-PublishGuardSelfTest {
         }
     }
     finally {
+        # Detach this test's junctions first so the recursive cleanup can never follow one out of the temp fixture.
+        foreach ($link in @($ancestorLinks) + @($junctionPublish, $junctionLink)) {
+            if ($link -and (Test-Path -LiteralPath $link)) {
+                $linkItem = Get-Item -LiteralPath $link -Force -ErrorAction SilentlyContinue
+                if ($linkItem -and $linkItem.LinkType) { [System.IO.Directory]::Delete($link, $false) }
+            }
+        }
         Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
