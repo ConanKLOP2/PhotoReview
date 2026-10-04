@@ -66,9 +66,9 @@ public sealed class EmbeddedThumbnailMutationTests : IDisposable
         await File.WriteAllBytesAsync(source, EmbeddedThumbnailJpegFixture.CreateWithThumbnail(mainSize: 48, thumbnailSize: 16));
         var diskDir = Path.Combine(_dir, "disk");
         using var cache = new PhotoReview.Imaging.Caching.ThumbnailCache(diskDir, maxRamBytes: 16 * 1024 * 1024);
+        var seed = PhotoReview.TestSupport.TestImages.OpaquePng;
+        var cached = PhotoReview.Imaging.Tests.Caching.ThumbnailCacheFiles.Write(diskDir, source, seed);
         Assert.NotNull(await cache.GetAsync(source, null));
-        var cached = Assert.Single(Directory.GetFiles(diskDir, "*.png"));
-        var seed = await File.ReadAllBytesAsync(cached);
         var rng = new Random(8);
         var failures = new List<string>();
         for (var i = 0; i < 150; i++)

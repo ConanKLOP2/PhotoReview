@@ -73,7 +73,7 @@ public sealed class ThumbnailCacheUnobservedFaultTests : IDisposable
     {
         var source = _root.File("a.jpg", EmbeddedThumbnailJpegFixture.CreateWithThumbnail(48, 16));
         var load = new TaskCompletionSource<IDecodedImage?>();
-        var cache = new ThumbnailCache(_root.Dir("disk"), persistNewThumbnails: false, embeddedThumbnailReader: (path, token) => load.Task);
+        var cache = new ThumbnailCache(_root.Dir("disk"), embeddedThumbnailReader: (path, token) => load.Task);
         Task? shared = null;
         cache.SharedLoadForTests = task => shared = task;
         using var cts = new CancellationTokenSource();

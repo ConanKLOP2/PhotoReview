@@ -112,12 +112,6 @@ public sealed class PhotoReviewPerf : EventSource
         if (IsEnabled()) WriteEvent(9, nav, pathId, ms, bytes);
     }
 
-    [Event(10, Level = EventLevel.Informational)]
-    public void SourceOpen(long nav, string pathId, double ms)
-    {
-        if (IsEnabled()) WriteEvent(10, nav, pathId, ms);
-    }
-
     [Event(11, Level = EventLevel.Informational)]
     public void SourceRead(long nav, string pathId, double ms, long bytes)
     {

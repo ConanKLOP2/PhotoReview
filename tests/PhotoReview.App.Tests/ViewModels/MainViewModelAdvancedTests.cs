@@ -115,8 +115,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
 
         _thumbnailCache = new ThumbnailCache(
             diskDirectory: Path.Combine(_tempDir, "thumbs"),
-            maxRamBytes: 16 * 1024 * 1024,
-            persistNewThumbnails: false);
+            maxRamBytes: 16 * 1024 * 1024);
 
         _hashService = new FileHashService();
     }

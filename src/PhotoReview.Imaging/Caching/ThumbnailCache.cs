@@ -21,7 +21,6 @@ public sealed class ThumbnailCache : IDisposable
     private readonly string _diskDirectory;
     private readonly long _maxRamBytes;
     private readonly long _maxDiskBytes;
-    private readonly bool _persistNewThumbnails;
     private readonly ILog _log;
     private readonly Func<string, CancellationToken, Task<IDecodedImage?>> _embeddedThumbnailReader;
     private readonly DiskCacheStore _diskStore;
@@ -37,20 +36,15 @@ public sealed class ThumbnailCache : IDisposable
     /// <summary>The start-up stale temp-file sweep started by the constructor; test seam.</summary>
     internal Task StartupCleanup { get; }
 
-    /// <summary>Test seam (RV-I02): replaces the PNG persist write of a new thumbnail; null uses <see cref="DiskCacheStore"/>.</summary>
-    internal Func<BitmapSource, string, CancellationToken, Task>? PersistForTests { get; set; }
-
     /// <summary>Test seam (RV-I10): receives the shared (Lazy) load task each caller waits on.</summary>
     internal Action<Task>? SharedLoadForTests { get; set; }
 
-    public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskDirectory;
 
     public ThumbnailCache(
         string? diskDirectory = null,
         long maxRamBytes = 1L * 1024 * 1024 * 1024,
         long maxDiskBytes = DefaultMaxDiskBytes,
-        bool persistNewThumbnails = true,
         ILog? log = null,
         Func<string, CancellationToken, Task<IDecodedImage?>>? embeddedThumbnailReader = null)
     {
@@ -61,7 +55,6 @@ public sealed class ThumbnailCache : IDisposable
             "PhotoReview", "thumbnails");
         _maxRamBytes = maxRamBytes;
         _maxDiskBytes = maxDiskBytes;
-        _persistNewThumbnails = persistNewThumbnails;
         _log = log ?? NullLog.Instance;
         _embeddedThumbnailReader = embeddedThumbnailReader ?? DefaultReadEmbeddedThumbnailAsync;
         _diskStore = new DiskCacheStore(_diskDirectory, "*.png", _maxDiskBytes, _log);
@@ -204,46 +197,13 @@ public sealed class ThumbnailCache : IDisposable
         // the preview, serialized behind each other). Read only the JPEG's embedded EXIF
         // thumbnail (APP1); if the source has none (or isn't a JPEG), return null and let the
         // preview decode that ImagePresenter already started concurrently supply the image.
-        var generationBeforeDecode = Volatile.Read(ref _cacheGeneration);
         // A RAW has no EXIF-thumbnail APP1 to read here; opening it through WIC would re-read the file the preview decode already
         // reads by byte ranges (and a codec thumbnail carries the sensor size, not the preview size). The preview is the first frame.
         if (ImageFileTypes.IsRawPath(sourcePath)) return null;
         var embedded = await _embeddedThumbnailReader(sourcePath, cancellationToken).ConfigureAwait(false);
-        // Includes a failed disk-cache attempt, if any; excludes persisting the new thumbnail.
+        // Includes a failed disk-cache attempt, if any.
         if (perf) PhotoReviewPerf.Log.ThumbEnd(perfNav, perfPathId, embedded is not null ? "embedded" : "none", PhotoReviewPerf.Ms(perfT0));
         if (embedded is null) return null;
-        if (!_persistNewThumbnails) return embedded;
-        // ClearDisk() bumps _cacheGeneration and wipes the directory; without this check an
-        // in-flight decode that started before the clear can still recreate a PNG right after
-        // the user asked for the disk cache to be emptied.
-        if (Volatile.Read(ref _cacheGeneration) != generationBeforeDecode) return embedded;
-        try
-        {
-            if (embedded.PlatformImage is BitmapSource bmp)
-            {
-                await (PersistForTests?.Invoke(bmp, cachePath, cancellationToken)
-                    ?? _diskStore.WriteAtomicallyAsync(bmp, cachePath, cancellationToken)).ConfigureAwait(false);
-            }
-            if (Volatile.Read(ref _cacheGeneration) != generationBeforeDecode)
-            {
-                // Went stale mid-write (ClearDisk ran concurrently): don't leave a
-                // freshly-written file for a cache generation that was just cleared.
-                DiskCacheStore.TryDelete(cachePath);
-            }
-            else
-            {
-                _diskStore.NoteWritten(cachePath);
-                PruneDiskCache();
-            }
-        }
-        // RV-I02: the PNG encoder / WIC can also throw InvalidOperationException, NotSupportedException, ArgumentException or
-        // COMException (IOException/UnauthorizedAccessException come from the temp file and File.Move). A failed persist must
-        // never lose the thumbnail that was already read: log and return it (same policy as PreviewImageService's persist
-        // worker). Cancellation still propagates.
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _log.Error($"Disk thumbnail write failed: {cachePath}", ex);
-        }
         return embedded;
     }
 
@@ -253,12 +213,6 @@ public sealed class ThumbnailCache : IDisposable
         try { _diskStore.ClearDirectory(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { _log.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
     }
-
-    public Task<bool> WaitForPruneAsync(TimeSpan timeout) => _diskStore.WaitForPruneAsync(timeout);
-
-    // Coalesced per directory in DiskCacheStore: concurrent thumbnail writes (folder scan
-    // pre-generating many at once) must not each spawn their own full directory scan.
-    private void PruneDiskCache() => _diskStore.SchedulePrune();
 
     private static Task<IDecodedImage> DecodeAsync(string path, CancellationToken cancellationToken)
     {

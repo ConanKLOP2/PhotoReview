@@ -52,7 +52,7 @@ public sealed class ExifLineViewModelTests : IDisposable
     public ExifLineViewModelTests()
     {
         Directory.CreateDirectory(_tempDir);
-        _thumbnailCache = new ThumbnailCache(diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 1024 * 1024, persistNewThumbnails: false);
+        _thumbnailCache = new ThumbnailCache(diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 1024 * 1024);
     }
 
     public void Dispose()

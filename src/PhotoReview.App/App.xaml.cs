@@ -131,7 +131,6 @@ public partial class App : System.Windows.Application, IDisposable
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
-            persistNewThumbnails: false,
             log: sp.GetService<ILog>()));
         services.AddSingleton<SourceBytesCachePolicy>(sp =>
         {

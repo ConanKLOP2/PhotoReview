@@ -17,7 +17,6 @@ public sealed class NavRecord
     public bool HasThumbnail { get; set; }
     public double? TJoinMs { get; set; }
     public double? TDiskMs { get; set; }
-    public double? TOpenMs { get; set; }
     public double? TReadMs { get; set; }
     public double? TDecodeMs { get; set; }
     public double? TVerifyMs { get; set; }
@@ -299,9 +298,6 @@ public static class PerfAnalyzeNavBuilder
                     break;
                 case "DiskCacheRead":
                     rec.TDiskMs = row.ANum;
-                    break;
-                case "SourceOpen":
-                    rec.TOpenMs = row.ANum;
                     break;
                 case "SourceRead":
                     rec.TReadMs = row.ANum;
