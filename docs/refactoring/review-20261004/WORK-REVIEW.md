@@ -295,3 +295,7 @@ Reviewed all 34 callable rows in 	ests/PhotoReview.Core.Tests/Session/SessionWri
 ### Batch 79 — LiveOperationMarkerTests
 
 Reviewed all 29 callable rows in 	ests/PhotoReview.Core.Tests/FileActions/LiveOperationMarkerTests.cs against journal transaction/reconcile lifetime behavior. Covered live-marker skipping, retry overlapping reconciliation, Prepared/outcome windows for actions/undo/recovery retry, append failure release, and in-process refcount. These tests use the in-process registry; named OS cross-process behavior remains unverified. No new finding; static only, no tests/build run.
+
+### Batch 80 — master drift delta through #323
+
+Fetched origin/master and reviewed the 17 paths changed by #321–#323 against baseline #320: R14 folder-open supersession, APP-P02 glide re-anchoring, R32 drive-root containment, R21 localization formatter failure handling, R23 settings Changed delivery, R16 saturating decoder admission, R11 fail-closed permanent delete, R26 capacity re-read, and their focused tests/fake updates. Static diff and caller review found no additional issue. No runtime validation in this batch. The callable ledger and aggregate counts remain pinned to #320; changed-path callable identities and new #323 test rows need a fresh inventory before claiming current-master totals.
