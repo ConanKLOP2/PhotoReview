@@ -383,12 +383,7 @@ public sealed class CaptureGroupActionRollbackTests
     public async Task ExecuteGroupAsync_CopyLeavesPartialFile_PartialFileIsDeleted()
     {
         var (fs, journal) = CreateWorld();
-        fs.CopyHook = (source, destination) =>
-        {
-            if (source != Raw) return null;
-            fs.AddFile(destination, "par", Stamp); // a half-written copy
-            return new IOException("disk full");
-        };
+        fs.CopyPartialHook = (source, _) => source == Raw ? (3, new IOException("disk full")) : null; // a half-written copy of ours
 
         var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Copy));
 

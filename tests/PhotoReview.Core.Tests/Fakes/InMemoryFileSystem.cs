@@ -32,6 +32,13 @@ public sealed class InMemoryFileSystem : IFileSystem
     public Func<string, string, Exception?>? CopyHook { get; set; }
 
     /// <summary>
+    /// R01: a copy that really creates its destination and then fails: when it returns a value for (source, destination), the first
+    /// <c>Bytes</c> bytes are written (the creation is proven to the caller) and <c>Error</c> is thrown. Unlike writing the destination
+    /// inside <see cref="CopyHook"/> (indistinguishable from a foreign file that appeared), this is a destination THIS copy created.
+    /// </summary>
+    public Func<string, string, (int Bytes, Exception Error)?>? CopyPartialHook { get; set; }
+
+    /// <summary>
     /// Simulates a cross-volume MoveFileEx(MOVEFILE_COPY_ALLOWED) that copied the file but could not delete the source
     /// (read-only / open without FILE_SHARE_DELETE): Move then returns normally and leaves the source in place.
     /// </summary>
@@ -171,13 +178,17 @@ public sealed class InMemoryFileSystem : IFileSystem
 
     public void Copy(string source, string destination)
     {
-        CopyCore(source, destination, failIfExists: false);
+        CopyCore(source, destination, failIfExists: false, proof: null);
     }
 
     /// <summary>Atomic create-new copy (existence check and creation under one lock), like the physical implementation.</summary>
-    public bool TryCopyNew(string source, string destination) => CopyCore(source, destination, failIfExists: true);
+    public bool TryCopyNew(string source, string destination) => CopyCore(source, destination, failIfExists: true, proof: null);
 
-    private bool CopyCore(string source, string destination, bool failIfExists)
+    /// <summary>Raises <paramref name="proof"/> at the moment this call writes the destination (also for a partial write that then throws).</summary>
+    public bool TryCopyNew(string source, string destination, CopyCreationProof proof) =>
+        CopyCore(source, destination, failIfExists: true, proof ?? throw new ArgumentNullException(nameof(proof)));
+
+    private bool CopyCore(string source, string destination, bool failIfExists, CopyCreationProof? proof = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
@@ -209,15 +220,25 @@ public sealed class InMemoryFileSystem : IFileSystem
                 throw new DirectoryNotFoundException($"Không tìm thấy thư mục đích: '{destDir}'.");
             }
 
+            if (CopyPartialHook?.Invoke(source, destination) is { } partial)
+            {
+                _files[dstNorm] = bytes.AsSpan(0, Math.Min(partial.Bytes, bytes.Length)).ToArray();
+                _fileWriteTimes[dstNorm] = DateTime.UtcNow;
+                proof?.MarkCreated();
+                throw partial.Error;
+            }
+
             if (CopyFailsAfterBytes is { } written)
             {
                 _files[dstNorm] = bytes.AsSpan(0, Math.Min(written, bytes.Length)).ToArray();
+                proof?.MarkCreated();
                 _fileWriteTimes[dstNorm] = DateTime.UtcNow;
                 throw new IOException("Simulated disk full during copy.");
             }
 
             _files[dstNorm] = (byte[])bytes.Clone();
             _fileWriteTimes[dstNorm] = DateTime.UtcNow;
+            proof?.MarkCreated();
             return true;
         }
     }

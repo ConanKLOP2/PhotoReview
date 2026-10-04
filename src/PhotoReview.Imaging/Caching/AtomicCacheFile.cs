@@ -31,10 +31,14 @@ internal static class AtomicCacheFile
         cancellationToken.ThrowIfCancellationRequested();
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
         var temporaryPath = temporaryPathOverride ?? cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp"; // matches DiskCacheStore.TempFilePattern
+        // Only a temp file this call created may be deleted: when CreateNew throws because the path already exists,
+        // that file belongs to someone else and must survive.
+        var created = false;
         try
         {
             var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                 64 * 1024, FileOptions.SequentialScan);
+            created = true;
             await using (stream.ConfigureAwait(false))
             {
                 writePayload(stream);
@@ -46,7 +50,8 @@ internal static class AtomicCacheFile
         }
         finally
         {
-            DiskCacheStore.TryDelete(temporaryPath, log);
+            if (created)
+                DiskCacheStore.TryDelete(temporaryPath, log);
         }
     }
 }

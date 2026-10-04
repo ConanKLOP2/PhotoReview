@@ -121,6 +121,10 @@ public sealed class CacheTempFileAndDiskProbeTests : IDisposable
         // reached the point of moving it into place. Mutating CreateNew -> Create would instead
         // silently truncate/overwrite it, write successfully, and create cachePath here.
         Assert.False(File.Exists(cachePath));
+        // R07: the pre-existing temp file belongs to someone else (this call never created it), so the cleanup must not delete it
+        // and its content must be untouched.
+        Assert.True(File.Exists(temporaryPath));
+        Assert.Equal(new byte[] { 9, 9, 9 }, File.ReadAllBytes(temporaryPath));
     }
 
     [Fact(DisplayName = "AtomicCacheFile.WriteAsync deletes its temp file when the payload write throws")]

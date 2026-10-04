@@ -43,13 +43,21 @@ public sealed class PhysicalFileSystem : IFileSystem
 
     // File.Copy without overwrite is CopyFile with COPY_FILE_FAIL_IF_EXISTS: the existence check and the creation are
     // one atomic step, and an already-existing destination surfaces as ERROR_FILE_EXISTS (80) / ERROR_ALREADY_EXISTS (183).
-    public bool TryCopyNew(string source, string destination)
+    // Ownership proof (R01): File.Copy cannot tell us whether a throw happened before or after it created the destination (a missing
+    // source with a destination that someone else just created throws FileNotFoundException and creates nothing), so the proof is
+    // raised only when File.Copy returned: a failed physical copy is never claimed as ours and its partial file, if any, is left for
+    // Recovery rather than risking deleting a foreign file.
+    public bool TryCopyNew(string source, string destination) => TryCopyNew(source, destination, new CopyCreationProof());
+
+    public bool TryCopyNew(string source, string destination, CopyCreationProof proof)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+        ArgumentNullException.ThrowIfNull(proof);
         try
         {
             File.Copy(source, destination);
+            proof.MarkCreated();
             return true;
         }
         // A directory at the destination is not "a file already exists": some Windows builds also report it as 80 (others as

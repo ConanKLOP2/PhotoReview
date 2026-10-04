@@ -51,9 +51,11 @@ public sealed class FaultableFileSystem(InMemoryFileSystem inner) : IFileSystem
         AfterCopy?.Invoke(source, destination);
     }
 
-    public bool TryCopyNew(string source, string destination)
+    public bool TryCopyNew(string source, string destination) => TryCopyNew(source, destination, new CopyCreationProof());
+
+    public bool TryCopyNew(string source, string destination, CopyCreationProof proof)
     {
-        var created = Inner.TryCopyNew(source, destination);
+        var created = Inner.TryCopyNew(source, destination, proof);
         if (created) AfterCopy?.Invoke(source, destination);
         return created;
     }

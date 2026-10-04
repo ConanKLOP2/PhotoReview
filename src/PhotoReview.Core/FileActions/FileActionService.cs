@@ -77,8 +77,9 @@ public sealed class FileActionService
         // the compensation below (Copy: delete the copies this operation made; Move: put the moved files back).
         var done = new List<JournalGroupMember>();
         JournalGroupMember? inFlight = null;
-        // True only while a Copy of the in-flight member may have created its destination: proven by TryCopyNew (it returns
-        // false, touching nothing, when the destination already existed; a throw means this call created/was creating it).
+        // Ownership of the in-flight Copy destination: only the proof the copy implementation raised when it created the file
+        // counts (R01). It is never assumed before the copy runs, nor inferred from a throw, a length or the preflight.
+        var inFlightCopyProof = new CopyCreationProof();
         var inFlightDestinationIsOurs = false;
         try
         {
@@ -176,21 +177,17 @@ public sealed class FileActionService
                 cancellationToken.ThrowIfCancellationRequested();
                 inFlight = member;
                 inFlightDestinationIsOurs = false;
+                inFlightCopyProof = new CopyCreationProof();
                 if (request.Operation == FileOperationType.Copy)
                 {
                     // Create-new copy: a file that appeared after the preflight is never overwritten and never claimed as ours,
-                    // so the compensation cannot delete it. The flag is raised inside the delegate, right before the call, so a
-                    // Task.Run cancelled before it starts never claims a destination (a throw after that may leave our partial file).
-                    var created = await Task.Run(() =>
-                    {
-                        inFlightDestinationIsOurs = true;
-                        return _fileSystem.TryCopyNew(member.Source, member.Destination!);
-                    }, cancellationToken).ConfigureAwait(false);
+                    // so the compensation cannot delete it. Only the copy implementation's proof of creation makes the destination
+                    // ours: a throw before it created anything (e.g. the source vanished) leaves a foreign destination untouched.
+                    var proof = inFlightCopyProof;
+                    var created = await Task.Run(() => _fileSystem.TryCopyNew(member.Source, member.Destination!, proof), cancellationToken)
+                        .ConfigureAwait(false);
                     if (!created)
-                    {
-                        inFlightDestinationIsOurs = false;
                         throw new IOException(Tr.CoreFileActionDestinationExists(member.Destination!));
-                    }
                     VerifyGroupDestination(member);
                 }
                 else if (request.Operation == FileOperationType.Move)
@@ -245,7 +242,7 @@ public sealed class FileActionService
                 if (tx is { IsPrepared: true } && request.Operation is FileOperationType.Move or FileOperationType.Copy)
                 {
                     stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
-                        ? RemoveCreatedCopies(done, inFlight, inFlightDestinationIsOurs)
+                        ? RemoveCreatedCopies(done, inFlight, inFlightCopyProof.DestinationCreated)
                         : RestoreMovedMembers(done, inFlight, inFlightDestinationIsOurs)).ConfigureAwait(false);
                 }
 
@@ -469,9 +466,10 @@ public sealed class FileActionService
         long sourceSize = 0;
         var sourceLastWriteUtc = DateTime.MinValue;
         var permanent = false;
-        // RV-C03: true only while this Copy may have created its destination (raised inside the delegate right before the
-        // create-new copy; a TryCopyNew that found the destination taken touched nothing and resets it).
-        var copyDestinationIsOurs = false;
+        // RV-C03 / R01: proof that this Copy created its destination, raised by the copy implementation itself. Never assumed
+        // before the copy runs: a throw that happened before anything was created (source vanished while a foreign file
+        // appeared at the destination) must leave that foreign file alone.
+        var copyProof = new CopyCreationProof();
 
         try
         {
@@ -538,16 +536,10 @@ public sealed class FileActionService
                 {
                     // Create-new copy (RV-C03): a file that appeared at the destination after the preflight is never
                     // overwritten and never claimed as ours, so the failure cleanup below cannot delete it.
-                    var created = await Task.Run(() =>
-                    {
-                        copyDestinationIsOurs = true;
-                        return _fileSystem.TryCopyNew(source, destinationPath);
-                    }, cancellationToken).ConfigureAwait(false);
+                    var created = await Task.Run(() => _fileSystem.TryCopyNew(source, destinationPath, copyProof), cancellationToken)
+                        .ConfigureAwait(false);
                     if (!created)
-                    {
-                        copyDestinationIsOurs = false;
                         throw new IOException(Tr.CoreFileActionDestinationExists(destinationPath));
-                    }
                 }
                 else
                 {
@@ -651,7 +643,7 @@ public sealed class FileActionService
         {
             // RV-C03: a Copy cut short (disk full, ...) must not leave its partial file: Recovery would call the entry a
             // Conflict and a retry would refuse "destination exists".
-            if (copyDestinationIsOurs && destinationPath is not null)
+            if (copyProof.DestinationCreated && destinationPath is not null)
                 RemovePartialCopy(destinationPath, sourceSize);
 
             string? journalError = null;
