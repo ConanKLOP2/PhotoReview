@@ -53,12 +53,13 @@ public sealed class WicDirectFactoryFailureTests
     }
 
     [Fact]
-    public void ThrowIfFactoryFailed_SuccessHresultButNoFactory_DoesNotThrowBecauseNoErrorCodeExistsToMap()
+    public void ThrowIfFactoryFailed_SuccessHresultButNoFactory_ThrowsComExceptionInsteadOfLeavingANullFactory()
     {
-        // Documents the contract: only an HRESULT can be mapped to an exception; S_OK with a null factory is left to the caller.
-        var exception = Record.Exception(() => WicDirectDecoder.ThrowIfFactoryFailed(0, factoryCreated: false));
+        // D-05: the old contract ("S_OK with a null factory is left to the caller") ended in a NullReferenceException later; a typed COMException
+        // (E_FAIL) is a backend failure the WPF fallback can decode around.
+        var ex = Assert.Throws<COMException>(() => WicDirectDecoder.ThrowIfFactoryFailed(0, factoryCreated: false));
 
-        Assert.Null(exception);
+        Assert.Equal(EFail, ex.HResult);
     }
 
     [Fact]

@@ -116,7 +116,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
             var candidates = new List<(object Item, RecycleCandidate Candidate)>();
             try
             {
-                foreach (dynamic item in (IEnumerable)items!)
+                foreach (dynamic item in ComEnumeration.Enumerate(items!))
                 {
                     var kept = false;
                     try
@@ -158,7 +158,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
                 try
                 {
                     var verbNames = new List<string>();
-                    foreach (dynamic verb in (IEnumerable)verbs!)
+                    foreach (dynamic verb in ComEnumeration.Enumerate(verbs!))
                     {
                         verbItems.Add(verb);
                         verbNames.Add((string?)verb.Name ?? string.Empty);
