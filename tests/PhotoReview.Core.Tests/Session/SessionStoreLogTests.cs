@@ -50,10 +50,13 @@ public sealed class SessionStoreLogTests
     [Fact]
     public void Save_WriteFailsAndLoggerThrows_StillDoesNotThrow()
     {
-        var store = NewStore(new InMemoryFileSystem { WriteHook = _ => new IOException("disk full") },
-            new RecordingLog(new InvalidOperationException("log broken")));
+        var log = new RecordingLog(new InvalidOperationException("log broken"));
+        var store = NewStore(new InMemoryFileSystem { WriteHook = _ => new IOException("disk full") }, log);
 
-        store.Save(new SessionState { Folder = Folder });
+        var thrown = Record.Exception(() => store.Save(new SessionState { Folder = Folder }));
+
+        Assert.Null(thrown);
+        Assert.Single(log.Warnings); // the logger really was invoked and failed
     }
 
     [Fact]
