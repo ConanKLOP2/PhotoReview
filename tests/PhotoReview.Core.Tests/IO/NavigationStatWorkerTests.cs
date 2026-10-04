@@ -57,4 +57,33 @@ public sealed class NavigationStatWorkerTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task.WaitAsync(Timeout));
         Assert.False(ran);
     }
+
+    [Fact(DisplayName = "Q-R29 C: an already-cancelled token cancels the task at once, even while the worker thread is busy")]
+    public async Task RunAsync_CancelledToken_CompletesWithoutWaitingForTheBusyWorker()
+    {
+        var worker = new NavigationStatWorker();
+        using var gate = new ManualResetEventSlim(false);
+        using var started = new ManualResetEventSlim(false);
+        var busy = worker.RunAsync(() =>
+        {
+            started.Set();
+            gate.Wait(Timeout);
+            return 1;
+        });
+        Assert.True(started.Wait(Timeout));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var task = worker.RunAsync(() => 2, cts.Token);
+
+        try
+        {
+            Assert.True(task.IsCanceled); // not queued behind the busy item
+        }
+        finally
+        {
+            gate.Set();
+        }
+        Assert.Equal(1, await busy.WaitAsync(Timeout));
+    }
 }
