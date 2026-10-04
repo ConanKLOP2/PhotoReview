@@ -39,6 +39,23 @@ public sealed class WindowsRecycleBinRestoreGuardTests
         Assert.Equal(stamp, seen.Value.Stamp);
     }
 
+    [Fact(DisplayName = "R18: the restore proof compares size AND write time (a same-timestamp file of another size is not the restored photo)")]
+    public void IsExpectedFile_SameTimestampDifferentSize_IsNotTheRestoredFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "PhotoReviewRestore_" + Guid.NewGuid().ToString("N") + ".jpg");
+        File.WriteAllBytes(path, [1, 2, 3]);
+        var stamp = new DateTime(2026, 9, 25, 1, 2, 3, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path, stamp);
+        try
+        {
+            Assert.True(WindowsRecycleBin.IsExpectedFile(path, 3, stamp));
+            Assert.False(WindowsRecycleBin.IsExpectedFile(path, 4, stamp));
+            Assert.False(WindowsRecycleBin.IsExpectedFile(path, 3, stamp.AddSeconds(1)));
+            Assert.False(WindowsRecycleBin.IsExpectedFile(path + ".missing", 3, stamp));
+        }
+        finally { File.Delete(path); }
+    }
+
     private sealed class NoSettings : IRecycleBinSettingsSource
     {
         public RecycleBinPolicy ReadPolicy() => throw new InvalidOperationException("not used by TryRestore");

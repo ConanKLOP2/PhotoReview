@@ -32,6 +32,7 @@ public sealed class UndoServiceTests
         public bool TryRestoreResult { get; set; } = true;
         public string? LastRestoredPath { get; private set; }
         public Action? OnTryRestore { get; set; }
+        public InMemoryFileSystem? Files { get; set; }
 
         public void SendToRecycleBin(string path) => RecycledPaths.Add(path);
 
@@ -39,6 +40,8 @@ public sealed class UndoServiceTests
         {
             LastRestoredPath = originalPath;
             OnTryRestore?.Invoke();
+            // R18: a successful restore puts the recycled file back (the undo no longer trusts the bin's bare "true").
+            if (TryRestoreResult) Files?.AddFile(originalPath, new string('x', checked((int)expectedSize)), expectedLastWriteUtc);
             return TryRestoreResult;
         }
     }
@@ -52,6 +55,7 @@ public sealed class UndoServiceTests
 
     public UndoServiceTests()
     {
+        _recycleBin.Files = _fs;
         _journal = new OperationJournal(new FakeAppPaths(@"C:\data\operations.jsonl"), _fs, _clock);
         _fileActionService = new FileActionService(_journal, _fs, _clock, _recycleBin);
         _service = new UndoService(_journal, _fs, _recycleBin, _fileActionService);

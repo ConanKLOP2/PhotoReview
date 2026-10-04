@@ -208,10 +208,14 @@ public sealed class RecoveryRetryService
                 {
                     if (failed.Undo == true)
                     {
-                        if (_fileSystem.FileExists(member.Source)) continue;
+                        // R15: this member was Missing at the pre-check (it is in the bin). Whatever sits at its path now is not the
+                        // recycled file (a foreign file, or a racing manual restore the next check will recognise by identity):
+                        // never count it as restored and never ask the shell to replace it. Fail closed, nothing is guessed.
+                        if (_fileSystem.FileExists(member.Source))
+                            throw new IOException(Tr.CoreUndoRecycleTargetExists(Path.GetFileName(member.Source)));
                         if (member.Permanent) throw new IOException(Tr.CoreRecoverySourceChanged);
                         if (!_recycleBin!.TryRestore(member.Source, member.Size, member.LastWriteUtc)
-                            || !_fileSystem.FileExists(member.Source))
+                            || !IsRestoredFile(member))
                             throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
                     }
                     else if (member.Permanent)
@@ -221,7 +225,7 @@ public sealed class RecoveryRetryService
                     }
                     else _recycleBin!.SendToRecycleBin(member.Source);
                     if (failed.Undo != true && _fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.SourceStillExistsAfterRecovery);
-                    if (failed.Undo == true && !_fileSystem.FileExists(member.Source))
+                    if (failed.Undo == true && !IsRestoredFile(member))
                         throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
                 }
                 else
@@ -290,6 +294,10 @@ public sealed class RecoveryRetryService
         if (!created) throw new IOException(Tr.CoreRecoveryDestinationExists);
     }
 
+    /// <summary>R15/R18: the recycled file itself is at the member's original path (journaled size and write time, the proof Undo and Recovery use), not just some file.</summary>
+    private bool IsRestoredFile(JournalGroupMember member) =>
+        _fileSystem.GetFileStat(member.Source) is { } back && back.Length == member.Size && back.LastWriteUtc == member.LastWriteUtc;
+
     private static RecoveryRetryResult AlreadyHandled() => new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);
 
     // P02: `failed` is the Recovery window's snapshot. Another process sharing the journal (InstanceMode.PerFolder) may be
@@ -305,6 +313,12 @@ public sealed class RecoveryRetryService
         try
         {
             if (!tx.TryBegin()) return AlreadyHandled();
+            // R17: the pre-checks ran before Prepared was journaled; a different file may have taken the source path since. Same
+            // identity re-proof the group retry does right before each mutation. The journaled fingerprint is the verified one
+            // (`prepared` carries the stat the pre-check read), so a replacement is never moved/copied under the old operation.
+            var sourceNow = _fileSystem.GetFileStat(failed.Source);
+            if (sourceNow is null || sourceNow.Length != prepared.Size || sourceNow.LastWriteUtc != prepared.LastWriteUtc)
+                throw new IOException(Tr.CoreRecoverySourceChanged);
             var destDir = Path.GetDirectoryName(destination);
             if (!string.IsNullOrEmpty(destDir))
             {

@@ -615,8 +615,13 @@ public sealed class OperationJournal
     {
         if (group.Type == FileOperationType.Recycle)
         {
-            var exists = _fileSystem.FileExists(member.Source);
-            return group.Undo == true ? exists : !exists;
+            if (group.Undo != true) return !_fileSystem.FileExists(member.Source);
+            // R15: an undo of a Recycle is done for a member only when the recycled file ITSELF is back (journaled size and write
+            // time, the same proof UndoService and RecoveryFileCheck use). Mere existence would let a replacement file at the
+            // original path settle the group as Committed while the real photo is still in the Recycle Bin. Fail closed: anything
+            // else leaves the group Failed for the user to review.
+            var back = _fileSystem.GetFileStat(member.Source);
+            return back is not null && back.Length == member.Size && back.LastWriteUtc == member.LastWriteUtc;
         }
 
         // An undo group is journaled already in undo direction (UndoService: Source = the original destination, Destination =
