@@ -138,7 +138,7 @@ public sealed class RawSurveyReportTests : IDisposable
     private static RawSurvey.SurveyFileResult File_(string name, string format, long size, int sensorW, int sensorH,
         int previewW, int previewH, long previewLength, bool wicOk = false, bool previewOnly = false, string? error = null) =>
         new("C:/x/" + name, name, format, size, 1, sensorW, sensorH,
-            previewW > 0 ? [new RawSurvey.EmbeddedJpeg(0, 0, previewLength, previewW, previewH, "sRGB", 1)] : [],
+            previewW > 0 ? [new RawSurvey.EmbeddedJpeg(0, 0, previewLength, previewW, previewH, "sRGB")] : [],
             wicOk, previewW, previewH, 1, null, wicOk, wicOk ? previewW : 0, wicOk ? previewH : 0, 1, wicOk ? null : "no codec", previewOnly,
             sensorW > 0 ? "container" : "unknown", error);
 
@@ -214,7 +214,7 @@ public sealed class RawSurveyReportTests : IDisposable
     {
         var dir = _root.Dir("broken");
         File.WriteAllBytes(Path.Combine(dir, "zero.cr2"), []);
-        var md = Path.Combine(dir, "out.md");
+        var md = Path.Combine(_root.Dir("broken-out"), "out.md");
 
         var exit = await RawSurvey.RunAsync(["--raw-survey", dir, "--markdown", md]);
 
@@ -277,7 +277,7 @@ public sealed class RawSurveyReportTests : IDisposable
         var exit = await RawSurvey.RunAsync([.. new[] { "--raw-survey", dir }, .. extra]);
 
         Assert.Equal(2, exit);
-        Assert.False(RawSurvey.TryParseArgs([.. new[] { "--raw-survey", dir }, .. extra], out _, out _));
+        Assert.False(RawSurvey.TryParseArgs([.. new[] { "--raw-survey", dir }, .. extra], out _, out _, out _));
     }
 
     [Theory(DisplayName = "valid --markdown / -o arguments parse to the output path")]
@@ -285,10 +285,10 @@ public sealed class RawSurveyReportTests : IDisposable
     [InlineData("-o")]
     public void TryParseArgs_ValidFlag_ReturnsPath(string flag)
     {
-        Assert.True(RawSurvey.TryParseArgs(["--raw-survey", "dir", flag, "out.md"], out var path, out var error));
+        Assert.True(RawSurvey.TryParseArgs(["--raw-survey", "dir", flag, "out.md"], out var path, out _, out var error));
         Assert.Equal("out.md", path);
         Assert.Null(error);
-        Assert.True(RawSurvey.TryParseArgs(["--raw-survey", "dir"], out var none, out _));
+        Assert.True(RawSurvey.TryParseArgs(["--raw-survey", "dir"], out var none, out _, out _));
         Assert.Null(none);
     }
 

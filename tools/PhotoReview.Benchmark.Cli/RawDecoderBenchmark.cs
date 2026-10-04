@@ -66,6 +66,7 @@ public static class RawDecoderBenchmark
         var folder = Path.GetFullPath(args[2]);
         var outDir = Path.GetFullPath(args[3]);
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException($"RAW directory not found: {folder}");
+        ToolPathGuard.EnsureOutputDirectory(outDir, folder);
         var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
             .Where(RawFileTypes.IsRawExtension)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();

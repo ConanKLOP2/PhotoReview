@@ -67,4 +67,49 @@ internal static class BenchmarkCliArguments
         int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value > 0
             ? value
             : throw new ArgumentException($"Invalid {name} '{text}' (expected a positive whole number)");
+
+    /// <summary>Parses a whole number in [<paramref name="min"/>, <paramref name="max"/>] using the invariant culture, digits only.</summary>
+    public static int ParseIntInRange(string text, string name, int min, int max) =>
+        int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value >= min && value <= max
+            ? value
+            : throw new ArgumentException($"{name} must be a whole number {min}..{max} (got '{text}')");
+
+    /// <summary>Parses a finite number greater than zero using the invariant culture; "Infinity" and "NaN" are rejected.</summary>
+    public static double ParsePositiveFiniteDouble(string text, string name) =>
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) && value > 0
+            ? value
+            : throw new ArgumentException($"{name} must be a finite number > 0 (got '{text}')");
+
+    /// <summary>Parses an enum name (case-insensitive) and rejects numbers that name no member (<c>99</c>) as well as unknown names.</summary>
+    public static TEnum ParseDefinedEnum<TEnum>(string text, string name) where TEnum : struct, Enum =>
+        Enum.TryParse<TEnum>(text, true, out var value) && Enum.IsDefined(value)
+            ? value
+            : throw new ArgumentException($"invalid {name} '{text}' ({string.Join('|', Enum.GetNames<TEnum>())})");
+
+    /// <summary>Failures every CLI mode reports as "message + exit code 2" instead of an unhandled-exception stack trace.</summary>
+    public static bool IsExpectedToolFailure(Exception ex) =>
+        ex is ArgumentException or IOException or InvalidOperationException or NotSupportedException or UnauthorizedAccessException
+            or FormatException or InvalidDataException;
+
+    /// <summary>
+    /// <c>--benchmark &lt;folder&gt; [profiles]</c> takes at most one more argument; the batch modes take an optional output folder.
+    /// A surplus token (<c>--benchmark-all folder out extra</c>) used to be ignored silently.
+    /// </summary>
+    public static void RejectSurplusBenchmarkArguments(IReadOnlyList<string> args)
+    {
+        if (args.Count > 3) throw new ArgumentException($"Unexpected argument for {args[0]}: {args[3]}");
+    }
+
+    /// <summary>
+    /// Where the <c>--benchmark*</c> modes write their reports: the override, or a timestamped folder under the temp directory.
+    /// An override that equals, contains or sits inside the photo folder is refused (T-B-03).
+    /// </summary>
+    public static string ResolveReportDirectory(string photoFolder, string? outputOverride)
+    {
+        var reportDirectory = outputOverride is { Length: > 0 }
+            ? Path.GetFullPath(outputOverride)
+            : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
+        ToolPathGuard.EnsureOutputDirectory(reportDirectory, photoFolder);
+        return reportDirectory;
+    }
 }

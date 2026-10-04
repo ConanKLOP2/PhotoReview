@@ -13,7 +13,7 @@ using System.Globalization;
 static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkProfile> profiles, string? outputOverride)
 {
     if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
-    var reportDirectory = outputOverride is { Length: > 0 } ? Path.GetFullPath(outputOverride) : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
+    var reportDirectory = BenchmarkCliArguments.ResolveReportDirectory(folder, outputOverride);
     Directory.CreateDirectory(reportDirectory);
     var supported = ImageFileTypes.SupportedExtensions;
     var allFiles = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
@@ -84,7 +84,11 @@ if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all
 {
     var benchmarkFolder = args[1];
     IReadOnlyList<BenchmarkProfile> requested;
-    try { requested = BenchmarkCliArguments.ResolveProfiles(args[0], args); }
+    try
+    {
+        BenchmarkCliArguments.RejectSurplusBenchmarkArguments(args);
+        requested = BenchmarkCliArguments.ResolveProfiles(args[0], args);
+    }
     catch (ArgumentException ex)
     {
         Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
@@ -93,7 +97,7 @@ if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all
     }
     var output = BenchmarkCliArguments.ResolveOutput(args[0], args);
     try { await RunCliBenchmarksAsync(benchmarkFolder, requested, output); }
-    catch (Exception ex) when (ex is DirectoryNotFoundException or InvalidOperationException)
+    catch (Exception ex) when (BenchmarkCliArguments.IsExpectedToolFailure(ex))
     {
         Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
         Environment.ExitCode = 2;
@@ -102,7 +106,12 @@ if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all
 }
 if (args.Length is 2 or 4 && args[0] == "--ui-next-probe" && (args.Length == 2 || args[2] == "--cache-dir"))
 {
-    await LocalUiNextProbe.RunAsync(args[1], args.Length == 4 ? args[3] : null);
+    try { await LocalUiNextProbe.RunAsync(args[1], args.Length == 4 ? args[3] : null); }
+    catch (Exception ex) when (BenchmarkCliArguments.IsExpectedToolFailure(ex))
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+    }
     return;
 }
 
@@ -122,7 +131,12 @@ if ((args.Length == 2 || args.Length == 3) && args[0] == "--preload-bench")
         Environment.ExitCode = 2;
         return;
     }
-    await LocalImageBenchmark.RunAsync(args[1], workers);
+    try { await LocalImageBenchmark.RunAsync(args[1], workers); }
+    catch (Exception ex) when (BenchmarkCliArguments.IsExpectedToolFailure(ex))
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+    }
     return;
 }
 
@@ -161,8 +175,8 @@ if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
         Environment.ExitCode = 2;
         return;
     }
-    try { await IoDecodeSplit.RunAsync(args[1], args[2], ioWidths, ioMax); }
-    catch (Exception ex) when (ex is DirectoryNotFoundException or InvalidOperationException)
+    try { Environment.ExitCode = await IoDecodeSplit.RunAsync(args[1], args[2], ioWidths, ioMax); }
+    catch (Exception ex) when (BenchmarkCliArguments.IsExpectedToolFailure(ex))
     {
         Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
         Environment.ExitCode = 2;
@@ -173,7 +187,7 @@ if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
 if (args.Length >= 2 && args[0] == "--decoder-bench" && args[1] == "--raw")
 {
     try { Environment.ExitCode = await RawDecoderBenchmark.RunAsync(args); }
-    catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or InvalidOperationException or IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException or FormatException)
+    catch (Exception ex) when (BenchmarkCliArguments.IsExpectedToolFailure(ex))
     {
         Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
         Environment.ExitCode = 2;
@@ -184,7 +198,7 @@ if (args.Length >= 2 && args[0] == "--decoder-bench" && args[1] == "--raw")
 if (args.Length is >= 3 and <= 6 && args[0] == "--decoder-bench")
 {
     try { Environment.ExitCode = await DecoderBenchmark.RunAsync(args); }
-    catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or InvalidOperationException)
+    catch (Exception ex) when (BenchmarkCliArguments.IsExpectedToolFailure(ex))
     {
         Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
         Environment.ExitCode = 2;
@@ -194,6 +208,12 @@ if (args.Length is >= 3 and <= 6 && args[0] == "--decoder-bench")
 
 if (args.Length == 2 && args[0] == "--explorer-probe")
 {
+    if (!Directory.Exists(args[1]))
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: Directory not found: {args[1]}");
+        Environment.ExitCode = 2;
+        return;
+    }
     var probe = await new ExplorerOrderService().TryGetSnapshotAsync(args[1], TimeSpan.FromSeconds(5), CancellationToken.None);
     Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(probe, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     var scanned = Directory.EnumerateFiles(args[1]).Where(ImageFileTypes.IsSupported).ToArray();

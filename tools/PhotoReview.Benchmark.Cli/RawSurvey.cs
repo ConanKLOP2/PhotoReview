@@ -22,8 +22,7 @@ internal static class RawSurvey
         long Length,
         int Width,
         int Height,
-        string ColorSpaceHint,
-        int Orientation);
+        string ColorSpaceHint);
 
     public sealed record SurveyFileResult(
         string Path,
@@ -53,19 +52,33 @@ internal static class RawSurvey
         string WicRawCodecInfo,
         IReadOnlyList<SurveyFileResult> Files);
 
-    internal const string Usage = "Usage: PhotoReview.Benchmark.Cli --raw-survey <directory> [--markdown <output.md>]";
+    internal const string Usage = "Usage: PhotoReview.Benchmark.Cli --raw-survey <directory> [--markdown <output.md> [--force]]";
 
     /// <summary>
-    /// Validates <c>--raw-survey &lt;dir&gt; [--markdown|-o &lt;file&gt;]</c> (args[0] is the mode). A valueless <c>--markdown</c>, a repeated one or
+    /// Validates <c>--raw-survey &lt;dir&gt; [--markdown|-o &lt;file&gt; [--force]]</c> (args[0] is the mode). A valueless <c>--markdown</c>, a repeated one or
     /// any other token is an error: silently ignoring it would exit 0 without the report the caller asked for.
+    /// <c>--force</c> allows replacing an existing report file (see <see cref="ValidateMarkdownPath"/>).
     /// </summary>
-    internal static bool TryParseArgs(IReadOnlyList<string> args, out string? markdownPath, out string? error)
+    internal static bool TryParseArgs(IReadOnlyList<string> args, out string? markdownPath, out bool force, out string? error)
     {
         markdownPath = null;
+        force = false;
         error = null;
         if (args.Count < 2 || string.IsNullOrWhiteSpace(args[1])) return false;
         for (var i = 2; i < args.Count; i++)
         {
+            if (args[i] == "--force")
+            {
+                if (force)
+                {
+                    error = "--force was given more than once";
+                    return false;
+                }
+
+                force = true;
+                continue;
+            }
+
             if (args[i] is not ("--markdown" or "-o"))
             {
                 error = $"Unexpected argument for --raw-survey: {args[i]}";
@@ -87,7 +100,29 @@ internal static class RawSurvey
             markdownPath = args[++i];
         }
 
+        if (force && markdownPath is null)
+        {
+            error = "--force only applies together with --markdown";
+            return false;
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// The report path must be a <c>.md</c> file outside the surveyed folder, and an existing file is only replaced with
+    /// <c>--force</c>: <c>--markdown D:\RAW\IMG_0001.CR2</c> must never overwrite a RAW (T-B-04). Returns the problem, or null.
+    /// </summary>
+    internal static string? ValidateMarkdownPath(string markdownPath, string surveyDir, bool force)
+    {
+        if (!string.Equals(Path.GetExtension(markdownPath), ".md", StringComparison.OrdinalIgnoreCase))
+            return $"--markdown must name a .md file (got '{markdownPath}')";
+        if (Directory.Exists(markdownPath)) return $"--markdown '{markdownPath}' is a directory";
+        if (ToolPathGuard.IsSameOrUnder(Path.GetDirectoryName(Path.GetFullPath(markdownPath)) ?? markdownPath, surveyDir))
+            return $"--markdown '{markdownPath}' must not be inside the surveyed folder '{surveyDir}'";
+        if (File.Exists(markdownPath) && !force)
+            return $"--markdown '{markdownPath}' already exists; pass --force to replace it";
+        return null;
     }
 
     /// <summary>Only RAW containers are surveyed: a .jpg/.jpeg in the folder is neither a RAW nor a RAW-container error source.</summary>
@@ -95,7 +130,7 @@ internal static class RawSurvey
 
     public static async Task<int> RunAsync(string[] args, Func<string, long>? readLength = null)
     {
-        if (!TryParseArgs(args, out var markdownPath, out var argError))
+        if (!TryParseArgs(args, out var markdownPath, out var force, out var argError))
         {
             if (argError is not null) Console.Error.WriteLine(argError);
             Console.Error.WriteLine(Usage);
@@ -106,6 +141,12 @@ internal static class RawSurvey
         if (!Directory.Exists(dir))
         {
             Console.Error.WriteLine($"Directory not found: {dir}");
+            return 2;
+        }
+
+        if (markdownPath is not null && ValidateMarkdownPath(markdownPath, dir, force) is { } markdownProblem)
+        {
+            Console.Error.WriteLine(markdownProblem);
             return 2;
         }
 
@@ -353,7 +394,7 @@ internal static class RawSurvey
 
     /// <summary>
     /// Scans a file for all embedded JPEG streams by locating SOI markers (FF D8) followed by valid JPEG segments,
-    /// parsing SOF0/1/2 dimensions, APP1 EXIF color space / orientation, and locating EOI (FF D9).
+    /// parsing SOF0/1/2 dimensions, APP1 EXIF color-space hint, and locating EOI (FF D9).
     /// </summary>
     public static IReadOnlyList<EmbeddedJpeg> ScanEmbeddedJpegs(string filePath)
     {
@@ -429,11 +470,9 @@ internal static class RawSurvey
         int width = 0;
         int height = 0;
         string colorSpace = "sRGB";
-        int orientation = 1;
         long endOffset = -1;
 
         // Bounded marker walk
-        var reader = new BinaryReader(stream, Encoding.Default, leaveOpen: true);
         try
         {
             while (stream.Position < maxLen)
@@ -516,10 +555,11 @@ internal static class RawSurvey
             // stream read error or truncated
         }
 
-        if (width > 0 && height > 0)
+        // A candidate without an EOI is truncated or not a JPEG: accepting it would report a "valid" preview running to
+        // the end of the file and hide every later preview of that file (T-B-10).
+        if (width > 0 && height > 0 && endOffset > startOffset)
         {
-            long length = (endOffset > startOffset) ? (endOffset - startOffset) : (stream.Position - startOffset);
-            jpeg = new EmbeddedJpeg(0, startOffset, length, width, height, colorSpace, orientation);
+            jpeg = new EmbeddedJpeg(0, startOffset, endOffset - startOffset, width, height, colorSpace);
             return true;
         }
 
@@ -549,7 +589,7 @@ internal static class RawSurvey
             }
         }
 
-        return stream.Position;
+        return -1; // no EOI before the end of the stream: the caller rejects the candidate
     }
 
     private static string ProbeWicRawCodecInfo()

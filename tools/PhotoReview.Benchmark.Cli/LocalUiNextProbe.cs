@@ -1,3 +1,4 @@
+using PhotoReview.Benchmark.Cli;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -19,6 +20,14 @@ internal static class LocalUiNextProbe
     /// </summary>
     public static async Task RunAsync(string folder, string? cacheDir = null)
     {
+        if (cacheDir is not null)
+        {
+            // Validate before anything is created: the cache folders are pruned (T-B-05).
+            cacheDir = Path.GetFullPath(cacheDir);
+            ToolPathGuard.EnsureCacheDirectory(cacheDir, (Path.GetFullPath(folder), "source folder"), (ToolPathGuard.AppDataFolder(), "real app data folder"));
+            ToolPathGuard.ClaimCacheDirectory(cacheDir);
+        }
+
         var tempRoot = Path.Combine(Path.GetTempPath(), "PhotoReview-UiNextProbe-" + Guid.NewGuid().ToString("N"));
         var dataRoot = Path.Combine(tempRoot, "data");
         var cacheRoot = cacheDir is null ? Path.Combine(tempRoot, "cache") : Path.GetFullPath(cacheDir);
