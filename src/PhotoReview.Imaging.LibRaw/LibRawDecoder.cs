@@ -54,9 +54,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         var header = Marshal.PtrToStructure<ProcessedImageHeader>(thumbnail.DangerousGetHandle());
         // LibRaw's memory wrapper leaves width/height as zero for JPEG thumbnails; validate the encoded
         // payload and let the existing JPEG decoder verify dimensions and structure.
-        if (header.Type != LibRawNativeMethods.ImageJpeg || header.DataSize < 4 || header.DataSize > MaxThumbnailBytes)
-            throw new InvalidDataException($"LibRaw returned an unsupported or oversized thumbnail (type={header.Type}, " +
-                $"width={header.Width}, height={header.Height}, bytes={header.DataSize}).");
+        ValidateThumbnailHeader(header);
 
         var bytes = new byte[checked((int)header.DataSize)];
         Marshal.Copy(IntPtr.Add(thumbnail.DangerousGetHandle(), ProcessedImageHeader.DataOffset), bytes, 0, bytes.Length);
@@ -64,6 +62,14 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 
         cancellationToken.ThrowIfCancellationRequested();
         return jpeg;
+    }
+
+    /// <summary>Rejects a processed-image header that is not a JPEG of 4 to <see cref="MaxThumbnailBytes"/> bytes.</summary>
+    internal static void ValidateThumbnailHeader(in ProcessedImageHeader header)
+    {
+        if (header.Type != LibRawNativeMethods.ImageJpeg || header.DataSize < 4 || header.DataSize > MaxThumbnailBytes)
+            throw new InvalidDataException($"LibRaw returned an unsupported or oversized thumbnail (type={header.Type}, " +
+                $"width={header.Width}, height={header.Height}, bytes={header.DataSize}).");
     }
 
     /// <summary>
@@ -156,9 +162,24 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         // Pinned by ReadInfo_PortraitRewrittenCorpusFile_MatchesDecodedOrientedDimensions.
         var width = LibRawNativeMethods.LibRawGetIWidth(handle);
         var height = LibRawNativeMethods.LibRawGetIHeight(handle);
-        if (width <= 0 || height <= 0) throw new InvalidDataException("LibRaw returned invalid image dimensions.");
+        ValidateImageDimensions(width, height);
         return new ImageInfo(width, height, 1);
     }
+
+    /// <summary>Rejects a non-positive width or height reported by LibRaw.</summary>
+    internal static void ValidateImageDimensions(int width, int height)
+    {
+        if (width <= 0 || height <= 0) throw new InvalidDataException("LibRaw returned invalid image dimensions.");
+    }
+
+    /// <summary>True for an 8-bit bitmap with a non-empty size and a supported channel count; anything else is not decodable.</summary>
+    internal static bool IsSupportedBitmap(in ProcessedImageHeader header) =>
+        header.Type == LibRawNativeMethods.ImageBitmap && header.Width != 0 && header.Height != 0
+        && RgbBgraResampler.IsSupportedChannelCount(header.Colors) && header.Bits == 8;
+
+    /// <summary>True when the decoded size is smaller than the source on either axis.</summary>
+    internal static bool IsDownscaled(int targetWidth, int targetHeight, int sourceWidth, int sourceHeight) =>
+        targetWidth < sourceWidth || targetHeight < sourceHeight;
 
     public IDecodedImage Decode(DecodeRequest request) => Decode(request, CancellationToken.None);
 
@@ -229,7 +250,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 
         using (image)
         {
-            if (header.Type != LibRawNativeMethods.ImageBitmap || header.Width == 0 || header.Height == 0 || !RgbBgraResampler.IsSupportedChannelCount(header.Colors) || header.Bits != 8)
+            if (!IsSupportedBitmap(header))
                 throw new InvalidDataException("LibRaw returned an unsupported processed image format.");
 
             var rgbLength = RgbBgraResampler.ValidateSourceLength(header.Width, header.Height, header.DataSize, header.Colors);
@@ -242,7 +263,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
             var bitmap = RgbBgraResampler.ToBitmap(pixels, () => _stageObserver?.Invoke(image.IsClosed ? "source-released" : "source-held"));
             _stageObserver?.Invoke("bitmap-created");
 
-            var downscaled = targetWidth < header.Width || targetHeight < header.Height;
+            var downscaled = IsDownscaled(targetWidth, targetHeight, header.Width, header.Height);
             return new WpfDecodedImage(bitmap, downscaled, actualBackend: DecoderBackend.LibRaw,
                 originalWidth: header.Width, originalHeight: header.Height);
         }
@@ -342,10 +363,14 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     /// Opens <paramref name="path"/> with libraw_open_wfile. That call fails with LIBRAW_IO_ERROR for paths beyond MAX_PATH even though the
     /// .NET readers succeed, so a long path is retried once in its extended-length form; when that fails too the ORIGINAL error is reported.
     /// </summary>
-    private static void OpenFile(SafeLibRawHandle handle, string path, CancellationToken cancellationToken)
+    private static void OpenFile(SafeLibRawHandle handle, string path, CancellationToken cancellationToken) =>
+        OpenFile(p => LibRawNativeMethods.LibRawOpenWFile(handle, p), path, cancellationToken);
+
+    /// <summary>The open-with-long-path-retry logic over an injectable <paramref name="open"/> call (LibRaw error code in, 0 = success).</summary>
+    internal static void OpenFile(Func<string, int> open, string path, CancellationToken cancellationToken)
     {
-        var code = LibRawNativeMethods.LibRawOpenWFile(handle, path);
-        if (code == LibRawIoError && ToExtendedLengthPath(path) is { } extended && LibRawNativeMethods.LibRawOpenWFile(handle, extended) == 0) return;
+        var code = open(path);
+        if (code == LibRawIoError && ToExtendedLengthPath(path) is { } extended && open(extended) == 0) return;
         CheckResult(code, "open RAW file", cancellationToken);
     }
 
@@ -370,7 +395,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         return full.StartsWith(@"\\", StringComparison.Ordinal) ? @"\\?\UNC\" + full[2..] : @"\\?\" + full;
     }
 
-    private static int CheckCancellation(IntPtr data, int stage, int iteration, int expected)
+    internal static int CheckCancellation(IntPtr data, int stage, int iteration, int expected)
     {
         try
         {
@@ -382,7 +407,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         }
     }
 
-    private static void CheckResult(int errorCode, string operation, CancellationToken cancellationToken = default)
+    internal static void CheckResult(int errorCode, string operation, CancellationToken cancellationToken = default)
     {
         if (errorCode != 0)
         {
@@ -407,7 +432,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         new($"LibRaw could not {operation}: {LibRawNativeMethods.FormatError(errorCode)}");
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct ProcessedImageHeader
+    internal struct ProcessedImageHeader
     {
         internal int Type;
         internal ushort Height;
@@ -418,7 +443,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         internal const int DataOffset = 16;
     }
 
-    private sealed class CancellationState : IDisposable
+    internal sealed class CancellationState : IDisposable
     {
         private readonly GCHandle _handle;
 

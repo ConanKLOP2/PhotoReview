@@ -14,17 +14,20 @@ public static class LibRawAvailability
     /// <summary>The exact patch release whose libraw_data_t layout the raw struct write was derived from and verified against (0.22.2).</summary>
     internal const int RequiredPatch = 2;
 
-    private static readonly Lazy<bool> ExactVersionResult = new(() =>
+    private static readonly Lazy<bool> ExactVersionResult = new(() => ComputeExactVersion(() => Probe(out _), LibRawNativeMethods.GetVersionString));
+
+    /// <summary>The exact-version decision over injectable probe/version calls: false when the probe fails or any call throws (a Lazy must not cache a throwing exception); memory exhaustion propagates.</summary>
+    internal static bool ComputeExactVersion(Func<bool> probe, Func<string?> version)
     {
         try
         {
-            return Probe(out _) && CheckExactVersion(LibRawNativeMethods.GetVersionString());
+            return probe() && CheckExactVersion(version());
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return false; // do not let the Lazy cache a throwing exception
         }
-    });
+    }
 
     /// <summary>True when the loaded runtime is exactly the pinned 0.22.2 (the only version the raw struct write is allowed on).</summary>
     internal static bool IsExactPinnedVersion => ExactVersionResult.Value;
@@ -51,12 +54,14 @@ public static class LibRawAvailability
         return result.Available;
     }
 
-    private static (bool, string?) RunProbe()
+    private static (bool, string?) RunProbe() => GuardProbe(RunProbeCore);
+
+    /// <summary>Runs <paramref name="core"/>; a Lazy caches a thrown exception for the process lifetime, so any failure (not memory exhaustion) becomes a reason.</summary>
+    internal static (bool, string?) GuardProbe(Func<(bool, string?)> core)
     {
-        // Lazy caches a thrown exception for the process lifetime: turn any probe failure (not memory exhaustion) into a reason.
         try
         {
-            return RunProbeCore();
+            return core();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
