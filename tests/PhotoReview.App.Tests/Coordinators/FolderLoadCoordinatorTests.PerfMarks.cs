@@ -125,4 +125,31 @@ public sealed partial class FolderLoadCoordinatorTests
         await Wait.UntilAsync(() => listener.Infos.Any(i => i.Phase == "explorerSnapshot"), "explorer failure trace");
         Assert.Contains(listener.Infos, i => i.Phase == "explorerSnapshot" && i.Detail == nameof(InvalidOperationException));
     }
+
+    [Fact]
+    public async Task PerfMarks_EarlySnapshotThatIsUnavailable_IsMarkedFallback()
+    {
+        TwoImages(out _, out _);
+        _explorerOrder.SnapshotHook = folder => Task.FromResult(MakeSnapshot(folder, [], ExplorerOrderStatus.NativeViewUnavailable));
+        using var listener = new PerfListener();
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(@"C:\photos");
+
+        Assert.Contains("explorerFallback", listener.Phases);
+        Assert.DoesNotContain("explorerApplied", listener.Phases);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WithRawSupportOff_TheListingNeverAcceptsSidecarFiles()
+    {
+        TwoImages(out _, out _);
+        _fs.WriteAllTextAtomic(@"C:\photos.xmp", "sidecar");
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(@"C:\photos");
+
+        Assert.Equal(2, _fs.ScannedEntries); // the two images only: an .xmp is a RAW sidecar and is listed only with RAW support
+        Assert.Equal(2, _catalog.Count);
+    }
 }
