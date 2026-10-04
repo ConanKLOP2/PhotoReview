@@ -54,29 +54,31 @@ public sealed class CaptureGroupActionRollbackTests
     }
 
     [Fact]
-    public async Task ExecuteGroupAsync_CrossVolumeMoveLeavesPartialDestination_PartialIsRemovedAndCaptureIsRetryable()
+    public async Task ExecuteGroupAsync_MoveFailsWithShorterFileAtDestination_FileIsNeverDeletedAndStaysForRecovery()
     {
         var (fs, journal) = CreateWorld();
-        // Cross-volume Move = copy + delete: the copy of the second member is cut short and the move fails, source intact.
+        // D-06: a Move failure other than "destination exists" cannot tell our own partial cross-volume copy from a foreign file that
+        // appeared after the preflight stat (File.Move gives no creation proof, unlike TryCopyNew). A strictly shorter file at the
+        // destination is therefore indistinguishable and must never be deleted.
         fs.MoveHook = (source, destination) =>
         {
             if (source != Raw) return null;
-            fs.AddFile(destination, "raw", Stamp); // 3 of 8 bytes
+            fs.AddFile(destination, "raw", Stamp); // 3 of 8 bytes: foreign, or a partial copy: not provable either way
             return new IOException("simulated cross-volume failure");
         };
 
         var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
 
         Assert.False(result.Succeeded);
-        Assert.False(fs.FileExists(MovedRaw));  // our partial copy is gone
-        Assert.False(fs.FileExists(MovedJpeg)); // first member rolled back
+        Assert.True(fs.FileExists(MovedRaw));          // never ours to delete without proof
+        Assert.Equal(3, fs.GetFileStat(MovedRaw)!.Length);
+        Assert.False(fs.FileExists(MovedJpeg));        // the member that was fully moved is still rolled back
         Assert.True(fs.FileExists(Raw));
         Assert.True(fs.FileExists(Jpeg));
-        AssertFullyRolledBackAndNotRetryable(journal, result);
-
-        fs.MoveHook = null; // the user retries: no "destination exists" conflict is left behind
-        var retry = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
-        Assert.True(retry.Succeeded);
+        var failed = Assert.Single(journal.ReadFailedOperations()); // not "rolled back": Recovery shows the leftover destination
+        Assert.Equal(JournalState.Failed, failed.State);
+        var rawMember = Assert.Single(result.Members, member => member.Member.Source == Raw);
+        Assert.True(rawMember.Conflict);
     }
 
     [Fact]

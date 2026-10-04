@@ -46,6 +46,7 @@ public static class DuplicateFinder
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path =>
             {
+                cancellationToken.ThrowIfCancellationRequested(); // W2-FA-10: Task.Run's token only cancels before the delegate starts
                 try
                 {
                     var size = fileSystem is not null

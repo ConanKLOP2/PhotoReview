@@ -867,5 +867,8 @@
   "settings.load.shortcutDisabled": "Phím tắt của {name} bị trùng với thao tác khác nên đã bị tắt. Bạn có thể gán lại trong Cài đặt > Phím tắt.",
   "core.recovery.busy": "Một thao tác tệp vẫn đang chạy. Hãy đợi thao tác đó xong rồi thử lại.",
   "recovery.readFailed": "Không đọc được danh sách Phục hồi từ nhật ký thao tác: {reason}",
-  "status.lateBatchRecycled": "Dọn ảnh trùng đã xong sau khi bạn rời thư mục này: {done} tệp đã vào Thùng rác, {failed} tệp lỗi. Không thể hoàn tác đợt dọn này bằng Ctrl+Z; hãy mở Thùng rác để khôi phục tệp."
+  "status.lateBatchRecycled": "Dọn ảnh trùng đã xong sau khi bạn rời thư mục này: {done} tệp đã vào Thùng rác, {failed} tệp lỗi. Không thể hoàn tác đợt dọn này bằng Ctrl+Z; hãy mở Thùng rác để khôi phục tệp.",
+  "core.recovery.conflict": "Tệp tồn tại ở cả nguồn lẫn đích; từ chối thử lại để không ghi đè. Hãy tự xử lý bản trùng.",
+  "core.recovery.destinationChanged": "Tệp ở đích không còn là tệp đã được di chuyển; từ chối thử lại để bảo vệ dữ liệu.",
+  "core.fileAction.groupNeedsTwoPaths": "Thao tác theo nhóm cần ít nhất hai tệp."
 }

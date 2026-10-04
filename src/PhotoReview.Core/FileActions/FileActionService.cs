@@ -80,11 +80,10 @@ public sealed class FileActionService
         // Ownership of the in-flight Copy destination: only the proof the copy implementation raised when it created the file
         // counts (R01). It is never assumed before the copy runs, nor inferred from a throw, a length or the preflight.
         var inFlightCopyProof = new CopyCreationProof();
-        var inFlightDestinationIsOurs = false;
         try
         {
             if (request.Group.Paths.Count < 2)
-                throw new ArgumentException("A grouped file action requires at least two paths.", nameof(request));
+                throw new IOException(Tr.CoreFileActionGroupNeedsTwoPaths);
             if (request.Operation is not (FileOperationType.Move or FileOperationType.Copy or FileOperationType.Recycle))
                 throw new NotSupportedException(Tr.CoreFileActionUnsupportedOperation(request.Operation));
 
@@ -176,7 +175,6 @@ public sealed class FileActionService
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 inFlight = member;
-                inFlightDestinationIsOurs = false;
                 inFlightCopyProof = new CopyCreationProof();
                 if (request.Operation == FileOperationType.Copy)
                 {
@@ -192,23 +190,13 @@ public sealed class FileActionService
                 }
                 else if (request.Operation == FileOperationType.Move)
                 {
-                    // A cross-volume Move is copy + delete: a failure in between can leave a partial destination. It is only ours
-                    // to clean when nothing was at the destination right before this member's Move started.
-                    inFlightDestinationIsOurs = _fileSystem.GetFileStat(member.Destination!) is null;
-                    try
-                    {
-                        if (_moveOverride is not null)
-                            await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
-                        else
-                            await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
-                    }
-                    catch (Exception moveEx) when (FileSystemErrors.IsDestinationExists(moveEx))
-                    {
-                        // "Destination exists" is raised before the move touches anything: the file there appeared after our
-                        // pre-check (someone else's) and is never ours to delete, whatever its size.
-                        inFlightDestinationIsOurs = false;
-                        throw;
-                    }
+                    // A cross-volume Move is copy + delete and can leave a partial destination, but File.Move gives no proof that THIS
+                    // call created it (D-06): a stat before the Move or a shorter length cannot tell it from a foreign file that
+                    // appeared meanwhile. So a failed in-flight Move never deletes its destination; Recovery judges the leftover.
+                    if (_moveOverride is not null)
+                        await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
+                    else
+                        await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
                     VerifyGroupMove(member);
                 }
                 else if (member.Permanent)
@@ -243,7 +231,7 @@ public sealed class FileActionService
                 {
                     stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
                         ? RemoveCreatedCopies(done, inFlight, inFlightCopyProof.DestinationCreated)
-                        : RestoreMovedMembers(done, inFlight, inFlightDestinationIsOurs)).ConfigureAwait(false);
+                        : RestoreMovedMembers(done, inFlight)).ConfigureAwait(false);
                 }
 
                 var states = manifest.Select(member => InspectGroupMember(request.Operation, member, ex.Message)).ToArray();
@@ -340,12 +328,11 @@ public sealed class FileActionService
     /// destination is still the file that was moved (same size and last-write time). Anything else (a new file at the
     /// source, an edited or vanished destination) is left alone. A plain file-system move is used, not the forward Move
     /// override. The member being moved when the failure hit (a cross-volume Move is copy + delete) may have left a partial
-    /// copy at its destination while its source is still there: that partial is deleted, but only when nothing was at the
-    /// destination before this Move started, the source is still exactly the manifest file, and the destination cannot be a
-    /// complete file (it is strictly shorter than the source: a full-size destination is left for Recovery to judge, as a
-    /// finished copy whose source could not be removed is a retryable failure); otherwise it is left alone. Returns how many already-moved members (or undeletable partials) could not be put back.
+    /// copy at its destination while its source is still there: it is never deleted (D-06), because File.Move gives no proof
+    /// that this operation created it, so it cannot be told from a foreign file; Recovery judges the leftover. Returns how many
+    /// already-moved members could not be put back.
     /// </summary>
-    private int RestoreMovedMembers(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight, bool inFlightDestinationIsOurs)
+    private int RestoreMovedMembers(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight)
     {
         var stuck = 0;
         var candidates = new List<(JournalGroupMember Member, bool WasDone)>();
@@ -359,15 +346,6 @@ public sealed class FileActionService
                 var source = _fileSystem.GetFileStat(member.Source);
                 var destination = _fileSystem.GetFileStat(member.Destination!);
                 if (source is not null && destination is null) continue; // already back
-                if (!wasDone && inFlightDestinationIsOurs && source is not null && destination is not null
-                    && source.Length == member.Size && source.LastWriteUtc == member.LastWriteUtc
-                    && destination.Length < member.Size)
-                {
-                    _fileSystem.Delete(member.Destination!);
-                    if (_fileSystem.FileExists(member.Destination!)) stuck++;
-                    continue;
-                }
-
                 if (source is not null || destination is null)
                 {
                     // Both present (a conflict) or neither (lost): only a finished member counts as "could not be put back".

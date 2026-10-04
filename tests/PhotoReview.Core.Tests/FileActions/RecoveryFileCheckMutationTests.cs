@@ -56,6 +56,18 @@ public sealed class RecoveryFileCheckMutationTests
         var result = Check(UndoRecycleGroup(Member(Jpg), Member(Raw)));
 
         Assert.All(result.GroupMembers!, member => Assert.Equal(RecoveryVerdict.AlreadyDone, member.Verdict));
+        // W2-FA-02: every file is back on disk, so the undo is done: not "probably in the Recycle Bin, cannot verify".
+        Assert.Equal(RecoveryVerdict.AlreadyDone, result.Verdict);
+    }
+
+    [Fact]
+    public void Check_NonUndoRecycleGroupAllMembersMissing_StaysRecycleUnverifiable()
+    {
+        var entry = UndoRecycleGroup(Member(Jpg), Member(Raw)) with { Undo = null, State = JournalState.Committed };
+
+        var result = Check(entry);
+
+        Assert.Equal(RecoveryVerdict.RecycleUnverifiable, result.Verdict);
     }
 
     private static JournalEntry MoveUndoGroup(params JournalGroupMember[] members) => new(

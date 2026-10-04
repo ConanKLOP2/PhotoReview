@@ -123,7 +123,15 @@ public sealed class RecoveryRetryService
 
         var check = new RecoveryFileCheck(_fileSystem).Check(failed);
         if (check.Verdict != RecoveryVerdict.CanRetry || check.GroupMembers is null)
-            return new(false, Tr.CoreRecoverySourceChanged, null);
+        {
+            return check.Verdict switch
+            {
+                RecoveryVerdict.AlreadyDone => AlreadyHandled(),
+                RecoveryVerdict.Conflict => new(false, Tr.CoreRecoveryConflict, null),
+                RecoveryVerdict.DestinationChanged => new(false, Tr.CoreRecoveryDestinationChanged, null),
+                _ => new(false, Tr.CoreRecoverySourceChanged, null),
+            };
+        }
 
         // Move/Copy: members whose own verdict is CanRetry. Delete (Recycle) undo: members still missing (restore them).
         // Delete: members still on disk (NotRecycled); those already recycled or deleted permanently are left alone.

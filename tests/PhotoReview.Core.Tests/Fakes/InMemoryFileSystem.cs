@@ -51,6 +51,10 @@ public sealed class InMemoryFileSystem : IFileSystem
     public Func<string, DateTime, DateTime>? StampOnMove { get; set; }
 
     /// <summary>
+    /// NOTE (D-01, open): this fake raises <see cref="CopyCreationProof"/> at the partial write, but the real
+    /// <c>PhysicalFileSystem.TryCopyNew</c> raises it only after File.Copy returned, so a real copy that throws after creating its
+    /// destination (disk full) is NOT claimed and its partial file is left for Recovery. Tests relying on partial-copy cleanup
+    /// therefore model a behaviour the production file system does not have yet.
     /// RV-C03: when set, <see cref="Copy"/>/<see cref="TryCopyNew"/> write only the first N bytes of the source to the
     /// (new) destination and then throw an <see cref="IOException"/>, like a copy cut short by a full disk.
     /// </summary>
