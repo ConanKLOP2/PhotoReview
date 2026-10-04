@@ -302,4 +302,34 @@ public sealed class SessionWriterShutdownAndVersionTests
         // Durability contract (ADR 0007 s2): the write is only detached, not dropped; once the disk answers the state lands.
         Assert.True(SpinWait.SpinUntil(() => store.Load(@"C:\photos").CurrentPath == "last", TimeSpan.FromSeconds(20)), "the detached save never completed");
     }
+
+    [Theory(DisplayName = "F03: a zero, negative or over-long debounce is rejected by the constructor")]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-5000)]
+    [InlineData(4294967295.0)]
+    public void Constructor_InvalidDebounce_Throws(double milliseconds)
+    {
+        var store = new SessionStore(new Paths(), _fs, _metrics);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SessionWriter(store, _log, TimeSpan.FromMilliseconds(milliseconds), _timer.Delay));
+    }
+
+    [Fact(DisplayName = "F03: a timer that throws neither faults the task nor blocks later scheduling; Flush still writes the state")]
+    public async Task BrokenTimer_DoesNotFaultOrWedgeTheWriter()
+    {
+        var calls = 0;
+        var store = new SessionStore(new Paths(), _fs, _metrics);
+        var writer = new SessionWriter(store, _log, delay: (span, token) =>
+            Interlocked.Increment(ref calls) == 1 ? throw new InvalidOperationException("timer broke") : _timer.Delay(span, token));
+
+        writer.Update(State(@"C:\photos", "first"));
+        await writer.WhenIdleAsync();
+        writer.Update(State(@"C:\photos", "second"));
+        writer.Flush();
+
+        Assert.Equal(2, calls);
+        Assert.Contains(_log.Errors, e => e.Exception is InvalidOperationException);
+        Assert.Equal("second", store.Load(@"C:\photos").CurrentPath);
+    }
 }

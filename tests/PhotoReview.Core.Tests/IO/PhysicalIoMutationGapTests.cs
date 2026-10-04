@@ -151,4 +151,13 @@ public sealed class PhysicalIoMutationGapTests : IDisposable
         Assert.Equal(file, _fs.ResolveRealPath(file), ignoreCase: true);
         Assert.Equal(Path.Combine(folder, "future", "x.jpg"), _fs.ResolveRealPath(Path.Combine(folder, "future", "x.jpg")), ignoreCase: true);
     }
+
+    [Fact(DisplayName = "F02: ResolveRealPath of a bare drive root keeps the trailing separator instead of returning the drive-relative form")]
+    public void ResolveRealPath_BareRoot_KeepsTheTrailingSeparator()
+    {
+        var root = Path.GetPathRoot(_root.Path)!;
+
+        Assert.Equal(root, _fs.ResolveRealPath(root));
+        Assert.EndsWith(Path.DirectorySeparatorChar.ToString(), _fs.ResolveRealPath(root), StringComparison.Ordinal);
+    }
 }

@@ -14,6 +14,8 @@ public sealed class SessionWriter : IDisposable
     /// <summary>Upper bound <see cref="Dispose"/> waits for an in-flight write (Q-R5): the last write is skipped rather than hanging shutdown.</summary>
     private static readonly TimeSpan ShutdownWait = TimeSpan.FromSeconds(2);
 
+    private const double MaxDebounceMilliseconds = uint.MaxValue - 1; // Task.Delay's own limit
+
     private readonly SessionStore _store;
     private readonly ILog? _log;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
@@ -34,6 +36,9 @@ public sealed class SessionWriter : IDisposable
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _log = log;
         _debounce = debounce ?? DefaultDebounce;
+        // Zero would run the write inside Update on the caller's thread; a negative or over-long value makes Task.Delay throw.
+        if (_debounce <= TimeSpan.Zero || _debounce.TotalMilliseconds > MaxDebounceMilliseconds)
+            throw new ArgumentOutOfRangeException(nameof(debounce), debounce, "The debounce must be positive and no longer than Task.Delay supports.");
         _delay = delay ?? Task.Delay;
     }
 
@@ -136,13 +141,30 @@ public sealed class SessionWriter : IDisposable
     {
         try { await _delay(_debounce, cts.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) { return; }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A broken timer must not leave _timerCts set (no later Update would ever schedule again) nor fault this task
+            // unobserved: forget the schedule; the pending state stays queued for the next Update's timer, Flush or Dispose.
+            _log?.Error("Session write timer failed", ex);
+            lock (_gate)
+            {
+                if (ReferenceEquals(_timerCts, cts)) _timerCts = null;
+            }
+            return;
+        }
 
         lock (_gate)
         {
             if (!ReferenceEquals(_timerCts, cts)) return; // flushed while we were waiting
             _timerCts = null;
         }
-        WritePending(bounded: false);
+
+        try { WritePending(bounded: false); }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // SaveBatch already logs store failures; this guards the rest (e.g. a faulting test seam) so the task never faults.
+            _log?.Error("Session write failed", ex);
+        }
     }
 
     /// <summary>How long a bounded flush (<see cref="Flush()"/>, <see cref="Dispose"/>) waits for the writer lock; a test seam so the timeout case does not take seconds.</summary>
