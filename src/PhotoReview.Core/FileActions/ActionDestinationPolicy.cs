@@ -83,7 +83,10 @@ public static class ActionDestinationPolicy
         if (string.Equals(realDestination, realSource, StringComparison.OrdinalIgnoreCase))
             return ActionDestinationCheck.Ok;
 
-        return realDestination.StartsWith(realSource + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+        // R32: a drive root ("C:\") keeps its separator after TrimEndingDirectorySeparator; appending another one ("C:\\")
+        // would never match a child path, so a relative destination under a drive-root photo folder was rejected.
+        var sourcePrefix = Path.EndsInDirectorySeparator(realSource) ? realSource : realSource + Path.DirectorySeparatorChar;
+        return realDestination.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase)
             ? ActionDestinationCheck.Ok
             : ActionDestinationCheck.EscapesSourceFolder;
     }

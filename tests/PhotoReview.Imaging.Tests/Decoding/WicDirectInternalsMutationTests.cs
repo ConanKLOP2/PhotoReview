@@ -61,6 +61,27 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
         Assert.Equal(1, consulted);
     }
 
+    [Fact(DisplayName = "R16: a byte count that wrapped negative is never mistaken for a small buffer")]
+    public void EnsureOutputFits_NegativeWrappedLength_IsRefused()
+    {
+        var wrapped = unchecked((long)int.MaxValue * int.MaxValue * 4);
+
+        Assert.True(wrapped < 0);
+        Assert.Throws<DecoderMemoryAdmissionException>(() => WicDirectDecoder.EnsureOutputFits(
+            int.MaxValue, int.MaxValue, wrapped, () => (64L * 1024 * 1024 * 1024, 0)));
+    }
+
+    [Theory(DisplayName = "R16: the output byte count saturates instead of wrapping")]
+    [InlineData(1, 1, 4L)]
+    [InlineData(6000, 6000, 144_000_000L)]
+    [InlineData(int.MaxValue, int.MaxValue, long.MaxValue)]
+    public void OutputByteLength_SaturatesInsteadOfWrapping(int width, int height, long expected)
+        => Assert.Equal(expected, WicDirectDecoder.OutputByteLength(width, height));
+
+    [Fact(DisplayName = "R16: a huge buffer whose doubled peak would overflow a long is refused")]
+    public void OutputHasHeadroom_BufferWhosePeakOverflows_IsRefused()
+        => Assert.False(MemoryHeadroom.OutputHasHeadroom(long.MaxValue, 64L * 1024 * 1024 * 1024, 0));
+
     [Fact]
     public void EnsureOutputFits_BufferJustBelowTheGuardThreshold_NeverConsultsTheMemoryBudget()
     {

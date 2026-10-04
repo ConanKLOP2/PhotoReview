@@ -232,7 +232,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         if (rawWidth > 0 && rawHeight > 0)
         {
             var (outW, outH) = bitmap.DecodePixelWidth > 0 && bitmap.DecodePixelHeight > 0 ? (bitmap.DecodePixelWidth, bitmap.DecodePixelHeight) : (rawWidth, rawHeight);
-            WicDirectDecoder.EnsureOutputFits(outW, outH, (long)outW * outH * 4, memoryInfo);
+            EnsureDecodeAdmitted(outW, outH, memoryInfo);
         }
 
         bitmap.StreamSource = stream;
@@ -243,6 +243,10 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             ? ExifOrientation.Apply(bitmap, orientation)
             : bitmap;
     }
+
+    /// <summary>R16: admission on the saturating byte count (a plain <c>(long)w * h * 4</c> wraps negative for hostile sides and would "fit").</summary>
+    internal static void EnsureDecodeAdmitted(int outW, int outH, Func<(long TotalAvailable, long Load)> memoryInfo)
+        => WicDirectDecoder.EnsureOutputFits(outW, outH, WicDirectDecoder.OutputByteLength(outW, outH), memoryInfo);
 
     private static bool IsDownscaleFallbackException(Exception ex)
         => ex is not DecoderMemoryAdmissionException // refused for memory: the full-size retry needs even more

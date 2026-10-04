@@ -122,7 +122,9 @@ public sealed class LocTemplate
             foreach (var arg in args)
             {
                 if (!string.Equals(arg.Name, _names[i], StringComparison.Ordinal)) continue;
-                sb.Append(FormatValue(arg.Value));
+                // R21: a throwing argument formatter must not escape into UI text; it is treated like a missing argument.
+                if (TryFormatValue(arg.Value, out var formatted)) sb.Append(formatted);
+                else sb.Append('{').Append(_names[i]).Append('}');
                 found = true;
                 break;
             }
@@ -142,6 +144,21 @@ public sealed class LocTemplate
         IFormattable f => f.ToString(null, CultureInfo.CurrentCulture),
         _ => value.ToString() ?? string.Empty,
     };
+
+    // Rendering is documented as never throwing; an argument's own ToString is foreign code. Fatal exceptions still propagate.
+    private static bool TryFormatValue(object? value, out string text)
+    {
+        try
+        {
+            text = FormatValue(value);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            text = string.Empty;
+            return false;
+        }
+    }
 
     internal static bool IsValidName(ReadOnlySpan<char> name)
     {
