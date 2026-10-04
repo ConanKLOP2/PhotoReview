@@ -267,12 +267,12 @@ public sealed partial class CompareViewModel : ObservableObject
         }
     }
 
-    private static long? TryGetFileSize(string path)
+    /// <param name="stat">Test seam for the length lookup (default: <see cref="FileInfo"/>); the expected failures of a stat are swallowed.</param>
+    internal static long? TryGetFileSize(string path, Func<string, long?>? stat = null)
     {
         try
         {
-            var fi = new FileInfo(path);
-            return fi.Exists ? fi.Length : null;
+            return (stat ?? StatLength)(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
@@ -280,5 +280,11 @@ public sealed partial class CompareViewModel : ObservableObject
             AppLog.Error($"Compare file size unavailable path={path}", ex);
             return null;
         }
+    }
+
+    private static long? StatLength(string path)
+    {
+        var fi = new FileInfo(path);
+        return fi.Exists ? fi.Length : null;
     }
 }

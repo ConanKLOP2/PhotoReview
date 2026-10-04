@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Services;
 using PhotoReview.Core;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
@@ -311,6 +312,77 @@ public sealed class WpfDialogHostSeamTests
             finally
             {
                 Directory.Delete(dir, true);
+            }
+        });
+    }
+
+    private static (RecoveryWindow Window, string Dir) ShowRecoveryWith(Action<ServiceCollection, OperationJournal, string> configure, out FakeHost host)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "PhotoReview_RecoveryWiring_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new OperationJournal(new AppPaths(dir), new PhysicalFileSystem(), new SystemClock());
+        var collection = new ServiceCollection();
+        collection.AddSingleton(journal);
+        configure(collection, journal, dir);
+        host = new FakeHost();
+        Create(host, collection.BuildServiceProvider()).ShowRecovery();
+        return ((RecoveryWindow)Assert.Single(host.Dialogs), dir);
+    }
+
+    private static T Field<T>(object target, string name)
+        => (T)typeof(RecoveryWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(target)!;
+
+    [Fact]
+    public void ShowRecovery_PassesRetryOnlyWhenARetryServiceIsRegistered()
+    {
+        StaUi.Run(() =>
+        {
+            EnsureResourceAssembly();
+            var (without, dirA) = ShowRecoveryWith((_, _, _) => { }, out _);
+            var (with, dirB) = ShowRecoveryWith((services, journal, _) =>
+                services.AddSingleton(new RecoveryRetryService(journal, new PhysicalFileSystem(), new SystemClock())), out _);
+            try
+            {
+                Assert.Null(typeof(RecoveryWindow).GetField("_retry", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(without));
+                Assert.NotNull(typeof(RecoveryWindow).GetField("_retry", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(with));
+            }
+            finally
+            {
+                Directory.Delete(dirA, true);
+                Directory.Delete(dirB, true);
+            }
+        });
+    }
+
+    [Fact]
+    public void ShowRecovery_TellsTheWindowWhetherPermanentDeleteIsAllowed()
+    {
+        StaUi.Run(() =>
+        {
+            EnsureResourceAssembly();
+            var dirs = new List<string>();
+            bool Allowed(bool? setting)
+            {
+                var (window, dir) = ShowRecoveryWith((services, _, directory) =>
+                {
+                    if (setting is null) return;
+                    var store = new SettingsStore(new AppPaths(directory), new PhysicalFileSystem(), new NullLog());
+                    store.Current.AllowPermanentDeleteWithoutRecycleBin = setting.Value;
+                    services.AddSingleton(store);
+                }, out _);
+                dirs.Add(dir);
+                return Field<Func<bool>>(window, "_allowPermanentDelete")();
+            }
+
+            try
+            {
+                Assert.False(Allowed(null));
+                Assert.False(Allowed(false));
+                Assert.True(Allowed(true));
+            }
+            finally
+            {
+                foreach (var dir in dirs) Directory.Delete(dir, true);
             }
         });
     }

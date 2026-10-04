@@ -187,15 +187,14 @@ public sealed partial class MainViewModelAdvancedTests
         var (vm, _) = CreateViewModel();
 
         var load = vm.OpenFolderAsync(folder, Path.Combine(folder, "1.png")); // presents the opened file; the Explorer order stays pending
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (_sink.PresentationCount == 0 && DateTime.UtcNow < deadline) await Task.Delay(10);
-        Assert.True(_sink.PresentationCount > 0);
+        await PhotoReview.TestSupport.Wait.UntilAsync(() => _sink.PresentationCount > 0, "the opened file is presented");
         var skip = vm.SkipAsync();
-        await Task.Delay(200);
         Assert.False(skip.IsCompleted);
+        Assert.Equal(0, vm.CurrentIndex); // nothing was skipped while the order is pending
 
         gate.SetResult();
         await skip.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(1, vm.CurrentIndex);
         await load.WaitAsync(TimeSpan.FromSeconds(30));
     }
 
