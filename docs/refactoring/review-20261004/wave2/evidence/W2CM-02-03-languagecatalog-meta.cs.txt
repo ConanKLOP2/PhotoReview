@@ -1,0 +1,24 @@
+﻿// NOT COMPILED, NOT EXECUTED. Draft repro for W2CM-03 (blank language name/nativeName accepted) and W2CM-02 (raw key text in warnings).
+using PhotoReview.Core.Localization;
+using Xunit;
+
+public sealed class LanguageCatalogMetaRepro
+{
+    [Fact]
+    public void EmptyNativeName_FallsBackToCode()
+    {
+        var warnings = new List<string>();
+        Assert.True(LanguageCatalog.TryParse("{\"_meta\":{\"code\":\"xx\",\"name\":\"\",\"nativeName\":\" \"}}", "t.json", out var c, warnings));
+        // Observed by reading: NativeName == " " (blank row in the language picker); expected "xx".
+        Assert.False(string.IsNullOrWhiteSpace(c!.NativeName));
+    }
+
+    [Fact]
+    public void WarningText_DoesNotContainRawLineBreaks()
+    {
+        var warnings = new List<string>();
+        LanguageCatalog.TryParse("{\"_meta\":{\"code\":\"xx\"},\"a\\n2026-10-04 00:00:00.000 [ERROR] [T1] forged\":5}", "t.json", out _, warnings);
+        // Observed by reading: the warning embeds the key verbatim including the newline.
+        Assert.DoesNotContain(warnings, w => w.Contains('\n'));
+    }
+}
