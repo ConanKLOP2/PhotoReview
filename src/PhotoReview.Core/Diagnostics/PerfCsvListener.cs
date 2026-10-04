@@ -20,7 +20,7 @@ public sealed class PerfCsvListener : EventListener, IDisposable
     private const string ProviderName = "PhotoReview-Perf";
     private const int ChannelCapacity = 100_000;
 
-    private readonly record struct Row(
+    internal readonly record struct Row(
         long UtcTicks, long QpcTicks, int ThreadId, string EventName,
         string Nav, string PathId, string A, string B, string C, string D, string Text);
 
@@ -42,14 +42,18 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         }
     }
 
-    protected override void OnEventWritten(EventWrittenEventArgs eventData)
+    protected override void OnEventWritten(EventWrittenEventArgs eventData) => Enqueue(() => BuildRow(eventData));
+
+    /// <summary>Queues the row built by <paramref name="build"/>; never throws, a row that cannot be built or queued is counted as dropped.
+    /// Internal so tests can reach the drop paths without an EventSource payload that breaks formatting.</summary>
+    internal void Enqueue(Func<Row> build)
     {
         var channel = _channel;
         if (channel is null) return; // construction not finished yet (see OnEventSourceCreated note); drop silently
 
         try
         {
-            var row = BuildRow(eventData);
+            var row = build();
             if (!channel.Writer.TryWrite(row))
             {
                 Interlocked.Increment(ref _dropped);
@@ -62,12 +66,14 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         }
     }
 
-    private static Row BuildRow(EventWrittenEventArgs eventData)
+    private static Row BuildRow(EventWrittenEventArgs eventData) =>
+        BuildRow(eventData.EventName ?? eventData.EventId.ToString(CultureInfo.InvariantCulture), eventData.PayloadNames, eventData.Payload);
+
+    internal static Row BuildRow(string eventName, IReadOnlyList<string>? names, IReadOnlyList<object?>? values)
     {
         var utcTicks = DateTime.UtcNow.Ticks;
         var qpcTicks = Stopwatch.GetTimestamp();
         var threadId = Environment.CurrentManagedThreadId;
-        var eventName = eventData.EventName ?? eventData.EventId.ToString(CultureInfo.InvariantCulture);
 
         string nav = "";
         string pathId = "";
@@ -75,8 +81,6 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         var numericCount = 0;
         var text = new List<string>();
 
-        var names = eventData.PayloadNames;
-        var values = eventData.Payload;
         if (names is not null && values is not null)
         {
             for (var i = 0; i < names.Count && i < values.Count; i++)
