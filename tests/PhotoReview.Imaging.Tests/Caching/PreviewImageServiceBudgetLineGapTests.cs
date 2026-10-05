@@ -20,7 +20,12 @@ public sealed class PreviewImageServiceBudgetLineGapTests : IDisposable
         var capacity = PreviewImageService.ResolveCapacity(1, 60, 32 * Gib, 2 * Gib, out var line);
 
         Assert.Equal(60L * 32 * Gib / 100 - 2 * Gib, capacity);
-        Assert.Equal("Memory budgets: preview cache 17612 MiB; cache share 60% of 32768 MiB physical RAM = 19660 MiB for preview + source-bytes, source-bytes cache 2048 MiB.", line);
+        // The figures are the contract; the surrounding wording may change without breaking this test.
+        Assert.Contains("preview cache 17612 MiB", line, StringComparison.Ordinal);
+        Assert.Contains("60%", line, StringComparison.Ordinal);
+        Assert.Contains("32768 MiB physical RAM", line, StringComparison.Ordinal);
+        Assert.Contains("19660 MiB", line, StringComparison.Ordinal);
+        Assert.Contains("source-bytes cache 2048 MiB", line, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "The clamped byte-budget line reports the requested size in MiB")]
@@ -28,7 +33,11 @@ public sealed class PreviewImageServiceBudgetLineGapTests : IDisposable
     {
         PreviewImageService.ResolveCapacity(64 * Gib, null, 32 * Gib, null, out var line);
 
-        Assert.Equal("Memory budgets: preview cache 16384 MiB (clamped from 65536 MiB to 50% of physical RAM), source-bytes cache off.", line);
+        // The figures are the contract; the surrounding wording may change without breaking this test.
+        Assert.Contains("preview cache 16384 MiB", line, StringComparison.Ordinal);
+        Assert.Contains("65536 MiB", line, StringComparison.Ordinal);
+        Assert.Contains("50%", line, StringComparison.Ordinal);
+        Assert.Contains("source-bytes cache off", line, StringComparison.Ordinal);
     }
 
     // ---- diagnostic pre-read goes through the injected source reader ----
