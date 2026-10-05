@@ -179,8 +179,9 @@ function Generate-TestReport {
         }
     }
 
-    # Per-project wall times
-    Write-Host "`nPer-Project Wall Time (60s threshold):" -ForegroundColor Cyan
+    # Per-project CUMULATIVE test time: the sum of every test's own duration from the .trx, NOT wall-clock. Tests inside
+    # a project can run in parallel, so the sum can exceed (or, with startup/discovery, undershoot) real elapsed time.
+    Write-Host "`nPer-Project Cumulative Test Time (sum of test durations, not wall-clock; 60s threshold):" -ForegroundColor Cyan
     $projectWarnings = @()
     foreach ($project in $projectTimings.Keys | Sort-Object) {
         $duration = $projectTimings[$project]
@@ -190,7 +191,7 @@ function Generate-TestReport {
         Write-Host "  $project`: $("{0:F2}" -f $duration)s [$status]" -ForegroundColor $color
 
         if ($status -eq "WARN") {
-            $projectWarnings += "$project exceeds 60s threshold ($("{0:F2}" -f $duration)s)"
+            $projectWarnings += "$project exceeds 60s cumulative-test-time threshold ($("{0:F2}" -f $duration)s)"
         }
     }
 

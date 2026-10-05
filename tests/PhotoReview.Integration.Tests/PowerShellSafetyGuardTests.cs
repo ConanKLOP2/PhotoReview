@@ -191,4 +191,44 @@ public sealed class PowerShellSafetyGuardTests : IDisposable
         Assert.DoesNotContain("cannot be combined with -SharedAppCache", output);
         Assert.Contains("Fixture file not found", output);
     }
+
+    private static (int ExitCode, string Output) RunFixtureCompare(string folder, string mutation)
+    {
+        var lib = Path.Combine(RepoRoot(), "tools", "diag", "Fixture-Fingerprint.ps1");
+        var script = $"$ErrorActionPreference='Stop'; . '{lib}'; $b = Get-FixtureStat '{folder}'; {mutation}; $c = Get-FixtureStat '{folder}'; " +
+                     "'EQUAL=' + (Test-FixtureStatEqual $b $c) + ' COUNT=' + ($b.Count -eq $c.Count) + ' BYTES=' + ($b.Bytes -eq $c.Bytes)";
+        return RunPowerShell("-Command", script);
+    }
+
+    [Fact(DisplayName = "TOOL-03 (R28): run-matrix fixture guard detects a same-size replacement that Count and Bytes cannot")]
+    public void FixtureGuardDetectsSameSizeReplacement()
+    {
+        var folder = _root.Dir("fixture");
+        var file = Path.Combine(folder, "a.jpg");
+        File.WriteAllText(file, "AAAA");
+        File.SetLastWriteTimeUtc(file, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var (code, output) = RunFixtureCompare(folder,
+            $"Set-Content -LiteralPath '{file}' -Value 'BBBB' -NoNewline; (Get-Item -LiteralPath '{file}').LastWriteTimeUtc = [datetime]'2021-06-01T00:00:00Z'");
+
+        Assert.Equal(0, code);
+        Assert.Contains("COUNT=True BYTES=True", output, StringComparison.Ordinal); // the old guard saw nothing
+        Assert.Contains("EQUAL=False", output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "TOOL-03 (R28): run-matrix fixture guard detects a same-size rename and stays equal when nothing changed")]
+    public void FixtureGuardDetectsRenameAndIgnoresUnchanged()
+    {
+        var folder = _root.Dir("fixture2");
+        var file = Path.Combine(folder, "a.jpg");
+        File.WriteAllText(file, "AAAA");
+
+        var (code1, unchanged) = RunFixtureCompare(folder, "$null = 1");
+        var (code2, renamed) = RunFixtureCompare(folder, $"Rename-Item -LiteralPath '{file}' -NewName 'b.jpg'");
+
+        Assert.Equal(0, code1);
+        Assert.Contains("EQUAL=True", unchanged, StringComparison.Ordinal);
+        Assert.Equal(0, code2);
+        Assert.Contains("EQUAL=False", renamed, StringComparison.Ordinal);
+    }
 }
