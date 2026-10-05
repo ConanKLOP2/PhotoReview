@@ -10,15 +10,17 @@ namespace PhotoReview.Core.FileActions;
 internal static class PartialDestinationCleanup
 {
     /// <summary>
-    /// Deletes <paramref name="destination"/> only while it is provably incomplete (strictly shorter than the source). A complete
-    /// file is left for Recovery to judge. Never throws except
+    /// Deletes <paramref name="destination"/> only while it is still the file this operation created (R01a/b: same size and write
+    /// time as <paramref name="created"/>, observed right after the copy; a foreign file that replaced it meanwhile is never ours) AND
+    /// it is provably incomplete (strictly shorter than the source). A complete file is left for Recovery to judge. Never throws except
     /// <see cref="OutOfMemoryException"/>: a file that cannot be inspected or deleted stays.
     /// </summary>
-    public static void RemoveIfPartial(IFileSystem fileSystem, string destination, long sourceSize)
+    public static void RemoveIfPartial(IFileSystem fileSystem, string destination, long sourceSize, FileStat created)
     {
+        ArgumentNullException.ThrowIfNull(created);
         try
         {
-            if (fileSystem.GetFileStat(destination) is { } stat && stat.Length < sourceSize)
+            if (fileSystem.GetFileStat(destination) is { } stat && stat.Length < sourceSize && IsSameFile(stat, created))
                 fileSystem.Delete(destination);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -26,4 +28,9 @@ internal static class PartialDestinationCleanup
             // Left in place; the Failed journal line still describes the operation, and the original error is what the caller reports.
         }
     }
+
+    /// <summary>Exact compare: the destination was created by this operation on its own volume and observed through the same file system,
+    /// so no rounding allowance applies (a tolerance would only widen what a replacement can pass as).</summary>
+    internal static bool IsSameFile(FileStat now, FileStat created) =>
+        now.Length == created.Length && now.LastWriteUtc == created.LastWriteUtc;
 }

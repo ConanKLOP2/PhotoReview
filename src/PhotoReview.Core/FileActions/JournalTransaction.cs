@@ -115,9 +115,12 @@ internal sealed class JournalTransaction : IDisposable
     public void Dispose() => ReleaseLiveMarker();
 
     /// <summary>Throws <see cref="JournalCodedException"/> (<paramref name="errorCode"/>) unless the destination has the prepared size.</summary>
-    public void VerifyDestination(IFileSystem fileSystem, string destination, string errorCode)
+    public void VerifyDestination(IFileSystem fileSystem, string destination, string errorCode) =>
+        VerifyDestination(fileSystem.GetFileStat(destination), errorCode);
+
+    /// <summary>Same check on a destination stat the caller already read (one metadata read serves the verification and the cleanup identity).</summary>
+    public void VerifyDestination(FileStat? stat, string errorCode)
     {
-        var stat = fileSystem.GetFileStat(destination);
         if (stat is null || stat.Length != _prepared.Size)
             throw new JournalCodedException(errorCode);
         MutationCompleted = true;

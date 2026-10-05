@@ -239,7 +239,8 @@ public sealed class InMemoryFileSystem : IFileSystem
             }
 
             _files[dstNorm] = (byte[])bytes.Clone();
-            _fileWriteTimes[dstNorm] = DateTime.UtcNow;
+            // Like File.Copy / CopyFile: the copy keeps the source's last-write time (the journal's identity checks rely on it).
+            _fileWriteTimes[dstNorm] = _fileWriteTimes[srcNorm];
             proof?.MarkCreated();
             return true;
         }

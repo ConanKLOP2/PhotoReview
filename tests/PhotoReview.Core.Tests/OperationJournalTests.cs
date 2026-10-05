@@ -399,7 +399,7 @@ public sealed class OperationJournalUnitTests
     {
         var journal = CreateJournal();
 
-        _fs.WriteAllTextAtomic(@"C:\photos\dest1.jpg", "1234");
+        _fs.AddFile(@"C:\photos\dest1.jpg", "1234", _clock.UtcNow); // R01c: the destination keeps the journaled write time
         journal.Append(new JournalEntry("move-done", FileOperationType.Move, JournalState.Prepared,
             @"C:\photos\src1.jpg", @"C:\photos\dest1.jpg", 4, _clock.UtcNow, _clock.UtcNow));
 
@@ -426,7 +426,7 @@ public sealed class OperationJournalUnitTests
         var journal = CreateJournal();
 
         _fs.WriteAllTextAtomic(@"C:\photos\src.jpg", "1234");
-        _fs.WriteAllTextAtomic(@"C:\photos\dest.jpg", "1234");
+        _fs.AddFile(@"C:\photos\dest.jpg", "1234", _clock.UtcNow); // R01c: the destination keeps the journaled write time
         journal.Append(new JournalEntry("copy-done", FileOperationType.Copy, JournalState.Prepared,
             @"C:\photos\src.jpg", @"C:\photos\dest.jpg", 4, _clock.UtcNow, _clock.UtcNow));
 

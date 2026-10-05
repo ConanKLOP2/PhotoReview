@@ -241,7 +241,7 @@ public sealed class RecoveryRetryService
                     if (!string.IsNullOrWhiteSpace(folder)) _fileSystem.CreateDirectory(folder);
                     if (failed.Type == FileOperationType.Copy)
                     {
-                        CopyNewOrRemovePartial(sourcePath, destinationPath, member.Size);
+                        CopyNewOrKeepLeftover(sourcePath, destinationPath);
                         var copied = _fileSystem.GetFileStat(destinationPath);
                         if (copied?.Length != member.Size) throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
                     }
@@ -271,27 +271,14 @@ public sealed class RecoveryRetryService
 
     /// <summary>
     /// RV-C03: create-new copy for a retry. A destination that appeared after the pre-checks is never overwritten nor deleted
-    /// (<see cref="Tr.CoreRecoveryDestinationExists"/>); when the copy itself fails after creating the destination, the partial
-    /// file is deleted while it is provably incomplete (strictly shorter than the source), so the entry stays retryable
-    /// instead of turning into a Conflict. The original failure is rethrown either way.
+    /// (<see cref="Tr.CoreRecoveryDestinationExists"/>). When the copy itself throws, the destination is never deleted either
+    /// (R01a): a throw gives no observation of the file this call created, so a size check cannot tell a partial copy from a foreign file
+    /// that replaced it (the real file system raises no proof then, COPY-PARTIAL-01 option c); the leftover stays for Recovery to show
+    /// as a Conflict and for the user to judge. The original failure propagates.
     /// </summary>
-    private void CopyNewOrRemovePartial(string source, string destination, long sourceSize)
+    private void CopyNewOrKeepLeftover(string source, string destination)
     {
-        bool created;
-        var proof = new CopyCreationProof();
-        try
-        {
-            created = _fileSystem.TryCopyNew(source, destination, proof);
-        }
-        catch (Exception copyFailure) when (copyFailure is not OutOfMemoryException)
-        {
-            // R01: only a destination the copy proved it created is ours to clean; a failure before creation (source vanished while a
-            // foreign file appeared at the destination) must leave it alone.
-            if (proof.DestinationCreated)
-                PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize);
-            throw;
-        }
-        if (!created) throw new IOException(Tr.CoreRecoveryDestinationExists);
+        if (!_fileSystem.TryCopyNew(source, destination)) throw new IOException(Tr.CoreRecoveryDestinationExists);
     }
 
     /// <summary>R15/R18: the recycled file itself is at the member's original path (journaled size and write time, the proof Undo and Recovery use), not just some file.</summary>
@@ -327,7 +314,7 @@ public sealed class RecoveryRetryService
 
             if (failed.Type == FileOperationType.Copy)
             {
-                CopyNewOrRemovePartial(failed.Source, destination, prepared.Size);
+                CopyNewOrKeepLeftover(failed.Source, destination);
                 tx.VerifyDestination(_fileSystem, destination, JournalErrors.RetryVerifyFailed);
             }
             else
