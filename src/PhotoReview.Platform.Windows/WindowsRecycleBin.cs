@@ -307,7 +307,7 @@ internal static class RecycleEligibility
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
 
         if (full.StartsWith(ExtendedPrefix, StringComparison.Ordinal) && full.Length >= 6 && full[5] == ':') full = full[4..];
-        if (full.StartsWith(UncPrefix, StringComparison.Ordinal)) return true; // UNC share: positively a network location
+        if (IsRealUnc(full)) return true; // UNC share: positively a network location (volume-GUID/device forms are NOT UNC, R44)
         string? mount;
         if (mountPointOf is null)
             mount = Path.GetPathRoot(full);
@@ -317,11 +317,24 @@ internal static class RecycleEligibility
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException) { return false; }
         }
         if (string.IsNullOrEmpty(mount)) return false;
-        if (mount.StartsWith(UncPrefix, StringComparison.Ordinal)) return true;
+        if (IsRealUnc(mount)) return true;
         DriveType? type;
         try { type = driveTypeOf(mount); }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { return false; }
         return type is DriveType.Removable or DriveType.Network or DriveType.CDRom or DriveType.Ram;
+    }
+
+    /// <summary>
+    /// R44: true only for the real UNC syntaxes <c>\\server\share</c> and <c>\\?\UNC\server\share</c>. Other <c>\\?\</c> and
+    /// <c>\\.\</c> forms (volume GUID <c>\\?\Volume{guid}\</c>, device paths) are local volumes whose type must be queried
+    /// and are never assumed to be a network location.
+    /// </summary>
+    internal static bool IsRealUnc(string path)
+    {
+        if (path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return true;
+        return path.StartsWith(UncPrefix, StringComparison.Ordinal)
+            && !path.StartsWith(ExtendedPrefix, StringComparison.Ordinal)
+            && !path.StartsWith(@"\\.\", StringComparison.Ordinal);
     }
 
     /// <summary>Drive type of a volume root or mount-point folder (<c>GetDriveType</c> accepts both; <c>DriveInfo</c> only reads the drive letter).</summary>
