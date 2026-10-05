@@ -1,0 +1,24 @@
+// Copy into tests/PhotoReview.App.Tests/Input for a bounded filtered reproduction.
+using System.Windows;
+using Xunit;
+
+namespace PhotoReview.App.Tests.Input;
+
+public sealed partial class PointerInputControllerTests
+{
+    [Fact]
+    public async Task Review_FitWidthSupersededDuringRender_OverflowCorrectionDoesNotOverrideNewZoom()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _surface.HoldYields = true;
+        _surface.ExtentWidth = 1200;
+        var fit = _controller.FitWidthAsync();
+        _version.Next();
+        _viewer.SetZoom(2.0); // newer viewport operation wins
+        _surface.HoldYields = false;
+        _surface.ReleaseYields();
+        await fit.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(2.0, _viewer.Zoom, 6);
+        Assert.Empty(_surface.Scrolls);
+    }
+}

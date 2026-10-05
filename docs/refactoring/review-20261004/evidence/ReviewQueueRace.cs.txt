@@ -1,0 +1,38 @@
+// Copy into tests/PhotoReview.App.Tests/ViewModels for a bounded filtered reproduction.
+// Reuses existing fake bin/file-system fixtures. No production file or real Recycle Bin mutation.
+using System.IO;
+using Xunit;
+
+namespace PhotoReview.App.Tests.ViewModels;
+
+public sealed partial class MainViewModelFileActionTests
+{
+    [Fact]
+    public async Task Review_QueuedMove_FolderChangesBeforeItsTurn_DoesNotMoveNewFolderPhoto()
+    {
+        var folderA = Path.Combine(_tempDir, "queue_a");
+        var folderB = Path.Combine(_tempDir, "queue_b");
+        Directory.CreateDirectory(folderA);
+        Directory.CreateDirectory(folderB);
+        var a = CreateImageFile(folderA, "1.jpg");
+        CreateImageFile(folderA, "2.jpg");
+        var b = CreateImageFile(folderB, "x.jpg");
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (vm, actions, _) = CreateViewModel(new BlockingMoveFileSystem(_fileSystem, release.Task));
+        await vm.OpenFolderAsync(folderA);
+        var first = vm.RunActionAsync(0);
+        Assert.True(actions.IsBusy);
+        var queued = vm.RunActionAsync(0);
+        Assert.False(queued.IsCompleted);
+        try
+        {
+            await vm.OpenFolderAsync(folderB);
+            release.SetResult();
+            await Task.WhenAll(first, queued).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(File.Exists(b), "An action queued in folder A moved folder B's photo.");
+            Assert.False(File.Exists(Path.Combine(folderB, "Sorted", "x.jpg")));
+            Assert.Equal([b], vm.Catalog.Paths);
+        }
+        finally { release.TrySetResult(); }
+    }
+}
