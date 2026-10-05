@@ -356,6 +356,18 @@ public sealed class RawDecoderMutationGapTests
     }
 
     [Fact]
+    public void Decode_OrfPreviewUnsupportedThenThumbnailFallback_CountsHeaderFailedPreviewAndThumbnailBytes()
+    {
+        // The failed 40-byte preview was read from the file before the thumbnail took over: it still counts.
+        var fallback = new StubFallback(() => new byte[20]);
+        var inner = new ScriptedDecoder(length => length == 40 ? throw new NotSupportedException("unsupported") : new FakeImage(160, 120));
+
+        var decoded = NewDecoder(OrfInfo(), inner, fallback: fallback).Decode(Request());
+
+        Assert.Equal(FileSize + 40 + 20, BytesRead(decoded));
+    }
+
+    [Fact]
     public void Decode_OrfPreviewUnsupportedWithoutAThumbnailProvider_PropagatesTheUnsupportedFailure()
     {
         var inner = new ScriptedDecoder(_ => throw new NotSupportedException("unsupported"));
