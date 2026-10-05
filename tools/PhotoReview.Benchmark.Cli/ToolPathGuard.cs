@@ -73,6 +73,26 @@ internal static class ToolPathGuard
         if (!File.Exists(marker)) File.WriteAllText(marker, "created by the PhotoReview benchmark CLI; its cache and thumbnails folders are pruned\n");
     }
 
+    /// <summary>
+    /// Writes a report file without ever writing THROUGH its final path: the text goes to a sibling temp file which then
+    /// replaces the leaf (rename semantics). A leaf that is a symlink or a hard link to a user's photo is therefore
+    /// replaced by a regular file and the photo's bytes stay untouched (R13); directory-level checks alone cannot see this.
+    /// </summary>
+    internal static async Task WriteReportFileAsync(string path, string content, System.Text.Encoding? encoding = null)
+    {
+        var full = Path.GetFullPath(path);
+        var temp = full + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+        try
+        {
+            await File.WriteAllTextAsync(temp, content, encoding ?? new System.Text.UTF8Encoding(false));
+            File.Move(temp, full, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
+    }
+
     /// <summary>The real app data folder (<c>%LOCALAPPDATA%\PhotoReview</c>), which no tool-owned folder may overlap.</summary>
     internal static string AppDataFolder() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview");

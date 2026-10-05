@@ -222,14 +222,14 @@ public static class RawDecoderBenchmark
             csv.AppendLine(string.Join(",", fields));
         }
 
-        await File.WriteAllTextAsync(Path.Combine(outDir, "raw-decoder-bench.csv"), csv.ToString(), System.Text.Encoding.UTF8);
+        await ToolPathGuard.WriteReportFileAsync(Path.Combine(outDir, "raw-decoder-bench.csv"), csv.ToString(), System.Text.Encoding.UTF8);
         var report = new { TimestampUtc = DateTime.UtcNow, MachineName = Environment.MachineName,
             OsVersion = Environment.OSVersion.VersionString, SourceFolder = folder,
             Method = "RawPreview and EmbeddedJpegDirect decode the SAME embedded JPEG (PreviewSelector for the target width: smallest preview with both sides >= width, else largest; see selectedPreview). "
                 + "RawPreview additionally includes container parse, the preview range read and Adobe RGB profile handling; EmbeddedJpegDirect reads the range and decodes it. LibRawFullDecode is full sensor demosaic. "
                 + "ColdMedianMs is iteration 0 (JIT and OS file cache cold) and WarmMedianMs the median of iterations 1+ (null with iterations=1).",
             StandaloneSameCameraJpegCorpusAvailable = false, Rows = rows, Summary = Summarize(rows) };
-        await File.WriteAllTextAsync(Path.Combine(outDir, "raw-decoder-bench.json"), JsonSerializer.Serialize(report, s_jsonOptions), System.Text.Encoding.UTF8);
+        await ToolPathGuard.WriteReportFileAsync(Path.Combine(outDir, "raw-decoder-bench.json"), JsonSerializer.Serialize(report, s_jsonOptions), System.Text.Encoding.UTF8);
     }
 
     private static double? Median(double[] values)

@@ -372,10 +372,10 @@ public static class DecoderBenchmark
 
         // Write outputs
         var summaryJsonPath = Path.Combine(outDir, "summary.json");
-        await File.WriteAllTextAsync(summaryJsonPath, JsonSerializer.Serialize(summary, JsonOptions));
+        await ToolPathGuard.WriteReportFileAsync(summaryJsonPath, JsonSerializer.Serialize(summary, JsonOptions));
 
         var summaryMdPath = Path.Combine(outDir, "summary.md");
-        await File.WriteAllTextAsync(summaryMdPath, GenerateMarkdownReport(summary));
+        await ToolPathGuard.WriteReportFileAsync(summaryMdPath, GenerateMarkdownReport(summary));
 
         var detailsCsvPath = Path.Combine(outDir, "details.csv");
         await WriteDetailsCsvAsync(detailsCsvPath, records);
@@ -501,7 +501,7 @@ public static class DecoderBenchmark
                 r.DecodeMs, r.AllocatedBytes, r.PixelWidth, r.PixelHeight, r.Success, escapedError));
         }
 
-        await File.WriteAllTextAsync(path, sb.ToString());
+        await ToolPathGuard.WriteReportFileAsync(path, sb.ToString());
     }
 
     /// <summary>"1.25x", or "n/a" when there is no Wpf baseline for the width (a 0 speedup is "not computed", never "1.00x").</summary>

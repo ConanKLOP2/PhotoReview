@@ -125,6 +125,17 @@ internal static class RawSurvey
         return null;
     }
 
+    /// <summary>
+    /// R20: a heuristic, not proof. WIC output matching the largest embedded preview's dimensions suggests it decoded only the preview;
+    /// when the sensor size is known the decode must also be smaller than the sensor (area), else matching sizes mean a full-size preview.
+    /// </summary>
+    internal static bool InferPreviewOnly(int decodedW, int decodedH, int previewW, int previewH, int sensorW, int sensorH)
+    {
+        if (decodedW != previewW || decodedH != previewH) return false;
+        if (sensorW > 0 && sensorH > 0) return (long)decodedW * decodedH < (long)sensorW * sensorH;
+        return true;
+    }
+
     /// <summary>Only RAW containers are surveyed: a .jpg/.jpeg in the folder is neither a RAW nor a RAW-container error source.</summary>
     internal static bool IsSurveyable(string path) => RawFileTypes.IsRawExtension(path);
 
@@ -169,7 +180,7 @@ internal static class RawSurvey
             try
             {
                 var md = GenerateMarkdownReport(summary);
-                await File.WriteAllTextAsync(markdownPath, md, Encoding.UTF8);
+                await ToolPathGuard.WriteReportFileAsync(markdownPath, md, Encoding.UTF8);
                 Console.WriteLine($"Markdown report written to: {markdownPath}");
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -357,16 +368,8 @@ internal static class RawSurvey
 
         // If embedded JPEGs exist, check if WIC decoded only the preview
         var largestPreview = embeddedJpegs.OrderByDescending(j => (long)j.Width * j.Height).FirstOrDefault();
-        bool isPreviewOnly = false;
-        if (wicDecodeSuccess && largestPreview != null)
-        {
-            // Decoded dimensions match largest preview, while file is a RAW format
-            if (wicDecodedW == largestPreview.Width && wicDecodedH == largestPreview.Height)
-            {
-                // If sensor dimensions equal preview, check if preview is full size
-                isPreviewOnly = true;
-            }
-        }
+        var isPreviewOnly = wicDecodeSuccess && largestPreview != null
+            && InferPreviewOnly(wicDecodedW, wicDecodedH, largestPreview.Width, largestPreview.Height, sensorW, sensorH);
 
         return new SurveyFileResult(
             filePath,

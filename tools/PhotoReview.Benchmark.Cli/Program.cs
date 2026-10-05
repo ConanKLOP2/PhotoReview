@@ -47,7 +47,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
                 new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
             reports.Add(report);
             outcomes.Add(report.Phases[0]);
-            var pathOut = Path.Combine(reportDirectory, $"{profile.Id}-{report.RunId}.json"); await File.WriteAllTextAsync(pathOut, report.ToJson());
+            var pathOut = Path.Combine(reportDirectory, $"{profile.Id}-{report.RunId}.json"); await ToolPathGuard.WriteReportFileAsync(pathOut, report.ToJson());
             var phase = report.Phases[0];
             if (phase.Status == BenchmarkResultStatus.Fail) anyFailed = true;
             Console.WriteLine($"DONE profile={profile.Id} status={phase.Status} p50={phase.P50:F1}ms p95={phase.P95:F1}ms max={phase.Max:F1}ms report={pathOut}");
@@ -63,13 +63,13 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
                 Path.GetFullPath(folder), [failed], Machine: Environment.MachineName);
             reports.Add(failedReport);
             var failedPath = Path.Combine(reportDirectory, $"{profile.Id}-{failedReport.RunId}.json");
-            await File.WriteAllTextAsync(failedPath, failedReport.ToJson());
+            await ToolPathGuard.WriteReportFileAsync(failedPath, failedReport.ToJson());
             Console.Error.WriteLine($"FAIL profile={profile.Id} error={ex.Message}");
         }
     }
     var summary = Path.Combine(reportDirectory, "summary.json");
     var batch = new BenchmarkBatchSummary(manifest, reports, outcomes);
-    await File.WriteAllTextAsync(summary, batch.ToJson());
+    await ToolPathGuard.WriteReportFileAsync(summary, batch.ToJson());
     Console.WriteLine($"REPORT: {summary}");
     if (anyFailed) Environment.ExitCode = 1;
 }

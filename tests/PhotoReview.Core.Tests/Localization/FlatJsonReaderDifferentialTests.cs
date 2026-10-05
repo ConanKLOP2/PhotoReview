@@ -126,7 +126,22 @@ public sealed class FlatJsonReaderDifferentialTests
             }
         }
 
-        Assert.Empty(mismatches);
+        Assert.True(mismatches.Count == 0, string.Join(" || ", mismatches));
+    }
+
+    [Theory(DisplayName = "R33: a lone surrogate inside a skipped _meta value or nested key is accepted by the generator exactly as by the runtime (System.Text.Json never materialises skipped values)")]
+    [InlineData("{ \"_meta\": { \"n\": \"\\ud800\" }, \"a\": \"x\" }")]
+    [InlineData("{ \"_meta\": [ \"\\udc00x\" ], \"a\": \"x\" }")]
+    [InlineData("{ \"_meta\": { \"\\ud83d\": 1 }, \"a\": \"x\" }")]
+    [InlineData("{ \"_meta\": \"\\ud800\", \"a\": \"x\" }")]
+    [InlineData("{ \"_meta\": { \"n\": \"\\ud83d\\ude00\" }, \"a\": \"x\" }")]
+    public void LoneSurrogateInSkippedMeta_AgreesWithRuntime(string text)
+    {
+        var expected = Oracle(text);
+        var actual = Generator(text);
+
+        Assert.True(expected is null == actual is null, $"{text} oracle={(expected is null ? "reject" : "accept")} gen={(actual is null ? "reject" : "accept")}");
+        Assert.NotNull(actual);
     }
 
     [Fact(DisplayName = "Deeply nested _meta values and huge files are rejected or read without a stack overflow")]
