@@ -434,7 +434,9 @@ public sealed class FileActionServiceGroupMutationGapTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(new JournalCodedException(JournalErrors.VerifySizeChanged).Message, result.Error);
-        Assert.False(world.Disk.FileExists(MovedJpeg)); // the unverifiable copy was removed again
+        // R01b: a copy whose size is wrong is still the observed file and is removed again; a destination that could not be observed
+        // right after the copy has no identity to prove, so it is kept (fail closed) instead of deleted by guess.
+        Assert.Equal(!wrongLength, world.Disk.FileExists(MovedJpeg));
     }
 
     // ---- Move compensation ----

@@ -507,7 +507,7 @@ public sealed class OperationJournal
         {
             var sourceExists = _fileSystem.FileExists(pending.Source);
             var destinationStat = pending.Destination is not null ? _fileSystem.GetFileStat(pending.Destination) : null;
-            var destinationMatches = destinationStat is not null && destinationStat.Length == pending.Size;
+            var destinationMatches = IsRecordedDestination(destinationStat, pending.Size, pending.LastWriteUtc);
             // Move must have removed the source to count as done; Copy is expected
             // to leave the source in place, so requiring its absence would reconcile
             // every genuinely-successful pending Copy as Failed.
@@ -611,6 +611,14 @@ public sealed class OperationJournal
         }
     }
 
+    /// <summary>
+    /// R01c: the destination is the recorded file, not just a file of the same size. A Move or Copy keeps the source's write time, which
+    /// every entry already carries, so size AND write time must match; a same-size replacement is left Failed for the user. The
+    /// compare allows the 2 s rounding of a FAT destination volume (<see cref="FileFingerprint"/>). No journal field was added.
+    /// </summary>
+    private static bool IsRecordedDestination(FileStat? destination, long size, DateTime lastWriteUtc) =>
+        destination is not null && FileFingerprint.MatchesMovedDestination(destination, size, lastWriteUtc);
+
     private bool IsGroupMemberCompleted(JournalEntry group, JournalGroupMember member)
     {
         if (group.Type == FileOperationType.Recycle)
@@ -628,7 +636,7 @@ public sealed class OperationJournal
         // the original source), like the single-entry reconcile and RecoveryFileCheck read it: no Undo-specific swap here.
         // Undo is only ever journaled for Move and Recycle (handled above); Copy is never undone.
         var destination = !string.IsNullOrWhiteSpace(member.Destination) ? _fileSystem.GetFileStat(member.Destination) : null;
-        var destinationMatches = destination is not null && destination.Length == member.Size;
+        var destinationMatches = IsRecordedDestination(destination, member.Size, member.LastWriteUtc);
         var sourceExists = _fileSystem.FileExists(member.Source);
         return group.Type switch
         {

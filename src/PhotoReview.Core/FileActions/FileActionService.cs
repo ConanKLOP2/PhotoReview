@@ -80,6 +80,9 @@ public sealed class FileActionService
         // Ownership of the in-flight Copy destination: only the proof the copy implementation raised when it created the file
         // counts (R01). It is never assumed before the copy runs, nor inferred from a throw, a length or the preflight.
         var inFlightCopyProof = new CopyCreationProof();
+        // R01b: destination -> what it looked like right after this operation created it (size + write time). The compensation deletes a
+        // copy only while it is still exactly that file; a foreign replacement (even of the same size) or an unobserved copy is kept.
+        var createdCopies = new Dictionary<string, FileStat>(StringComparer.OrdinalIgnoreCase);
         try
         {
             if (request.Group.Paths.Count < 2)
@@ -186,7 +189,9 @@ public sealed class FileActionService
                         .ConfigureAwait(false);
                     if (!created)
                         throw new IOException(Tr.CoreFileActionDestinationExists(member.Destination!));
-                    VerifyGroupDestination(member);
+                    var copied = _fileSystem.GetFileStat(member.Destination!);
+                    if (copied is not null) createdCopies[member.Destination!] = copied;
+                    VerifyGroupDestination(member, copied);
                 }
                 else if (request.Operation == FileOperationType.Move)
                 {
@@ -230,7 +235,7 @@ public sealed class FileActionService
                 if (tx is { IsPrepared: true } && request.Operation is FileOperationType.Move or FileOperationType.Copy)
                 {
                     stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
-                        ? RemoveCreatedCopies(done, inFlight, inFlightCopyProof.DestinationCreated)
+                        ? RemoveCreatedCopies(done, inFlight, inFlightCopyProof.DestinationCreated, createdCopies)
                         : RestoreMovedMembers(done, inFlight)).ConfigureAwait(false);
                 }
 
@@ -275,12 +280,15 @@ public sealed class FileActionService
     /// <summary>
     /// Copy compensation: deletes the destination files this operation created so a failed or cancelled Copy leaves no
     /// half capture behind (and a re-run is not blocked by the "destination exists" preflight). A verified copy is only
-    /// deleted while it still has the size that was copied; the member being copied when the failure hit is only touched
-    /// when <see cref="IFileSystem.TryCopyNew"/> proved this operation created its destination (so it is our partial file,
-    /// never a foreign one that appeared between the preflight and the copy).
+    /// deleted while it is still exactly the file observed right after its copy (size and write time, R01b), so a replacement made
+    /// later is reported as not cleaned up instead of deleted; the member being copied when the failure hit is only touched
+    /// when <see cref="IFileSystem.TryCopyNew"/> proved this operation created its destination AND it is still the observed file
+    /// (so it is our partial file, never a foreign one that appeared between the preflight and the copy or replaced it afterwards).
     /// Sources and the Recycle Bin are never touched. Returns how many files could not be cleaned up.
     /// </summary>
-    private int RemoveCreatedCopies(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight, bool inFlightDestinationIsOurs)
+    private int RemoveCreatedCopies(
+        IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight, bool inFlightDestinationIsOurs,
+        Dictionary<string, FileStat> createdCopies)
     {
         var stuck = 0;
         foreach (var member in done.Reverse())
@@ -289,7 +297,8 @@ public sealed class FileActionService
             {
                 var stat = _fileSystem.GetFileStat(member.Destination!);
                 if (stat is null) continue;
-                if (stat.Length != member.Size)
+                if (!createdCopies.TryGetValue(member.Destination!, out var created)
+                    || stat.Length != member.Size || !PartialDestinationCleanup.IsSameFile(stat, created))
                 {
                     stuck++;
                     continue;
@@ -307,10 +316,17 @@ public sealed class FileActionService
         {
             try
             {
-                if (_fileSystem.FileExists(partial))
+                if (_fileSystem.GetFileStat(partial) is { } now)
                 {
-                    _fileSystem.Delete(partial);
-                    if (_fileSystem.FileExists(partial)) stuck++;
+                    if (!createdCopies.TryGetValue(partial, out var created) || !PartialDestinationCleanup.IsSameFile(now, created))
+                    {
+                        stuck++; // not the file this operation created (or never observed): kept for the user
+                    }
+                    else
+                    {
+                        _fileSystem.Delete(partial);
+                        if (_fileSystem.FileExists(partial)) stuck++;
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -373,9 +389,8 @@ public sealed class FileActionService
         return stuck;
     }
 
-    private void VerifyGroupDestination(JournalGroupMember member)
+    private static void VerifyGroupDestination(JournalGroupMember member, FileStat? destination)
     {
-        var destination = _fileSystem.GetFileStat(member.Destination!);
         if (destination is null || destination.Length != member.Size)
             throw new JournalCodedException(JournalErrors.VerifySizeChanged);
     }
@@ -383,7 +398,7 @@ public sealed class FileActionService
     private void VerifyGroupMove(JournalGroupMember member)
     {
         if (_fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.MoveSourceNotRemoved);
-        VerifyGroupDestination(member);
+        VerifyGroupDestination(member, _fileSystem.GetFileStat(member.Destination!));
     }
 
     private CaptureGroupMemberResult InspectGroupMember(FileOperationType operation, JournalGroupMember member, string error)
@@ -448,6 +463,9 @@ public sealed class FileActionService
         // before the copy runs: a throw that happened before anything was created (source vanished while a foreign file
         // appeared at the destination) must leave that foreign file alone.
         var copyProof = new CopyCreationProof();
+        // R01a/b: what the destination looked like right after THIS Copy created it. The failure cleanup deletes only a file that still
+        // has this size and write time; without an observation (the stat failed) nothing is deleted.
+        FileStat? copiedStat = null;
 
         try
         {
@@ -518,6 +536,7 @@ public sealed class FileActionService
                         .ConfigureAwait(false);
                     if (!created)
                         throw new IOException(Tr.CoreFileActionDestinationExists(destinationPath));
+                    copiedStat = _fileSystem.GetFileStat(destinationPath);
                 }
                 else
                 {
@@ -535,7 +554,7 @@ public sealed class FileActionService
                 if (request.Operation == FileOperationType.Move)
                     tx.VerifyMoved(_fileSystem, source, destinationPath, JournalErrors.VerifySizeChanged);
                 else
-                    tx.VerifyDestination(_fileSystem, destinationPath, JournalErrors.VerifySizeChanged);
+                    tx.VerifyDestination(copiedStat, JournalErrors.VerifySizeChanged);
 
                 _ = tx.Commit(out var journalError);
                 if (journalError is not null)
@@ -621,8 +640,8 @@ public sealed class FileActionService
         {
             // RV-C03: a Copy cut short (disk full, ...) must not leave its partial file: Recovery would call the entry a
             // Conflict and a retry would refuse "destination exists".
-            if (copyProof.DestinationCreated && destinationPath is not null)
-                RemovePartialCopy(destinationPath, sourceSize);
+            if (copyProof.DestinationCreated && destinationPath is not null && copiedStat is not null)
+                RemovePartialCopy(destinationPath, sourceSize, copiedStat);
 
             string? journalError = null;
             var mutationCompleted = tx?.MutationCompleted ?? false;
@@ -659,12 +678,12 @@ public sealed class FileActionService
     }
 
     /// <summary>
-    /// RV-C03: deletes the destination of a failed single Copy that this call created, only while it is provably incomplete
-    /// (strictly shorter than the source). A complete copy is left for Recovery to judge. Best effort: a file that cannot be
+    /// RV-C03: deletes the destination of a failed single Copy that this call created, only while it is still the file observed right
+    /// after the copy (R01a/b) and provably incomplete (strictly shorter than the source). A complete copy is left for Recovery to judge. Best effort: a file that cannot be
     /// inspected or deleted stays (Recovery then shows the conflict).
     /// </summary>
-    private void RemovePartialCopy(string destination, long sourceSize) =>
-        PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize);
+    private void RemovePartialCopy(string destination, long sourceSize, FileStat created) =>
+        PartialDestinationCleanup.RemoveIfPartial(_fileSystem, destination, sourceSize, created);
 
     /// <summary>RV-C02: true when the source is still exactly the preflight file (same volume: exact compare) and nothing is at
     /// the destination. Any inspection error counts as "touched" (keeps the Failed Recovery line) and never escapes.</summary>

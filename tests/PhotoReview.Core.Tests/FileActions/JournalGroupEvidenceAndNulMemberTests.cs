@@ -153,6 +153,7 @@ public sealed class JournalGroupEvidenceAndNulMemberTests
         Directory.CreateDirectory(Path.GetDirectoryName(paths.JournalFile)!);
         var done = Path.Combine(root.Path, "done.jpg");
         File.WriteAllText(done, "12345");
+        File.SetLastWriteTimeUtc(done, Stamp); // R01c: a moved file keeps the journaled write time
         var badMembers = new JournalGroupMember[]
         {
             new(Path.Combine(root.Path, "gone-a.jpg"), Path.Combine(root.Path, "sel", "a\0.jpg"), 5, Stamp),
