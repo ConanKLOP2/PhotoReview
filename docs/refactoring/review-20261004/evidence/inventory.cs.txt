@@ -1,0 +1,32 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Diagnostics;
+var root = args[0];
+var psi = new ProcessStartInfo("git", "ls-files -- *.cs") { WorkingDirectory = root, RedirectStandardOutput = true };
+using var p = Process.Start(psi)!;
+var files = p.StandardOutput.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries); p.WaitForExit();
+var rows = new List<string>{"Id\tPath\tLine\tEndLine\tKind\tFunction\tStatus\tRationale"};
+int id = 0;
+foreach (var f0 in files.Order()) {
+ var f = f0.Trim(); var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(root, f)), new CSharpParseOptions(LanguageVersion.Preview));
+ foreach (var n in tree.GetRoot().DescendantNodes()) {
+  string? signature = n switch {
+   BaseMethodDeclarationSyntax m when m.Body != null || m.ExpressionBody != null => m.ToString().Split('{')[0].Split("=>")[0].Trim(),
+   LocalFunctionStatementSyntax m => m.Identifier.Text + m.ParameterList.ToString(),
+   AccessorDeclarationSyntax a when a.Body != null || a.ExpressionBody != null => (a.Parent?.Parent is PropertyDeclarationSyntax prop ? prop.Identifier.Text : "indexer/event") + "." + a.Keyword.Text,
+   PropertyDeclarationSyntax prop when prop.ExpressionBody != null => prop.Identifier.Text + ".get",
+   IndexerDeclarationSyntax ix when ix.ExpressionBody != null => "this" + ix.ParameterList.ToString(),
+   AnonymousFunctionExpressionSyntax lam => "lambda in " + (lam.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? lam.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? "initializer"),
+   _ => null
+  };
+  if(signature == null) continue;
+  var span = tree.GetLineSpan(n.Span);
+  var cls = string.Join(".",n.Ancestors().OfType<TypeDeclarationSyntax>().Reverse().Select(t=>t.Identifier.Text));
+  signature = string.Join(" ",signature.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries)).Replace('\t',' ');
+  rows.Add($"F{++id:D5}\t{f}\t{span.StartLinePosition.Line+1}\t{span.EndLinePosition.Line+1}\t{n.Kind()}\t{cls}.{signature}\tUNREVIEWED\t");
+ }
+}
+Directory.CreateDirectory(Path.Combine(root,"TestResults","review"));
+File.WriteAllLines(Path.Combine(root,"TestResults","review","functions.tsv"),rows.Select(row => string.Join("\t", row.Split('\t').Select(field => "\"" + field.Replace("\"", "\"\"") + "\""))));
+Console.WriteLine($"{files.Length} C# files; {id} callable bodies including explicit accessors, local functions and lambdas");

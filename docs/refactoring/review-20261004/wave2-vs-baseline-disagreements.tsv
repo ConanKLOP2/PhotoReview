@@ -1,0 +1,124 @@
+Path	Function	Wave2Verdict	BaselineStatus	Wave2Ledger
+src/PhotoReview.Core/Catalog/DragDropInputService.cs	DragDropInputService.public static DragDropInputResult Parse(IEnumerable<string>? paths, bool rawEnabled = false)	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/Catalog/DragDropInputService.cs	DragDropInputService.lambda in Parse	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/Catalog/ExplorerReason.cs	ExplorerReason.public static string Format(string code, params string[] details)	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/Catalog/ExplorerSnapshotValidator.cs	ExplorerSnapshotValidator.public static bool TryValidate(ExplorerViewSnapshot snapshot, IReadOnlyCollection<string> scannedFiles, out IReadOnlyList<string> ordered, out string? reason)	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/Catalog/ExplorerSnapshotValidator.cs	ExplorerSnapshotValidator.private static bool TryValidateCore(ExplorerViewSnapshot snapshot, IReadOnlyCollection<string> scannedFiles, out IReadOnlyList<string> ordered, out string? reason)	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/Model/ExifInfoFields.cs	ExifInfoFieldsJsonConverter.public override ExifInfoFields Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/Model/ExifInfoFields.cs	ExifInfoFieldsJsonConverter.public override void Write(Utf8JsonWriter writer, ExifInfoFields value, JsonSerializerOptions options)	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/Model/TitleBarFields.cs	TitleBarFieldsJsonConverter.public override TitleBarFields Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/Model/TitleBarFields.cs	TitleBarFieldsJsonConverter.public override void Write(Utf8JsonWriter writer, TitleBarFields value, JsonSerializerOptions options)	ISSUE	STATIC-ONLY	ledger-core-catalog.tsv
+src/PhotoReview.Core/FileActions/ActionDestinationPolicy.cs	ActionDestinationPolicy.public static ActionDestinationCheck ValidateNoEscapeViaReparsePoint( string sourceFolder, string destinationFolderOrPath, IFileSystem fileSystem)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/DuplicateFinder.cs	DuplicateFinder.lambda in FindAsync	ISSUE	STATIC-ONLY	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.private int RemoveCreatedCopies(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight, bool inFlightDestinationIsOurs)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.private void VerifyGroupDestination(JournalGroupMember member)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.public async Task<FileActionResult> ExecuteAsync(FileActionRequest request, CancellationToken cancellationToken = default)	NEEDS-EVIDENCE	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.lambda in ExecuteAsync	NEEDS-EVIDENCE	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/FileActionService.cs	FileActionService.private void RemovePartialCopy(string destination, long sourceSize)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/JournalCompactionPlan.cs	JournalCompactionPlan.public static Result Build(ReadOnlySpan<byte> snapshot)	ISSUE	STATIC-ONLY	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/JournalCompactionPlan.cs	JournalCompactionPlan.IsDroppable(int i)	ISSUE	STATIC-ONLY	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/JournalLineParser.cs	JournalLineParser.private static bool IsKnown<T>(ref Utf8JsonReader reader, string? alias) where T : struct, Enum	ISSUE	STATIC-ONLY	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/JournalLineParser.cs	JournalLineParser.RecordingConverter.public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)	ISSUE	STATIC-ONLY	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.private void AppendLines(IReadOnlyList<JournalEntry> entries)	ISSUE	STATIC-ONLY	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.public IReadOnlyList<JournalEntry> ReconcilePendingOperations(DateTime? preparedBeforeUtc = null)	NEEDS-EVIDENCE	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.lambda in ReconcilePendingOperations	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.private void ReconcileOne(JournalEntry pending, List<JournalEntry> reconciled)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.lambda in ReconcileOne	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.lambda in ReconcileOne	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.lambda in ReconcileOne	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.lambda in ReconcileOne	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.lambda in RepairGroupLinesSettledByOlderBuild	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.lambda in RepairGroupLinesSettledByOlderBuild	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/OperationJournal.cs	OperationJournal.private bool IsGroupMemberCompleted(JournalEntry group, JournalGroupMember member)	NEEDS-EVIDENCE	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/PartialDestinationCleanup.cs	PartialDestinationCleanup.public static void RemoveIfPartial(IFileSystem fileSystem, string destination, long sourceSize)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryFileCheck.cs	RecoveryFileCheck.private static RecoveryVerdict AggregateGroupVerdict(JournalEntry entry, IReadOnlyList<RecoveryGroupMemberCheck> members)	ISSUE	STATIC-ONLY	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryFileCheck.cs	RecoveryFileCheck.lambda in AggregateGroupVerdict	ISSUE	STATIC-ONLY	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.public async Task<RecoveryRetryResult> RetryMoveOrCopyAsync(JournalEntry failed, bool confirmedFinishCancelled = false, CancellationToken ct = default)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.private async Task<RecoveryRetryResult> RetryCoreAsync(JournalEntry failed, bool confirmedFinishCancelled, CancellationToken ct)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.lambda in RetryCoreAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.lambda in RetryGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.lambda in RetryGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.lambda in RetryGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.lambda in RetryGroupAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.private RecoveryRetryResult ExecuteGroupRetry(JournalEntry failed, JournalEntry prepared, IReadOnlyList<RecoveryGroupMemberCheck> pending, CancellationToken ct)	NEEDS-EVIDENCE	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.private void CopyNewOrRemovePartial(string source, string destination, long sourceSize)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/RecoveryRetryService.cs	RecoveryRetryService.private RecoveryRetryResult ExecuteRetry(JournalEntry failed, JournalEntry prepared)	NEEDS-EVIDENCE	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.public async Task<UndoResult> UndoMoveAsync()	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoMoveAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoMoveAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.public async Task<UndoResult> UndoLastAsync()	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoLastAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.private async Task<UndoResult> UndoGroupMoveAsync(UndoActionRecord action, IReadOnlyList<JournalGroupMember> members)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoGroupMoveAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoGroupMoveAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoGroupMoveAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoGroupMoveAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.private async Task<UndoResult> UndoGroupRecycleAsync(UndoActionRecord action, IReadOnlyList<JournalGroupMember> members)	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoGroupRecycleAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoGroupRecycleAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/FileActions/UndoService.cs	UndoService.lambda in UndoGroupRecycleAsync	OK	ISSUE	ledger-core-fileactions.tsv
+src/PhotoReview.Core/IO/PhysicalFileSystem.cs	PhysicalFileSystem.public string ResolveRealPath(string path)	ISSUE	STATIC-ONLY	ledger-core-io.tsv
+src/PhotoReview.Core/Session/SessionWriter.cs	SessionWriter.public SessionWriter(SessionStore store, ILog? log = null, TimeSpan? debounce = null, Func<TimeSpan, CancellationToken, Task>? delay = null)	ISSUE	STATIC-ONLY	ledger-core-io.tsv
+src/PhotoReview.Core/Session/SessionWriter.cs	SessionWriter.public void Update(SessionState state)	ISSUE	STATIC-ONLY	ledger-core-io.tsv
+src/PhotoReview.Core/Session/SessionWriter.cs	SessionWriter.private async Task RunTimerAsync(CancellationTokenSource cts)	ISSUE	STATIC-ONLY	ledger-core-io.tsv
+src/PhotoReview.Core/Session/SessionWriter.cs	SessionWriter.private void WriteBatch(List<(SessionState State, long Version)> batch, bool bounded)	ISSUE	STATIC-ONLY	ledger-core-io.tsv
+src/PhotoReview.Core/Settings/SettingsStore.cs	SettingsStore.private bool TryPersistRepairs(AppSettings repaired)	OK	ISSUE	ledger-core-io.tsv
+src/PhotoReview.Core/Settings/SettingsStore.cs	SettingsStore.public void Save(AppSettings settings)	OK	ISSUE	ledger-core-io.tsv
+src/PhotoReview.Core/Settings/SettingsStore.cs	SettingsStore.public static void Migrate(AppSettings settings)	ISSUE	STATIC-ONLY	ledger-core-io.tsv
+src/PhotoReview.Core/Diagnostics/FileLog.cs	FileLog.private void Write(string level, string message, Exception? exception)	ISSUE	STATIC-ONLY	ledger-core-misc.tsv
+src/PhotoReview.Core/Diagnostics/FileLog.cs	FileLog.private void Drain()	ISSUE	STATIC-ONLY	ledger-core-misc.tsv
+src/PhotoReview.Core/Diagnostics/PerfCsvListener.cs	PerfCsvListener.private async Task WriterLoopAsync()	ISSUE	STATIC-ONLY	ledger-core-misc.tsv
+src/PhotoReview.Core/Diagnostics/PerfCsvListener.cs	PerfCsvListener.public override void Dispose()	ISSUE	STATIC-ONLY	ledger-core-misc.tsv
+src/PhotoReview.Core/Diagnostics/PhotoReviewPerf.cs	PhotoReviewPerf.public static string PathId(string path)	ISSUE	STATIC-ONLY	ledger-core-misc.tsv
+src/PhotoReview.Core/Localization/LanguageCatalog.cs	LanguageCatalog.public static bool TryParse(string json, string source, [NotNullWhen(true)] out LanguageCatalog? catalog, ICollection<string> warnings)	OK	ISSUE	ledger-core-misc.tsv
+src/PhotoReview.Core/Localization/LanguageCatalog.cs	LanguageCatalog.private static bool ParseDocument(JsonDocument doc, string source, ICollection<string> warnings, [NotNullWhen(true)] out LanguageCatalog? catalog)	ISSUE	STATIC-ONLY	ledger-core-misc.tsv
+src/PhotoReview.Core/Localization/LanguageCatalog.cs	LanguageCatalog.private static void ReadMeta(JsonElement meta, string source, ICollection<string> warnings, ref string? code, ref string? name, ref string? nativeName, ref PluralRule plural, ref bool pluralDeclared, List<string> authors)	OK	ISSUE	ledger-core-misc.tsv
+src/PhotoReview.Core/Localization/LocTemplate.cs	LocTemplate.public string Render(ReadOnlySpan<LocArg> args)	OK	ISSUE	ledger-core-misc.tsv
+src/PhotoReview.Core/Localization/LocTemplate.cs	LocTemplate.private static string FormatValue(object? value)	OK	ISSUE	ledger-core-misc.tsv
+src/PhotoReview.Core/Updates/UpdateChecker.cs	UpdateChecker.public async Task<UpdateCheckResult> CheckAsync(string? currentVersion, CancellationToken cancellationToken)	ISSUE	STATIC-ONLY	ledger-core-misc.tsv
+src/PhotoReview.Platform.Windows/Explorer/ExplorerOrderService.cs	ExplorerOrderService.private ExplorerViewSnapshot QueryShell(string folder, IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)	ISSUE	STATIC-ONLY	ledger-platform.tsv
+src/PhotoReview.Platform.Windows/Explorer/ExplorerOrderService.cs	ExplorerOrderService.private ExplorerViewSnapshot TryReadNativeView(object window, string folder, IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)	ISSUE	STATIC-ONLY	ledger-platform.tsv
+src/PhotoReview.Platform.Windows/RecycleBinCapacity.cs	RecycleBinCapacityGuard.internal static RecycleCapacityVerdict Evaluate(string path, long? fileSize, IRecycleBinSettingsSource source, ILog? log = null)	OK	ISSUE	ledger-platform.tsv
+src/PhotoReview.Platform.Windows/WindowsRecycleBin.cs	WindowsRecycleBin.private bool RestoreViaShell(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)	ISSUE	STATIC-ONLY	ledger-platform.tsv
+src/PhotoReview.Benchmarking/BenchmarkWorkloadRunner.cs	BenchmarkWorkloadRunner.lambda in PrepareIterationAsync	ISSUE	STATIC-ONLY	ledger-tooling-a.tsv
+src/PhotoReview.PerfAnalysis/PerfAnalyze.cs	PerfAnalyze.public static Task<AnalysisResult> RunAsync(string runDir, string? rulesPath)	ISSUE	STATIC-ONLY	ledger-tooling-a.tsv
+src/PhotoReview.PerfAnalysis/PerfAnalyzeNav.cs	PerfAnalyzeNavBuilder.private static NavRecord BuildNavRecord(PerfCsvFile file, long navId, List<PerfRow> rows, KeyInputIndex keyInputs)	ISSUE	STATIC-ONLY	ledger-tooling-a.tsv
+src/PhotoReview.PerfAnalysis/PerfAnalyzeReport.cs	PerfAnalyzeReport.public static void WriteJson(string path, PerfAnalyze.AnalysisResult result)	ISSUE	STATIC-ONLY	ledger-tooling-a.tsv
+src/PhotoReview.PerfAnalysis/PerfAnalyzeReport.cs	PerfAnalyzeReport.lambda in WriteJson	ISSUE	STATIC-ONLY	ledger-tooling-a.tsv
+src/PhotoReview.PerfAnalysis/PerfAnalyzeReport.cs	PerfAnalyzeReport.lambda in WriteJson	ISSUE	STATIC-ONLY	ledger-tooling-a.tsv
+src/PhotoReview.PerfAnalysis/PerfAnalyzeReport.cs	PerfAnalyzeReport.lambda in WriteJson	ISSUE	STATIC-ONLY	ledger-tooling-a.tsv
+src/PhotoReview.PerfAnalysis/PerfAnalyzeStats.cs	GroupSummary.LowSampleWarning.get	ISSUE	STATIC-ONLY	ledger-tooling-a.tsv
+src/PhotoReview.Localization.Generator/FlatJsonReader.cs	FlatJsonReader.private List<JsonEntry> ReadRoot()	OK	ISSUE	ledger-tooling-b.tsv
+src/PhotoReview.Localization.Generator/TrGenerator.cs	TrGenerator.private static void Execute(SourceProductionContext context, CatalogInput input)	OK	ISSUE	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/BenchmarkCliArguments.cs	BenchmarkCliArguments.public static string? ParsePerfAnalyzeRules(IReadOnlyList<string> args)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/DecoderBenchmark.cs	DecoderBenchmark.internal static (string[] Backends, int[] Widths, int Iterations) ParseOptions(string[] args)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/DecoderBenchmark.cs	DecoderBenchmark.public static async Task<int> RunAsync(string[] args)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/DecoderBenchmark.cs	DecoderBenchmark.internal static string GenerateMarkdownReport(BenchmarkSummary summary)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/IoDecodeSplit.cs	IoDecodeSplit.private static FileResult MeasureFile(int index, string path, int[] widths, StringBuilder rawCsv)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/LocalUiNextProbe.cs	LocalUiNextProbe.public static async Task RunAsync(string folder, string? cacheDir = null)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/PerfSession.cs	PerfSession.public static async Task<int> RunAsync(string[] args)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/PerfSession.cs	PerfSession.private static bool IsUnder(string path, string root)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/RawDecoderBenchmark.cs	RawDecoderBenchmark.public static async Task<int> RunAsync(string[] args)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/RawSurvey.cs	RawSurvey.public static async Task<int> RunAsync(string[] args, Func<string, long>? readLength = null)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/RawSurvey.cs	RawSurvey.public static async Task<SurveyFileResult> SurveyFileAsync(string filePath, Func<string, long>? readLength = null)	OK	ISSUE	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/RawSurvey.cs	RawSurvey.private static bool TryParseJpegAt(Stream stream, long startOffset, long maxLen, out EmbeddedJpeg jpeg)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/RawSurvey.cs	RawSurvey.private static long ScanForEoi(Stream stream, long maxLen)	ISSUE	STATIC-ONLY	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/RawSurvey.cs	RawSurvey.internal static IReadOnlyList<string> BuildConclusions(SurveySummary summary)	OK	ISSUE	ledger-tooling-b.tsv
+tools/PhotoReview.Benchmark.Cli/RawSurvey.cs	RawSurvey.public static string GenerateMarkdownReport(SurveySummary summary)	OK	ISSUE	ledger-tooling-b.tsv

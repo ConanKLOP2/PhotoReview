@@ -1,0 +1,44 @@
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Model;
+using PhotoReview.Core.Tests.Fakes;
+namespace PhotoReview.Core.Tests;
+public sealed class CoreReviewReproTests
+{
+ private sealed class Clock : IClock { public DateTime UtcNow => new(2026,10,4,0,0,0,DateTimeKind.Utc); }
+ private static (InMemoryFileSystem Fs, OperationJournal Journal, FileActionService Service) World()
+ {
+  var fs=new InMemoryFileSystem(); var paths=new AppPaths(@"C:\fake-review"); var c=new Clock();
+  var journal=new OperationJournal(paths,fs,c); return (fs,journal,new FileActionService(journal,fs,c,new NeverBin()));
+ }
+ private sealed class NeverBin : IRecycleBin
+ {
+  public void SendToRecycleBin(string p)=>throw new InvalidOperationException();
+  public bool TryRestore(string p,long l,DateTime d)=>throw new InvalidOperationException();
+ }
+ [Fact] public async Task SingleCopy_SourceVanishesAndForeignDestinationArrives_DeletesForeignFile()
+ {
+  var w=World(); const string src=@"C:\photos\a.jpg", dst=@"C:\photos\sel\a.jpg";
+  w.Fs.AddFile(src,"long source photo");
+  w.Fs.CopyHook=(s,d)=>{w.Fs.AddFile(d,"foreign"); w.Fs.Delete(s); return null;};
+  var r=await w.Service.ExecuteAsync(new FileActionRequest(src,FileOperationType.Copy,"sel"));
+  Assert.False(r.Succeeded); Assert.False(w.Fs.FileExists(dst));
+ }
+ [Fact] public async Task GroupCopy_SourceVanishesAndForeignDestinationArrives_DeletesFullForeignFile()
+ {
+  var w=World(); const string jpeg=@"C:\photos\a.jpg", raw=@"C:\photos\a.cr2", dst=@"C:\photos\sel\a.cr2";
+  w.Fs.AddFile(jpeg,"jpeg"); w.Fs.AddFile(raw,"raw");
+  w.Fs.CopyHook=(s,d)=>{if(s==raw){w.Fs.AddFile(d,"foreign longer than source");w.Fs.Delete(s);}return null;};
+  var r=await w.Service.ExecuteGroupAsync(new CaptureGroupActionRequest(new CaptureGroup(jpeg,raw),FileOperationType.Copy,"sel"));
+  Assert.False(r.Succeeded); Assert.False(w.Fs.FileExists(dst));
+ }
+ [Fact] public async Task RecoveryCopy_SourceVanishesAndForeignDestinationArrives_DeletesForeignFile()
+ {
+  var w=World(); const string src=@"C:\photos\a.jpg", dst=@"D:\sel\a.jpg";
+  w.Fs.AddFile(src,"long source photo");var st=w.Fs.GetFileStat(src)!;
+  var failed=new JournalEntry("repro",FileOperationType.Copy,JournalState.Failed,src,dst,st.Length,st.LastWriteUtc,new Clock().UtcNow);
+  w.Journal.Append(failed);w.Fs.CopyHook=(s,d)=>{w.Fs.AddFile(d,"foreign");w.Fs.Delete(s);return null;};
+  var r=await new RecoveryRetryService(w.Journal,w.Fs,new Clock()).RetryMoveOrCopyAsync(failed);
+  Assert.False(r.Succeeded); Assert.False(w.Fs.FileExists(dst));
+ }
+}

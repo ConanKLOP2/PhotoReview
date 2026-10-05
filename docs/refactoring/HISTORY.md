@@ -35,6 +35,7 @@ Open work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md). Decisions: [`OPEN-DECISIO
 | **Threading analyzers + reader fuzzing (2026-10-03)** | `Microsoft.VisualStudio.Threading.Analyzers` VSTHRD100/VSTHRD110 and CA2012 are errors for `src/`; `BinaryFuzz` harness + 6 binary-reader fuzz tests (`BinaryReaderFuzzTests`). | #264 |
 | **Dead-code cleanup (2026-10-03)** | Unused usings, dead members/params, orphaned `SourceSizeTracker`, unused i18n keys and 4 unused scripts removed. | #265, #266 |
 | **Mutation testing (Stryker.NET) 2026-10-03/04** | Stryker.NET (Basic level) on Core, Imaging, Imaging.Raw, LibRaw and App: mutation scores 57-82% -> 78-97%, ~1,700 tests added, a handful of internal test seams (TurboJpeg/WIC/PhysicalFileSystem/OperationJournal/DiskCacheStore/PreviewImageService/PreloadScheduler), `JournalTransaction.Commit` clock fix, `AsRational` type-test fix, Settings > Import on the shared `ParseText` pipeline. Recipe, scores, remaining seam-needing survivors: [`../MUTATION-TESTING.md`](../MUTATION-TESTING.md). | #268-#275 |
+| **Whole-project function review (2026-10-04/05)** | Static review of 16,799 callable bodies (baseline `18aa6eb6`) plus wave-2 ledgers; findings reconciled to master `d2a0e9a6`; ledger gz and status table in [`review-20261004/`](review-20261004/README.md). Open leftovers: [ACTIVE-TASKS](../ACTIVE-TASKS.md). | #284 (review branch, not merged), wave-2 ledgers #301-#308, fixes #287-#326 |
 
 ## Handoff log (older detail dropped)
 

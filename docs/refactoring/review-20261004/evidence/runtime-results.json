@@ -1,0 +1,65 @@
+[
+  {
+    "Evidence": "core-review-repros.trx",
+    "Test": "PhotoReview.Core.Tests.CoreReviewReproTests.SingleCopy_SourceVanishesAndForeignDestinationArrives_DeletesForeignFile",
+    "Outcome": "Passed",
+    "Duration": "00:00:00.0739354",
+    "Message": null
+  },
+  {
+    "Evidence": "core-review-repros.trx",
+    "Test": "PhotoReview.Core.Tests.CoreReviewReproTests.RecoveryCopy_SourceVanishesAndForeignDestinationArrives_DeletesForeignFile",
+    "Outcome": "Passed",
+    "Duration": "00:00:00.1312290",
+    "Message": null
+  },
+  {
+    "Evidence": "core-review-repros.trx",
+    "Test": "PhotoReview.Core.Tests.CoreReviewReproTests.GroupCopy_SourceVanishesAndForeignDestinationArrives_DeletesFullForeignFile",
+    "Outcome": "Passed",
+    "Duration": "00:00:00.2985391",
+    "Message": null
+  },
+  {
+    "Evidence": "app-review-repros.trx",
+    "Test": "PhotoReview.App.Tests.Input.PointerInputControllerTests.Review_FitWidthSupersededDuringRender_OverflowCorrectionDoesNotOverrideNewZoom",
+    "Outcome": "Failed",
+    "Duration": "00:00:00.1269076",
+    "Message": "System.InvalidOperationException : Collection was modified; enumeration operation may not execute."
+  },
+  {
+    "Evidence": "app-review-repros.trx",
+    "Test": "PhotoReview.App.Tests.ViewModels.MainViewModelFileActionTests.Review_QueuedMove_FolderChangesBeforeItsTurn_DoesNotMoveNewFolderPhoto",
+    "Outcome": "Failed",
+    "Duration": "00:00:02.5960742",
+    "Message": "An action queued in folder A moved folder B's photo."
+  },
+  {
+    "Evidence": "fit-review-repro.trx",
+    "Test": "PhotoReview.App.Tests.Input.PointerInputControllerTests.Review_FitWidthSupersededDuringRender_OverflowCorrectionDoesNotOverrideNewZoom",
+    "Outcome": "Failed",
+    "Duration": "00:00:00.0509764",
+    "Message": "Assert.Equal() Failure: Values are not within 6 decimal places\r\nExpected: 2 (rounded from 2)\r\nActual:   0.40000000000000002 (rounded from 0.40000000000000002)"
+  },
+  {
+    "Evidence": "forwarded-retry.trx",
+    "Test": "A3: a forwarded launch that arrives after the main window closed is dropped, not opened into it",
+    "Outcome": "Passed",
+    "Duration": "00:00:04.0790107",
+    "Message": null
+  },
+  {
+    "Evidence": "core-settings-lead.trx",
+    "Test": "PhotoReview.Core.Tests.CoreReviewSettingsReproTests.ParseText_NonFiniteFontSize_ResultIsNaN",
+    "Outcome": "Passed",
+    "Duration": "00:00:00.0394152",
+    "Message": null
+  },
+  {
+    "Evidence": "core-settings-lead.trx",
+    "Test": "PhotoReview.Core.Tests.CoreReviewSettingsReproTests.ParseText_KeyboardZoomStepAboveMax_RemainsUnnormalized",
+    "Outcome": "Passed",
+    "Duration": "00:00:00.2106870",
+    "Message": null
+  }
+]
