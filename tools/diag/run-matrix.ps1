@@ -232,20 +232,16 @@ if ($cacheDir) { Write-Host "Cache isolation: preview+thumbnail caches under $ca
 else { Write-Host "Cache isolation: -SharedAppCache -- using the real $localApp caches" -ForegroundColor Yellow }
 
 # Fixture-change guard: snapshot every fixture folder now, and re-check after every run.
-function Get-FixtureStat([string]$path) {
-    $files = @(Get-ChildItem -LiteralPath $path -File -Recurse -ErrorAction SilentlyContinue)
-    $bytes = if ($files.Count -eq 0) { 0 } else { ($files | Measure-Object -Property Length -Sum).Sum }
-    return [pscustomobject]@{ Count = $files.Count; Bytes = [int64]$bytes }
-}
+. (Join-Path $PSScriptRoot 'Fixture-Fingerprint.ps1')  # Get-FixtureStat / Test-FixtureStatEqual (count + bytes + listing fingerprint)
 $fixtureBaseline = @{}
 foreach ($alias in $FixtureAlias) { $fixtureBaseline[$alias] = Get-FixtureStat $folders[$alias] }
 $script:fixtureChanged = $false
 function Test-FixtureUnchanged([string]$alias) {
     $current = Get-FixtureStat $folders[$alias]
     $base = $fixtureBaseline[$alias]
-    if ($current.Count -ne $base.Count -or $current.Bytes -ne $base.Bytes) {
+    if (-not (Test-FixtureStatEqual $base $current)) {
         $script:fixtureChanged = $true
-        Write-Host "WARNING: fixture '$alias' ($($folders[$alias])) changed mid-batch: was $($base.Count) file(s)/$($base.Bytes) bytes, now $($current.Count) file(s)/$($current.Bytes) bytes. This entire batch is suspect." -ForegroundColor Red
+        Write-Host "WARNING: fixture '$alias' ($($folders[$alias])) changed mid-batch: was $($base.Count) file(s)/$($base.Bytes) bytes/fingerprint $($base.Fingerprint), now $($current.Count) file(s)/$($current.Bytes) bytes/fingerprint $($current.Fingerprint) (names, sizes or last-write times differ). This entire batch is suspect." -ForegroundColor Red
     }
 }
 

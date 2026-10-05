@@ -168,6 +168,22 @@ function Test-FetchRawSamplesSelfTest {
         catch { if ($_.Exception.Message -like '*is not recorded as CC0 1.0*') { $nonCc0Rejected = $true } else { throw } }
         if (-not $nonCc0Rejected) { throw 'SELF-TEST FAILED: One-row manifest with a non-CC0 record was accepted.' }
 
+        # R27: an existing (caller-owned) target must survive a failed download and be replaced only by a verified temp file.
+        $keepTarget = Join-Path $testTempDir 'keep.CR2'
+        Set-Content -LiteralPath $keepTarget -Value 'caller-owned' -Encoding UTF8
+        $installFailed = $false
+        try { Install-VerifiedRawSample -VerifiedTempFile (Join-Path $testTempDir 'keep.CR2.tmp.missing') -TargetPath $keepTarget } catch { $installFailed = $true }
+        if (-not $installFailed) { throw 'SELF-TEST FAILED: Installing a missing verified temp file did not fail.' }
+        if (-not (Test-Path -LiteralPath $keepTarget) -or ((Get-Content -LiteralPath $keepTarget -Raw).Trim() -ne 'caller-owned')) {
+            throw 'SELF-TEST FAILED: A failed install removed or changed the existing target file.'
+        }
+        $newTemp = Join-Path $testTempDir 'keep.CR2.tmp.new'
+        Set-Content -LiteralPath $newTemp -Value 'verified-new' -Encoding UTF8
+        Install-VerifiedRawSample -VerifiedTempFile $newTemp -TargetPath $keepTarget
+        if ((Get-Content -LiteralPath $keepTarget -Raw).Trim() -ne 'verified-new' -or (Test-Path -LiteralPath $newTemp)) {
+            throw 'SELF-TEST FAILED: A verified temp file did not replace the existing target.'
+        }
+
         Write-Host 'PASS: fetch-raw-samples self-test matched injected CC0 source metadata and rejected missing/non-CC0 records, malformed manifest rows, and SHA-256 mismatches.' -ForegroundColor Green
         return $true
     }
@@ -367,6 +383,20 @@ function Select-RawSamples {
     return $selected
 }
 
+function Install-VerifiedRawSample {
+    # Puts an already downloaded AND hash-verified temp file (same folder as the target, so the move is a same-volume
+    # rename) into place. An existing target is replaced only by this final move; if the temp file is missing the
+    # move throws and the existing target is left untouched.
+    param(
+        [Parameter(Mandatory = $true)][string]$VerifiedTempFile,
+        [Parameter(Mandatory = $true)][string]$TargetPath
+    )
+    if (-not (Test-Path -LiteralPath $VerifiedTempFile -PathType Leaf)) {
+        throw "Verified download '$VerifiedTempFile' is missing; '$TargetPath' was left untouched."
+    }
+    Move-Item -LiteralPath $VerifiedTempFile -Destination $TargetPath -Force
+}
+
 if ($SelfTest) {
     Test-FetchRawSamplesSelfTest
     exit 0
@@ -402,8 +432,9 @@ foreach ($sample in $selectedSamples) {
             if ($Limit -gt 0 -and $processed -ge $Limit) { break }
             continue
         } else {
-            Write-Warning "MISMATCH: $fileName existing hash mismatch ($existingHash vs $expectedHash). Re-fetching..."
-            Remove-Item -LiteralPath $targetPath -Force -ErrorAction SilentlyContinue
+            # Do NOT delete the existing file here: it is caller-owned and the download below may still fail. It is
+            # replaced only by Install-VerifiedRawSample after the new bytes were downloaded and hash-verified.
+            Write-Warning "MISMATCH: $fileName existing hash mismatch ($existingHash vs $expectedHash). Re-fetching (existing file kept until the new one is verified)..."
         }
     }
 
@@ -427,7 +458,7 @@ foreach ($sample in $selectedSamples) {
             throw
         }
 
-        Move-Item -LiteralPath $tempFile -Destination $targetPath -Force
+        Install-VerifiedRawSample -VerifiedTempFile $tempFile -TargetPath $targetPath
         Write-Host "PASS: Fetched and verified $fileName successfully." -ForegroundColor Green
         $processed++
         if ($Limit -gt 0 -and $processed -ge $Limit) { break }
