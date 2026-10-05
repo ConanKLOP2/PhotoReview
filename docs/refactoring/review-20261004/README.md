@@ -1,6 +1,6 @@
 # Whole-project function review (2026-10-04) - folder guide
 
-Static review of every callable body in the repository, landed from the (still open, untouched) review branch of PR #284 and reconciled with `origin/master`. **Start with [WORK-REVIEW.md](WORK-REVIEW.md)**: its status table at the top gives the current state (FIXED / OPEN / ...) of every finding. Everything else here is supporting evidence.
+Static review of every callable body in the repository, landed from the review branch of PR #284 (closed 2026-10-05, superseded by #327; the full original `functions.tsv` is in the annotated git tag `review-20261004-archive`) and reconciled with `origin/master`. **Start with [WORK-REVIEW.md](WORK-REVIEW.md)**: its status table at the top gives the current state (FIXED / OPEN / ...) of every finding. Everything else here is supporting evidence.
 
 ## Files
 
