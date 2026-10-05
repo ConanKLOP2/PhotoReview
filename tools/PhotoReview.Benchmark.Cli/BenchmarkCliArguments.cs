@@ -108,7 +108,7 @@ internal static class BenchmarkCliArguments
     {
         var reportDirectory = outputOverride is { Length: > 0 }
             ? Path.GetFullPath(outputOverride)
-            : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
+            : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N")[..6]);
         ToolPathGuard.EnsureOutputDirectory(reportDirectory, photoFolder);
         return reportDirectory;
     }

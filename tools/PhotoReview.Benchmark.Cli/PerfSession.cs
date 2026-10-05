@@ -150,8 +150,7 @@ internal static class PerfSession
         /// <summary>
         /// Q-R29 slow-link measurement: total bandwidth cap, in MB/s (1,000,000 bytes/s), shared by every
         /// reader in this process (foreground decode + preload workers) -- models one wifi link. Null =
-        /// no cap. Only meaningful together with <see cref="SlowLinkLatencyMs"/> being non-null (both flags
-        /// are independent, but a bandwidth cap with zero added stat latency does not model Q-R29's NAS case).
+        /// no cap. Applied on its own too (R34): a bandwidth cap alone enables the slow link with zero added stat latency.
         /// </summary>
         public double? SlowLinkBandwidthMbps { get; set; }
     }
@@ -288,7 +287,7 @@ internal static class PerfSession
         // ImagePresenter's TryGetFileStat, folder enumeration, preload's OpenReadShared reads -- resolves the
         // SAME instance, so the bandwidth cap is genuinely shared across the foreground read and preload
         // workers, modelling one wifi link. Never touches config.json or any other machine's state.
-        var slowLinkEnabled = options.SlowLinkLatencyMs is not null;
+        var slowLinkEnabled = IsSlowLinkRequested(options);
         var slowLinkBandwidth = options.SlowLinkBandwidthMbps is { } mbps
             ? new PhotoReview.Benchmarking.SharedBandwidthLimiter((long)(mbps * 1_000_000))
             : null;
@@ -301,7 +300,7 @@ internal static class PerfSession
                 // ReviewMetrics.StatCount still counts real metadata calls) with the extra latency/bandwidth cap.
                 overrides.AddSingleton<IFileSystem>(sp => new PhotoReview.Benchmarking.SlowLinkFileSystem(
                     new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()),
-                    TimeSpan.FromMilliseconds(options.SlowLinkLatencyMs!.Value),
+                    TimeSpan.FromMilliseconds(options.SlowLinkLatencyMs ?? 0),
                     slowLinkBandwidth));
             if (slowLinkEnabled)
                 // Q-R29 option C-2: the SAME SharedBandwidthLimiter instance as above, but wired onto the
@@ -435,17 +434,19 @@ internal static class PerfSession
                             if (!usesCopy) throw new InvalidOperationException("action steps require a temporary copy");
                             var repeat = Math.Max(1, step.Repeat ?? 1);
                             var done = 0;
+                            var handled = 0;
                             for (var i = 0; i < repeat; i++)
                             {
                                 if (GetFiles(window).Count == 0) { detail = "folder empty"; break; }
                                 VerifyActionTarget(window, settings, folder, copyRoot);
                                 keysSent++;
-                                if (SendKey(window, key)) keysHandled++;
+                                if (SendKey(window, key)) { keysHandled++; handled++; }
                                 done++;
                                 await WaitUntilAsync(() => !window.IsFileActionInProgress,
                                     TimeSpan.FromSeconds(30));
                                 if (step.IntervalMs is > 0) await Task.Delay(step.IntervalMs.Value);
                             }
+                            if (ActionNotInvokedReason(step.Action!, done, handled) is { } notInvoked) throw new InvalidOperationException(notInvoked);
                             var moved = Directory.Exists(actionDestination) ? Directory.GetFiles(actionDestination).Length : 0;
                             detail = $"{key} x{done} @{step.IntervalMs ?? 0}ms moved={moved} remaining={GetFiles(window).Count}" + (detail is null ? "" : $" ({detail})");
                             break;
@@ -926,6 +927,15 @@ internal static class PerfSession
     }
 
     // ---- Parsing ---------------------------------------------------------------------------------
+
+    /// <summary>R34: a bandwidth-only <c>--slow-link-bandwidth-mbps</c> is applied too, not just reported.</summary>
+    internal static bool IsSlowLinkRequested(Options options) => options.SlowLinkLatencyMs is not null || options.SlowLinkBandwidthMbps is not null;
+
+    /// <summary>R35: an action step that never ran its action (empty folder, or the key was not handled) must fail the scenario instead of passing silently.</summary>
+    internal static string? ActionNotInvokedReason(string action, int iterationsRun, int keysHandled) =>
+        iterationsRun == 0 ? $"action step '{action}' was not invoked: the folder was empty"
+        : keysHandled == 0 ? $"action step '{action}' was not invoked: its key was sent {iterationsRun} time(s) but never handled"
+        : null;
 
     internal static Options ParseArgs(string[] args)
     {

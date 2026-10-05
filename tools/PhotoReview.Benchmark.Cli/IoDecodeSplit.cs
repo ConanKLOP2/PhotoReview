@@ -106,9 +106,9 @@ internal static class IoDecodeSplit
         {
             // Reports are written even when the loop was aborted, so the files measured so far are never lost.
             var rawPath = Path.Combine(outDir, "raw.csv");
-            await File.WriteAllTextAsync(rawPath, rawCsv.ToString());
+            await ToolPathGuard.WriteReportFileAsync(rawPath, rawCsv.ToString());
             var summaryPath = Path.Combine(outDir, "summary.md");
-            await File.WriteAllTextAsync(summaryPath, BuildSummary(results, widths, files.Length, max, failures));
+            await ToolPathGuard.WriteReportFileAsync(summaryPath, BuildSummary(results, widths, files.Length, max, failures));
             Console.WriteLine($"RAW: {rawPath}");
             Console.WriteLine($"REPORT: {summaryPath}");
         }
