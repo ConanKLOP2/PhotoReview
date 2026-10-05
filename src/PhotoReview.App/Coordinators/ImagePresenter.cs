@@ -283,7 +283,7 @@ public sealed class ImagePresenter
         StatResult initial;
         try
         {
-            initial = await StatOffUiThreadAsync(path, viewerDecodeCts.Token);
+            initial = await StatOffUiThreadAsync(path, viewerDecodeToken);
         }
         catch (OperationCanceledException) when (!_clock.IsNavigationCurrent(token))
         {
@@ -375,7 +375,7 @@ public sealed class ImagePresenter
             // perf(preload): the viewer's decode gets its own priority lane and is dropped (before it
             // starts) when a newer navigation supersedes this one; see GetViewerPreviewAsync.
             var previewTask = ramReady ? null : _previewService.GetViewerPreviewAsync(path, currentKey,
-                viewerDecodeCts.Token, _preloadController.GetViewerDecodeDelay());
+                viewerDecodeToken, _preloadController.GetViewerDecodeDelay());
             // R2-F-29: a superseded navigation returns without awaiting previewTask; observe a later fault here so it
             // is not reported context-free by TaskScheduler.UnobservedTaskException at GC time. Awaiting it below
             // still throws as before (a continuation does not consume the exception).

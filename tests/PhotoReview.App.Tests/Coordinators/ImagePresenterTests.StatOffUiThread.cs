@@ -217,6 +217,31 @@ public sealed partial class ImagePresenterTests
         Assert.Equal(1, _catalog.CurrentIndex);
     }
 
+    [Fact(DisplayName = "APP-P01: a navigation whose SUCCESSFUL stat resumes after a newer navigation disposed its decode source completes quietly and shows nothing")]
+    public async Task PresentAsync_SupersededWhileStatPending_SuccessfulStatResumesWithoutTouchingDisposedSource()
+    {
+        var first = CreateFakeImageFile("first.png");
+        var second = CreateFakeImageFile("second.png");
+        _catalog.Reset([first, second]);
+        var fs = new DelayedStatFileSystem(new PhysicalFileSystem());
+        fs.Hold(first);
+        var presenter = CreatePresenterWithDelayedStat(fs);
+        Task stale, current;
+        try
+        {
+            stale = presenter.PresentAsync(0);
+            await fs.StatStarted(first).WaitAsync(GateTimeout);
+            current = presenter.PresentAsync(1); // disposes the first navigation's decode source while its stat is pending
+            fs.Release(first); // the first stat now resumes with a Found result, after its source was disposed
+            await Task.WhenAll(stale, current).WaitAsync(GateTimeout);
+        }
+        finally { fs.ReleaseAll(); }
+
+        Assert.True(stale.IsCompletedSuccessfully);
+        Assert.Equal([second], _sink.PresentedPaths);
+        Assert.Equal(1, _catalog.CurrentIndex);
+    }
+
     [Fact(DisplayName = "Q-R29 C: stats of navigations superseded while queued behind a slow stat are dropped without touching the disk")]
     public async Task PresentAsync_BurstBehindSlowStat_SkipsTheSupersededStats()
     {

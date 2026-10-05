@@ -256,6 +256,7 @@ public sealed class RawDecoder : IImageDecoder
             {
                 var thumbnail = DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, () => Tr.ImageErrorRawCorrupt, out fallbackThumbnailBytesRead);
                 degradedFallback = true; // the container's real previews failed to decode
+                previewBytesRead = failedBytes; // the failed attempts' bytes were read from the file too
                 return thumbnail;
             }
             catch (Exception ex) when (_noPreviewDecoder is not null && IsRecoverablePreviewFailure(ex))
