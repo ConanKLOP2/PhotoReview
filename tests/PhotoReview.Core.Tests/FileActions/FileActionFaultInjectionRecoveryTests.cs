@@ -81,16 +81,16 @@ public sealed class FileActionFaultInjectionRecoveryTests
     }
 
     [Fact(DisplayName = "Undo of a Move: every fault point keeps the photo, the stack truthful and the undo retryable")]
-    public Task UndoMove_Matrix() => FaultInjectionMatrix.RunAsync("UndoMove", () => AfterAction(false, FileOperationType.Move), Undo, CheckUndoRetryable);
+    public Task UndoMove_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("UndoMove", () => AfterAction(false, FileOperationType.Move), Undo, CheckUndoRetryable);
 
     [Fact(DisplayName = "Undo of a group Move: every fault point loses no member")]
-    public Task UndoGroupMove_Matrix() => FaultInjectionMatrix.RunAsync("UndoGroupMove", () => AfterAction(true, FileOperationType.Move), Undo, CheckUndoRetryable);
+    public Task UndoGroupMove_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("UndoGroupMove", () => AfterAction(true, FileOperationType.Move), Undo, CheckUndoRetryable);
 
     [Fact(DisplayName = "Undo of a Delete (restore from the fake bin): every fault point leaves the photo in exactly one place")]
-    public Task UndoRecycle_Matrix() => FaultInjectionMatrix.RunAsync("UndoRecycle", () => AfterAction(false, FileOperationType.Recycle), Undo, CheckUndoRetryable, minCalls: 1);
+    public Task UndoRecycle_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("UndoRecycle", () => AfterAction(false, FileOperationType.Recycle), Undo, CheckUndoRetryable, minCalls: 1);
 
     [Fact(DisplayName = "Undo of a group Delete: every fault point leaves each member in exactly one place")]
-    public Task UndoGroupRecycle_Matrix() => FaultInjectionMatrix.RunAsync("UndoGroupRecycle", () => AfterAction(true, FileOperationType.Recycle), Undo, CheckUndoRetryable);
+    public Task UndoGroupRecycle_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("UndoGroupRecycle", () => AfterAction(true, FileOperationType.Recycle), Undo, CheckUndoRetryable);
 
     // ---- Recovery retry --------------------------------------------------------------------------------------------------------
 
@@ -110,10 +110,10 @@ public sealed class FileActionFaultInjectionRecoveryTests
     }
 
     [Fact(DisplayName = "Retry of a failed Move: every fault point keeps the photo and the verdict matches the disk")]
-    public Task RetryMove_Matrix() => FaultInjectionMatrix.RunAsync("RetryMove", () => WithFailedSingle(FileOperationType.Move), Retry);
+    public Task RetryMove_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("RetryMove", () => WithFailedSingle(FileOperationType.Move), Retry);
 
     [Fact(DisplayName = "Retry of a failed Copy: every fault point keeps the source and never calls a truncated copy done")]
-    public Task RetryCopy_Matrix() => FaultInjectionMatrix.RunAsync("RetryCopy", () => WithFailedSingle(FileOperationType.Copy), Retry);
+    public Task RetryCopy_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("RetryCopy", () => WithFailedSingle(FileOperationType.Copy), Retry);
 
     /// <summary>A group action that died after its first member: a.jpg already moved to sel (or already in the bin), the RAW and the XMP untouched.</summary>
     private static async Task<FaultRig> WithHalfDoneGroup(FileOperationType type)
@@ -142,26 +142,26 @@ public sealed class FileActionFaultInjectionRecoveryTests
     }
 
     [Fact(DisplayName = "Retry of a half-moved group Move: every fault point loses no member")]
-    public Task RetryGroupMove_Matrix() => FaultInjectionMatrix.RunAsync("RetryGroupMove", () => WithHalfDoneGroup(FileOperationType.Move), Retry);
+    public Task RetryGroupMove_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("RetryGroupMove", () => WithHalfDoneGroup(FileOperationType.Move), Retry);
 
     [Fact(DisplayName = "Retry of a half-deleted group Delete: every fault point leaves each member in exactly one place")]
-    public Task RetryGroupRecycle_Matrix() => FaultInjectionMatrix.RunAsync("RetryGroupRecycle", () => WithHalfDoneGroup(FileOperationType.Recycle), Retry);
+    public Task RetryGroupRecycle_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("RetryGroupRecycle", () => WithHalfDoneGroup(FileOperationType.Recycle), Retry);
 
     // ---- The startup reconcile is itself interrupted ---------------------------------------------------------------------------
 
     [Fact(DisplayName = "Reconcile interrupted at each of its own writes after a Move crash: the next start reaches the same verdict")]
-    public Task ReconcileInterrupted_Move() => FaultInjectionMatrix.RunReconcileInterruptedAsync("ReconcileMove", SingleRig,
+    public Task ReconcileInterrupted_Move() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileMove", SingleRig,
         rig => Do(rig, new FileActionRequest(A, FileOperationType.Move, "sel")));
 
     [Fact(DisplayName = "Reconcile interrupted at each of its own writes after a Copy crash: the next start reaches the same verdict")]
-    public Task ReconcileInterrupted_Copy() => FaultInjectionMatrix.RunReconcileInterruptedAsync("ReconcileCopy", SingleRig,
+    public Task ReconcileInterrupted_Copy() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileCopy", SingleRig,
         rig => Do(rig, new FileActionRequest(A, FileOperationType.Copy, "sel")));
 
     [Fact(DisplayName = "Reconcile interrupted at each of its own writes after a group Move crash: the next start reaches the same verdict")]
-    public Task ReconcileInterrupted_GroupMove() => FaultInjectionMatrix.RunReconcileInterruptedAsync("ReconcileGroupMove", GroupRig,
+    public Task ReconcileInterrupted_GroupMove() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileGroupMove", GroupRig,
         rig => DoGroup(rig, FileOperationType.Move));
 
     [Fact(DisplayName = "Reconcile interrupted at each of its own writes after a group Delete crash: the next start reaches the same verdict")]
-    public Task ReconcileInterrupted_GroupRecycle() => FaultInjectionMatrix.RunReconcileInterruptedAsync("ReconcileGroupRecycle", GroupRig,
+    public Task ReconcileInterrupted_GroupRecycle() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileGroupRecycle", GroupRig,
         rig => DoGroup(rig, FileOperationType.Recycle, null));
 }

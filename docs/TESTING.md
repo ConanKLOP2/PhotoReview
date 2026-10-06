@@ -28,7 +28,7 @@ Five xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`, 
 
 ## Fault-injection (crash-consistency) tests
 
-`tests/PhotoReview.Core.Tests/FileActions/FileActionFaultInjection*Tests.cs` run each file-action scenario (Move, Copy, Delete via a fake bin, group actions, Undo, Recovery retry, interrupted startup reconcile) once per mutating call x fault kind (`FaultInjectionFileSystem`: crash before/after/torn, or one transient failure). `FaultInvariants` then checks no photo lost, duplicated or overwritten, every journal verdict true, nothing Prepared, a second reconcile a no-op. A new scenario is one `FaultInjectionMatrix.RunAsync` call; in-memory only (no real disk or Recycle Bin). `JournalCompactionFaultInjectionTests` does the same for journal compaction.
+`tests/PhotoReview.Core.Tests/FileActions/FileActionFaultInjection*Tests.cs` run each file-action scenario (Move, Copy, Delete via a fake bin, group actions, Undo, Recovery retry, interrupted startup reconcile) once per mutating call x fault kind (`FaultInjectionFileSystem`: crash before/after/torn, or one transient failure). `FaultInvariants` then checks no photo lost, duplicated or overwritten, every journal verdict true, nothing Prepared, a second reconcile a no-op. A new scenario is one `FaultInjectionMatrix.AssertAllFaultPointsAsync` call; in-memory only (no real disk or Recycle Bin). `JournalCompactionFaultInjectionTests` does the same for journal compaction.
 
 ## Mutation tests
 

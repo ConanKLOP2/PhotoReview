@@ -16,7 +16,7 @@ internal static class FaultInjectionMatrix
     /// Runs <paramref name="act"/> on a fresh rig for every injection point. <paramref name="create"/> builds the rig AND runs the
     /// healthy part of the scenario (the setup is never faulted); only <paramref name="act"/> is numbered.
     /// </summary>
-    public static async Task RunAsync(string name, Func<Task<FaultRig>> create, Func<FaultRig, Task> act,
+    public static async Task AssertAllFaultPointsAsync(string name, Func<Task<FaultRig>> create, Func<FaultRig, Task> act,
         Func<FaultRig, string, List<string>, Task>? extraCheck = null, FaultKind[]? kinds = null, int minCalls = 2)
     {
         var violations = new List<string>();
@@ -116,7 +116,7 @@ internal static class FaultInjectionMatrix
     /// every crash point of <paramref name="act"/>: the next, healthy start must still reach exactly the verdicts an uninterrupted
     /// reconcile reaches, lose nothing, and be idempotent.
     /// </summary>
-    public static async Task RunReconcileInterruptedAsync(string name, Func<Task<FaultRig>> create, Func<FaultRig, Task> act)
+    public static async Task AssertReconcileInterruptedAsync(string name, Func<Task<FaultRig>> create, Func<FaultRig, Task> act)
     {
         var violations = new List<string>();
         var probe = await create();
