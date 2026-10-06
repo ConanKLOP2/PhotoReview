@@ -1,13 +1,13 @@
 [CmdletBinding()]
 param(
-    # Output directory (git-ignored: /work/ is in .gitignore). Raw .coverage files, the merged cobertura
+    # Output directory, absolute or relative to the current directory (git-ignored: /work/ is in .gitignore). Raw .coverage files, the merged cobertura
     # XML, summary.json and coverage-report.md land here. Never commit it.
     [string]$OutDir = '',
 
     # Skip the Release build of the solution (use when it was just built).
     [switch]$SkipBuild,
 
-    # Only measure these test projects (names like 'PhotoReview.Core.Tests'); default: all five.
+    # Only measure these test projects ('Core', 'Core.Tests' or 'PhotoReview.Core.Tests'); default: all five.
     [string[]]$Project = @(),
 
     # Re-render the report from an existing merged cobertura file without running any test.
@@ -45,20 +45,33 @@ param(
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File tools/coverage.ps1
     Full run (~5-10 min); report in work\coverage\coverage-report.md.
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File tools/coverage.ps1 -Project Core -OutDir work\cov-core
+    One project, relative -OutDir (resolved against the current directory). Exits non-zero with a message
+    when the merged cobertura has no packages or lines.
 #>
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($OutDir)) { $OutDir = Join-Path $root 'work\coverage' }
+# Absolute from the start: a relative -OutDir would otherwise resolve against whichever working directory a
+# child process (test host, dotnet-coverage) happens to have, and produce an empty merge.
+if (-not [System.IO.Path]::IsPathRooted($OutDir)) { $OutDir = Join-Path (Get-Location).ProviderPath $OutDir }
+$OutDir = [System.IO.Path]::GetFullPath($OutDir)
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-$OutDir = (Resolve-Path -LiteralPath $OutDir).Path
 $merged = Join-Path $OutDir 'merged.cobertura.xml'
 $mergedXml = Join-Path $OutDir 'merged.coverage.xml'
 $rawDir = Join-Path $OutDir 'raw'
 
 $allProjects = @('Architecture.Tests', 'Core.Tests', 'Imaging.Tests', 'Integration.Tests', 'App.Tests') |
     ForEach-Object { "PhotoReview.$_" }
-if ($Project.Count -gt 0) { $allProjects = $allProjects | Where-Object { $Project -contains $_ } }
+if ($Project.Count -gt 0) {
+    # Accept 'Core', 'Core.Tests' or 'PhotoReview.Core.Tests'.
+    $wanted = $Project | ForEach-Object { $n = $_ -replace '^PhotoReview\.', ''; if ($n -notmatch '\.Tests$') { $n += '.Tests' }; "PhotoReview.$n" }
+    $allProjects = @($allProjects | Where-Object { $wanted -contains $_ })
+    if ($allProjects.Count -eq 0) { throw "-Project '$($Project -join ', ')' matches none of the test projects" }
+}
 
 if (-not $ReportOnly) {
     Push-Location $root
@@ -146,11 +159,21 @@ if (-not $ReportOnly) {
         }
         if ($failed.Count -gt 0) { Write-Warning "Test failures in: $($failed -join ', ') (coverage still merged, but numbers are for a red run)" }
 
-        $files = Get-ChildItem -LiteralPath $rawDir -Recurse -Filter *.coverage | ForEach-Object FullName
+        # @(...) is load-bearing: with exactly one .coverage file (a single -Project) the pipeline yields a bare string,
+        # and splatting `@files` of a string passes NO file to dotnet-coverage, which then writes an EMPTY merge.
+        $files = @(Get-ChildItem -LiteralPath $rawDir -Recurse -Filter *.coverage | ForEach-Object FullName)
         if (-not $files) { throw "No .coverage files produced under $rawDir" }
         foreach ($m in @($merged, $mergedXml)) { if (Test-Path -LiteralPath $m) { Remove-Item -Force -LiteralPath $m } }
         dotnet tool run dotnet-coverage merge -f cobertura -o $merged @files
         if ($LASTEXITCODE -ne 0) { throw 'dotnet-coverage merge failed' }
+        # Fail loudly on an empty merge (no packages / no lines) instead of writing a report of zeros.
+        if (-not (Test-Path -LiteralPath $merged)) { throw "dotnet-coverage merge wrote no file at $merged" }
+        $probe = Get-Content -LiteralPath $merged -Raw
+        $pkgCount = ([regex]::Matches($probe, '<package\s')).Count
+        $lineCount = ([regex]::Matches($probe, '<line\s')).Count
+        if ($pkgCount -eq 0 -or $lineCount -eq 0) {
+            throw "Merged cobertura $merged is empty ($pkgCount packages, $lineCount lines) from $($files.Count) .coverage file(s) under $rawDir; the instrumented test run produced no coverage data (see the per-project logs in $OutDir)."
+        }
         # Cobertura from this collector carries NO branch data (every line is branch="False"), so the
         # same merge is also written in the native xml format, which has per-function block counts.
         dotnet tool run dotnet-coverage merge -f xml -o $mergedXml @files
