@@ -25,6 +25,8 @@ namespace PhotoReview.Integration.Tests;
 [Collection("GlobalState")]
 public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
 {
+    private const double Aspect = 1.5; // the generated 6000x4000 images
+    private const double Tolerance = 0.01;
     private static readonly TimeSpan PresentTimeout = TimeSpan.FromSeconds(20);
 
     public enum Start { Maximized, Normal }
@@ -98,25 +100,37 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
         return path;
     }
 
-    /// <summary>Signal-based settle: a render tick is awaited after the dispatcher drained down to ApplicationIdle.</summary>
-    private static async Task SettleAsync(Probe probe, int frames = 3)
+    /// <summary>
+    /// Condition-based settle: waits (bounded) until <paramref name="done"/> holds, then until two more render ticks were
+    /// observed (best effort, bounded) so any frame queued by the last layout change is captured by the probe.
+    /// </summary>
+    private static async Task SettleAsync(Probe probe, MainWindow window, Func<bool> done, string what)
     {
-        await StaTestHost.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-        var target = probe.Frames + frames;
+        Assert.True(await StaTestHost.WaitForAsync(done, TimeSpan.FromSeconds(15)), $"{what}: transition never settled. {Format(what, probe.Steps)}");
+        var target = probe.Frames + 2;
         var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Tick(object? s, EventArgs e) { if (probe.Frames >= target) tcs.TrySetResult(null); }
         CompositionTarget.Rendering += Tick;
+        var bound = new DispatcherTimer(DispatcherPriority.Send) { Interval = TimeSpan.FromSeconds(3) };
+        bound.Tick += (_, _) => { bound.Stop(); tcs.TrySetResult(null); };
+        bound.Start();
         try
         {
-            // A render tick can be skipped when nothing is dirty; request one by invalidating, then bound the wait.
-            var timeout = new DispatcherTimer(DispatcherPriority.Send) { Interval = TimeSpan.FromSeconds(5) };
-            timeout.Tick += (_, _) => { timeout.Stop(); tcs.TrySetResult(null); };
-            timeout.Start();
+            window.ImageScroll.InvalidateVisual(); // guarantee a composition tick even if nothing else is dirty
             await tcs.Task;
-            timeout.Stop();
         }
-        finally { CompositionTarget.Rendering -= Tick; }
-        await StaTestHost.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        finally { bound.Stop(); CompositionTarget.Rendering -= Tick; }
+    }
+
+    private static bool Converged(MainWindow w, bool fullscreen, WindowState state)
+    {
+        var v = w.ViewModel.Viewer;
+        var s = w.ImageScroll;
+        var fitW = Math.Min(s.ActualWidth, s.ActualHeight * Aspect);
+        return w.WindowStyle == (fullscreen ? WindowStyle.None : WindowStyle.SingleBorderWindow)
+            && w.WindowState == state
+            && Math.Abs(v.MaxImageWidth - s.ActualWidth) < Tolerance && Math.Abs(v.MaxImageHeight - s.ActualHeight) < Tolerance
+            && Math.Abs(w.MainImage.ActualWidth - fitW) < Tolerance;
     }
 
     private static async Task<(List<Step> Enter, List<Step> Exit)> RunAsync(Start start)
@@ -139,7 +153,7 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
                 window.Show();
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, PresentTimeout), "never presented");
                 using var probe = new Probe(window);
-                await SettleAsync(probe);
+                await SettleAsync(probe, window, () => Converged(window, false, start == Start.Maximized ? WindowState.Maximized : WindowState.Normal), "initial");
 
                 var viewer = window.ViewModel.Viewer;
                 Assert.True(viewer.IsFit);
@@ -148,7 +162,7 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
                 probe.Mark("BEFORE-ENTER");
                 window.ViewModel.ToggleFullscreen();
                 probe.Mark("AFTER-TOGGLE-SYNC");
-                await SettleAsync(probe);
+                await SettleAsync(probe, window, () => Converged(window, true, WindowState.Maximized), "enter");
                 probe.Mark("SETTLED-ENTER");
                 enter = [.. probe.Steps];
 
@@ -156,10 +170,10 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
                 probe.Mark("BEFORE-EXIT");
                 window.ViewModel.ToggleFullscreen();
                 probe.Mark("AFTER-TOGGLE-SYNC");
-                await SettleAsync(probe);
+                await SettleAsync(probe, window, () => Converged(window, false, start == Start.Maximized ? WindowState.Maximized : WindowState.Normal), "exit");
                 probe.Mark("SETTLED-EXIT");
                 exit = [.. probe.Steps];
-            }, TimeSpan.FromSeconds(60));
+            }, TimeSpan.FromSeconds(120));
         }
         finally
         {
@@ -178,9 +192,6 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
                 $"{s.T,8:0.0} {s.Tag,-22} {s.State,-9} win={s.WinW:0}x{s.WinH:0} scroll={s.ScrW:0}x{s.ScrH:0} img={s.ImgW:0.#}x{s.ImgH:0.#} imgMax={s.MaxW:0.#}x{s.MaxH:0.#} vmMax={s.VmMaxW:0.#}x{s.VmMaxH:0.#} bars={s.Bars} opacity={s.Opacity:0.#}"));
         return sb.ToString();
     }
-
-    private const double Aspect = 1.5; // the generated 6000x4000 images
-    private const double Tolerance = 0.01;
 
     /// <summary>
     /// Every frame the compositor was given (a RENDER tick with ImageScroll visible) must show the image at exactly the Fit size
