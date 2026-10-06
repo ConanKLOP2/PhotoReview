@@ -44,9 +44,16 @@ public sealed class PerfDispatcherHooksTests : IDisposable
     }
 
     // Distinct method names: the hook names an operation "DeclaringType.Method" of its callback.
-    private static void SlowWork() => Thread.Sleep(60);
+    private static void SlowWork() => BurnCpu(60);
 
-    private static void SlowWorkDetached() => Thread.Sleep(60);
+    private static void SlowWorkDetached() => BurnCpu(60);
+
+    // Simulated work on the dispatcher thread (not a wait the test asserts on): busy for at least the given time, so the hook sees a long operation.
+    private static void BurnCpu(int milliseconds)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (clock.ElapsedMilliseconds < milliseconds) Thread.SpinWait(100);
+    }
 
     private static void FastWork()
     {
@@ -82,7 +89,7 @@ public sealed class PerfDispatcherHooksTests : IDisposable
     public async Task OperationBelowTheThreshold_EmitsNothing()
     {
         using var ui = new DispatcherThread();
-        // A threshold no real operation reaches keeps this independent of machine load; SlowWork sleeps 60 ms and is still below it.
+        // A threshold no real operation reaches keeps this independent of machine load; SlowWork burns 60 ms and is still below it.
         PerfDispatcherHooks.Attach(ui.Dispatcher, longOpThresholdMs: 60_000);
 
         await RunAndSettleAsync(ui.Dispatcher, SlowWork);
