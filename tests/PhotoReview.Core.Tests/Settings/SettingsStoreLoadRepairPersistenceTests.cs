@@ -145,6 +145,106 @@ public sealed class SettingsStoreLoadRepairPersistenceTests
         Assert.Equal(0, writes);
     }
 
+    private const string OutOfRangeConfig = """{"ConfigVersion":3,"PreloadWorkerCount":99999}""";
+
+    private List<string> Backups(string pattern) =>
+        _fs.EnumerateFiles(Path.GetDirectoryName(_paths.ConfigFile)!, pattern).ToList();
+
+    [Fact(DisplayName = "F06: an out-of-range value is clamped, config.json rewritten and the original bytes kept in a .repaired backup")]
+    public void Load_OutOfRangeValue_RewritesConfigAndKeepsOriginalBackup()
+    {
+        _fs.AddFile(_paths.ConfigFile, OutOfRangeConfig);
+        var store = NewStore();
+
+        var loaded = store.Load();
+
+        Assert.Contains(nameof(AppSettings.PreloadWorkerCount), store.LastLoadRepairs);
+        Assert.NotEqual(99999, loaded.PreloadWorkerCount);
+        Assert.NotEqual(OutOfRangeConfig, _fs.ReadAllText(_paths.ConfigFile));
+        var backup = Assert.Single(Backups("config.json.repaired-*"));
+        Assert.Equal(OutOfRangeConfig, _fs.ReadAllText(backup));
+    }
+
+    [Fact(DisplayName = "F06: a disabled optional shortcut keeps the original text in a .repaired backup")]
+    public void Load_DisabledShortcutConflict_KeepsOriginalBackup()
+    {
+        _fs.AddFile(_paths.ConfigFile, ConflictingConfig);
+
+        NewStore().Load();
+
+        var backup = Assert.Single(Backups("config.json.repaired-*"));
+        Assert.Equal(ConflictingConfig, _fs.ReadAllText(backup));
+    }
+
+    [Fact(DisplayName = "F06: a salvage load makes exactly one backup (the .corrupt one), not a second .repaired one")]
+    public void Load_Salvage_MakesExactlyOneBackup()
+    {
+        _fs.AddFile(_paths.ConfigFile, """{"ConfigVersion":3,"ClickZoomPercent":"abc"}""");
+
+        NewStore().Load();
+
+        Assert.Single(Backups("config.json.corrupt-*"));
+        Assert.Empty(Backups("config.json.repaired-*"));
+        Assert.Single(Backups("config.json.*"));
+    }
+
+    [Fact(DisplayName = "F06: a clean file makes no backup")]
+    public void Load_CleanFile_MakesNoBackup()
+    {
+        _fs.AddFile(_paths.ConfigFile, """{"ConfigVersion":3}""");
+
+        var store = NewStore();
+        store.Load();
+
+        Assert.Empty(store.LastLoadRepairs);
+        Assert.Empty(Backups("config.json.*"));
+    }
+
+    [Fact(DisplayName = "F06: a newer-build file is neither rewritten nor backed up")]
+    public void Load_NewerVersionWithRepair_NoBackup()
+    {
+        var newer = """{"ConfigVersion":99,"PreloadWorkerCount":99999}""";
+        _fs.AddFile(_paths.ConfigFile, newer);
+
+        var store = NewStore();
+        store.Load();
+
+        Assert.NotEmpty(store.LastLoadRepairs);
+        Assert.Equal(newer, _fs.ReadAllText(_paths.ConfigFile));
+        Assert.Empty(Backups("config.json.*"));
+    }
+
+    [Fact(DisplayName = "F06: when the repair backup cannot be made config.json stays byte-identical and the repaired values live in memory")]
+    public void Load_RepairBackupFails_ConfigUntouchedAndRepairedInMemory()
+    {
+        _fs.AddFile(_paths.ConfigFile, OutOfRangeConfig);
+        _fs.CopyHook = (_, _) => new IOException("disk full");
+        var errors = 0;
+        var store = new SettingsStore(_paths, _fs, NullLog.Instance, onStartupError: (_, _) => errors++);
+
+        var loaded = store.Load();
+        store.Save(loaded); // a later Save must honour the kept-file guard too
+
+        Assert.NotEqual(99999, loaded.PreloadWorkerCount);
+        Assert.Same(loaded, store.Current);
+        Assert.Equal(OutOfRangeConfig, _fs.ReadAllText(_paths.ConfigFile));
+        Assert.True(errors > 0);
+        Assert.Empty(Backups("config.json.*"));
+    }
+
+    [Fact(DisplayName = "F06: the backup name never collides with or matches config.json")]
+    public void Load_RepairBackup_NameIsDistinctFromConfig()
+    {
+        _fs.AddFile(_paths.ConfigFile, OutOfRangeConfig);
+
+        NewStore().Load();
+
+        var backup = Assert.Single(Backups("config.json.repaired-*"));
+        Assert.NotEqual(_paths.ConfigFile, backup);
+        Assert.DoesNotContain("config.json", Backups("config.json").Where(f => f != _paths.ConfigFile).ToList());
+        Assert.StartsWith(_paths.ConfigFile + ".repaired-", backup, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Build_ShortcutRepair_UsesTheTurnedOffTextNotTheResetText()
     {
