@@ -841,7 +841,9 @@ public sealed class ExplorerNativeViewTests : IDisposable
         var pump = new ExplorerOrderService.StaThreadPump(NullLog.Instance);
         pump.Dispose();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => pump.Enqueue(() => ExplorerOrderService.Unavailable(_root, ExplorerOrderStatus.Failed, "x")));
+        var task = pump.Enqueue(() => ExplorerOrderService.Unavailable(_root, ExplorerOrderStatus.Failed, "x")); // must not throw synchronously
+        Assert.True(task.IsFaulted);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => task);
         pump.Dispose(); // idempotent
     }
 
