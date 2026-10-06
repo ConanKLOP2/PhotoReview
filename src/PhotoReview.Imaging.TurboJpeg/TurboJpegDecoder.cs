@@ -293,7 +293,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
     /// <summary>
     /// Extends the initial header read using exponential growth up to <see cref="ExtendedHeaderCap"/>.
-    /// This avoids re-reading the entire file when the header area exceeded the initial 8 MB cap.
+    /// This avoids re-reading the entire file when the header area exceeded <see cref="HeaderReadCap"/> (8 MB); growth stops at <see cref="ExtendedHeaderCap"/> (64 MB).
     /// Reuses the buffer passed in and continues from where ReadHeaderArea left off.
     /// </summary>
     internal static byte[] ExtendHeaderArea(string path, byte[] initialBuffer)
