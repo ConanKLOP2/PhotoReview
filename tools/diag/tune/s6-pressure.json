@@ -1,0 +1,11 @@
+[
+  { "id": "l85-m1g",  "set": { "PreloadMemoryLoadLimit": 0.85, "MemoryReserveBytes": 1073741824 } },
+  { "id": "l85-m2g",  "set": { "PreloadMemoryLoadLimit": 0.85, "MemoryReserveBytes": 2147483648 } },
+  { "id": "l85-m4g",  "set": { "PreloadMemoryLoadLimit": 0.85, "MemoryReserveBytes": 4294967296 } },
+  { "id": "l90-m1g",  "set": { "PreloadMemoryLoadLimit": 0.90, "MemoryReserveBytes": 1073741824 } },
+  { "id": "default",  "set": { "PreloadMemoryLoadLimit": 0.90, "MemoryReserveBytes": 2147483648 } },
+  { "id": "l90-m4g",  "set": { "PreloadMemoryLoadLimit": 0.90, "MemoryReserveBytes": 4294967296 } },
+  { "id": "l95-m1g",  "set": { "PreloadMemoryLoadLimit": 0.95, "MemoryReserveBytes": 1073741824 } },
+  { "id": "l95-m2g",  "set": { "PreloadMemoryLoadLimit": 0.95, "MemoryReserveBytes": 2147483648 } },
+  { "id": "l95-m4g",  "set": { "PreloadMemoryLoadLimit": 0.95, "MemoryReserveBytes": 4294967296 } }
+]

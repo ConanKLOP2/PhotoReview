@@ -1,0 +1,11 @@
+[
+  { "id": "f24-b4",   "set": { "PreloadForwardCount": 24, "PreloadBackwardCount": 4 } },
+  { "id": "f24-b8",   "set": { "PreloadForwardCount": 24, "PreloadBackwardCount": 8 } },
+  { "id": "f24-b12",  "set": { "PreloadForwardCount": 24, "PreloadBackwardCount": 12 } },
+  { "id": "f32-b4",   "set": { "PreloadForwardCount": 32, "PreloadBackwardCount": 4 } },
+  { "id": "default",  "set": { "PreloadForwardCount": 32, "PreloadBackwardCount": 8 } },
+  { "id": "f32-b12",  "set": { "PreloadForwardCount": 32, "PreloadBackwardCount": 12 } },
+  { "id": "f48-b4",   "set": { "PreloadForwardCount": 48, "PreloadBackwardCount": 4 } },
+  { "id": "f48-b8",   "set": { "PreloadForwardCount": 48, "PreloadBackwardCount": 8 } },
+  { "id": "f48-b12",  "set": { "PreloadForwardCount": 48, "PreloadBackwardCount": 12 } }
+]

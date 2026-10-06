@@ -1,0 +1,7 @@
+[
+  { "id": "r25",     "set": { "ImageCacheRamPercent": 25 } },
+  { "id": "r35",     "set": { "ImageCacheRamPercent": 35 } },
+  { "id": "default", "set": { "ImageCacheRamPercent": 50 } },
+  { "id": "r65",     "set": { "ImageCacheRamPercent": 65 } },
+  { "id": "r75",     "set": { "ImageCacheRamPercent": 75 } }
+]
