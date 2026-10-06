@@ -215,12 +215,14 @@ public sealed class WindowsRecycleBin : IRecycleBin
         finally { Release(recycle); Release(shell); }
     }
 
-    private static bool WaitForRestore(string path, long expectedSize, DateTime expectedLastWriteUtc)
+    /// <param name="attempts">Checks before the final one (default 30 x 60 ms, about 1.8 s: the shell restores asynchronously and can be slow on a busy disk); tests shorten it.</param>
+    /// <param name="pauseMs">Pause between two checks.</param>
+    internal static bool WaitForRestore(string path, long expectedSize, DateTime expectedLastWriteUtc, int attempts = 30, int pauseMs = 60)
     {
-        for (var i = 0; i < 30; i++) // ~1.8 s: the shell restores asynchronously and can be slow on a busy disk
+        for (var i = 0; i < attempts; i++)
         {
             if (IsExpectedFile(path, expectedSize, expectedLastWriteUtc)) return true;
-            Thread.Sleep(60);
+            Thread.Sleep(pauseMs);
         }
         return IsExpectedFile(path, expectedSize, expectedLastWriteUtc);
     }
