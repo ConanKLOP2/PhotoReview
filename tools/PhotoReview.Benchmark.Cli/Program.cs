@@ -154,6 +154,7 @@ if (args.Length >= 2 && args[0] == "--perf-analyze")
         Environment.ExitCode = 2;
         return;
     }
+    PhotoReview.Benchmark.Cli.NavSamplesCsv.Write(args[1], analysis);
     Console.WriteLine($"PERF-ANALYZE: {analysis.CsvFileCount} file, {analysis.Groups.Count} groups");
     Console.WriteLine($"REPORT: {analysis.SummaryMdPath}");
     Console.WriteLine($"REPORT: {analysis.SummaryJsonPath}");

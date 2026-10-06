@@ -1,0 +1,9 @@
+[
+  { "id": "default",   "set": { "UseSourceBytesCache": false, "PreviewDiskCacheCapacityBytes": 4294967296 } },
+  { "id": "sb-4g",     "set": { "UseSourceBytesCache": true,  "SourceBytesCapacityBytes": 4294967296 } },
+  { "id": "sb-8g",     "set": { "UseSourceBytesCache": true,  "SourceBytesCapacityBytes": 8589934592 } },
+  { "id": "sb-16g",    "set": { "UseSourceBytesCache": true,  "SourceBytesCapacityBytes": 17179869184 } },
+  { "id": "pd-0",      "set": { "PreviewDiskCacheCapacityBytes": 0 } },
+  { "id": "pd-2g",     "set": { "PreviewDiskCacheCapacityBytes": 2147483648 } },
+  { "id": "pd-8g",     "set": { "PreviewDiskCacheCapacityBytes": 8589934592 } }
+]

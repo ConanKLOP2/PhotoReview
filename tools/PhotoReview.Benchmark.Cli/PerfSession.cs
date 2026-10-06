@@ -25,7 +25,7 @@ using PhotoReview.Core.Model;
 /// <summary>
 /// D06 in-process scenario driver: <c>--perf-session &lt;scenario.json&gt; &lt;folder&gt; &lt;outDir&gt;
 /// [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA]
-/// [--source-bytes-cache on|off]</c>.
+/// [--source-bytes-cache on|off] [--resource-sample]</c>. <c>--resource-sample</c> writes resources.csv (see ResourceSampler).
 /// <para>
 /// Safety (PERF-DIAGNOSIS-TASKS rule 4): keys are delivered only as WPF routed events raised on the
 /// window inside this process. No SendInput/SendKeys/keybd_event/AttachThreadInput/SetForegroundWindow,
@@ -142,6 +142,8 @@ internal static class PerfSession
         /// original behavior (shared with the real app) for a caller that doesn't pass it.
         /// </summary>
         public string? CacheDir { get; set; }
+        /// <summary>perf(harness): <c>--resource-sample</c> writes <c>resources.csv</c> (machine/process samples every 500 ms) next to the other run files.</summary>
+        public bool ResourceSample { get; set; }
         /// <summary>
         /// Q-R29 slow-link measurement (perf(harness) only -- never a production default): extra latency,
         /// in whole milliseconds, added before every metadata-only <see cref="IFileSystem"/> call
@@ -178,7 +180,7 @@ internal static class PerfSession
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or IOException or InvalidOperationException)
         {
             Console.Error.WriteLine($"perf-session: {ex.Message}");
-            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR] [--source-bytes-cache on|off] [--slow-link-latency-ms N] [--slow-link-bandwidth-mbps N]");
+            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR] [--resource-sample] [--source-bytes-cache on|off] [--slow-link-latency-ms N] [--slow-link-bandwidth-mbps N]");
             return 2;
         }
 
@@ -268,6 +270,9 @@ internal static class PerfSession
         var keyDispatchMs = new List<double>();
         var keyUiBusyMs = new List<double>();
         using var uiBusy = UiBusyMeter.Attach(dispatcher);
+        using var resourceSampler = options.ResourceSample
+            ? new PhotoReview.Benchmark.Cli.ResourceSampler(Path.Combine(iterationDir, "resources.csv"), TimeSpan.FromMilliseconds(500))
+            : null;
 
         // AR02c: build the production DI graph (AppHost.BuildServices == App.ConfigureServices, no
         // test-root overrides) so --perf-session measures the shipped configuration (F2). SettingsStore
@@ -590,6 +595,14 @@ internal static class PerfSession
             appVersion = typeof(MainWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
             effectiveConfig,
             env = DiagEnvironment(),
+            // perf(harness, tune stage S8): what the runtime actually runs with, so DOTNET_* env overrides are verifiable per run.
+            runtime = new
+            {
+                serverGc = System.Runtime.GCSettings.IsServerGC,
+                gcLatencyMode = System.Runtime.GCSettings.LatencyMode.ToString(),
+                logicalCores = Environment.ProcessorCount,
+                dotnetEnv = DotnetEnvironment(),
+            },
             window = new { width = 1920, height = 1080, left = 0, top = 0, dpiScale = dpi, showActivated = false, foregroundNotGuaranteed = true },
             keyDelivery = "WPF routed PreviewKeyDown (+KeyDown if unhandled) raised on the window in-process; no OS input queue",
             keysSent,
@@ -916,6 +929,16 @@ internal static class PerfSession
         return Convert.ToHexString(bytes, 0, 4).ToLowerInvariant();
     }
 
+    /// <summary>The <c>DOTNET_*</c> variables of this process (runtime knobs such as DOTNET_gcServer); values are not personal.</summary>
+    private static SortedDictionary<string, string> DotnetEnvironment()
+    {
+        var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
+            if (entry.Key is string name && name.StartsWith("DOTNET_", StringComparison.OrdinalIgnoreCase))
+                result[name] = entry.Value?.ToString() ?? "";
+        return result;
+    }
+
     private static SortedDictionary<string, string> DiagEnvironment()
     {
         var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
@@ -982,6 +1005,7 @@ internal static class PerfSession
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
                 case "--cache-dir": options.CacheDir = Path.GetFullPath(Next()); break;
+                case "--resource-sample": options.ResourceSample = true; break;
                 case "--slow-link-latency-ms":
                     options.SlowLinkLatencyMs = BenchmarkCliArguments.ParseIntInRange(Next(), "--slow-link-latency-ms", 0, int.MaxValue);
                     break;
