@@ -421,11 +421,16 @@ internal sealed partial class SoakSession
             });
         });
 
-        // Before anything reads the budgets: a small RAM share (clamped up to the preload-window floor by the app) so a
-        // 200-photo folder cannot simply stay cached, and the soak exercises eviction.
+        // Before anything reads the budgets: a small RAM share, clamped up by the app to the preload-window floor
+        // (window images x a fixed minimum box x 4 bytes). The default window (41 images) puts that floor at ~1.3 GB, which a
+        // machine with a small screen (CI runner: smaller decode box, ~4 MB per preview) never fills with 200 photos, so the
+        // soak silently stopped exercising eviction. A small window (6 images) makes the budget a few hundred MB on any
+        // screen/RAM, so the 200-photo folder always overflows the cache and the soak always evicts.
         var store = sp.GetRequiredService<SettingsStore>();
         var settings = store.Current;
         settings.ImageCacheRamPercent = 1;
+        settings.PreloadForwardCount = 4;
+        settings.PreloadBackwardCount = 1;
         store.Save(settings);
 
         var window = sp.GetRequiredService<MainWindow>();
