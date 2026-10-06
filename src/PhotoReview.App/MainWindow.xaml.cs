@@ -164,45 +164,13 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private WindowState _stateBeforeFullscreen = WindowState.Normal;
-
-    // F11 transition: the Normal -> style -> Maximized sequence raises SizeChanged for every intermediate size; the gate
-    // suppresses those and one UpdateFitSize runs after layout settles (Loaded priority is below the Render-priority layout).
-    private readonly FitUpdateGate _fitGate = new();
+    // F11: the window never changes its OS state (see FullscreenWindowPlacer); only its style and one SetWindowPos change.
+    private readonly FullscreenWindowPlacer _fullscreenPlacer = new();
 
     private void ApplyFullscreenState(bool isFullscreen)
     {
-        var gateToken = _fitGate.Begin();
-        // Measured (FullscreenTransitionFrameTests): the Maximized -> Normal -> style -> Maximized sequence renders frames at
-        // every intermediate window size while MainImage still has the old Fit limits (a 1585x1057 image in a 1200x800
-        // viewport with scrollbars; on exit a 1620x1080 image in a 1920x1057 viewport), and the corrected size only lands
-        // at the Loaded-priority update below. Hide the image from before the first state change until that update has
-        // been laid out, so no stale frame is ever rendered (the canvas background shows for the 1-2 frames in between).
-        ImageScroll.Opacity = 0;
-        if (isFullscreen)
-        {
-            _stateBeforeFullscreen = WindowState == WindowState.Minimized ? WindowState.Normal : WindowState;
-            // RV-A02: a window that is already Maximized keeps its work-area size when only the style changes (setting
-            // Maximized again is a no-op), which leaves the taskbar visible. Leave Maximized first so WPF re-maximizes
-            // the now borderless window over the whole monitor. Visual check on a real taskbar: see the PR description.
-            if (WindowState == WindowState.Maximized) WindowState = WindowState.Normal;
-        }
-        ResizeMode = isFullscreen ? ResizeMode.NoResize : ResizeMode.CanResize;
-        WindowStyle = isFullscreen ? WindowStyle.None : WindowStyle.SingleBorderWindow;
-        WindowState = isFullscreen ? WindowState.Maximized : _stateBeforeFullscreen;
-        _ = Dispatcher.BeginInvoke(() =>
-        {
-            if (!_fitGate.TryEnd(gateToken)) return; // superseded: the newer transition reveals the image
-            try
-            {
-                if (IsLoaded)
-                {
-                    UpdateFitSize();
-                    ImageScroll.UpdateLayout(); // apply the new Max* limits now, so the first visible frame is already final
-                }
-            }
-            finally { ImageScroll.Opacity = 1; }
-        }, System.Windows.Threading.DispatcherPriority.Loaded);
+        if (isFullscreen) _fullscreenPlacer.Enter(this);
+        else _fullscreenPlacer.Exit(this);
     }
 
     private (double Width, double Height) GetViewportSize() => _surface.ViewportSize;
@@ -439,11 +407,11 @@ public partial class MainWindow : Window
         OutgoingImage.Visibility = Visibility.Collapsed;
     }
 
-    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) { if (_fitGate.ShouldApply) UpdateFitSize(); }
-    private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e) { if (_fitGate.ShouldApply) UpdateFitSize(); }
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) { UpdateFitSize(); }
+    private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e) { UpdateFitSize(); }
     private void MainImage_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_fitGate.ShouldApply && _viewModel.Viewer.IsFit) UpdateFitSize();
+        if (_viewModel.Viewer.IsFit) UpdateFitSize();
     }
     private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e)
     {
@@ -454,7 +422,8 @@ public partial class MainWindow : Window
     {
         if (e.Cancel || PlacementFile is not { } placementFile) return;
         // R7-10: fullscreen is a borderless Maximized; reopen in the state the window had before it.
-        WindowPlacementService.Save(this, placementFile, _viewModel.Viewer.IsFullscreen ? _stateBeforeFullscreen : null);
+        var fullscreen = _viewModel.Viewer.IsFullscreen;
+        WindowPlacementService.Save(this, placementFile, fullscreen ? _fullscreenPlacer.StateBefore : null, fullscreen ? _fullscreenPlacer.NormalBounds : null);
     }
 
     /// <summary>Harness use: never restore or save the user's real window-placement.json for this instance.</summary>

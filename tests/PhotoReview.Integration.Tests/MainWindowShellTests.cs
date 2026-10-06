@@ -13,6 +13,10 @@ namespace PhotoReview.Integration.Tests;
 [Collection("GlobalState")]
 public sealed class MainWindowShellTests
 {
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Rc { public int L, T, R, B; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out Rc r);
+
     private static readonly JsonSerializerOptions PlacementJson = new() { IncludeFields = true };
 
     private static Task OnSta(Action body) => StaTestHost.RunAsync(() => { body(); return Task.CompletedTask; });
@@ -30,11 +34,11 @@ public sealed class MainWindowShellTests
         return window;
     }
 
-    [Theory(DisplayName = "RV-A02: fullscreen is a borderless Maximized from Normal, Maximized or Minimized, and exit restores the prior state")]
+    [Theory(DisplayName = "RV-A02: fullscreen is a borderless window over the whole monitor that keeps its state (Normal/Maximized; Minimized becomes Normal), and exit restores the prior state")]
     [InlineData(WindowState.Normal, WindowState.Normal)]
     [InlineData(WindowState.Maximized, WindowState.Maximized)]
     [InlineData(WindowState.Minimized, WindowState.Normal)]
-    public async Task Fullscreen_FromEachState_EntersBorderlessMaximizedAndExitRestores(WindowState before, WindowState expectedAfterExit)
+    public async Task Fullscreen_FromEachState_EntersBorderlessKeepingStateAndExitRestores(WindowState before, WindowState expectedAfterExit)
     {
         using var dataRoot = new DataRootFixture();
         await OnSta(() =>
@@ -45,7 +49,7 @@ public sealed class MainWindowShellTests
                 window.WindowState = before;
 
                 window.ViewModel.Viewer.IsFullscreen = true;
-                Assert.Equal(WindowState.Maximized, window.WindowState);
+                Assert.Equal(expectedAfterExit, window.WindowState); // never flipped: the OS state is unchanged during fullscreen
                 Assert.Equal(WindowStyle.None, window.WindowStyle);
                 Assert.Equal(ResizeMode.NoResize, window.ResizeMode);
 
@@ -63,15 +67,22 @@ public sealed class MainWindowShellTests
     {
         using var dataRoot = new DataRootFixture();
         var file = dataRoot.Root.Combine("placement.json");
+        var expected = new WindowPlacementService.Rectangle();
         await OnSta(() =>
         {
             var window = CreateShown(file);
+            var rect = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            GetWindowRect(rect, out var r);
+            expected = new WindowPlacementService.Rectangle { Left = r.L, Top = r.T, Right = r.R, Bottom = r.B };
             window.ViewModel.Viewer.IsFullscreen = true;
             window.Close();
         });
         var placement = JsonSerializer.Deserialize<WindowPlacementService.WindowPlacement>(File.ReadAllText(file),
             PlacementJson)!;
         Assert.Equal(1, placement.ShowCommand); // SW_SHOWNORMAL, not the fullscreen Maximized
+        // fullscreen moves the Normal window onto the whole monitor: the saved bounds must still be the pre-fullscreen ones
+        Assert.Equal((expected.Left, expected.Top, expected.Right, expected.Bottom),
+            (placement.NormalPosition.Left, placement.NormalPosition.Top, placement.NormalPosition.Right, placement.NormalPosition.Bottom));
     }
 
     [Fact(DisplayName = "RV-A16: a closed MainWindow no longer reacts to SettingsStore.Changed")]
