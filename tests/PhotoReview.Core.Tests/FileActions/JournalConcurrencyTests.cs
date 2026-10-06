@@ -33,7 +33,7 @@ public sealed class JournalConcurrencyTests : IDisposable
     /// <summary>Bounded barrier wait: a participant that died before signalling fails the others instead of blocking them forever.</summary>
     private static void Rendezvous(Barrier barrier)
     {
-        if (!barrier.SignalAndWait(TimeSpan.FromSeconds(30))) throw new TimeoutException("barrier participants did not all arrive within 30 s");
+        if (!barrier.SignalAndWait(TimeSpan.FromSeconds(20))) throw new TimeoutException("barrier participants did not all arrive within 20 s");
     }
 
     private void RethrowThreadFailures()
