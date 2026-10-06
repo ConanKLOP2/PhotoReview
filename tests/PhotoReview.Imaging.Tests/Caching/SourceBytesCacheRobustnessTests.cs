@@ -152,6 +152,47 @@ public sealed class SourceBytesCacheRobustnessTests : IDisposable
         Assert.Equal(1, cache.Count);
     }
 
+    [Fact(DisplayName = "A reader that misses the cache but reaches the in-flight lookup after another reader published shares that array (no second disk read)")]
+    public async Task LateReaderAfterPublish_SharesArrayWithoutSecondRead()
+    {
+        var path = _root.File("late-race.bin", Enumerable.Range(0, 4096).Select(i => (byte)i).ToArray());
+        var reader = new CountingReader();
+        var cache = new SourceBytesCache(1024 * 1024, reader);
+        using var lateMissed = new ManualResetEventSlim();
+        using var winnerDone = new ManualResetEventSlim();
+        var lateThreadId = -1;
+        cache.AfterCacheMissForTests = () =>
+        {
+            if (Environment.CurrentManagedThreadId != Volatile.Read(ref lateThreadId)) return;
+            lateMissed.Set();
+            Assert.True(winnerDone.Wait(RaceTimeout), "winner never finished");
+        };
+
+        var late = Task.Factory.StartNew(() =>
+        {
+            Volatile.Write(ref lateThreadId, Environment.CurrentManagedThreadId);
+            return cache.GetOrRead(path);
+        }, TaskCreationOptions.LongRunning);
+        Assert.True(lateMissed.Wait(RaceTimeout), "late reader never reached the miss point");
+        var winner = cache.GetOrRead(path); // reads, publishes and removes its in-flight entry while `late` is parked
+        winnerDone.Set();
+        var lateBytes = await late.WaitAsync(RaceTimeout);
+
+        Assert.Same(winner, lateBytes);
+        Assert.Equal(1, reader.Opens);
+    }
+
+    private sealed class CountingReader : PhotoReview.Core.Abstractions.ISourceReader
+    {
+        private int _opens;
+        public int Opens => Volatile.Read(ref _opens);
+        public Stream OpenSource(string path, PhotoReview.Core.Abstractions.SourceReadPriority priority, int bufferSize = 1024 * 1024)
+        {
+            Interlocked.Increment(ref _opens);
+            return PhotoReview.Core.Abstractions.PhysicalSourceReader.Instance.OpenSource(path, priority, bufferSize);
+        }
+    }
+
     [Fact(DisplayName = "Readers racing Evict/Clear on the same paths always get the exact file bytes, and the cache never exceeds its capacity")]
     public async Task ReadersRacingEvictAndClear_StayCorrectAndBounded()
     {
