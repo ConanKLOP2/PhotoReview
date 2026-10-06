@@ -372,7 +372,7 @@ public sealed class BenchmarkCliHardeningTests : IDisposable
         Assert.True(BenchmarkCliArguments.IsExpectedToolFailure(new NotSupportedException()));
         Assert.True(BenchmarkCliArguments.IsExpectedToolFailure(new ArgumentException()));
         Assert.False(BenchmarkCliArguments.IsExpectedToolFailure(new OperationCanceledException()));
-        Assert.False(BenchmarkCliArguments.IsExpectedToolFailure(new OperationCanceledException()));
+        Assert.False(BenchmarkCliArguments.IsExpectedToolFailure(new OutOfMemoryException())); // APP-T18: the OOM case was a duplicated cancellation line
     }
 
     // ---- T-B-07 / T-B-08 -------------------------------------------------------------------------

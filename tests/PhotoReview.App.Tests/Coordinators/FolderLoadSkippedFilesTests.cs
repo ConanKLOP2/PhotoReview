@@ -137,7 +137,9 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or IOException or InvalidOperationException)
         {
-            return; // ACL manipulation not permitted here: skip gracefully
+            // APP-T25: reported as Skipped, not as a pass that never ran its assertions.
+            Assert.Skip($"ACL manipulation not permitted here: {ex.GetType().Name}: {ex.Message}");
+            return;
         }
 
         try
@@ -173,6 +175,8 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or IOException or InvalidOperationException)
         {
+            // APP-T25: reported as Skipped, not as a pass that never ran its assertions.
+            Assert.Skip($"ACL manipulation not permitted here: {ex.GetType().Name}: {ex.Message}");
             return;
         }
 
@@ -208,6 +212,8 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or IOException or InvalidOperationException)
         {
+            // APP-T25: reported as Skipped, not as a pass that never ran its assertions.
+            Assert.Skip($"ACL manipulation not permitted here: {ex.GetType().Name}: {ex.Message}");
             return;
         }
 
