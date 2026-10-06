@@ -373,13 +373,16 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         var files = System.IO.Directory.GetFiles(_fixtureFolder, "*.jpg");
         Assert.True(files.Length >= 20, "Fixture needs at least 20 images");
 
-        var (vm, _) = CreateViewModelWithActions(_fixtureFolder);
+        // APP-T19: a recording sink instead of the no-op stub, so "presented without duplicates" is actually observed.
+        var presented = new List<string>();
+        var (vm, _) = CreateViewModelWithActions(_fixtureFolder, presentationSink: new RecordingPresentationSink(presented));
         await vm.OpenFolderAsync(_fixtureFolder).WithTimeout(TimeSpan.FromSeconds(20), "OpenFolderAsync");
 
         Assert.Equal(0, vm.CurrentIndex);
         Assert.True(vm.CanNavigateNext);
         Assert.False(vm.CanNavigatePrevious);
         Assert.True(vm.HasImages);
+        presented.Clear();
 
         // Queue K=10 Next operations without await (all at once).
         const int K = 10;
@@ -405,6 +408,13 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         Assert.NotNull(vm.Catalog.Current);
         var expectedImage = files.OrderBy(f => f, ManagedNaturalComparer.Instance).ElementAt(K);
         Assert.Equal(expectedImage, vm.Catalog.Current.Path);
+
+        // The sink saw the final image last (the newest navigation won) and never saw any path twice.
+        string[] seen;
+        lock (presented) seen = presented.ToArray();
+        Assert.NotEmpty(seen);
+        Assert.Equal(expectedImage, seen[^1]);
+        Assert.Equal(seen.Length, seen.Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
     [Fact(DisplayName = "TC06: Move/Delete with queue behavior (Q-T1)")]

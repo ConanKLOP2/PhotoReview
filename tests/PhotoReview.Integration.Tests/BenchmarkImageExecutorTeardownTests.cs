@@ -34,16 +34,38 @@ public sealed class BenchmarkImageExecutorTeardownTests : IDisposable
         Directory.CreateDirectory(cacheDir);
         File.WriteAllText(Path.Combine(cacheDir, "seed.pv4"), "seed");
 
-        var sw = Stopwatch.StartNew();
-        await executor.DisposeAsync();
-        sw.Stop();
+        // APP-T04: hold a real prune pass in flight (a barrier in the prune loop), so "does not wait for the prune" is a
+        // property of the code under test and not of how fast the machine happens to prune an empty directory.
+        using var pruneEntered = new ManualResetEventSlim(false);
+        using var releasePrune = new ManualResetEventSlim(false);
+        var diskStore = executor.PreviewServiceForTests.DiskStore;
+        diskStore.BeforeClearPruneScheduledForTests = () =>
+        {
+            pruneEntered.Set();
+            releasePrune.Wait(TimeSpan.FromSeconds(60)); // bounded: a failing test must not park a pool thread forever
+        };
+        try
+        {
+            diskStore.SchedulePrune();
+            Assert.True(pruneEntered.Wait(TimeSpan.FromSeconds(30)), "the prune pass never reached the barrier");
 
-        // The old implementation awaited up to 5s of prune settling right here; teardown itself must return fast
-        // regardless of how long the prune pass actually takes, so the next profile can start immediately.
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(2), $"DisposeAsync took {sw.Elapsed} -- it must not wait for the prune pass");
+            // The old implementation awaited the prune settling right here. With the pass held open, a DisposeAsync that waits for it
+            // cannot complete, so a bounded wait turns "blocks on prune" into a failure instead of a hang.
+            await executor.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+
+            // The prune is still running: the scratch directory must survive until it settles, and teardown is still pending.
+            // A negative check cannot be event-driven, so it is a bounded wait: the teardown task finishing inside it can only mean it did
+            // not wait for the prune (it never fails a correct implementation, and a broken one finishes within milliseconds).
+            await Assert.ThrowsAsync<TimeoutException>(() => executor.TeardownBackgroundTask.WaitAsync(TimeSpan.FromSeconds(1)));
+            Assert.True(Directory.Exists(cacheDir), "the scratch directory was removed while the prune pass was still running");
+        }
+        finally
+        {
+            releasePrune.Set();
+        }
 
         // Cleanup is only GUARANTEED once the background teardown task settles -- await it explicitly.
-        await executor.TeardownBackgroundTask.WaitAsync(TimeSpan.FromSeconds(15));
+        await executor.TeardownBackgroundTask.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.False(Directory.Exists(cacheDir), $"Scratch disk-cache directory was not cleaned up: {cacheDir}");
     }
 }

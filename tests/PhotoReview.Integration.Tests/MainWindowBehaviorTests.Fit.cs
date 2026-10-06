@@ -284,7 +284,14 @@ public partial class MainWindowBehaviorTests
                 window.MainImage.UpdateLayout();
                 await StaTestHost.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
 
-                // Right-click (RightButton, ClickCount=2)
+                // APP-T20: raise the event WPF really routes for a right-button press (PreviewMouseRightButtonDown), and prove it
+                // was delivered to the image, so the test cannot pass because nothing was ever raised.
+                var rightPresses = 0;
+                window.MainImage.PreviewMouseRightButtonDown += (_, _) => rightPresses++;
+                RaiseMainImagePress(window, MouseButton.Right, 2, UIElement.PreviewMouseRightButtonDownEvent);
+                Assert.Equal(1, rightPresses);
+
+                // Also drive the left-button handler with a Right ChangedButton (ClickCount=2): that is the guard inside OnImagePress.
                 RaiseMainImagePress(window, MouseButton.Right, 2);
 
                 // Brief wait
@@ -328,11 +335,11 @@ public partial class MainWindowBehaviorTests
     /// count is a real property with an internal setter (there is no public way to synthesise a multi-click), so a
     /// failure to set it must fail the test loudly instead of silently degrading to a single click.
     /// </summary>
-    private static void RaiseMainImagePress(MainWindow window, MouseButton button, int clickCount)
+    private static void RaiseMainImagePress(MainWindow window, MouseButton button, int clickCount, RoutedEvent? routedEvent = null)
     {
         var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, button)
         {
-            RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
+            RoutedEvent = routedEvent ?? UIElement.PreviewMouseLeftButtonDownEvent,
         };
         var property = typeof(MouseButtonEventArgs).GetProperty(nameof(MouseButtonEventArgs.ClickCount))!;
         property.SetValue(args, clickCount);

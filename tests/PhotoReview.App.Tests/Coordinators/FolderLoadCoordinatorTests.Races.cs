@@ -10,6 +10,9 @@ namespace PhotoReview.App.Tests.Coordinators;
 /// <summary>Folder switching while loading, stale scan/Explorer results and misuse of a coordinator that was closed.</summary>
 public sealed partial class FolderLoadCoordinatorTests
 {
+    /// <summary>Upper bound for a scan-blocking test hook: longer than the 10 s the test thread waits, so a healthy run never reaches it.</summary>
+    private static readonly TimeSpan ScanHookBound = TimeSpan.FromSeconds(30);
+
     [Fact(DisplayName = "Fixture guard: the session store's background temp-file sweep listing never fires the folder-scan block hook")]
     public void FakeFileSystem_SessionSweepListing_DoesNotFireTheScanHook()
     {
@@ -40,7 +43,7 @@ public sealed partial class FolderLoadCoordinatorTests
         {
             if (Interlocked.Increment(ref calls) != 1) return; // only the first (slow) scan blocks
             scanEntered.TrySetResult();
-            releaseScan.Wait();
+            releaseScan.Wait(ScanHookBound); // bounded (APP-T24): a test that fails before Set must not park the scan thread forever
         };
 
         using var coordinator = CreateCoordinator();
@@ -67,7 +70,7 @@ public sealed partial class FolderLoadCoordinatorTests
         _fs.OnEnumerateFiles = () =>
         {
             scanEntered.TrySetResult();
-            releaseScan.Wait();
+            releaseScan.Wait(ScanHookBound); // bounded (APP-T24): a test that fails before Set must not park the scan thread forever
         };
         using var coordinator = CreateCoordinator();
         var load = coordinator.LoadAsync(@"C:slow");
@@ -103,7 +106,7 @@ public sealed partial class FolderLoadCoordinatorTests
             var call = Interlocked.Increment(ref calls);
             if (call >= entered.Length) return; // the last scan is not blocked
             entered[call].TrySetResult();
-            release.Wait();
+            release.Wait(ScanHookBound); // bounded (APP-T24)
         };
 
         using var coordinator = CreateCoordinator();

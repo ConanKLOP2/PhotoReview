@@ -245,6 +245,13 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
         public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        // IMG-R04: the wrapper owns the file stream it was given; leaking it keeps a handle on the fixture file open.
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) inner.Dispose();
+            base.Dispose(disposing);
+        }
     }
 
     private sealed class FaultReader(Func<Exception> fault) : ISourceReader

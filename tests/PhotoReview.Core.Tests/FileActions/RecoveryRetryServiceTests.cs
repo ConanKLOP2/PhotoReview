@@ -301,9 +301,11 @@ public sealed class RecoveryRetryServiceTests
             SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
             try { done.SetResult(_service.RetryMoveOrCopyAsync(failed).GetAwaiter().GetResult()); }
             catch (Exception ex) { done.SetException(ex); }
-        });
+        })
+        { IsBackground = true }; // a hung worker must neither keep the test host alive nor block the await below
         thread.Start();
-        var result = await done.Task;
+        // Bounded: the original unbounded await made the 10 s Join below unreachable when the worker hung.
+        var result = await done.Task.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "worker thread hung");
 
         Assert.True(result.Succeeded);
