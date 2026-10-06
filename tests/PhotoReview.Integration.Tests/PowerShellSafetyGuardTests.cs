@@ -21,7 +21,7 @@ public sealed class PowerShellSafetyGuardTests : IDisposable
         return dir?.FullName ?? throw new InvalidOperationException("repo root not found");
     }
 
-    private const int PowerShellTimeoutMs = 120_000;
+    private const int PowerShellTimeoutMs = 60_000; // below the 120 s blame-hang timeout so a wedged script fails this test first
 
     private static readonly string[] BaseArgs = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"];
 
