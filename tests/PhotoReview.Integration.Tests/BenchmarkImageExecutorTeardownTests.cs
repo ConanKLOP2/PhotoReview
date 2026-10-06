@@ -54,10 +54,9 @@ public sealed class BenchmarkImageExecutorTeardownTests : IDisposable
             await executor.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
 
             // The prune is still running: the scratch directory must survive until it settles, and teardown is still pending.
-            // A negative check cannot be event-driven, so it is a bounded race: the teardown task winning it can only mean it did not
-            // wait for the prune (it never fails a correct implementation, and a broken one finishes within milliseconds).
-            var first = await Task.WhenAny(executor.TeardownBackgroundTask, Task.Delay(TimeSpan.FromSeconds(1)));
-            Assert.NotSame(executor.TeardownBackgroundTask, first);
+            // A negative check cannot be event-driven, so it is a bounded wait: the teardown task finishing inside it can only mean it did
+            // not wait for the prune (it never fails a correct implementation, and a broken one finishes within milliseconds).
+            Assert.False(executor.TeardownBackgroundTask.Wait(TimeSpan.FromSeconds(1)), "teardown finished while the prune pass was still in flight");
             Assert.True(Directory.Exists(cacheDir), "the scratch directory was removed while the prune pass was still running");
         }
         finally
