@@ -35,3 +35,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-09-29 -- RAW-60 decoder benchmark](perf/2026-09-29-raw-60-decoder-bench.md)
 - [2026-09-29 -- RAW-31 LibRaw `half_size` evaluation](perf/2026-09-29-raw-31-half-size-evaluation.md)
 - [2026-10-06 -- PLAN: bench many configurations for this device (not yet run)](perf/PLAN-device-config-bench.md)
+- [2026-10-06 -- S0 noise floor of the device-tuning bench (F4 grew to 28.5 GB; run P95 too noisy at 3 repeats)](perf/2026-10-06-s0-noise-floor.md)
