@@ -992,10 +992,16 @@ public partial class SettingsWindow : Window
             InitialDirectory = AppContext.BaseDirectory, FileName = "PhotoReview-settings.json",
         };
         if (dialog.ShowDialog(this) != true) return;
+        ExportSettingsTo(dialog.FileName);
+    }
+
+    /// <summary>The body of Export once the user picked a file (a test seam: the file dialog cannot be driven in a test).</summary>
+    internal void ExportSettingsTo(string path)
+    {
         try
         {
             var json = JsonSerializer.Serialize(Settings, AppSettingsJsonContext.Default.AppSettings);
-            File.WriteAllText(dialog.FileName, json);
+            File.WriteAllText(path, json);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -1007,10 +1013,16 @@ public partial class SettingsWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog { Title = Tr.DialogImportSettingsTitle, Filter = Tr.DialogFileFilterJson, InitialDirectory = AppContext.BaseDirectory };
         if (dialog.ShowDialog(this) != true) return;
+        ImportSettingsFrom(dialog.FileName);
+    }
+
+    /// <summary>The body of Import once the user picked a file (a test seam: the file dialog cannot be driven in a test).</summary>
+    internal void ImportSettingsFrom(string path)
+    {
         string json;
         try
         {
-            json = File.ReadAllText(dialog.FileName);
+            json = File.ReadAllText(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
