@@ -429,7 +429,7 @@ public sealed class JournalCompactionTests : IDisposable
             {
                 failures.Enqueue(ex);
             }
-        })).ToList();
+        }) { IsBackground = true }).ToList();
 
         var compactor = new Thread(() =>
         {
@@ -446,32 +446,43 @@ public sealed class JournalCompactionTests : IDisposable
             {
                 failures.Enqueue(ex);
             }
-        });
+        }) { IsBackground = true };
 
         compactor.Start();
         writers.ForEach(t => t.Start());
-        foreach (var t in writers) Assert.True(t.Join(TimeSpan.FromSeconds(60)), "writer thread hung");
-        Volatile.Write(ref stop, true);
+        try
+        {
+            foreach (var t in writers) Assert.True(t.Join(TimeSpan.FromSeconds(60)), "writer thread hung");
+        }
+        finally
+        {
+            // R39: a failed writer join must still stop the compactor, or it keeps rewriting the journal while the test unwinds.
+            Volatile.Write(ref stop, true);
+        }
         Assert.True(compactor.Join(TimeSpan.FromSeconds(60)), "compactor thread hung");
 
         if (!failures.IsEmpty) throw new AggregateException(failures);
 
         var final = MakeJournal(compactionFiles: null);
         var lines = File.ReadAllLines(_paths.JournalFile).Where(l => l.Length > 0).ToList();
-        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+        var latestStateById = new Dictionary<string, JournalState>(StringComparer.Ordinal);
         foreach (var line in lines)
         {
             var entry = JsonSerializer.Deserialize<JournalEntry>(line); // a glued/torn line throws here
             Assert.NotNull(entry);
+            latestStateById[entry.Id] = entry.State;
         }
 
         var pendingAndFailed = final.ReadPendingAndFailedOperations().ToDictionary(e => e.Id, StringComparer.Ordinal);
         foreach (var (id, _) in acknowledged)
         {
-            // Every acknowledged Committed stress entry must not show up as pending/failed (it should have resolved Committed).
+            // R38: "not pending/failed" is also true of an entry that vanished, so first require the acknowledged line to be in the file
+            // (compaction never drops the only line of an Id) and to still read Committed.
+            Assert.True(latestStateById.TryGetValue(id, out var state), $"{id} was acknowledged but is missing from the journal after compaction");
+            Assert.Equal(JournalState.Committed, state);
             Assert.False(pendingAndFailed.ContainsKey(id), $"{id} unexpectedly still pending/failed after compaction");
-            _ = seenIds.Add(id);
         }
+        Assert.NotEmpty(acknowledged); // guards the loop above against passing vacuously
     }
 
     // -----------------------------------------------------------------------------------------------------------

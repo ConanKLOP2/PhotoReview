@@ -101,6 +101,9 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     /// assert it is actually removed once <see cref="TeardownBackgroundTask"/> settles.</summary>
     internal string DiskCacheDirectory => _diskCacheDirectory;
 
+    /// <summary>Test seam: this executor's preview service, so a teardown test can hold one of its disk-cache prune passes in flight.</summary>
+    internal PreviewImageService PreviewServiceForTests => _previewService;
+
     /// <summary>
     /// perf(bench-window): the background prune-then-delete pass <see cref="DisposeAsync"/> starts (never
     /// awaited by production code, which must not block the next profile on a slow prune). Tests await this

@@ -24,14 +24,14 @@ The application must prioritize the following principles when processing and rev
 
 1. **Every session (T0, ≤18 KB total):** `AGENTS.md`, `task_on_progress.md`, `docs/INDEX.md` — establishes context, constraints, and links to scope-specific docs.
 2. **Per task (T1, ≤24 KB per file):** Use `INDEX.md` to find which single plan/architecture doc relates to the work. Read that file + relevant ADR. Do not pre-read all plans. `docs/refactoring/decisions/` and `docs/refactoring/perf/`: read only the one fragment file a link in `OPEN-DECISIONS.md`/`PERF-STATUS.md` points you to, never the whole directory.
-3. **History (T2):** there is no `docs/archive/` any more (removed 2026-10-01). Use `git log --follow -- <path>` or `git show 2f2bf342:<path>` for change rationale and removed evidence.
+3. **History (T2):** use `git log --follow -- <path>` or `git show 2f2bf342:<path>` for change rationale and removed evidence; there is no archive directory.
 4. **Task completion:** When a task is done and reaches status DONE, compress it to one line in `docs/refactoring/HISTORY.md` and delete the plan/evidence files (git history keeps them); keep `task_on_progress.md` and `docs/ACTIVE-TASKS.md` to open work only — see the "Avoid append-conflicts" rule below for how these two get updated.
 
 ## Coding Conventions (Naming & Analyzer Warnings)
 
 **Goal:** Keep the build warning-free without fighting analyzer rules that don't fit the codebase's real conventions.
 
-1. **Production code (`src/`, `tools/`):** Strict PascalCase for all public/internal members. No public mutable fields (`CA1051`) — use properties. New public fields need a documented decision (the old `MainWindow` public-field exception, ST06, was superseded by AR02d; see [`docs/refactoring/HISTORY.md`](docs/refactoring/HISTORY.md)).
+1. **Production code (`src/`, `tools/`):** Strict PascalCase for all public/internal members. No public mutable fields (`CA1051`) — use properties. New public fields need a documented decision.
 2. **Test code (`tests/`):** `Method_Scenario_ExpectedResult` (underscore-separated) is accepted — do not rename tests to remove underscores. `CA1707` is suppressed for test projects via `.editorconfig`, scoped so only test-only methods are exempt.
 3. **String comparisons (`CA1310`):** Always pass an explicit `StringComparison`. Use `Ordinal`/`OrdinalIgnoreCase` for file/path names (not culture-aware on Windows); `CurrentCulture` is reserved for user-facing text sorting/display only.
 4. **Culture-sensitive formatting (`CA1305`):** Any `ToString`/`Parse`/`Format` writing to a log, CSV, journal, or other machine-read/diagnostic file must use `CultureInfo.InvariantCulture`, never the user's locale (app ships Vietnamese UI text). UI-facing display text may use `CurrentCulture`.
@@ -47,7 +47,7 @@ The application must prioritize the following principles when processing and rev
 ## Agent Workflow (applies on every machine)
 
 - **Decision log:** `master` is the only source of truth for the handoff (`task_on_progress.md`), `docs/refactoring/OPEN-DECISIONS.md` and the current `WORK-*` doc — no `develop` branch. At session start `git fetch` and read them on `origin/master`. Feature/fix/docs branches all start from `origin/master`.
-- **Avoid append-conflicts (2026-09-27):** a decision's/perf full detail goes in a new file under `decisions/`/`perf/`, never inline
+- **Avoid append-conflicts:** a decision's/perf full detail goes in a new file under `decisions/`/`perf/`, never inline
   in `OPEN-DECISIONS.md`/`PERF-STATUS.md`. `OPEN-DECISIONS.md`'s table is GENERATED (see its own header) — add your
   `decisions/<ID>.md`, run `tools/generate-open-decisions.ps1`, commit; `PERF-STATUS.md` still gets one bullet by hand.
   `task_on_progress.md`/`docs/ACTIVE-TASKS.md`: routine PRs don't edit these — a docs-sync PR refreshes them; a check-item PR
@@ -59,7 +59,7 @@ The application must prioritize the following principles when processing and rev
 - **Verify claims:** never report an agent's "done / N tests pass" without rebuilding (`dotnet build PhotoReview.slnx -c Release`, 0 warnings) and rerunning the gate on the merged result.
 - **No stacked PRs:** after the user merges, check each PR head with `git merge-base --is-ancestor <head> origin/master`, not the MERGED label.
 - **Recycle Bin:** never run code that deletes from, sweeps or empties the user's real Recycle Bin — including mutation checks of such code (2026-09-24 incident, Q-R9 declined). Use fakes; Native bin tests only remove their own items.
-- **Real-machine checks:** Claude runs perf/headless checks on the user's PC itself (machine-specific fixture paths live in `work/diag/fixtures.local.json` / `CLAUDE.local.md`); only visual checks go to the user.
+- **Real-machine checks:** Claude runs perf/headless checks on the user's PC itself (machine-specific fixture paths live in `work/diag/fixtures.local.json`); only visual checks go to the user.
 - **Asking the user to decide:** never ask a bare question. For every decision give (1) the current state and why it matters, (2) 2-4 options, each with detailed pros and cons (risk to user data, effort, behaviour change, what must be tested/changed), (3) one recommended option with the reason, and (4) what you will do once the user picks. Reply in Vietnamese (user rule). Record the outcome in `OPEN-DECISIONS.md`.
 
 ## Tests

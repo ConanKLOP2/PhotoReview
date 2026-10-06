@@ -36,6 +36,30 @@ public sealed class UpdateCheckerBoundaryTests
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
+    /// <summary>A body that declares a Content-Length and records whether anything ever asked for its bytes.</summary>
+    private sealed class DeclaredLengthContent(long declaredLength, byte[] data) : HttpContent
+    {
+        public bool BodyWasRequested { get; private set; }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = declaredLength;
+            return true;
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            BodyWasRequested = true;
+            return stream.WriteAsync(data, 0, data.Length);
+        }
+
+        protected override Task<Stream> CreateContentReadStreamAsync()
+        {
+            BodyWasRequested = true;
+            return Task.FromResult<Stream>(new MemoryStream(data));
+        }
+    }
+
     /// <summary>A valid release JSON padded with trailing spaces to exactly <paramref name="totalBytes"/> bytes.</summary>
     private static byte[] PaddedRelease(int totalBytes)
     {
@@ -79,9 +103,13 @@ public sealed class UpdateCheckerBoundaryTests
     [Fact(DisplayName = "A declared Content-Length over MaxBodyBytes is rejected before the body is read")]
     public async Task DeclaredLengthOverMax_IsRejected()
     {
-        var result = await Check(() => new ByteArrayContent(PaddedRelease(UpdateChecker.MaxBodyBytes + 1)));
+        // T-05: a rejection alone is also what reading the whole body and then refusing it would give; prove the body was never requested.
+        var content = new DeclaredLengthContent(UpdateChecker.MaxBodyBytes + 1, PaddedRelease(UpdateChecker.MaxBodyBytes + 1));
+
+        var result = await Check(() => content);
 
         Assert.Equal(UpdateFailure.BadResponse, result.Failure);
+        Assert.False(content.BodyWasRequested, "the oversized body was read although its Content-Length already exceeded the cap");
     }
 
     [Theory(DisplayName = "A non-string html_url is ignored and the releases page is offered instead")]
