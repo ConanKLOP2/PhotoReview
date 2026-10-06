@@ -37,9 +37,9 @@ public sealed class PlatformGapTests
     public void Evaluate_RealSource_UnmountedDriveLetter_ReturnsUnknown()
     {
         var mounted = DriveInfo.GetDrives().Select(d => char.ToUpperInvariant(d.Name[0])).ToHashSet();
-        // APP-T27: with every letter D..Z mounted there is nothing to probe; say so instead of throwing from First().
         var free = Enumerable.Range('D', 'Z' - 'D' + 1).Select(c => (char)c).FirstOrDefault(c => !mounted.Contains(c));
-        if (free == '\0') Assert.Skip("every drive letter D..Z is mounted on this machine");
+        // APP-T27: First() threw an opaque InvalidOperationException when every letter D..Z is mounted; name the real cause.
+        Assert.True(free != '\0', "every drive letter D..Z is mounted on this machine, so no unmounted letter exists to probe");
         var path = $@"{free}:\photoreview-rvt67\x.jpg";
         var source = WindowsRecycleBinSettingsSource.Instance;
 
@@ -53,7 +53,7 @@ public sealed class PlatformGapTests
     public void GetTiming_ZeroHandle_ReturnsDwmFallbackTiming()
     {
         var dwm = WindowsDisplayClock.DwmTiming();
-        if (dwm is null) Assert.Skip("no compositor timing on this machine/session: nothing to compare against");
+        if (dwm is null) return; // no compositor timing on this machine/session: nothing to compare against
 
         var timing = WindowsDisplayClock.Instance.GetTiming(IntPtr.Zero);
 

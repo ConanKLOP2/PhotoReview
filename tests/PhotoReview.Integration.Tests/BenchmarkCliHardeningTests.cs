@@ -372,7 +372,9 @@ public sealed class BenchmarkCliHardeningTests : IDisposable
         Assert.True(BenchmarkCliArguments.IsExpectedToolFailure(new NotSupportedException()));
         Assert.True(BenchmarkCliArguments.IsExpectedToolFailure(new ArgumentException()));
         Assert.False(BenchmarkCliArguments.IsExpectedToolFailure(new OperationCanceledException()));
+#pragma warning disable CA2201 // an OutOfMemoryException is exactly the reserved runtime exception the classifier must NOT treat as an expected tool failure
         Assert.False(BenchmarkCliArguments.IsExpectedToolFailure(new OutOfMemoryException())); // APP-T18: the OOM case was a duplicated cancellation line
+#pragma warning restore CA2201
     }
 
     // ---- T-B-07 / T-B-08 -------------------------------------------------------------------------

@@ -137,8 +137,9 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or IOException or InvalidOperationException)
         {
-            // APP-T25: reported as Skipped, not as a pass that never ran its assertions.
-            Assert.Skip($"ACL manipulation not permitted here: {ex.GetType().Name}: {ex.Message}");
+            // APP-T25: a silent return reported a pass for a test that never reached its assertions. The files are created by this
+            // test under the user's own temp folder, so being unable to change their ACL is an environment fault worth failing on.
+            Assert.Fail($"Could not set the ACL this test needs: {ex.GetType().Name}: {ex.Message}");
             return;
         }
 
@@ -175,8 +176,9 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or IOException or InvalidOperationException)
         {
-            // APP-T25: reported as Skipped, not as a pass that never ran its assertions.
-            Assert.Skip($"ACL manipulation not permitted here: {ex.GetType().Name}: {ex.Message}");
+            // APP-T25: a silent return reported a pass for a test that never reached its assertions. The files are created by this
+            // test under the user's own temp folder, so being unable to change their ACL is an environment fault worth failing on.
+            Assert.Fail($"Could not set the ACL this test needs: {ex.GetType().Name}: {ex.Message}");
             return;
         }
 
@@ -212,8 +214,9 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or IOException or InvalidOperationException)
         {
-            // APP-T25: reported as Skipped, not as a pass that never ran its assertions.
-            Assert.Skip($"ACL manipulation not permitted here: {ex.GetType().Name}: {ex.Message}");
+            // APP-T25: a silent return reported a pass for a test that never reached its assertions. The files are created by this
+            // test under the user's own temp folder, so being unable to change their ACL is an environment fault worth failing on.
+            Assert.Fail($"Could not set the ACL this test needs: {ex.GetType().Name}: {ex.Message}");
             return;
         }
 
