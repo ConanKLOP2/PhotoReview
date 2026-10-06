@@ -84,6 +84,9 @@ internal sealed class FaultRig
     /// <summary>Every result an action of the scenario returned (checked against the disk right after the scenario).</summary>
     public List<object> Outcomes { get; } = [];
 
+    /// <summary>True in the single-Delete undo scenario: Ctrl+Z restores the file without any journal line, so its Committed Delete line legitimately stays.</summary>
+    public bool SingleRecycleMayBeRestored { get; set; }
+
     public FaultRig()
     {
         Fs = new FaultInjectionFileSystem(Disk);

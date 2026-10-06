@@ -90,9 +90,10 @@ internal static class FaultInvariants
         // EVERY JOURNAL VERDICT IS TRUE.
         foreach (var entry in latest.Values.Where(e => e.State != JournalState.Dismissed))
         {
-            var supersededByUndo = entry.Undo != true && entry.Type == FileOperationType.Move && lines.Any(u =>
-                u.Undo == true && u.Id != entry.Id && FaultRig.MembersOf(u).Any(um =>
-                    FaultRig.MembersOf(entry).Any(em => Same(um.Source, em.Destination))));
+            // An undo (journaled for Move and group Delete) legitimately reverses its original line, which stays Committed.
+            var supersededByUndo = entry.Undo != true && entry.Type != FileOperationType.Copy && lines.Any(u =>
+                u.Undo == true && u.Id != entry.Id && u.Type == entry.Type && FaultRig.MembersOf(u).Any(um =>
+                    FaultRig.MembersOf(entry).Any(em => Same(um.Source, entry.Type == FileOperationType.Move ? em.Destination : em.Source))));
             foreach (var member in FaultRig.MembersOf(entry))
             {
                 switch (entry.Type)
@@ -110,6 +111,9 @@ internal static class FaultInvariants
                         // The photo is in exactly one place (folder or bin) in EVERY state: never both, never neither.
                         var places = (rig.HasFull(member.Source) ? 1 : 0) + rig.BinCount(member.Source);
                         if (places != 1) violations.Add($"{ctx}: Delete of {member.Source} (state {entry.State}, undo={entry.Undo}) leaves the photo in {places} places");
+                        // The verdict is true: Committed means it left the folder (a single Delete that Ctrl+Z restored is not journaled again).
+                        if (entry.State == JournalState.Committed && entry.Undo != true && !supersededByUndo && !rig.SingleRecycleMayBeRestored && rig.Disk.FileExists(member.Source))
+                            violations.Add($"{ctx}: Delete of {member.Source} is Committed but the file is still in the folder");
                         break;
                 }
             }

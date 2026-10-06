@@ -46,6 +46,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
         }
 
         rig.Outcomes.Clear();
+        rig.SingleRecycleMayBeRestored = !group && operation == FileOperationType.Recycle;
         return rig;
     }
 
