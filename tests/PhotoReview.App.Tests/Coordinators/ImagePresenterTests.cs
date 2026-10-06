@@ -208,19 +208,15 @@ public sealed partial class ImagePresenterTests : IDisposable
         var path = CreateFakeImageFile("racing.png");
         var info = new FileInfo(path);
         _catalog.Reset([new CatalogEntry(path).WithMetadata(info.Length, info.LastWriteTimeUtc)]);
-        var presenter = CreatePresenter();
+        // Another program rewrites the file while the decoder is running: the key taken before the decode never matches
+        // afterwards. The decoder itself does the rewrite, so the change lands at exactly the same point on every run.
+        var decoder = new RewritingDecoder(path);
+        var presenter = CreatePresenterWithServices(CreatePreviewService(decoder), _thumbnailCache);
 
-        // Another program keeps rewriting the file: the key taken before the decode never matches afterwards.
-        using (new FileToucher(path))
-        {
-            await presenter.PresentAsync(0);
-        }
+        await presenter.PresentAsync(0);
 
-        // The file keeps changing, so either check may notice first: while decoding or while reading the dimensions.
-        // Both are the localized "source changed" sentence; the assertion is that the UI language is used, not which check won.
-        var duringDecode = $"Lỗi ảnh: racing.png — Tệp ảnh đã thay đổi trong lúc giải mã: {path}";
-        var readingDimensions = $"Lỗi ảnh: racing.png — Tệp ảnh đã thay đổi trong lúc đọc kích thước: {path}";
-        Assert.True(presenter.StatusText == duringDecode || presenter.StatusText == readingDimensions, "unexpected status: " + presenter.StatusText);
+        Assert.Equal(1, decoder.DecodeCalls);
+        Assert.Equal($"Lỗi ảnh: racing.png — Tệp ảnh đã thay đổi trong lúc giải mã: {path}", presenter.StatusText);
         Assert.DoesNotContain("changed during decode", presenter.StatusText, StringComparison.Ordinal);
         Assert.DoesNotContain("changed while", presenter.StatusText, StringComparison.Ordinal);
     }
@@ -856,6 +852,22 @@ public sealed partial class ImagePresenterTests : IDisposable
         public IDecodedImage Decode(DecodeRequest request)
         {
             _paths.Enqueue(request.Path);
+            return new FakeDecodedImage();
+        }
+
+        public ImageInfo ReadInfo(string path) => new(1, 1);
+    }
+
+    /// <summary>Decoder that changes the source file's length mid-decode (deterministic stand-in for another program rewriting it).</summary>
+    private sealed class RewritingDecoder(string path) : IImageDecoder
+    {
+        private int _decodeCalls;
+        public int DecodeCalls => Volatile.Read(ref _decodeCalls);
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            Interlocked.Increment(ref _decodeCalls);
+            using (var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) stream.WriteByte(0);
             return new FakeDecodedImage();
         }
 
