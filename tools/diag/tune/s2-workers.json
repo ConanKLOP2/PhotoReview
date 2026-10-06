@@ -1,0 +1,9 @@
+[
+  { "id": "w2",  "set": { "PreloadWorkerCount": 2 } },
+  { "id": "w4",  "set": { "PreloadWorkerCount": 4 } },
+  { "id": "w6",  "set": { "PreloadWorkerCount": 6 } },
+  { "id": "w8",  "set": { "PreloadWorkerCount": 8 } },
+  { "id": "w10", "set": { "PreloadWorkerCount": 10 } },
+  { "id": "w12", "set": { "PreloadWorkerCount": 12 } },
+  { "id": "w16", "set": { "PreloadWorkerCount": 16 } }
+]
