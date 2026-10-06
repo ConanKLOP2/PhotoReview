@@ -21,6 +21,11 @@ public sealed class WpfPresentationSink : IPresentationSink
     private int _crossThreadLogged;
     private RenderFrameTrace? _renderTrace;
 
+    // Test seam: the render-tick subscription (the real one needs a rendering window); the default is CompositionTarget.Rendering.
+    internal Action<EventHandler> SubscribeRendering { get; init; } = h => CompositionTarget.Rendering += h;
+
+    internal Action<EventHandler> UnsubscribeRendering { get; init; } = h => CompositionTarget.Rendering -= h;
+
     public WpfPresentationSink(
         Action<object?, bool>? onSetCurrentImage = null,
         Action<string>? onSetStatusText = null,
@@ -96,8 +101,8 @@ public sealed class WpfPresentationSink : IPresentationSink
                 // RV-A17: one pending trace at a time (RenderFrameTrace replaces it), so a minimized window that never
                 // renders cannot pile up Rendering handlers.
                 _renderTrace ??= new RenderFrameTrace(
-                    h => CompositionTarget.Rendering += h,
-                    h => CompositionTarget.Rendering -= h,
+                    SubscribeRendering,
+                    UnsubscribeRendering,
                     (t, k, assigned) =>
                     {
                         PhotoReviewPerf.Log.Rendered(t, PhotoReviewPerf.Ms(assigned));
