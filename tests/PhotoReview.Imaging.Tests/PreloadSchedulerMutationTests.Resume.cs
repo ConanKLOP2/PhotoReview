@@ -164,6 +164,23 @@ public sealed partial class PreloadSchedulerMutationTests
         Assert.Equal(4, target.Started.Count);
     }
 
+    [Fact(DisplayName = "Memory pause: a navigation that lands while the re-check is probing memory wins; the re-check does not kick a run")]
+    public async Task MemoryPause_NavigationDuringTheProbe_SupersedesTheResume()
+    {
+        var (scheduler, target, probe, time) = await PausedRunAsync();
+        // The re-check's own probe (the only call with the resume limit) is the window between its generation check and its kick.
+        probe.Answer = maximumLoad =>
+        {
+            if (maximumLoad < PauseLimit) scheduler.NotifyNavigation(5);
+            return true;
+        };
+
+        time.Pending!.Fire();
+
+        Assert.Equal(0, scheduler.ResumesForTests);
+        Assert.Empty(target.Started); // the navigation's own PreloadAroundAsync (not called here) is what preloads around 5
+    }
+
     [Fact(DisplayName = "Memory pause: no resume once the cache is at the whole-folder fill limit, and no further re-checks")]
     public async Task MemoryPause_CacheAtFillLimit_DoesNotResume()
     {
