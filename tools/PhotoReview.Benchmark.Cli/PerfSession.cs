@@ -129,6 +129,9 @@ internal static class PerfSession
         /// whatever the loaded config.json has; "on"/"off" force it in-memory only (config.json untouched),
         /// the same override pattern as <see cref="Mode"/>/<see cref="Decoder"/>.</summary>
         public bool? SourceBytesCache { get; set; }
+        /// <summary>perf(harness): repeatable <c>--set Key=Value</c> in-memory <c>AppSettings</c> overrides (whitelist in
+        /// <see cref="PerfSettingOverrides"/>), in command-line order. Empty keeps config.json untouched.</summary>
+        public List<KeyValuePair<string, Action<AppSettings>>> SettingOverrides { get; } = [];
         public int Repeat { get; set; } = 1;
         public string? Alias { get; set; }
         public string? Commit { get; set; }
@@ -320,6 +323,9 @@ internal static class PerfSession
         // That first resolution happens inside GetRequiredService<MainWindow>() below, so this override
         // MUST run before that call or it has no effect (config.json itself is never touched).
         if (options.SourceBytesCache is { } sbc) settingsStore.Current.UseSourceBytesCache = sbc;
+        // perf(harness): --set Key=Value overrides (device-tuning matrix). Same ordering constraint as above: the
+        // services read these (worker count, cache budgets, ...) while MainWindow is resolved. In memory only.
+        var settingOverrides = PerfSettingOverrides.Apply(settingsStore.Current, options.SettingOverrides);
         var window = services.GetRequiredService<MainWindow>();
         window.Width = 1920;
         window.Height = 1080;
@@ -571,6 +577,8 @@ internal static class PerfSession
             repeat = options.Repeat,
             mode = settings.LoadingMode,
             modeSource = options.Mode is null ? "config" : "override",
+            // perf(harness): effective value of every --set key (null when none), so the run is self-describing.
+            settingOverrides = settingOverrides.Count == 0 ? null : settingOverrides,
             configMode,
             folderAlias = options.Alias,
             folderPathId = PathIdOf(options.Folder),
@@ -952,7 +960,7 @@ internal static class PerfSession
         {
             string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value");
             var option = args[i].ToLowerInvariant();
-            if (option.StartsWith("--", StringComparison.Ordinal) && !seen.Add(option))
+            if (option != "--set" && option.StartsWith("--", StringComparison.Ordinal) && !seen.Add(option))
                 throw new ArgumentException($"{args[i]} was given more than once");
             switch (option)
             {
@@ -964,6 +972,12 @@ internal static class PerfSession
                     break;
                 case "--decoder":
                     options.Decoder = BenchmarkCliArguments.ParseDefinedEnum<DecoderBackend>(Next(), "decoder").ToString();
+                    break;
+                case "--set":
+                    var (setKey, setApply) = PerfSettingOverrides.Parse(Next());
+                    if (options.SettingOverrides.Any(o => o.Key == setKey))
+                        throw new ArgumentException($"--set {setKey} was given more than once");
+                    options.SettingOverrides.Add(new(setKey, setApply));
                     break;
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
@@ -986,6 +1000,8 @@ internal static class PerfSession
                 default: throw new ArgumentException($"unknown option {args[i]}");
             }
         }
+        if (options.SourceBytesCache is not null && options.SettingOverrides.Any(o => o.Key == nameof(AppSettings.UseSourceBytesCache)))
+            throw new ArgumentException("--source-bytes-cache and --set UseSourceBytesCache were both given");
         return options;
     }
 
