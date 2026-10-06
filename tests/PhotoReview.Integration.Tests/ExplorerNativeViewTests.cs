@@ -84,7 +84,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
     private sealed unsafe class NativeObject : IDisposable
     {
         private const int SlotCount = 40;
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<IntPtr, NativeObject> Registry = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<IntPtr, NativeObject> LiveObjects = new();
         private readonly IntPtr _vtable = Marshal.AllocHGlobal(SlotCount * IntPtr.Size);
         private readonly Dictionary<int, Delegate> _handlers = [];
         private readonly Dictionary<Guid, NativeObject> _interfaces = [];
@@ -95,7 +95,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
             for (var i = 0; i < SlotCount; i++) Marshal.WriteIntPtr(_vtable, i * IntPtr.Size, IntPtr.Zero);
             Pointer = Marshal.AllocHGlobal(IntPtr.Size);
             Marshal.WriteIntPtr(Pointer, _vtable);
-            Registry[Pointer] = this;
+            LiveObjects[Pointer] = this;
             Marshal.WriteIntPtr(_vtable, 0, (IntPtr)(delegate* unmanaged[Stdcall]<IntPtr, Guid*, IntPtr*, int>)&Thunks.QueryInterface);
             Marshal.WriteIntPtr(_vtable, IntPtr.Size, (IntPtr)(delegate* unmanaged[Stdcall]<IntPtr, uint>)&Thunks.AddRef);
             Marshal.WriteIntPtr(_vtable, 2 * IntPtr.Size, (IntPtr)(delegate* unmanaged[Stdcall]<IntPtr, uint>)&Thunks.Release);
@@ -124,7 +124,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
         public void Supports(Guid iid, NativeObject target) => _interfaces[iid] = target;
         public void Forget(Guid iid) => _interfaces.Remove(iid);
 
-        internal static NativeObject Find(IntPtr self) => Registry[self];
+        internal static NativeObject Find(IntPtr self) => LiveObjects[self];
         internal T Handler<T>(int slot) where T : Delegate => (T)_handlers[slot];
 
         internal int QueryInterface(ref Guid iid, out IntPtr obj)
@@ -140,7 +140,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
 
         public void Dispose()
         {
-            Registry.TryRemove(Pointer, out _);
+            LiveObjects.TryRemove(Pointer, out _);
             Marshal.FreeHGlobal(Pointer);
             Marshal.FreeHGlobal(_vtable);
         }
