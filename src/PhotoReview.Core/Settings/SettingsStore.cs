@@ -85,6 +85,7 @@ public sealed class SettingsStore
         LastLoadRepairs = [];
         _keepCorruptFile = false;
         AppSettings? ready = null;
+        var backedUp = false; // the salvage path already kept the original: no second backup for the same file
         try
         {
             if (_fileSystem.FileExists(filePath))
@@ -100,6 +101,7 @@ public sealed class SettingsStore
                     try
                     {
                         _fileSystem.Copy(filePath, UniqueBackupPath(filePath));
+                        backedUp = true;
                     }
                     catch (Exception copyEx) when (copyEx is IOException or UnauthorizedAccessException)
                     {
@@ -119,7 +121,23 @@ public sealed class SettingsStore
                 // try (R23: a throwing handler must be neither mistaken for a failed write nor invoked twice).
                 // A file from a NEWER build is never rewritten: persisting would drop its unknown fields and stamp the older version.
                 if (LastLoadRepairs.Count > 0 && path is null && loaded.ConfigVersion <= AppSettings.CurrentConfigVersion)
+                {
+                    // F06: normalized values (clamped, reset, a shortcut disabled) overwrite the user's original text, so keep it first;
+                    // when the backup fails the file stays untouched and the repairs live in memory only (Persist honours _keepCorruptFile).
+                    if (!backedUp)
+                    {
+                        try
+                        {
+                            _fileSystem.Copy(filePath, UniqueBackupPath(filePath, "repaired"));
+                        }
+                        catch (Exception copyEx) when (copyEx is IOException or UnauthorizedAccessException)
+                        {
+                            _keepCorruptFile = true; // path is null in this branch
+                            LogStartupError("Could not back up config.json before writing repairs", copyEx);
+                        }
+                    }
                     TryPersistRepairs(loaded);
+                }
                 ready = _current; // RV-S04: Changed is raised after the try, so a throwing handler cannot be mistaken for an IO failure
             }
         }
@@ -263,9 +281,9 @@ public sealed class SettingsStore
     }
 
     // Second resolution is not unique when the app crash-loops on a bad file: never overwrite (or fail on) an earlier backup.
-    private string UniqueBackupPath(string filePath)
+    private string UniqueBackupPath(string filePath, string kind = "corrupt")
     {
-        var stem = filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        var stem = filePath + "." + kind + "-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
         var candidate = stem;
         for (var i = 2; i < 100 && _fileSystem.FileExists(candidate); i++) candidate = stem + "-" + i.ToString(CultureInfo.InvariantCulture);
         return candidate;
