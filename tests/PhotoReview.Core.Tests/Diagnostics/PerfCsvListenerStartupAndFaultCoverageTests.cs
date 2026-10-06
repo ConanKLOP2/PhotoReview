@@ -110,7 +110,10 @@ public sealed class PerfCsvListenerStartupAndFaultCoverageTests
         const int before = 200;
         for (var i = 0; i < before; i++) listener.Enqueue(Row);
         Assert.True(SpinWait.SpinUntil(() => listener.WriterFaulted, TimeSpan.FromSeconds(20)), "the writer never faulted");
-        Assert.Equal(before, listener.DroppedCount); // every abandoned row is counted once (W2CM-04)
+        // WriterFaulted flips before the writer loop has finished draining the abandoned rows into the drop counter, so wait
+        // for the counter to settle (condition, not a delay) before asserting that every abandoned row is counted once (W2CM-04).
+        Assert.True(SpinWait.SpinUntil(() => listener.DroppedCount >= before, TimeSpan.FromSeconds(20)), "the abandoned rows were never all counted");
+        Assert.Equal(before, listener.DroppedCount);
 
         for (var i = 0; i < 5; i++) listener.Enqueue(Row);
 
