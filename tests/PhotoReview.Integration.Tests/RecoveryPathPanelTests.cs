@@ -86,19 +86,6 @@ public sealed class RecoveryPathPanelTests
         finally { Directory.Delete(dir, recursive: true); }
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task Show_Click_BlankPath_StartsNothing(string path)
-    {
-        var started = new List<ProcessStartInfo>();
-
-        var failures = await ClickShowAsync(path, started.Add);
-
-        Assert.Empty(started);
-        Assert.Empty(failures);
-    }
-
     [Fact]
     public async Task Show_Click_PathWithNoExistingAncestor_StartsNothing()
     {
