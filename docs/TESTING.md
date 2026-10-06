@@ -26,6 +26,10 @@ Five xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`, 
 
 `tests/PhotoReview.Imaging.Tests/Robustness/BinaryFuzz.cs` is the shared harness for `BinaryReaderFuzzTests` (binary readers fed untrusted bytes): a bounded, reproducible mutant corpus (truncation, length-field overwrites, seeded bit flips/splices) run under a wall-clock bound. It asserts only "no hang" and "every failure is the reader's documented clean failure"; a failing case prints a label that reproduces it.
 
+## Property tests
+
+`tests/PhotoReview.TestSupport/PropertyRunner.cs` runs seeded random properties (`Properties/` folders of Core/Imaging tests; no FsCheck, the offline restore has no such package). CI uses fixed seeds 1..3. Set `PHOTOREVIEW_PROP_SEED=<int>` to replay one seed or `random` for one fresh seed; every failure message names the seed, the iteration and this variable.
+
 ## Mutation tests
 
 [Stryker.NET](MUTATION-TESTING.md) measures how well the tests pin behaviour (manual, not part of CI): how to run it safely and the 2026-10-03 baseline.
