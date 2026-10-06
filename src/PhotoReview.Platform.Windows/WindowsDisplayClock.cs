@@ -32,9 +32,21 @@ public sealed class WindowsDisplayClock : IDisplayClock
     /// <summary>A failed monitor falls back to DWM timing for this long, then the vblank wait is tried again (ms).</summary>
     public const int RetryFailedAfterMs = 8000;
 
+    private readonly IVBlankDriver _driver;
+    private readonly Func<long> _timestamp;
+
     public WindowsDisplayClock(ILog? log = null)
+        : this(log, NativeVBlankDriver.Instance, Stopwatch.GetTimestamp)
+    {
+    }
+
+    /// <param name="driver">Test seam for the OS calls (monitor lookup, adapter open, vblank wait, DWM timing).</param>
+    /// <param name="timestamp">Test seam for the QPC clock (ticks of <see cref="Stopwatch.Frequency"/>).</param>
+    internal WindowsDisplayClock(ILog? log, IVBlankDriver driver, Func<long> timestamp)
     {
         _log = log ?? NullLog.Instance;
+        _driver = driver ?? throw new ArgumentNullException(nameof(driver));
+        _timestamp = timestamp ?? throw new ArgumentNullException(nameof(timestamp));
     }
 
     /// <summary>Falls back to DWM timing for <paramref name="monitor"/>; logs once which step failed, so a non-60 Hz secondary display running on primary-display timing is explainable.</summary>
@@ -44,7 +56,7 @@ public sealed class WindowsDisplayClock : IDisplayClock
         lock (_gate)
         {
             _failedMonitor = monitor;
-            _failedAt = Stopwatch.GetTimestamp();
+            _failedAt = _timestamp();
             _thread = null;
         }
     }
@@ -53,15 +65,15 @@ public sealed class WindowsDisplayClock : IDisplayClock
 
     public DisplayTiming? GetTiming(IntPtr window)
     {
-        var monitor = window != IntPtr.Zero ? MonitorFromWindow(window, MonitorDefaultToNearest) : IntPtr.Zero;
-        if (monitor == IntPtr.Zero) return DwmTiming();
-        Volatile.Write(ref _lastUse, Stopwatch.GetTimestamp());
+        var monitor = window != IntPtr.Zero ? _driver.MonitorFromWindow(window) : IntPtr.Zero;
+        if (monitor == IntPtr.Zero) return _driver.DwmTiming();
+        Volatile.Write(ref _lastUse, _timestamp());
         lock (_gate)
         {
             if (monitor == _failedMonitor)
             {
-                var sinceFailMs = (Stopwatch.GetTimestamp() - _failedAt) * 1000.0 / Stopwatch.Frequency;
-                if (sinceFailMs < RetryFailedAfterMs) return DwmTiming();
+                var sinceFailMs = (_timestamp() - _failedAt) * 1000.0 / Stopwatch.Frequency;
+                if (sinceFailMs < RetryFailedAfterMs) return _driver.DwmTiming();
                 _failedMonitor = IntPtr.Zero; // retry the vblank wait (e.g. after a display/driver reset)
             }
             _monitor = monitor;
@@ -89,7 +101,7 @@ public sealed class WindowsDisplayClock : IDisplayClock
                 IntPtr wanted;
                 lock (_gate)
                 {
-                    var idle = (Stopwatch.GetTimestamp() - Volatile.Read(ref _lastUse)) * 1000.0 / Stopwatch.Frequency;
+                    var idle = (_timestamp() - Volatile.Read(ref _lastUse)) * 1000.0 / Stopwatch.Frequency;
                     if (idle > IdleStopMs)
                     {
                         _thread = null;
@@ -101,24 +113,23 @@ public sealed class WindowsDisplayClock : IDisplayClock
                 }
                 if (wanted != opened)
                 {
-                    Close(ref adapter);
+                    CloseAdapter(ref adapter);
                     estimator.Reset();
                     Volatile.Write(ref _published, null);
                     opened = wanted;
-                    if (!TryOpen(wanted, out adapter, out source))
+                    if (!_driver.TryOpen(wanted, out adapter, out source))
                     {
                         MarkFailed(wanted, "opening the adapter failed (GetMonitorInfo, CreateDC or D3DKMTOpenAdapterFromHdc)");
                         return;
                     }
                 }
-                var wait = new WaitForVerticalBlankEvent { Adapter = adapter, Device = 0, VidPnSourceId = source };
-                var waitStatus = D3DKMTWaitForVerticalBlankEvent(ref wait);
+                var waitStatus = _driver.WaitForVBlank(adapter, source);
                 if (waitStatus != 0)
                 {
                     MarkFailed(opened, $"D3DKMTWaitForVerticalBlankEvent returned 0x{waitStatus:X8}");
                     return;
                 }
-                estimator.Add(Stopwatch.GetTimestamp());
+                estimator.Add(_timestamp());
                 if (estimator.Current is { } timing) Volatile.Write(ref _published, new Published(opened, timing));
             }
         }
@@ -143,11 +154,58 @@ public sealed class WindowsDisplayClock : IDisplayClock
         }
         finally
         {
-            Close(ref adapter);
+            CloseAdapter(ref adapter);
         }
     }
 
-    private static bool TryOpen(IntPtr monitor, out uint adapter, out uint source)
+    private void CloseAdapter(ref uint adapter)
+    {
+        if (adapter == 0) return;
+        _driver.Close(adapter);
+        adapter = 0;
+    }
+
+    /// <summary>The compositor's timing (primary display), or null.</summary>
+    public static DisplayTiming? DwmTiming() => NativeVBlankDriver.Instance.DwmTiming();
+}
+
+/// <summary>The OS calls <see cref="WindowsDisplayClock"/> makes; the seam tests replace with a scripted fake.</summary>
+internal interface IVBlankDriver
+{
+    /// <summary>Monitor nearest to <paramref name="window"/>, or <see cref="IntPtr.Zero"/>.</summary>
+    IntPtr MonitorFromWindow(IntPtr window);
+
+    /// <summary>Opens the display adapter of <paramref name="monitor"/>; false when any step fails.</summary>
+    bool TryOpen(IntPtr monitor, out uint adapter, out uint source);
+
+    /// <summary>Blocks until the next vblank; the NTSTATUS (0 = success).</summary>
+    int WaitForVBlank(uint adapter, uint source);
+
+    void Close(uint adapter);
+
+    /// <summary>The compositor's timing (primary display), or null.</summary>
+    DisplayTiming? DwmTiming();
+}
+
+internal sealed class NativeVBlankDriver : IVBlankDriver
+{
+    public static readonly NativeVBlankDriver Instance = new();
+
+    public IntPtr MonitorFromWindow(IntPtr window) => MonitorFromWindow(window, MonitorDefaultToNearest);
+
+    public int WaitForVBlank(uint adapter, uint source)
+    {
+        var wait = new WaitForVerticalBlankEvent { Adapter = adapter, Device = 0, VidPnSourceId = source };
+        return D3DKMTWaitForVerticalBlankEvent(ref wait);
+    }
+
+    public void Close(uint adapter)
+    {
+        var close = new CloseAdapter { Adapter = adapter };
+        _ = D3DKMTCloseAdapter(ref close);
+    }
+
+    public bool TryOpen(IntPtr monitor, out uint adapter, out uint source)
     {
         adapter = 0;
         source = 0;
@@ -169,16 +227,8 @@ public sealed class WindowsDisplayClock : IDisplayClock
         }
     }
 
-    private static void Close(ref uint adapter)
-    {
-        if (adapter == 0) return;
-        var close = new CloseAdapter { Adapter = adapter };
-        _ = D3DKMTCloseAdapter(ref close);
-        adapter = 0;
-    }
-
     /// <summary>The compositor's timing (primary display), or null.</summary>
-    public static DisplayTiming? DwmTiming()
+    public DisplayTiming? DwmTiming()
     {
         var info = new TimingInfo { Size = (uint)Marshal.SizeOf<TimingInfo>() };
         try
