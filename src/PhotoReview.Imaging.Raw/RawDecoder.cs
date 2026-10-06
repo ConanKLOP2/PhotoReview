@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Localization;
@@ -415,7 +415,7 @@ public sealed class RawDecoder : IImageDecoder
                 return DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, () => Tr.ImageErrorRawNoPreview, out bytesRead);
             }
             // The thumbnail is missing or not a JPEG (e.g. Leica M8 DNG stores a bitmap): fall through to the full decode.
-            catch (Exception ex) when (IsRecoverablePreviewFailure(ex))
+            catch (Exception ex) when (_noPreviewDecoder is not null && IsRecoverablePreviewFailure(ex))
             {
                 bytesRead = 0;
             }
