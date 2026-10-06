@@ -1,3 +1,4 @@
+using System.IO;
 using PhotoReview.App;
 using PhotoReview.Integration.Tests.Infrastructure;
 
@@ -113,5 +114,146 @@ public sealed class SettingsWindowImportTests
             finally { window.Close(); }
             return Task.CompletedTask;
         });
+    }
+
+    [Fact(DisplayName = "Export writes a file that Import reads back into the same settings")]
+    public async Task ExportSettingsTo_ThenImportSettingsFrom_RoundTripsTheSettings()
+    {
+        var dir = Directory.CreateTempSubdirectory("pr-settings-rt-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "settings.json");
+            await StaTestHost.RunAsync(() =>
+            {
+                var source = new SettingsWindow(new AppSettings { KeyboardZoomStepPercent = 37, UiLanguage = "en" });
+                var target = new SettingsWindow(new AppSettings { KeyboardZoomStepPercent = 20, UiLanguage = "en" });
+                try
+                {
+                    source.InvalidSettingsWarning = m => Assert.Fail("export must not warn: " + m);
+                    target.InvalidSettingsWarning = m => Assert.Fail("import must not warn: " + m);
+                    target.ImportRepairsNotice = m => Assert.Fail("nothing should be reset: " + m);
+
+                    source.ExportSettingsTo(path);
+                    target.ImportSettingsFrom(path);
+
+                    Assert.True(File.Exists(path));
+                    Assert.Equal(37, target.Settings.KeyboardZoomStepPercent);
+                }
+                finally { source.Close(); target.Close(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact(DisplayName = "Export to an unwritable path warns instead of throwing")]
+    public async Task ExportSettingsTo_PathIsADirectory_WarnsWithTheFailureText()
+    {
+        var dir = Directory.CreateTempSubdirectory("pr-settings-exp-").FullName; // a directory cannot be written as a file
+        try
+        {
+            await StaTestHost.RunAsync(() =>
+            {
+                var window = new SettingsWindow(new AppSettings());
+                try
+                {
+                    var warnings = new List<string>();
+                    window.InvalidSettingsWarning = warnings.Add;
+
+                    window.ExportSettingsTo(dir);
+
+                    Assert.Single(warnings);
+                }
+                finally { window.Close(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact(DisplayName = "Import of a missing file warns and keeps the previous settings")]
+    public async Task ImportSettingsFrom_MissingFile_WarnsAndKeepsSettings()
+    {
+        var dir = Directory.CreateTempSubdirectory("pr-settings-imp-").FullName;
+        try
+        {
+            await StaTestHost.RunAsync(() =>
+            {
+                var window = new SettingsWindow(new AppSettings { KeyboardZoomStepPercent = 33 });
+                try
+                {
+                    var warnings = new List<string>();
+                    window.InvalidSettingsWarning = warnings.Add;
+                    var before = window.Settings;
+
+                    window.ImportSettingsFrom(Path.Combine(dir, "does-not-exist.json"));
+
+                    Assert.Single(warnings);
+                    Assert.Same(before, window.Settings);
+                    Assert.Equal(33, window.Settings.KeyboardZoomStepPercent);
+                }
+                finally { window.Close(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact(DisplayName = "Import of a half-valid file routes the reset values to the notice, not the error warning")]
+    public async Task ImportSettingsFrom_HalfValidFile_ShowsRepairNoticeNotWarning()
+    {
+        var dir = Directory.CreateTempSubdirectory("pr-settings-imp-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "half.json");
+            File.WriteAllText(path, """{"ConfigVersion":3,"UiLanguage":"en","ClickZoomPercent":"abc","KeyboardZoomStepPercent":40}""");
+            await StaTestHost.RunAsync(() =>
+            {
+                var window = new SettingsWindow(new AppSettings());
+                try
+                {
+                    var notices = new List<string>();
+                    window.ImportRepairsNotice = notices.Add;
+                    window.InvalidSettingsWarning = m => Assert.Fail("a usable file must not raise the error warning: " + m);
+
+                    window.ImportSettingsFrom(path);
+
+                    Assert.Contains(nameof(AppSettings.ClickZoomPercent), Assert.Single(notices));
+                    Assert.Equal(40, window.Settings.KeyboardZoomStepPercent);
+                }
+                finally { window.Close(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact(DisplayName = "Import of an unusable file routes the error to the warning, not the repair notice")]
+    public async Task ImportSettingsFrom_NotJson_ShowsWarningNotNotice()
+    {
+        var dir = Directory.CreateTempSubdirectory("pr-settings-imp-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "bad.json");
+            File.WriteAllText(path, "this is not json");
+            await StaTestHost.RunAsync(() =>
+            {
+                var window = new SettingsWindow(new AppSettings { KeyboardZoomStepPercent = 33 });
+                try
+                {
+                    var warnings = new List<string>();
+                    window.InvalidSettingsWarning = warnings.Add;
+                    window.ImportRepairsNotice = m => Assert.Fail("no repair notice for an unusable file: " + m);
+
+                    window.ImportSettingsFrom(path);
+
+                    Assert.Single(warnings);
+                    Assert.Equal(33, window.Settings.KeyboardZoomStepPercent);
+                }
+                finally { window.Close(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { Directory.Delete(dir, recursive: true); }
     }
 }

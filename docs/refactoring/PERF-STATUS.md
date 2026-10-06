@@ -34,3 +34,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-09-29 -- RAW-22 cache/preload/RAM estimate](perf/2026-09-29-raw-22-cache-preload.md)
 - [2026-09-29 -- RAW-60 decoder benchmark](perf/2026-09-29-raw-60-decoder-bench.md)
 - [2026-09-29 -- RAW-31 LibRaw `half_size` evaluation](perf/2026-09-29-raw-31-half-size-evaluation.md)
+- [2026-10-06 -- PLAN: bench many configurations for this device (not yet run)](perf/PLAN-device-config-bench.md)
