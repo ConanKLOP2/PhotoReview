@@ -15,7 +15,7 @@ namespace PhotoReview.Imaging.Tests;
 /// in the fake target or a seam; the WaitAsync timeouts are only hang guards.
 /// </summary>
 [Trait("Category", "HotPath")]
-public sealed class PreloadSchedulerMutationTests : IDisposable
+public sealed partial class PreloadSchedulerMutationTests : IDisposable
 {
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(10);
     private readonly TempRoot _root = new("preload-mut");
@@ -122,11 +122,11 @@ public sealed class PreloadSchedulerMutationTests : IDisposable
 
     private PreloadScheduler Create(Target target, CatalogEntry[] entries, int workers, PreloadWindow window,
         bool wholeFolder = false, ReviewMetrics? metrics = null, NavigationPace? pace = null, ILog? log = null,
-        IMemoryProbe? probe = null, Func<int>? snapshotVersion = null)
+        IMemoryProbe? probe = null, Func<int>? snapshotVersion = null, TimeProvider? time = null)
     {
         var scheduler = new PreloadScheduler(target, metrics ?? new ReviewMetrics(), () => entries,
             new PreloadOptions(WorkerCount: workers, FullFolderThresholdBytes: wholeFolder ? 1_000_000_000L : -1) { Window = window },
-            probe ?? new FakeMemoryProbe(true), log, pace: pace, snapshotVersion: snapshotVersion);
+            probe ?? new FakeMemoryProbe(true), log, pace: pace, snapshotVersion: snapshotVersion, timeProvider: time);
         _disposables.Add(scheduler);
         return scheduler;
     }
