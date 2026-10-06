@@ -18,6 +18,9 @@ public partial class RecoveryPathPanel : UserControl
 
     internal string CurrentPath => PathBox.Text;
 
+    /// <summary>Test seam: starts Explorer for "Show in Explorer"; the default really starts the process (a test must never open the user's Explorer).</summary>
+    internal Action<ProcessStartInfo> StartExplorer { get; set; } = static startInfo => { using var explorer = Process.Start(startInfo); };
+
     internal void Show(RecoveryPathView view)
     {
         ArgumentNullException.ThrowIfNull(view);
@@ -46,12 +49,12 @@ public partial class RecoveryPathPanel : UserControl
         {
             if (File.Exists(path))
             {
-                using var explorer = Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+                StartExplorer(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
                 return;
             }
             var folder = RecoveryPresenter.NearestExistingFolder(path, Directory.Exists);
             if (folder is null) return;
-            using var explorerAtFolder = Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
+            StartExplorer(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
