@@ -2,7 +2,9 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Runtime.InteropServices;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -136,6 +138,120 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
             && Math.Abs(w.MainImage.ActualWidth - fitW) < Tolerance;
     }
 
+    // ---- native window-state / rect trace (the cause measured on a real monitor: a Maximized -> Normal -> Maximized flip) ----
+    [StructLayout(LayoutKind.Sequential)] private struct Rc { public int L, T, R, B; }
+    [StructLayout(LayoutKind.Sequential)] private struct MonInfo { public int Size; public Rc Monitor; public Rc Work; public int Flags; }
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out Rc r);
+    [DllImport("user32.dll")] private static extern bool IsZoomed(IntPtr h);
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool GetMonitorInfo(IntPtr m, ref MonInfo i);
+
+    private sealed record NativeSample(string Tag, bool Zoomed, WindowState Wpf, Rc Rect);
+
+    /// <summary>Records the native rect and zoomed flag after every WM_WINDOWPOSCHANGED, plus every WPF StateChanged.</summary>
+    private sealed class NativeTrace : IDisposable
+    {
+        private readonly MainWindow _w;
+        private readonly HwndSource _src;
+        public List<NativeSample> Samples { get; } = [];
+
+        public NativeTrace(MainWindow w)
+        {
+            _w = w;
+            _src = (HwndSource)PresentationSource.FromVisual(w)!;
+            _src.AddHook(Hook);
+            w.StateChanged += OnState;
+        }
+
+        private IntPtr Hook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == 0x0047) Add("WM_WINDOWPOSCHANGED");
+            return IntPtr.Zero;
+        }
+        private void OnState(object? s, EventArgs e) => Add("StateChanged");
+        private void Add(string tag)
+        {
+            GetWindowRect(_src.Handle, out var r);
+            Samples.Add(new NativeSample(tag, IsZoomed(_src.Handle), _w.WindowState, r));
+        }
+        public Rc Rect() { GetWindowRect(_src.Handle, out var r); return r; }
+        public Rc MonitorRect()
+        {
+            var info = new MonInfo { Size = Marshal.SizeOf<MonInfo>() };
+            Assert.True(GetMonitorInfo(MonitorFromWindow(_src.Handle, 2), ref info));
+            return info.Monitor;
+        }
+        public string Dump() => string.Join(Environment.NewLine, Samples.Select(x => $"{x.Tag,-20} zoomed={x.Zoomed} wpf={x.Wpf} rect={x.Rect.L},{x.Rect.T} {x.Rect.R - x.Rect.L}x{x.Rect.B - x.Rect.T}"));
+        public void Dispose() { _src.RemoveHook(Hook); _w.StateChanged -= OnState; }
+    }
+
+    /// <summary>
+    /// Fullscreen must change the window rect in ONE step (start rect -> monitor rect and back) and never leave the OS
+    /// state: a Maximized window stays zoomed throughout, a Normal one never becomes zoomed. Any intermediate state or
+    /// rect is a frame DWM can present (measured on a real monitor).
+    /// </summary>
+    [Theory]
+    [InlineData(Start.Maximized)]
+    [InlineData(Start.Normal)]
+    public async Task FullscreenToggle_NeverLeavesTheWindowState_AndMovesStraightToTheMonitorRect(Start start)
+    {
+        using var dataRoot = new DataRootFixture();
+        using var folder = new TempRoot("f11-state");
+        WriteBigJpeg(Path.Combine(folder.Path, "a.jpg"), 600, 400);
+        var presented = new List<string>();
+        MainWindow? window = null;
+        string failure = "";
+        try
+        {
+            await StaTestHost.RunAsync(async () =>
+            {
+                window = TestAppHost.CreateMainWindow(folder.Path, new TestHostHooks { OnPresented = presented.Add, DisablePreload = true });
+                if (start == Start.Maximized) window.WindowState = WindowState.Maximized;
+                else { window.Width = 700; window.Height = 500; window.WindowState = WindowState.Normal; }
+                window.Show();
+                Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, PresentTimeout), "never presented");
+                await StaTestHost.WaitForAsync(() => window.IsLoaded, TimeSpan.FromSeconds(5));
+                using var trace = new NativeTrace(window);
+                var startRect = trace.Rect();
+                var monitor = trace.MonitorRect();
+                var zoomedStart = start == Start.Maximized;
+
+                void Check(string phase, Rc finalRect)
+                {
+                    var allowed = new[] { startRect, monitor };
+                    foreach (var x in trace.Samples)
+                    {
+                        if (x.Zoomed != zoomedStart || (x.Wpf == WindowState.Maximized) != zoomedStart)
+                            failure += $"{phase}: window state left {start}: {x.Tag} zoomed={x.Zoomed} wpf={x.Wpf}\n";
+                        if (!allowed.Any(a => a.L == x.Rect.L && a.T == x.Rect.T && a.R == x.Rect.R && a.B == x.Rect.B))
+                            failure += $"{phase}: intermediate rect {x.Rect.L},{x.Rect.T} {x.Rect.R - x.Rect.L}x{x.Rect.B - x.Rect.T}\n";
+                    }
+                    var last = trace.Rect();
+                    if (last.L != finalRect.L || last.T != finalRect.T || last.R != finalRect.R || last.B != finalRect.B)
+                        failure += $"{phase}: final rect {last.L},{last.T} {last.R - last.L}x{last.B - last.T} != expected {finalRect.L},{finalRect.T} {finalRect.R - finalRect.L}x{finalRect.B - finalRect.T}\n";
+                }
+
+                window.ViewModel.ToggleFullscreen();
+                await StaTestHost.WaitForAsync(() => window.WindowStyle == WindowStyle.None, TimeSpan.FromSeconds(5));
+                Check("enter", monitor);
+                var enterTrace = trace.Dump();
+                trace.Samples.Clear();
+
+                window.ViewModel.ToggleFullscreen();
+                await StaTestHost.WaitForAsync(() => window.WindowStyle == WindowStyle.SingleBorderWindow, TimeSpan.FromSeconds(5));
+                Check("exit", startRect);
+                output.WriteLine("enter:"+Environment.NewLine + enterTrace + Environment.NewLine+"exit:"+Environment.NewLine + trace.Dump());
+            }, TimeSpan.FromSeconds(60));
+        }
+        finally
+        {
+            var w = window;
+            if (w is not null)
+                await StaTestHost.RunAsync(() => { try { w.Close(); } catch (InvalidOperationException) { } return Task.CompletedTask; });
+        }
+        Assert.True(failure.Length == 0, failure);
+    }
+
     private static async Task<(List<Step> Enter, List<Step> Exit)> RunAsync(Start start)
     {
         using var dataRoot = new DataRootFixture();
@@ -165,7 +281,7 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
                 probe.Mark("BEFORE-ENTER");
                 window.ViewModel.ToggleFullscreen();
                 probe.Mark("AFTER-TOGGLE-SYNC");
-                await SettleAsync(probe, window, () => Converged(window, true, WindowState.Maximized), "enter");
+                await SettleAsync(probe, window, () => Converged(window, true, start == Start.Maximized ? WindowState.Maximized : WindowState.Normal), "enter");
                 probe.Mark("SETTLED-ENTER");
                 enter = [.. probe.Steps];
 
