@@ -26,6 +26,10 @@ Five xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`, 
 
 `tests/PhotoReview.Imaging.Tests/Robustness/BinaryFuzz.cs` is the shared harness for `BinaryReaderFuzzTests` (binary readers fed untrusted bytes): a bounded, reproducible mutant corpus (truncation, length-field overwrites, seeded bit flips/splices) run under a wall-clock bound. It asserts only "no hang" and "every failure is the reader's documented clean failure"; a failing case prints a label that reproduces it.
 
+## Fault-injection (crash-consistency) tests
+
+`tests/PhotoReview.Core.Tests/FileActions/FileActionFaultInjection*Tests.cs` run each file-action scenario (Move, Copy, Delete via a fake bin, group actions, Undo, Recovery retry, interrupted startup reconcile) once per mutating call x fault kind (`FaultInjectionFileSystem`: crash before/after/torn, or one transient failure). `FaultInvariants` then checks no photo lost, duplicated or overwritten, every journal verdict true, nothing Prepared, a second reconcile a no-op. A new scenario is one `FaultInjectionMatrix.RunAsync` call; in-memory only (no real disk or Recycle Bin). `JournalCompactionFaultInjectionTests` does the same for journal compaction.
+
 ## Mutation tests
 
 [Stryker.NET](MUTATION-TESTING.md) measures how well the tests pin behaviour (manual, not part of CI): how to run it safely and the 2026-10-03 baseline.
