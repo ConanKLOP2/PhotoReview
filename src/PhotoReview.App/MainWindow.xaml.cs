@@ -166,8 +166,13 @@ public partial class MainWindow : Window
 
     private WindowState _stateBeforeFullscreen = WindowState.Normal;
 
+    // F11 transition: the Normal -> style -> Maximized sequence raises SizeChanged for every intermediate size; the gate
+    // suppresses those and one UpdateFitSize runs after layout settles (Loaded priority is below the Render-priority layout).
+    private readonly FitUpdateGate _fitGate = new();
+
     private void ApplyFullscreenState(bool isFullscreen)
     {
+        var gateToken = _fitGate.Begin();
         if (isFullscreen)
         {
             _stateBeforeFullscreen = WindowState == WindowState.Minimized ? WindowState.Normal : WindowState;
@@ -179,6 +184,10 @@ public partial class MainWindow : Window
         ResizeMode = isFullscreen ? ResizeMode.NoResize : ResizeMode.CanResize;
         WindowStyle = isFullscreen ? WindowStyle.None : WindowStyle.SingleBorderWindow;
         WindowState = isFullscreen ? WindowState.Maximized : _stateBeforeFullscreen;
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            if (_fitGate.TryEnd(gateToken) && IsLoaded) UpdateFitSize();
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private (double Width, double Height) GetViewportSize() => _surface.ViewportSize;
@@ -415,11 +424,11 @@ public partial class MainWindow : Window
         OutgoingImage.Visibility = Visibility.Collapsed;
     }
 
-    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
-    private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) { if (_fitGate.ShouldApply) UpdateFitSize(); }
+    private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e) { if (_fitGate.ShouldApply) UpdateFitSize(); }
     private void MainImage_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_viewModel.Viewer.IsFit) UpdateFitSize();
+        if (_fitGate.ShouldApply && _viewModel.Viewer.IsFit) UpdateFitSize();
     }
     private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e)
     {
