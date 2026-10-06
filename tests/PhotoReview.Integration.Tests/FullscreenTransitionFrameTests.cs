@@ -27,6 +27,9 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
 {
     private const double Aspect = 1.5; // the generated 6000x4000 images
     private const double Tolerance = 0.01;
+    // Layout rounding (DPI snapping of the Image height) moves a Fit size by a fraction of a DIP on some screens (a 1024x768 CI runner
+    // gave 682.4 vs 682.67); a stale frame differs by tens of DIPs, so one DIP still separates them.
+    private const double FitTolerance = 1.0;
     private static readonly TimeSpan PresentTimeout = TimeSpan.FromSeconds(20);
 
     public enum Start { Maximized, Normal }
@@ -210,9 +213,9 @@ public sealed class FullscreenTransitionFrameTests(ITestOutputHelper output)
         {
             var fitW = Math.Min(s.ScrW, s.ScrH * Aspect);
             var fitH = fitW / Aspect;
-            Assert.True(s.ImgW <= finalW + Tolerance && s.ImgH <= finalH + Tolerance,
+            Assert.True(s.ImgW <= finalW + FitTolerance && s.ImgH <= finalH + FitTolerance,
                 $"{what}: frame at {s.T} ms shows {s.ImgW}x{s.ImgH}, larger than the final Fit {finalW}x{finalH}. {Format(what, steps)}");
-            Assert.True(Math.Abs(s.ImgW - fitW) <= Tolerance && Math.Abs(s.ImgH - fitH) <= Tolerance,
+            Assert.True(Math.Abs(s.ImgW - fitW) <= FitTolerance && Math.Abs(s.ImgH - fitH) <= FitTolerance,
                 $"{what}: frame at {s.T} ms shows {s.ImgW}x{s.ImgH} in a {s.ScrW}x{s.ScrH} viewport (Fit would be {fitW}x{fitH}). {Format(what, steps)}");
         }
         Assert.Equal(1.0, final.Opacity); // never left hidden
