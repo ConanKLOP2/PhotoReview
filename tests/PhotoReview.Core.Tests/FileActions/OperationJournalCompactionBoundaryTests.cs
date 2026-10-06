@@ -198,7 +198,7 @@ public sealed class OperationJournalCompactionBoundaryTests
         _files.BeforeLock = () =>
         {
             using var stream = _fs.OpenAppend(Paths.JournalFile, durable: false);
-            var torn = Encoding.UTF8.GetBytes("{\"Id\":\"torn\",\"Ty");
+            var torn = Encoding.UTF8.GetBytes(TornDelta);
             stream.Write(torn, 0, torn.Length);
             stream.Flush();
         };
@@ -209,7 +209,12 @@ public sealed class OperationJournalCompactionBoundaryTests
         var after = JournalBytes();
         Assert.Equal(after.Length, result.BytesAfter);
         Assert.Equal((byte)'\n', after[^1]);
+        // R40: a newline on the end alone also holds when the torn delta was dropped. The delta bytes themselves must survive, then the terminator.
+        var tail = Encoding.UTF8.GetString(after)[^(TornDelta.Length + Environment.NewLine.Length)..];
+        Assert.Equal(TornDelta + Environment.NewLine, tail);
     }
+
+    private const string TornDelta = "{\"Id\":\"torn\",\"Ty";
 
     // ---------------------------------------------------------------------------------------------------------
     // Stale replacement files left by a crashed compaction.

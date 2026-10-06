@@ -135,10 +135,14 @@ public sealed class OperationJournalMutationTests
     [Fact]
     public void GetHashCode_EntriesDifferingOnlyInTheMembers_DifferInTheirHash()
     {
-        var left = FullEntry();
-        var right = left with { GroupMembers = [MoveMember(@"C:\a.jpg", @"C:\b\a.jpg", 99), MoveMember(Raw, OutRaw, 8)] };
+        // R36: two unequal values are allowed to collide, so a single NotEqual pair is a coin flip in principle. Many variants
+        // that differ only in the members must NOT all hash alike: a GetHashCode that ignores GroupMembers yields one value.
+        var baseline = FullEntry();
+        var hashes = new HashSet<int> { baseline.GetHashCode() };
+        for (var i = 1; i <= 16; i++)
+            hashes.Add((baseline with { GroupMembers = [MoveMember(@"C:\a.jpg", @"C:\b\a.jpg", 99 + i), MoveMember(Raw, OutRaw, 8)] }).GetHashCode());
 
-        Assert.NotEqual(left.GetHashCode(), right.GetHashCode());
+        Assert.True(hashes.Count > 1, "the hash ignores GroupMembers");
     }
 
     // ---------------------------------------------------------------------------------------------------------

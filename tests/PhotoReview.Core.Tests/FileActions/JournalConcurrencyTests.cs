@@ -28,6 +28,14 @@ public sealed class JournalConcurrencyTests : IDisposable
         catch (Exception ex) { _threadFailures.Enqueue(System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex)); }
     };
 
+    private static Thread Background(ThreadStart body) => new(body) { IsBackground = true }; // a hung worker must not outlive the test host
+
+    /// <summary>Bounded barrier wait: a participant that died before signalling fails the others instead of blocking them forever.</summary>
+    private static void Rendezvous(Barrier barrier)
+    {
+        if (!barrier.SignalAndWait(TimeSpan.FromSeconds(30))) throw new TimeoutException("barrier participants did not all arrive within 30 s");
+    }
+
     private void RethrowThreadFailures()
     {
         if (_threadFailures.TryDequeue(out var first)) first.Throw();
@@ -42,11 +50,11 @@ public sealed class JournalConcurrencyTests : IDisposable
         var start = new Barrier(writers);
         var acknowledged = new System.Collections.Concurrent.ConcurrentBag<string>();
 
-        var threads = Enumerable.Range(0, writers).Select(w => new Thread(Captured(() =>
+        var threads = Enumerable.Range(0, writers).Select(w => Background(Captured(() =>
         {
             // One instance per "process": its lock does not serialize the others, only the file sharing does.
             var journal = new OperationJournal(paths, new PhysicalFileSystem(), new SystemClock());
-            start.SignalAndWait();
+            Rendezvous(start);
             for (var i = 0; i < perWriter; i++)
             {
                 var id = $"w{w}-{i}";
@@ -102,9 +110,9 @@ public sealed class JournalConcurrencyTests : IDisposable
 
         var start = new Barrier(2);
         var committed = new System.Collections.Concurrent.ConcurrentBag<string>();
-        var commit = new Thread(Captured(() =>
+        var commit = Background(Captured(() =>
         {
-            start.SignalAndWait();
+            Rendezvous(start);
             foreach (var prepared in entries)
             {
                 File.WriteAllText(prepared.Destination!, "x"); // the copy completes, then Committed is journaled
@@ -120,9 +128,9 @@ public sealed class JournalConcurrencyTests : IDisposable
                 }
             }
         }));
-        var reconcile = new Thread(Captured(() =>
+        var reconcile = Background(Captured(() =>
         {
-            start.SignalAndWait();
+            Rendezvous(start);
             try
             {
                 reconciler.ReconcilePendingOperations();
@@ -172,17 +180,17 @@ public sealed class JournalConcurrencyTests : IDisposable
         var allLosersTurnedAway = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var tasks = Enumerable.Range(0, 8).Select(i => Task.Run(async () =>
         {
-            start.SignalAndWait();
+            Rendezvous(start);
             var result = await service.ExecuteAsync(new FileActionRequest($@"C:\photos\a{i}.jpg", FileOperationType.Move, "sel"));
             if (result.Rejected && Interlocked.Increment(ref rejected) == 7) allLosersTurnedAway.TrySetResult();
             return result;
         })).ToList();
 
-        await entered.Task; // the winner is inside its Move
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(30)); // the winner is inside its Move
         // Hold the winner until every other action has been rejected: releasing earlier would let a slow starter
         // find the gate free and succeed (the test then fails on a loaded machine).
-        await allLosersTurnedAway.Task.WaitAsync(TimeSpan.FromSeconds(30));
-        release.SetResult();
+        try { await allLosersTurnedAway.Task.WaitAsync(TimeSpan.FromSeconds(30)); }
+        finally { release.TrySetResult(); } // never leave the winner parked in its Move when the wait above times out
         var results = await Task.WhenAll(tasks);
 
         Assert.Equal(1, results.Count(r => r.Succeeded));

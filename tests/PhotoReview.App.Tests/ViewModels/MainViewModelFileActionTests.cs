@@ -1010,12 +1010,13 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
                 _countBarrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             }
 
-            using var cts = new CancellationTokenSource(timeout);
+            // APP-T03: the timeout must actually bound the wait (a CancellationTokenSource nobody observed never fired).
+            var barrier = _countBarrier;
             try
             {
-                await _countBarrier.Task.ConfigureAwait(false);
+                await barrier.Task.WaitAsync(timeout).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (TimeoutException)
             {
                 lock (PresentedPaths)
                 {

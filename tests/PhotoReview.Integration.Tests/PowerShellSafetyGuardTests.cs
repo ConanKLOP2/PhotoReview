@@ -21,6 +21,8 @@ public sealed class PowerShellSafetyGuardTests : IDisposable
         return dir?.FullName ?? throw new InvalidOperationException("repo root not found");
     }
 
+    private const int PowerShellTimeoutMs = 120_000;
+
     private static readonly string[] BaseArgs = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"];
 
     private static (int ExitCode, string Output) RunPowerShell(params string[] args)
@@ -30,9 +32,16 @@ public sealed class PowerShellSafetyGuardTests : IDisposable
         PowerShellRunner.ForWindowsPowerShell(psi);
         using var p = Process.Start(psi)!;
         var stderr = p.StandardError.ReadToEndAsync();
-        var stdout = p.StandardOutput.ReadToEnd();
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        // Bounded: a wedged powershell.exe (or one that never closes its pipes) fails the test instead of hanging the run.
+        if (!p.WaitForExit(PowerShellTimeoutMs))
+        {
+            try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { /* exited between the wait and the kill */ }
+            throw new TimeoutException($"powershell.exe did not exit within {PowerShellTimeoutMs} ms.");
+        }
+        // WaitForExit(int) returns before the redirected streams are drained; the parameterless overload waits for EOF (the process has exited, so this is prompt).
         p.WaitForExit();
-        return (p.ExitCode, stdout + stderr.Result);
+        return (p.ExitCode, stdout.Result + stderr.Result);
     }
 
     private static (int ExitCode, string Output) RunGuard(string directory, string approvedRoot)

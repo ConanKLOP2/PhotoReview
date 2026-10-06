@@ -152,9 +152,11 @@ public sealed class SourceBytesCacheTests : IDisposable
         {
             callingThreadId = Environment.CurrentManagedThreadId;
             cache.GetOrRead(path);
-        });
+        })
+        { IsBackground = true }; // a wedged read must not keep the test host alive
         worker.Start();
-        worker.Join();
+        // Bounded join: a read that never returns fails this test instead of hanging the whole run.
+        Assert.True(worker.Join(TimeSpan.FromSeconds(30)), "GetOrRead did not return within 30 s");
 
         Assert.NotNull(callingThreadId);
         Assert.Equal(callingThreadId, cache.LastReadManagedThreadId);
