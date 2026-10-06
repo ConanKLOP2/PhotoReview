@@ -21,6 +21,9 @@ public sealed class PhotoFolderBuilder : IDisposable
     // Process-level cache folder (built once per process)
     private string? _cachedFolder;
 
+    // R24: only a folder this builder created under its own default name is ours to delete; a caller-supplied tempDir is the caller's.
+    private bool _ownsCachedFolder;
+
     // Size config
     private static readonly (int width, int height)[] SizeCfg = [(4000, 3000), (6000, 4000), (8000, 6000)];
 
@@ -57,10 +60,12 @@ public sealed class PhotoFolderBuilder : IDisposable
             }
 
             // Create new cache folder (use fixed name in temp to avoid leak on cache hit)
+            var ownsFolder = tempDir is null;
             tempDir ??= Path.Combine(Path.GetTempPath(), "PhotoReview-TC01-" + Environment.ProcessId + "-cache");
             if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
 
             builder._cachedFolder = tempDir;
+            builder._ownsCachedFolder = ownsFolder;
 
             // Generate JPEG files by cycling through sizes and copying from master with unique COM
             for (int i = 0; i < imageCount; i++)
@@ -219,6 +224,9 @@ public sealed class PhotoFolderBuilder : IDisposable
                 {
                     try
                     {
+                        // R25: age alone could remove the folder of a still-running (long) test process. The folder name carries its
+                        // owner's process id ("PhotoReview-TC01-<pid>-cache"): a folder whose owner is alive is never purged.
+                        if (IsOwnedByRunningProcess(Path.GetFileName(dir))) return false;
                         var dirInfo = new DirectoryInfo(dir);
                         return dirInfo.CreationTime < cutoffTime;
                     }
@@ -247,12 +255,34 @@ public sealed class PhotoFolderBuilder : IDisposable
         }
     }
 
+    private static bool IsOwnedByRunningProcess(string folderName)
+    {
+        const string prefix = "PhotoReview-TC01-";
+        const string suffix = "-cache";
+        if (!folderName.StartsWith(prefix, StringComparison.Ordinal) || !folderName.EndsWith(suffix, StringComparison.Ordinal)) return false;
+        var pidText = folderName[prefix.Length..^suffix.Length];
+        if (!int.TryParse(pidText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid)) return false;
+        try
+        {
+            using var owner = System.Diagnostics.Process.GetProcessById(pid);
+            return !owner.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false; // no such process any more
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Clean up cached folder on process exit.</summary>
     private void Cleanup()
     {
         lock (_lock)
         {
-            if (_cachedFolder is not null && Directory.Exists(_cachedFolder))
+            if (_ownsCachedFolder && _cachedFolder is not null && Directory.Exists(_cachedFolder))
             {
                 try
                 {
