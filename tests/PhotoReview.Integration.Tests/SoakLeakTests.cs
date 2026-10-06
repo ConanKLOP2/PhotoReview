@@ -82,31 +82,41 @@ public sealed class SoakLeakTests(SoakFolderFixture folder, ITestOutputHelper ou
     }
 
     [Fact(DisplayName = "Soak: open-folder cycles (big folder <-> small folder) plateau")]
-    public Task OpenFolder_Soak_Plateaus() => RunCycleSoakAsync("open-folder cycles", async (session, _) =>
+    public async Task OpenFolder_Soak_Plateaus()
     {
-        var vm = session.Window.ViewModel;
-        for (var i = 0; i < 4; i++)
+        await RunCycleSoakAsync("open-folder cycles", async (session, _) =>
         {
-            await session.OpenAsync(folder.SmallDir);
-            for (var n = 0; n < 8; n++) await StepForwardAsync(vm);
-            await session.OpenAsync(folder.Dir);
-            for (var n = 0; n < 8; n++) await StepForwardAsync(vm);
-        }
-    });
+            var vm = session.Window.ViewModel;
+            for (var i = 0; i < 4; i++)
+            {
+                await session.OpenAsync(folder.SmallDir);
+                for (var n = 0; n < 8; n++) await StepForwardAsync(vm);
+                await session.OpenAsync(folder.Dir);
+                for (var n = 0; n < 8; n++) await StepForwardAsync(vm);
+            }
+        });
+        Assert.Equal(SoakFolderFixture.SmallCount, Directory.GetFiles(folder.SmallDir).Length);
+    }
 
     [Fact(DisplayName = "Soak: compare toggle cycles over a real pair plateau")]
-    public Task Compare_Soak_Plateaus() => RunCycleSoakAsync("compare cycles", async (session, _) =>
+    public async Task Compare_Soak_Plateaus()
     {
-        var vm = session.Window.ViewModel;
-        await session.Window.ShowImageAsync(SoakFolderFixture.PairIndex(vm));
-        for (var i = 0; i < 12; i++)
+        var toggles = 0;
+        await RunCycleSoakAsync("compare cycles", async (session, _) =>
         {
-            vm.ToggleCompare();
-            await vm.CompareToggleTask;
-            vm.ToggleCompare();
-            await vm.CompareToggleTask;
-        }
-    });
+            var vm = session.Window.ViewModel;
+            await session.Window.ShowImageAsync(SoakFolderFixture.PairIndex(vm));
+            for (var i = 0; i < 12; i++)
+            {
+                vm.ToggleCompare();
+                await vm.CompareToggleTask;
+                vm.ToggleCompare();
+                await vm.CompareToggleTask;
+                toggles += 2;
+            }
+        });
+        Assert.Equal(8 * 24, toggles);
+    }
 
     [Fact(DisplayName = "Soak: move + undo cycles on real temp files plateau and restore every file")]
     public async Task MoveUndo_Soak_Plateaus()
