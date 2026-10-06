@@ -121,6 +121,7 @@ public sealed partial class ImagePresenterTests
 
         await Task.WhenAll(presents).WaitAsync(TimeSpan.FromSeconds(20));
 
+        Assert.Empty(decoder.TimedOutPaths); // APP-T23: every decode was released by Open, none gave up on its gate
         Assert.Equal([paths[^1]], _sink.PresentedPaths);
         Assert.Equal(count - 1, _catalog.CurrentIndex);
         Assert.Single(_sink.Images, i => i is not null);
@@ -258,6 +259,11 @@ public sealed partial class ImagePresenterTests
         private TaskCompletionSource Gate(string path) =>
             _gates.GetOrAdd(path, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
 
+        private readonly ConcurrentBag<string> _timedOut = new();
+
+        /// <summary>Paths whose gate was still closed when the decode gave up waiting (a test that forgot to <see cref="Open"/> them).</summary>
+        public IReadOnlyCollection<string> TimedOutPaths => _timedOut;
+
         public void Open(string path) => Gate(path).TrySetResult();
 
         public IDecodedImage Decode(DecodeRequest request)
@@ -265,7 +271,12 @@ public sealed partial class ImagePresenterTests
             _started.GetOrAdd(request.Path, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
             // APP-T23: a gate that was never opened must fail the decode, not quietly return an image as if it had been released.
             if (!Gate(request.Path).Task.Wait(TimeSpan.FromSeconds(15)))
+            {
+                // The presenter swallows the failure of a superseded decode, so the throw alone would be invisible to the test:
+                // also record it, and the tests assert nothing timed out.
+                _timedOut.Add(request.Path);
                 throw new TimeoutException($"decode gate for {request.Path} was never opened");
+            }
             return new FakeDecodedImage();
         }
 
