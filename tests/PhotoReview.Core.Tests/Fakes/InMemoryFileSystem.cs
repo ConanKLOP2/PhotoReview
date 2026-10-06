@@ -28,6 +28,8 @@ public sealed class InMemoryFileSystem : IFileSystem
     /// <summary>Runs (outside the internal lock, so it may block) at the start of every <see cref="GetFileStat"/>; a returned exception is thrown.</summary>
     public Func<string, Exception?>? StatHook { get; set; }
     public Func<string, Exception?>? DeleteHook { get; set; }
+    /// <summary>Runs at the start of every <see cref="EnumerateFiles"/>; a returned exception is thrown (e.g. access denied on a directory listing).</summary>
+    public Func<string, Exception?>? EnumerateFilesHook { get; set; }
     public Func<string, string, Exception?>? MoveHook { get; set; }
     public Func<string, string, Exception?>? CopyHook { get; set; }
 
@@ -398,6 +400,11 @@ public sealed class InMemoryFileSystem : IFileSystem
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        if (EnumerateFilesHook?.Invoke(directory) is { } hookEx)
+        {
+            throw hookEx;
+        }
+
         lock (_lock)
         {
             var normalizedDir = NormalizeDirectoryPath(directory);
