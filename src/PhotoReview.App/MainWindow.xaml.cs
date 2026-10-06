@@ -173,6 +173,12 @@ public partial class MainWindow : Window
     private void ApplyFullscreenState(bool isFullscreen)
     {
         var gateToken = _fitGate.Begin();
+        // Measured (FullscreenTransitionFrameTests): the Maximized -> Normal -> style -> Maximized sequence renders frames at
+        // every intermediate window size while MainImage still has the old Fit limits (a 1585x1057 image in a 1200x800
+        // viewport with scrollbars; on exit a 1620x1080 image in a 1920x1057 viewport), and the corrected size only lands
+        // at the Loaded-priority update below. Hide the image from before the first state change until that update has
+        // been laid out, so no stale frame is ever rendered (the canvas background shows for the 1-2 frames in between).
+        ImageScroll.Opacity = 0;
         if (isFullscreen)
         {
             _stateBeforeFullscreen = WindowState == WindowState.Minimized ? WindowState.Normal : WindowState;
@@ -186,7 +192,16 @@ public partial class MainWindow : Window
         WindowState = isFullscreen ? WindowState.Maximized : _stateBeforeFullscreen;
         _ = Dispatcher.BeginInvoke(() =>
         {
-            if (_fitGate.TryEnd(gateToken) && IsLoaded) UpdateFitSize();
+            if (!_fitGate.TryEnd(gateToken)) return; // superseded: the newer transition reveals the image
+            try
+            {
+                if (IsLoaded)
+                {
+                    UpdateFitSize();
+                    ImageScroll.UpdateLayout(); // apply the new Max* limits now, so the first visible frame is already final
+                }
+            }
+            finally { ImageScroll.Opacity = 1; }
         }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
