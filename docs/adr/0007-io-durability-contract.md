@@ -43,7 +43,7 @@ Phân biệt quan trọng: **process crash không làm mất dữ liệu đã gh
 
 ### 2. Settings / Session (S-B)
 
-- **Settings:** giữ nguyên (atomic + `WriteThrough` + `Flush(true)`) — hiếm khi ghi, là cấu hình người dùng tự chỉnh.
+- **Settings:** giữ nguyên (atomic + `WriteThrough` + `Flush(true)`) — hiếm khi ghi, là cấu hình người dùng tự chỉnh. Nhiều cửa sổ (`InstanceMode.PerFolder`): best-effort, ghi sau cùng thắng ([SETTINGS-SAVE-MULTI-INSTANCE](../refactoring/decisions/SETTINGS-SAVE-MULTI-INSTANCE.md)).
 - **Session:** bỏ `WriteThrough`/`Flush(true)`, **giữ** atomic temp + rename. Mất điện có thể làm mất vị trí xem cuối hoặc để lại file session rỗng/hỏng ⇒ `SessionStore.Load` phải coi file rỗng/hỏng như "không có session" (không crash, không cảnh báo lỗi cho người dùng).
 - Tách API: `IFileSystem.WriteAllTextAtomic(path, text, durable: bool)` (hoặc hai method) thay vì một policy chung cho mọi text write.
 
