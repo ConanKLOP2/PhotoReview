@@ -1,0 +1,9 @@
+[
+  { "id": "default",     "decoder": "WicDirect", "mode": "Preview" },
+  { "id": "gcserver-1",  "env": { "DOTNET_gcServer": "1" } },
+  { "id": "gcserver-0",  "env": { "DOTNET_gcServer": "0" } },
+  { "id": "pgo-0",       "env": { "DOTNET_TieredPGO": "0" } },
+  { "id": "pgo-1",       "env": { "DOTNET_TieredPGO": "1" } },
+  { "id": "gen0-64m",    "env": { "DOTNET_GCgen0size": "4000000" } },
+  { "id": "gen0-256m",   "env": { "DOTNET_GCgen0size": "10000000" } }
+]

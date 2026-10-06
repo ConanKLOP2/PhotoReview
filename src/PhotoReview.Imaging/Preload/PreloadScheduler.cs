@@ -77,6 +77,16 @@ public sealed class PreloadScheduler : IDisposable
     private bool _schedulerRunExiting;
     private int _schedulerSnapshotVersion;
     private bool _disposed;
+    // Memory-pause auto-resume (see ArmResumeCheckLocked). A run that pauses for memory used to stay dead until the
+    // next navigation, so a transient pressure spike (a browser opening) left a slow reviewer without preload.
+    // _resumeTimer is the one pending low-frequency re-check; _resumeGeneration is bumped by every kick, navigation,
+    // Cancel, Dispose and new arm, so a re-check that fires late (or races one of those) does nothing; _resumeChecks
+    // counts re-checks armed since the last real navigation/Cancel and is NOT reset by a resume, so repeated
+    // pause/resume cycles stay bounded by MaxResumeChecks. All guarded by _preloadCtsGate.
+    private readonly TimeProvider _timeProvider;
+    private ITimer? _resumeTimer;
+    private long _resumeGeneration;
+    private int _resumeChecks;
 
     public PreloadScheduler(
         IPreloadTarget target,
@@ -87,7 +97,8 @@ public sealed class PreloadScheduler : IDisposable
         ILog? log = null,
         Func<string, CancellationToken, Task>? prefetchSourceBytes = null,
         NavigationPace? pace = null,
-        Func<int>? snapshotVersion = null)
+        Func<int>? snapshotVersion = null,
+        TimeProvider? timeProvider = null)
     {
         _target = target ?? throw new ArgumentNullException(nameof(target));
         _pace = pace ?? new NavigationPace();
@@ -98,6 +109,7 @@ public sealed class PreloadScheduler : IDisposable
         _log = log ?? NullLog.Instance;
         _prefetchSourceBytes = prefetchSourceBytes;
         _snapshotVersion = snapshotVersion;
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
         // D10: precedence is the explicit option/parameter, then the diagnostic environment variable
         _workerCount = DiagOptionsWorkers() ?? _options.WorkerCount;
@@ -148,6 +160,7 @@ public sealed class PreloadScheduler : IDisposable
         {
             if (_disposed) return;
             _preloadCts.Cancel();
+            CancelResumeCheckLocked(resetChecks: true); // folder change/file action: no memory re-check survives it
         }
         WakeScheduler();
         if (PhotoReviewPerf.Log.IsEnabled()) PhotoReviewPerf.Log.PreloadCancel("cancel");
@@ -171,7 +184,7 @@ public sealed class PreloadScheduler : IDisposable
     /// True when the current preload lifetime has no decode work in flight or queued (the scheduler
     /// loop only returns when its running set is empty; see <see cref="RunPreloadSchedulerAsync"/>).
     /// Best-effort: used by diagnostics/the perf harness to know a navigation has fully settled, not
-    /// for correctness. A fresh scheduler (or one paused for memory headroom) reports idle too.
+    /// for correctness. A fresh scheduler (or one paused for memory headroom, even with a memory re-check pending) reports idle too.
     /// </summary>
     public bool IsIdle
     {
@@ -201,6 +214,8 @@ public sealed class PreloadScheduler : IDisposable
             if (_disposed) return;
             Volatile.Write(ref _preloadCenter, index);
             Interlocked.Increment(ref _preloadPriorityVersion);
+            // A navigation re-kicks preload itself (here during a burst, else PreloadAroundAsync after present).
+            CancelResumeCheckLocked(resetChecks: true);
         }
         WakeScheduler();
         if (CurrentShape().Lead > 0) _ = PreloadAroundAsync(index);
@@ -232,7 +247,7 @@ public sealed class PreloadScheduler : IDisposable
         // the UI-thread caller synchronously. Preload is best effort -- log and do nothing, the next navigation re-kicks it.
         try
         {
-            return PreloadAroundCore(center);
+            return PreloadAroundCore(center, resumeGeneration: null);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -241,7 +256,10 @@ public sealed class PreloadScheduler : IDisposable
         }
     }
 
-    private Task PreloadAroundCore(int center)
+    /// <param name="resumeGeneration">Null for a real kick (navigation). Set by <see cref="OnResumeCheck"/>: the kick then
+    /// only happens if no kick, navigation, Cancel or Dispose happened since that re-check was armed (checked under the
+    /// gate, so it cannot resurrect preload after a folder change), and it does not reset the re-check budget.</param>
+    private Task PreloadAroundCore(int center, long? resumeGeneration)
     {
         // Disposed schedulers must stay dead: without this check, a call here
         // would resurrect a new CancellationTokenSource and background loop.
@@ -251,7 +269,7 @@ public sealed class PreloadScheduler : IDisposable
         if (_workerCount == 0) return Task.CompletedTask;
         // No-op when NotifyNavigation already recorded this index (the normal App path); keeps
         // direction tracking working for callers that only ever call PreloadAroundAsync.
-        _pace.Record(center);
+        if (resumeGeneration is null) _pace.Record(center);
         // RV-I13: read before the snapshot below is taken, so a change in between only costs one extra restart.
         var snapshotVersion = _snapshotVersion?.Invoke() ?? 0;
         // Navigation changes priority, but an already running decode is useful
@@ -260,6 +278,10 @@ public sealed class PreloadScheduler : IDisposable
         lock (_preloadCtsGate)
         {
             if (_disposed) return Task.CompletedTask;
+            if (resumeGeneration is { } generation
+                && (generation != _resumeGeneration || _preloadCts.IsCancellationRequested)) return Task.CompletedTask;
+            CancelResumeCheckLocked(resetChecks: resumeGeneration is null);
+            if (resumeGeneration is not null) ResumesForTests++;
             if (snapshotVersion != _schedulerSnapshotVersion && _preloadSchedulerTask is { IsCompleted: false }
                 && ReferenceEquals(_preloadSchedulerCts, _preloadCts) && !_preloadCts.IsCancellationRequested)
             {
@@ -331,10 +353,118 @@ public sealed class PreloadScheduler : IDisposable
         {
             if (!paused && !cancellationToken.IsCancellationRequested
                 && Interlocked.Read(ref _preloadPriorityVersion) != seenVersion) return false;
-            if (runId == _schedulerRunId) _schedulerRunExiting = true;
+            if (runId == _schedulerRunId)
+            {
+                _schedulerRunExiting = true;
+                // The newest run stops for memory headroom: arm a low-frequency re-check so a transient pressure spike
+                // does not leave preload dead until the next navigation (see ArmResumeCheckLocked).
+                if (paused && !cancellationToken.IsCancellationRequested && !_disposed) ArmResumeCheckLocked();
+            }
             return true;
         }
     }
+
+    // ---- memory-pause auto-resume ----------------------------------------------------------------------------------
+
+    /// <summary>First re-check after a memory pause; each further one doubles, up to <see cref="ResumeCheckMaxDelay"/>.</summary>
+    internal static readonly TimeSpan ResumeCheckBaseDelay = TimeSpan.FromSeconds(2);
+    internal static readonly TimeSpan ResumeCheckMaxDelay = TimeSpan.FromSeconds(30);
+    /// <summary>Re-checks armed between two real navigations (2+4+8+16+30*4 s, about 2.5 min). Resumes do not reset it,
+    /// so a pressure that keeps coming back cannot make preload pause/resume forever; the next navigation re-kicks anyway.</summary>
+    internal const int MaxResumeChecks = 8;
+    /// <summary>Hysteresis: preload pauses at load &gt;= MemoryLoadLimit but resumes only below MemoryLoadLimit minus this,
+    /// so a load hovering at the limit does not flap between pause and resume.</summary>
+    internal const double ResumeLoadMargin = 0.05;
+
+    internal static TimeSpan ResumeCheckDelay(int check)
+    {
+        var delay = ResumeCheckBaseDelay * Math.Pow(2, Math.Min(check, 16));
+        return delay < ResumeCheckMaxDelay ? delay : ResumeCheckMaxDelay;
+    }
+
+    /// <summary>
+    /// Arms the single pending memory re-check (replacing any older one). Caller holds <see cref="_preloadCtsGate"/>.
+    /// Only creates a timer -- no probe, target or log callback runs under the gate (lock-order rule; ADR 0005). The timer
+    /// fires on the thread pool (never the UI thread) and does no disk I/O: one GlobalMemoryStatusEx per check.
+    /// </summary>
+    private void ArmResumeCheckLocked()
+    {
+        _resumeTimer?.Dispose();
+        _resumeTimer = null;
+        if (_resumeChecks >= MaxResumeChecks) return; // budget spent: wait for the next navigation, as before auto-resume
+        var delay = ResumeCheckDelay(_resumeChecks++);
+        var generation = ++_resumeGeneration;
+        // The re-check must not carry the paused run's async-local perf context (a navigation id) into the resumed run.
+        var restoreFlow = !ExecutionContext.IsFlowSuppressed();
+        if (restoreFlow) ExecutionContext.SuppressFlow();
+        try { _resumeTimer = _timeProvider.CreateTimer(_ => OnResumeCheck(generation), null, delay, Timeout.InfiniteTimeSpan); }
+        finally { if (restoreFlow) ExecutionContext.RestoreFlow(); }
+    }
+
+    /// <summary>Drops the pending re-check (if any) and invalidates one already firing. Caller holds <see cref="_preloadCtsGate"/>.</summary>
+    private void CancelResumeCheckLocked(bool resetChecks)
+    {
+        _resumeGeneration++;
+        _resumeTimer?.Dispose();
+        _resumeTimer = null;
+        if (resetChecks) _resumeChecks = 0;
+    }
+
+    private enum ResumeVerdict { Resume, NotYet, CacheFull }
+
+    // Called outside the gate: reads the target and the memory probe.
+    private ResumeVerdict EvaluateResume()
+    {
+        // Same fill limit a whole-folder pass stops at: nothing far is left to add, only evictions of what is there.
+        if (_options.FullFolderThresholdBytes > 0
+            && _target.CacheBytes >= _options.FullFolderThresholdBytes * WholeFolderCacheFillLimit) return ResumeVerdict.CacheFull;
+        // The viewer is decoding the image on screen: do not start a preload burst against it, check again later.
+        if (_target.ActiveViewerDecodes > 0) return ResumeVerdict.NotYet;
+        return _memoryProbe.HasHeadroom(Math.Max(0, _options.MemoryLoadLimit - ResumeLoadMargin), _options.ReserveBytes)
+            ? ResumeVerdict.Resume
+            : ResumeVerdict.NotYet;
+    }
+
+    private void OnResumeCheck(long generation)
+    {
+        // A timer callback: an exception escaping here would crash the process.
+        try
+        {
+            lock (_preloadCtsGate)
+            {
+                if (_disposed || generation != _resumeGeneration) return; // superseded by a kick/navigation/Cancel/Dispose
+                _resumeTimer?.Dispose();
+                _resumeTimer = null;
+            }
+            var verdict = EvaluateResume();
+            switch (verdict)
+            {
+                case ResumeVerdict.Resume:
+                    var center = Volatile.Read(ref _preloadCenter);
+                    if (_log.Enabled) _log.Info($"Preload resumed after memory pause: center={center}");
+                    var run = PreloadAroundCore(center, generation);
+                    lock (_preloadCtsGate) ResumedRunForTests = run;
+                    break;
+                case ResumeVerdict.CacheFull:
+                    if (_log.Enabled) _log.Info($"Preload stays paused: cache at its fill limit (cacheBytes={_target.CacheBytes})");
+                    break;
+                default:
+                    lock (_preloadCtsGate)
+                        if (!_disposed && generation == _resumeGeneration) ArmResumeCheckLocked();
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _log.Error("Preload memory re-check failed; preload resumes on the next navigation", ex);
+        }
+    }
+
+    /// <summary>Test seam: the run the last successful memory re-check started (a completed task when it was superseded).</summary>
+    internal Task? ResumedRunForTests { get; private set; }
+
+    /// <summary>Test seam: memory re-checks that actually kicked a resumed run (guarded by <see cref="_preloadCtsGate"/>).</summary>
+    internal int ResumesForTests { get; private set; }
 
     private void MarkRunExiting(long runId)
     {
@@ -455,6 +585,9 @@ public sealed class PreloadScheduler : IDisposable
                             PhotoReviewPerf.Log.PreloadPaused(memory is { } m ? (int)m.LoadPercent : -1,
                                 memory is { } a ? (long)(a.AvailableBytes / (1024 * 1024)) : -1);
                         }
+                        // The run ends here (TryExitRun below). It is restarted by the next navigation, or -- if
+                        // the user stays put -- by the memory re-check TryExitRun arms once the load drops below
+                        // MemoryLoadLimit - ResumeLoadMargin (backing off, at most MaxResumeChecks per navigation).
                         paused = true;
                         break;
                     }
@@ -781,6 +914,7 @@ public sealed class PreloadScheduler : IDisposable
             if (_disposed) return;
             _disposed = true;
             _preloadCts.Cancel();
+            CancelResumeCheckLocked(resetChecks: true);
             lifetimeTasks = _preloadLifetimeTasks.Select(entry => entry.Task).ToArray();
             lifetimeCts = _preloadLifetimes.ToArray();
         }

@@ -148,7 +148,7 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
         foreach (var claim in claims)
         {
             // One failing claim must not leave the remaining claims' mutexes/pipes undisposed.
-            try { claim.Dispose(); }
+            try { ClaimDisposeHook?.Invoke(claim.MutexName); claim.Dispose(); }
             catch (Exception ex) { _log.Warn($"Instance claim dispose failed: {ex.GetType().Name}"); }
         }
     }
@@ -198,7 +198,7 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
                 BeforeReleaseHook?.Invoke();
                 foreach (var claim in released)
                 {
-                    try { claim.Dispose(); }
+                    try { ClaimDisposeHook?.Invoke(claim.MutexName); claim.Dispose(); }
                     catch (Exception ex) { _log.Error("Instance lock release failed", ex); }
                 }
             }));
@@ -209,6 +209,9 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
 
     /// <summary>Test seam: runs on the pool thread right before a release disposes its locks (lets a test hold a release pending).</summary>
     internal Action? BeforeReleaseHook { get; set; }
+
+    /// <summary>Test seam: runs with the mutex name right before a claim is disposed (release or shutdown); a throwing hook stands in for a failing dispose.</summary>
+    internal Action<string>? ClaimDisposeHook { get; set; }
 
     /// <summary>Completes when every release started so far has finished (tests; shutdown does not need it).</summary>
     internal Task WhenReleased

@@ -29,6 +29,16 @@
   throttle into later cells. Caches ALWAYS live under <batch>\cache (--cache-dir); the real %LOCALAPPDATA%\PhotoReview
   caches are never used and there is no -SharedAppCache. -ColdDiskCache empties <batch>\cache before every recorded run.
 
+  RESOURCE SAMPLER: every recorded run (and warm-up) passes `--resource-sample` to the CLI, which then samples ITSELF every 500 ms
+  into <run dir>\resources.csv: min/avg available physical RAM (GlobalMemoryStatusEx), working set, peak working set, private bytes,
+  GC pause %, page faults/s and CPU %. It runs in-process (a thread of the measured CLI process, which is also the app host), not as a
+  separate sidecar, because GC pause time and page faults are only cheaply readable from inside; it dies with the run, nothing to kill.
+  tune-rank.ps1 fills the minAvailRam constraint from it. -NoResourceSample turns it off.
+
+  STAGE FILES shipped in tools\diag\tune\ (see README.md there for how to run each stage): s0-noise, s1-decoder-mode, s2-workers,
+  s3-window, s3-window-refine, s4-ram, s5-caches, s6-pressure (with tools\diag\MemBalloon.ps1), s8-runtime. Every ID 'default' is the
+  shipped default config of that stage = baseline and A/A group for tune-rank.ps1.
+
   matrix.json (rewritten after every run) holds the environment checklist (AC power, power plan, free RAM, free disk,
   CPU idle %, fixture fingerprint, commit, versions), the expanded configs and one entry per finished run. Refuses to start
   on battery unless -AllowBattery. Resume skips runs already ok/fail in matrix.json (-RetryFailed re-runs the failed ones).
@@ -55,6 +65,7 @@ param(
     [int]$CooldownSeconds = 30,
     [int]$Seed = 1,
     [switch]$AllowBattery,
+    [switch]$NoResourceSample,
     [switch]$RetryFailed,
     [switch]$DryRun,
     [string]$WarmupScenario = 's1-open-folder',
@@ -331,6 +342,7 @@ function Invoke-Session($config, [string]$scenarioFile, [string]$outDir) {
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null
     $argList = @('--perf-session', $scenarioFile, $folder, $outDir, '--decoder', $config.decoder, '--mode', $config.mode,
         '--alias', $FixtureAlias, '--commit', [string]$commit, '--cache-dir', $cacheDir)
+    if (-not $NoResourceSample) { $argList += '--resource-sample' }   # in-process sampler: <run dir>\resources.csv every 500 ms (tune-rank reads it)
     foreach ($k in $config.set.Keys) { $argList += @('--set', "$k=$($config.set[$k])") }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     if ($cliExe) { $psi.FileName = $cliExe.FullName; $full = $argList }

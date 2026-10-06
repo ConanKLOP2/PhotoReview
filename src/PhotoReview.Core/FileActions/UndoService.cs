@@ -168,6 +168,7 @@ public sealed class UndoService
             // The destination is gone (deleted/renamed outside the app): this entry can never be undone. Report it
             // once and drop it, otherwise it is pushed back and every later Ctrl+Z hits the same dead entry.
             var permanentlyBroken = false;
+            var moveReturned = false;
             try
             {
                 if (!_fileSystem.FileExists(move.Destination))
@@ -237,6 +238,7 @@ public sealed class UndoService
                     {
                         await Task.Run(() => _fileSystem.Move(move.Destination, move.Source)).ConfigureAwait(false);
                     }
+                    moveReturned = true;
                     tx.VerifyMoved(_fileSystem, move.Destination, move.Source, JournalErrors.VerifySizeChanged);
                 }
                 catch (Exception undoFailure)
@@ -262,6 +264,14 @@ public sealed class UndoService
             }
             catch (Exception ex)
             {
+                // The move itself ran and the file is at Source (only the verification threw): nothing is left at Destination,
+                // so the entry can never be undone again. Report the failure once and drop it instead of pushing a dead entry
+                // back for the next Ctrl+Z to trip over.
+                if (moveReturned && !permanentlyBroken
+                    && SafeFileExists(move.Source) && !SafeFileExists(move.Destination))
+                {
+                    permanentlyBroken = true;
+                }
                 if (permanentlyBroken)
                 {
                     _moveFingerprints.Remove(move.Destination);
@@ -285,11 +295,27 @@ public sealed class UndoService
         }
     }
 
+    private bool SafeFileExists(string path)
+    {
+        try { return _fileSystem.FileExists(path); }
+        catch (Exception ex) when (IsNonCritical(ex)) { return false; }
+    }
+
     /// <summary>
     /// Hoàn tác thao tác vừa thực hiện gần nhất (Move hoặc Recycle).
     /// </summary>
+    /// <remarks>
+    /// UI thread only: the undo stacks and <c>_lastUndoAction</c> are not thread-safe and are read here before the busy gate
+    /// is taken by the callee. The cheap guard below rejects a call while another file action holds the gate, so the state is
+    /// never read mid-mutation; it is not a lock and does not make concurrent callers safe.
+    /// </remarks>
     public async Task<UndoResult> UndoLastAsync()
     {
+        if (IsBusy)
+        {
+            return new UndoResult(false, null, string.Empty, null, Tr.CoreUndoBusy, Rejected: true);
+        }
+
         if (_lastUndoAction is null)
         {
             return new UndoResult(false, null, string.Empty, null, Tr.CoreUndoNothingToUndo);
@@ -328,7 +354,17 @@ public sealed class UndoService
                     return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleTargetExists(Path.GetFileName(action.Source)));
                 }
 
-                _ = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc)).ConfigureAwait(false);
+                // A bin that throws is not trusted either way: the proof below decides. If the file is not back, the undo fails
+                // truthfully with the bin's error and stays retryable (_lastUndoAction is kept).
+                Exception? restoreFault = null;
+                try
+                {
+                    _ = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc)).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (IsNonCritical(ex))
+                {
+                    restoreFault = ex;
+                }
                 // R18: the bin's verdict is not the proof. A shell restore can report failure although the file did come back (verb
                 // timeout, a racing manual restore) and can report success while something else sits at the path; the undo is done
                 // only when the recycled file itself (size AND write time) is at its original path (same rule as the group path).
@@ -336,7 +372,8 @@ public sealed class UndoService
                     && back.Length == action.Size && back.LastWriteUtc == action.LastWriteUtc;
                 if (!restored)
                 {
-                    return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(action.Source)));
+                    return new UndoResult(false, FileOperationType.Recycle, action.Source, null,
+                        restoreFault is null ? Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(action.Source)) : Tr.CoreUndoFailed(restoreFault.Message));
                 }
 
                 _lastUndoAction = null;

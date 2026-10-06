@@ -191,7 +191,8 @@ public sealed class RawDecoder : IImageDecoder
     /// preview is tried first (always: it needs no native code), then the ORF thumbnail fallback (an unsupported ORF preview
     /// only, when one exists), then the full decode (when the no-preview decoder exists). Cancellation, out-of-memory and
     /// resource-exhaustion COM failures (a transient condition, see <see cref="IsRecoverablePreviewFailure"/>) are never
-    /// swallowed; when no step remains the first failure propagates unchanged.
+    /// swallowed; when no step remains the first failure propagates unchanged (a recoverable failure of the ORF thumbnail
+    /// fallback included: it is only another step that did not help, so it never replaces the first failure).
     /// A thumbnail-sized next-best preview (long side below <see cref="MinUsefulFallbackLongSide"/>) is never taken after a
     /// LARGER preview failed, unless the failure proves the data corrupt (<see cref="IsCorruptDataFailure"/>) and every
     /// remaining preview is that small: thumbnails are a last resort for corrupt data, not a silent answer to transient or
@@ -259,7 +260,7 @@ public sealed class RawDecoder : IImageDecoder
                 previewBytesRead = failedBytes; // the failed attempts' bytes were read from the file too
                 return thumbnail;
             }
-            catch (Exception ex) when (_noPreviewDecoder is not null && IsRecoverablePreviewFailure(ex))
+            catch (Exception ex) when (IsRecoverablePreviewFailure(ex))
             {
                 fallbackThumbnailBytesRead = 0;
             }

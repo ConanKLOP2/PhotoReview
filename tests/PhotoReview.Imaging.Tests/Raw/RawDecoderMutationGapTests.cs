@@ -401,17 +401,26 @@ public sealed class RawDecoderMutationGapTests
         Assert.Single(full.Lengths);
     }
 
-    [Theory]
-    [InlineData(nameof(InvalidDataException))]
-    [InlineData(nameof(IOException))]
-    public void Decode_OrfThumbnailFallbackFailsWithoutAFullDecoder_ThePropagatedFailureIsTheThumbnailsOwn(string kind)
+    [Fact]
+    public void Decode_OrfThumbnailFallbackFailsRecoverablyWithoutAFullDecoder_TheFirstFailurePropagatesUnchanged()
     {
-        // Without a full decoder the thumbnail failure is not caught at all: not even the first (unsupported) preview failure replaces it.
-        Exception failure = kind == nameof(IOException) ? new IOException("thumb-broken") : new InvalidDataException("thumb-broken");
-        var fallback = new StubFallback(() => throw failure);
+        // No step remains: the thumbnail failure is only another step that did not help, so the first (unsupported preview) failure wins.
+        var fallback = new StubFallback(() => throw new InvalidDataException("thumb-broken"));
         var inner = new ScriptedDecoder(_ => throw new NotSupportedException("unsupported"));
 
-        var thrown = Assert.ThrowsAny<Exception>(() => NewDecoder(OrfInfo(), inner, fallback: fallback).Decode(Request()));
+        var thrown = Assert.Throws<NotSupportedException>(() => NewDecoder(OrfInfo(), inner, fallback: fallback).Decode(Request()));
+
+        Assert.Equal("unsupported", thrown.Message);
+    }
+
+    [Fact]
+    public void Decode_OrfThumbnailFallbackFailsNonRecoverablyWithoutAFullDecoder_ThePropagatedFailureIsTheThumbnailsOwn()
+    {
+        // A non-recoverable failure (an I/O error) is never swallowed, so it is not replaced by the first failure either.
+        var fallback = new StubFallback(() => throw new IOException("thumb-broken"));
+        var inner = new ScriptedDecoder(_ => throw new NotSupportedException("unsupported"));
+
+        var thrown = Assert.Throws<IOException>(() => NewDecoder(OrfInfo(), inner, fallback: fallback).Decode(Request()));
 
         Assert.Equal("thumb-broken", thrown.Message);
     }

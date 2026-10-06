@@ -19,6 +19,9 @@ public sealed class SourceBytesCache
     internal Action? BeforePublishForTests { get; set; }
     // Test seam: runs after the read loop, just before the Length/LastWriteTime re-check, so a test can change the file at exactly that point.
     internal Action? AfterReadForTests { get; set; }
+    // Test seam: runs on the calling thread between the cache miss and the in-flight lookup, so a test can let another
+    // reader finish and publish in exactly that window.
+    internal Action? AfterCacheMissForTests { get; set; }
     // Per-path eviction versions: evicting one moved/deleted file must not invalidate in-flight reads of OTHER paths
     // (a global bump would make them skip caching and re-read from disk). One small entry per evicted path.
     private readonly ConcurrentDictionary<string, int> _pathVersions = new(StringComparer.OrdinalIgnoreCase);
@@ -128,6 +131,7 @@ public sealed class SourceBytesCache
         if (_cache.TryGet(key, out var cached)) return cached;
         System.Diagnostics.Debug.Assert(SynchronizationContext.Current is null,
             "SourceBytesCache.GetOrRead must never be called from a UI (or other SynchronizationContext-bound) thread -- it reads synchronously.");
+        AfterCacheMissForTests?.Invoke();
         var generation = Volatile.Read(ref _generation);
         var pathVersion = _pathVersions.GetValueOrDefault(key.Path);
         // Lazy<T> (ExecutionAndPublication) runs ReadAndCache on whichever caller's thread wins the race to
@@ -142,7 +146,11 @@ public sealed class SourceBytesCache
         // decides" semantics the dedup itself already has; a joiner's own priority is not consulted (it is
         // waiting for the same bytes either way, not starting its own read).
         var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<byte[]>(
-            () => ReadAndCache(key, generation, pathVersion, priority), LazyThreadSafetyMode.ExecutionAndPublication));
+            // Double-checked: a late caller can miss the cache, then reach GetOrAdd only after the winner published its
+            // array and removed its in-flight entry. Re-checking here (the factory runs at most once per Lazy) means that
+            // caller shares the published array instead of starting a second disk read of the same range.
+            () => _cache.TryGet(key, out var published) ? published : ReadAndCache(key, generation, pathVersion, priority),
+            LazyThreadSafetyMode.ExecutionAndPublication));
         try { return lazy.Value; }
         finally { _inFlight.TryRemove(new KeyValuePair<RangeKey, Lazy<byte[]>>(key, lazy)); }
     }

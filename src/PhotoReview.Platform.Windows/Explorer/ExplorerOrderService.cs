@@ -16,7 +16,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     /// same STA thread that created/obtained them; this pump avoids the cost of spinning up a brand-new
     /// STA thread per query while still guaranteeing one-call-at-a-time execution.
     /// </summary>
-    private sealed class StaThreadPump : IDisposable
+    internal sealed class StaThreadPump : IDisposable
     {
         private readonly BlockingCollection<Action> _queue = new();
         private readonly Thread _thread;
@@ -91,12 +91,41 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     private readonly ExplorerQuery _query;
     private readonly TimeProvider _time;
     private readonly TimeSpan _prefetchMaxAge;
+    private readonly ShellAccess _shell;
     private int _disposed;
+
+    /// <summary>
+    /// How the query reaches the Explorer windows: <see cref="IsAvailable"/> says whether the shell automation object exists at
+    /// all, <see cref="OpenWindows"/> creates it and returns it with the enumerable <c>Windows()</c> collection (both are released
+    /// by the caller). The default talks to <c>Shell.Application</c>; tests hand in fake window objects.
+    /// </summary>
+    internal sealed record ShellAccess(Func<bool> IsAvailable, Func<(object? Shell, object Windows)> OpenWindows)
+    {
+        public static readonly ShellAccess Real = new(
+            () => Type.GetTypeFromProgID("Shell.Application") is not null,
+            () =>
+            {
+                var shellType = Type.GetTypeFromProgID("Shell.Application")!;
+                object? shell = null;
+                try
+                {
+                    shell = Activator.CreateInstance(shellType);
+                    var windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null, CultureInfo.InvariantCulture);
+                    return (shell, windows!);
+                }
+                catch
+                {
+                    Release(shell);
+                    throw;
+                }
+            });
+    }
 
     public ExplorerOrderService(ILog? log = null) : this(log, null) { }
 
-    internal ExplorerOrderService(ILog? log, ExplorerQuery? query, TimeProvider? time = null, TimeSpan? prefetchMaxAge = null)
+    internal ExplorerOrderService(ILog? log, ExplorerQuery? query, TimeProvider? time = null, TimeSpan? prefetchMaxAge = null, ShellAccess? shell = null)
     {
+        _shell = shell ?? ShellAccess.Real;
         _log = log ?? NullLog.Instance;
         _query = query ?? QueryShell;
         _time = time ?? TimeProvider.System;
@@ -296,8 +325,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     {
         var queryTimer = Stopwatch.StartNew();
         _log.Info($"Explorer query-start: folder={folder}");
-        var shellType = Type.GetTypeFromProgID("Shell.Application");
-        if (shellType is null) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.ShellUnavailable);
+        if (!_shell.IsAvailable()) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.ShellUnavailable);
         // The caller's timeout only cancels the Task it is awaiting; this action already
         // started running on the single STA pump thread and must check the token itself,
         // or a stale/superseded query keeps occupying that thread and delays whatever
@@ -306,8 +334,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         object? shell = null, windows = null;
         try
         {
-            shell = Activator.CreateInstance(shellType);
-            windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null, CultureInfo.InvariantCulture);
+            (shell, windows) = _shell.OpenWindows();
             return ExplorerWindowSelector.Select(folder, ComEnumeration.Enumerate(windows!),
                 window => (string?)((dynamic)window).LocationURL,
                 window => TryReadNativeView(window, folder, progress, batchSize, cancellationToken),
@@ -316,7 +343,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         finally { Release(windows); Release(shell); }
     }
 
-    private ExplorerViewSnapshot TryReadNativeView(object window, string folder,
+    internal ExplorerViewSnapshot TryReadNativeView(object window, string folder,
         IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
     {
         var timer = Stopwatch.StartNew();

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
@@ -8,15 +9,24 @@ namespace PhotoReview.Imaging.Tests.Robustness;
 /// Shared harness for the deterministic fuzz tests of the binary readers that take untrusted input. Two parts:
 /// <see cref="Mutants"/> derives a bounded, fully reproducible corpus from valid sample bytes (truncation at every offset for
 /// small files, length-field overwrites with 0 / 0x7FFFFFFF / 0xFFFFFFFF, seeded bit flips and random splices), and
-/// <see cref="Run"/> feeds it to a reader on a worker thread under a wall-clock bound, so a hang fails the test (with the case
+/// <see cref="Run"/> feeds it to a reader on a worker thread under wall-clock bounds (per case and per corpus), so a hang fails the test (with the case
 /// label that stalled) instead of hanging the run. Only two things are asserted: no hang, and every failure is the reader's
 /// documented clean failure; anything else (IndexOutOfRange, ArgumentOutOfRange, NullReference, Overflow, OutOfMemory, ...)
 /// is a defect reported with a label that reproduces it.
 /// </summary>
 internal static class BinaryFuzz
 {
-    /// <summary>Whole-corpus wall-clock bound: a corpus of a few thousand microsecond parses finishes in well under a second.</summary>
-    public static readonly TimeSpan HangBound = TimeSpan.FromSeconds(60);
+    /// <summary>
+    /// Wall-clock bound for ONE mutated case: a real hang or runaway loop blocks a single case for good, while even the file-based
+    /// readers parse one header in milliseconds, so 10 s is two to three orders of magnitude of headroom for a loaded machine.
+    /// </summary>
+    public static readonly TimeSpan CaseBound = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Whole-corpus safety net behind <see cref="CaseBound"/> (a runaway generator, or every case near its bound). It is deliberately
+    /// generous: a corpus that is merely slow under machine load must not fail, only one that stops making progress.
+    /// </summary>
+    public static readonly TimeSpan HangBound = TimeSpan.FromMinutes(5);
 
     /// <summary>Upper bound on the cases one systematic mutation family yields per seed, keeping each test in seconds.</summary>
     private const int FamilyCap = 4_000;
@@ -146,16 +156,20 @@ internal static class BinaryFuzz
     }
 
     /// <summary>
-    /// Runs <paramref name="exercise"/> over <paramref name="cases"/> on a worker thread bounded by <paramref name="bound"/> (default
-    /// <see cref="HangBound"/>); the worker checks a cancellation token between cases so a late finish stops cleanly. The delegate
-    /// returns true when the reader accepted the input (parsed something), false when it rejected it through its normal result.
-    /// A throw that <paramref name="isCleanFailure"/> accepts counts as a clean rejection; any other throw is collected as a defect.
+    /// Runs <paramref name="exercise"/> over <paramref name="cases"/> on a worker thread watched by the calling thread: the run fails
+    /// when one case takes longer than <paramref name="caseBound"/> (default <see cref="CaseBound"/>), naming that case, or when the
+    /// whole corpus takes longer than <paramref name="bound"/> (default <see cref="HangBound"/>). The worker checks a cancellation
+    /// token between cases so a late finish stops cleanly. The delegate returns true when the reader accepted the input (parsed
+    /// something), false when it rejected it through its normal result. A throw that <paramref name="isCleanFailure"/> accepts counts
+    /// as a clean rejection; any other throw is collected as a defect.
     /// </summary>
-    public static Stats Run(string target, IEnumerable<Case> cases, Func<byte[], bool> exercise, Func<Exception, bool> isCleanFailure, TimeSpan? bound = null)
+    public static Stats Run(string target, IEnumerable<Case> cases, Func<byte[], bool> exercise, Func<Exception, bool> isCleanFailure, TimeSpan? bound = null, TimeSpan? caseBound = null)
     {
         var limit = bound ?? HangBound;
+        var perCase = caseBound ?? CaseBound;
         using var cts = new CancellationTokenSource();
         var current = "(not started)";
+        long caseStarted = Stopwatch.GetTimestamp(); // Volatile: when the case now running began
         var defects = new List<string>();
         int accepted = 0, rejected = 0, total = 0;
 
@@ -165,6 +179,7 @@ internal static class BinaryFuzz
             {
                 if (cts.IsCancellationRequested) return;
                 Volatile.Write(ref current, c.Label);
+                Volatile.Write(ref caseStarted, Stopwatch.GetTimestamp());
                 total++;
                 try
                 {
@@ -182,10 +197,22 @@ internal static class BinaryFuzz
             }
         }, CancellationToken.None);
 
-        if (!worker.Wait(limit))
+        var started = Stopwatch.GetTimestamp();
+        // Event-driven wait (returns the moment the worker finishes); the 250 ms slice only sets how often the two bounds are re-checked.
+        while (!worker.Wait(TimeSpan.FromMilliseconds(250)))
         {
-            cts.Cancel();
-            Assert.Fail($"{target}: no result within {limit.TotalSeconds:F0} s -- stuck on case [{Volatile.Read(ref current)}] (hang or runaway loop).");
+            var stuckFor = Stopwatch.GetElapsedTime(Volatile.Read(ref caseStarted));
+            if (stuckFor > perCase)
+            {
+                cts.Cancel();
+                Assert.Fail($"{target}: one case ran for {stuckFor.TotalSeconds:F0} s (per-case bound {perCase.TotalSeconds:F1} s) -- stuck on case [{Volatile.Read(ref current)}] (hang or runaway loop).");
+            }
+
+            if (Stopwatch.GetElapsedTime(started) > limit)
+            {
+                cts.Cancel();
+                Assert.Fail($"{target}: corpus not finished within {limit.TotalSeconds:F0} s -- now on case [{Volatile.Read(ref current)}] (no progress or runaway generator).");
+            }
         }
 
         worker.GetAwaiter().GetResult();

@@ -1,0 +1,8 @@
+[
+  { "id": "wpf-fast",     "decoder": "Wpf",       "mode": "Fast" },
+  { "id": "wpf-preview",  "decoder": "Wpf",       "mode": "Preview" },
+  { "id": "wic-fast",     "decoder": "WicDirect", "mode": "Fast" },
+  { "id": "default",      "decoder": "WicDirect", "mode": "Preview" },
+  { "id": "tj-fast",      "decoder": "TurboJpeg", "mode": "Fast" },
+  { "id": "tj-preview",   "decoder": "TurboJpeg", "mode": "Preview" }
+]

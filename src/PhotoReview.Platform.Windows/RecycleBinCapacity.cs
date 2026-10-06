@@ -135,18 +135,30 @@ internal sealed class WindowsRecycleBinSettingsSource : IRecycleBinSettingsSourc
 {
     public static readonly WindowsRecycleBinSettingsSource Instance = new();
 
+    private readonly Func<RegistryHive, string, string, object?> _readValue;
+
+    public WindowsRecycleBinSettingsSource() : this(ReadRegistryValue)
+    {
+    }
+
+    /// <param name="readValue">Test seam for the registry: (hive, sub key, value name) to the raw value, or null when the key or value is absent.</param>
+    internal WindowsRecycleBinSettingsSource(Func<RegistryHive, string, string, object?> readValue)
+    {
+        _readValue = readValue ?? throw new ArgumentNullException(nameof(readValue));
+    }
+
     private const string PolicyKey = @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer";
     private const string BitBucketKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket";
     private const int MaxPathChars = 32768;
 
     public RecycleBinPolicy ReadPolicy()
     {
-        var noRecycle = IsNonZero(ReadDword(Registry.CurrentUser, PolicyKey, "NoRecycleFiles"))
-            || IsNonZero(ReadDword(Registry.LocalMachine, PolicyKey, "NoRecycleFiles"));
-        var userPercent = ReadDword(Registry.CurrentUser, PolicyKey, "RecycleBinSize");
-        var machinePercent = ReadDword(Registry.LocalMachine, PolicyKey, "RecycleBinSize");
+        var noRecycle = IsNonZero(ReadDword(RegistryHive.CurrentUser, PolicyKey, "NoRecycleFiles"))
+            || IsNonZero(ReadDword(RegistryHive.LocalMachine, PolicyKey, "NoRecycleFiles"));
+        var userPercent = ReadDword(RegistryHive.CurrentUser, PolicyKey, "RecycleBinSize");
+        var machinePercent = ReadDword(RegistryHive.LocalMachine, PolicyKey, "RecycleBinSize");
         long? percent = userPercent is { } u && machinePercent is { } m ? Math.Min(u, m) : userPercent ?? machinePercent;
-        var legacyNuke = IsNonZero(ReadDword(Registry.CurrentUser, BitBucketKey, "NukeOnDelete"));
+        var legacyNuke = IsNonZero(ReadDword(RegistryHive.CurrentUser, BitBucketKey, "NukeOnDelete"));
         return new RecycleBinPolicy(noRecycle, percent, legacyNuke);
     }
 
@@ -169,7 +181,7 @@ internal sealed class WindowsRecycleBinSettingsSource : IRecycleBinSettingsSourc
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(volumeGuid);
         var key = BitBucketKey + @"\Volume\" + volumeGuid;
-        return new RecycleBinVolumeSettings(ReadDword(Registry.CurrentUser, key, "NukeOnDelete"), ReadDword(Registry.CurrentUser, key, "MaxCapacity"));
+        return new RecycleBinVolumeSettings(ReadDword(RegistryHive.CurrentUser, key, "NukeOnDelete"), ReadDword(RegistryHive.CurrentUser, key, "MaxCapacity"));
     }
 
     public long? GetUserQuotaBytes(string path)
@@ -204,16 +216,21 @@ internal sealed class WindowsRecycleBinSettingsSource : IRecycleBinSettingsSourc
     private static bool IsNonZero(long? value) => value is { } v && v != 0;
 
     /// <summary>Null when the key or value is absent; a REG_DWORD as its unsigned value; any other type throws.</summary>
-    private static long? ReadDword(RegistryKey hive, string subKey, string name)
+    private long? ReadDword(RegistryHive hive, string subKey, string name)
     {
-        using var key = hive.OpenSubKey(subKey, writable: false);
-        var value = key?.GetValue(name);
+        var value = _readValue(hive, subKey, name);
         return value switch
         {
             null => null,
             int dword => unchecked((uint)dword),
             _ => throw new InvalidDataException($"Registry value {subKey}\\{name} is not a DWORD."),
         };
+    }
+
+    private static object? ReadRegistryValue(RegistryHive hive, string subKey, string name)
+    {
+        using var key = (hive == RegistryHive.LocalMachine ? Registry.LocalMachine : Registry.CurrentUser).OpenSubKey(subKey, writable: false);
+        return key?.GetValue(name);
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetVolumePathNameW", SetLastError = true, ExactSpelling = true)]
