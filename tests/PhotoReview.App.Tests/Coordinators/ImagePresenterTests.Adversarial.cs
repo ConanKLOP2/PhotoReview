@@ -264,7 +264,7 @@ public sealed partial class ImagePresenterTests
         {
             _started.GetOrAdd(request.Path, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
             // APP-T23: a gate that was never opened must fail the decode, not quietly return an image as if it had been released.
-            if (!Gate(request.Path).Task.Wait(TimeSpan.FromSeconds(20)))
+            if (!Gate(request.Path).Task.Wait(TimeSpan.FromSeconds(15)))
                 throw new TimeoutException($"decode gate for {request.Path} was never opened");
             return new FakeDecodedImage();
         }
