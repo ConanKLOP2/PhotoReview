@@ -16,7 +16,7 @@ namespace PhotoReview.App.Diagnostics;
 /// </summary>
 public sealed class PerfDispatcherHooks
 {
-    private const double LongOpThresholdMs = 16;
+    internal const double DefaultLongOpThresholdMs = 16;
     // DispatcherOperation keeps its callback in a private field; reading it is best effort and only
     // happens for operations that already exceeded the threshold.
     internal const string MethodFieldName = "_method";
@@ -25,15 +25,23 @@ public sealed class PerfDispatcherHooks
         typeof(DispatcherOperation).GetField(MethodFieldName, BindingFlags.Instance | BindingFlags.NonPublic);
 
     private readonly DispatcherHooks _hooks;
+    private readonly double _longOpThresholdMs;
     private readonly ConditionalWeakTable<DispatcherOperation, StrongBox<long>> _starts = new();
 
-    private PerfDispatcherHooks(DispatcherHooks hooks) => _hooks = hooks;
+    private PerfDispatcherHooks(DispatcherHooks hooks, double longOpThresholdMs)
+    {
+        _hooks = hooks;
+        _longOpThresholdMs = longOpThresholdMs;
+    }
 
-    public static PerfDispatcherHooks? Attach(Dispatcher dispatcher)
+    public static PerfDispatcherHooks? Attach(Dispatcher dispatcher) => Attach(dispatcher, DefaultLongOpThresholdMs);
+
+    // Test seam: the threshold is a parameter so a test does not depend on how long a "fast" operation happens to take on a loaded machine.
+    internal static PerfDispatcherHooks? Attach(Dispatcher dispatcher, double longOpThresholdMs)
     {
         try
         {
-            var hooks = new PerfDispatcherHooks(dispatcher.Hooks);
+            var hooks = new PerfDispatcherHooks(dispatcher.Hooks, longOpThresholdMs);
             hooks._hooks.OperationStarted += hooks.OnStarted;
             hooks._hooks.OperationCompleted += hooks.OnCompleted;
             hooks._hooks.OperationAborted += hooks.OnAborted;
@@ -64,7 +72,7 @@ public sealed class PerfDispatcherHooks
         if (!_starts.TryGetValue(operation, out var start)) return;
         _starts.Remove(operation);
         var ms = PhotoReviewPerf.Ms(start.Value);
-        if (ms <= LongOpThresholdMs) return;
+        if (ms <= _longOpThresholdMs) return;
         var priority = operation.Priority.ToString();
         PhotoReviewPerf.Log.DispatcherLongOp(ms, priority, DescribeOperation(operation) ?? priority);
     }

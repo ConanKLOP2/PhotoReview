@@ -153,14 +153,24 @@ public sealed class InstanceForwardPipeTests : IDisposable
     public async Task Client_OwnerAnswersTooLate_ReportsUnknown()
     {
         var release = new ManualResetEventSlim();
-        var server = new InstanceForwardServer(_pipe, _ => release.Wait(Timeout));
+        // APP-T22: latch the handler so the test proves the owner really received the request and was busy answering it,
+        // instead of an Unknown that a request lost on the way to a not-yet-listening server would also produce.
+        var handlerEntered = new ManualResetEventSlim();
+        var server = new InstanceForwardServer(_pipe, _ =>
+        {
+            handlerEntered.Set();
+            release.Wait(Timeout);
+        });
         _disposables.Add(server);
         _disposables.Add(release);
+        _disposables.Add(handlerEntered);
         server.Start();
 
         var outcome = await new InstanceForwardClient(_pipe).SendAsync([MakeFile("slow.jpg")], TimeSpan.FromMilliseconds(400));
+        var delivered = handlerEntered.Wait(Timeout);
         release.Set();
 
+        Assert.True(delivered, "the owner's handler never ran: the request did not reach it");
         Assert.Equal(ForwardOutcome.Unknown, outcome);
     }
 

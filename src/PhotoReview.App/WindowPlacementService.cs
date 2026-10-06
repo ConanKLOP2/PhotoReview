@@ -39,7 +39,12 @@ internal static class WindowPlacementService
     /// <param name="fullscreenRestoreState">
     /// R7-10: the state to reopen in when closing from fullscreen (fullscreen itself is a borderless Maximized), or null.
     /// </param>
-    public static void Save(Window window, string placementPath, WindowState? fullscreenRestoreState = null)
+    /// <param name="fullscreenNormalBounds">
+    /// The restore rect (physical px) saved when fullscreen was entered. Fullscreen moves a Normal window onto the whole
+    /// monitor without changing its state, so GetWindowPlacement would report that monitor rect as the restore bounds.
+    /// </param>
+    public static void Save(Window window, string placementPath, WindowState? fullscreenRestoreState = null,
+        (int Left, int Top, int Right, int Bottom)? fullscreenNormalBounds = null)
     {
         try
         {
@@ -50,6 +55,8 @@ internal static class WindowPlacementService
 
             // Never reopen minimized. Closing from the taskbar should restore normally.
             placement.ShowCommand = ResolveShowCommand(placement.ShowCommand, fullscreenRestoreState);
+            if (fullscreenRestoreState is not null && fullscreenNormalBounds is { } b)
+                placement.NormalPosition = new Rectangle { Left = b.Left, Top = b.Top, Right = b.Right, Bottom = b.Bottom };
             Directory.CreateDirectory(Path.GetDirectoryName(placementPath)!);
             WriteAtomically(placementPath, JsonSerializer.Serialize(placement, JsonOptions));
         }

@@ -37,7 +37,9 @@ public sealed class PlatformGapTests
     public void Evaluate_RealSource_UnmountedDriveLetter_ReturnsUnknown()
     {
         var mounted = DriveInfo.GetDrives().Select(d => char.ToUpperInvariant(d.Name[0])).ToHashSet();
-        var free = Enumerable.Range('D', 'Z' - 'D' + 1).Select(c => (char)c).First(c => !mounted.Contains(c));
+        var free = Enumerable.Range('D', 'Z' - 'D' + 1).Select(c => (char)c).FirstOrDefault(c => !mounted.Contains(c));
+        // APP-T27: First() threw an opaque InvalidOperationException when every letter D..Z is mounted; name the real cause.
+        Assert.True(free != '\0', "every drive letter D..Z is mounted on this machine, so no unmounted letter exists to probe");
         var path = $@"{free}:\photoreview-rvt67\x.jpg";
         var source = WindowsRecycleBinSettingsSource.Instance;
 

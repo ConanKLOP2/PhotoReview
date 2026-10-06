@@ -79,11 +79,13 @@ public sealed class PlatformPrimitivesTests
         Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "Window handle creation timed out.");
         Assert.Null(threadException);
 
-        // Both DWM attributes are supported on the CI/dev machines this suite runs on (Windows 10
-        // 20H1+/Windows 11); an older Windows build is expected to make DwmSetWindowAttribute fail,
-        // which TryEnableDarkMode/TrySetCaptionColor turn into `false` instead of throwing.
-        Assert.True(darkModeAccepted, "DWMWA_USE_IMMERSIVE_DARK_MODE was rejected by DWM on this machine.");
-        Assert.True(captionColorAccepted, "DWMWA_CAPTION_COLOR was rejected by DWM on this machine.");
+        // PW-01: an older Windows build is expected to make DwmSetWindowAttribute fail, which TryEnableDarkMode/TrySetCaptionColor
+        // turn into `false` instead of throwing (asserted for the null handle above). So each attribute is only required to be
+        // accepted on a build that documents it: DWMWA_USE_IMMERSIVE_DARK_MODE (20) from Windows 10 2004 (build 19041),
+        // DWMWA_CAPTION_COLOR (35) from Windows 11 (build 22000). The unsupported side must at least not throw (it did not: the thread ended cleanly).
+        var build = Environment.OSVersion.Version.Build;
+        if (build >= 19041) Assert.True(darkModeAccepted, "DWMWA_USE_IMMERSIVE_DARK_MODE was rejected by DWM on this machine.");
+        if (build >= 22000) Assert.True(captionColorAccepted, "DWMWA_CAPTION_COLOR was rejected by DWM on this machine.");
     }
 
     // Split from the argument checks: a miss makes TryRestore enumerate the user's real Recycle Bin through
