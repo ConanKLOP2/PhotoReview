@@ -37,3 +37,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-06 -- PLAN: bench many configurations for this device (not yet run)](perf/PLAN-device-config-bench.md)
 - [2026-10-06 -- S0 noise floor of the device-tuning bench (F4 grew to 28.5 GB; run P95 too noisy at 3 repeats)](perf/2026-10-06-s0-noise-floor.md)
 - [2026-10-07 -- Device-tuning bench results S0-S8: no winner, defaults kept; S3/S9 not run](perf/2026-10-07-device-tuning-results.md)
+- [2026-10-07 -- TieredPGO=0 confirmation (48 runs): P50 -8.6 %, P95 +8 %, not adopted](perf/2026-10-07-tieredpgo-confirmation.md)
