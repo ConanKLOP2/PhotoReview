@@ -15,7 +15,7 @@ and perf measurements go in new fragment files under `docs/refactoring/decisions
   branches): [raw/PROGRESS](docs/refactoring/raw/PROGRESS.md).
 - **Kinetic pan:** the 2026-09-27 manual check failed (jerky arrow-key glide); #221 damped only the mouse-release glide. User re-checked 2026-10-06: arrow-key panning OK, P-DISP-02 revisit condition no longer triggered.
 
-- **Device config bench:** plan [PLAN-device-config-bench](docs/refactoring/perf/PLAN-device-config-bench.md) (#337), harness merged (#341). Results 2026-10-07 in PR #361 (perf/2026-10-07-device-tuning-results.md): no measurable winner; A/A noise up to 27%; candidate `DOTNET_TieredPGO=0` to re-test on High performance; recommended (D) keep defaults. F11 window-state flip fixed in #351 (FullscreenWindowPlacer; #339/#346 removed as dead); capture rig `tools/diag/fullscreen-capture.ps1`; user re-check pending after Release 2.0.350 with always-visible taskbar.
+- **Device config bench:** plan [PLAN-device-config-bench](docs/refactoring/perf/PLAN-device-config-bench.md) (#337), harness merged (#341). Results 2026-10-07 in PR #361 (perf/2026-10-07-device-tuning-results.md): no measurable winner; A/A noise up to 27%; candidate `DOTNET_TieredPGO=0` to re-test on High performance; recommended (D) keep defaults. F11 window-state flip fixed in #351 (FullscreenWindowPlacer; #339/#346 removed as dead); capture rig `tools/diag/fullscreen-capture.ps1`; user confirmed F11 OK on Release 2.0.350 (2026-10-07).
 - **Ledger:** the TSV is a `3ef2bb5` snapshot (line numbers stale, note atop the
   WORK report; both removed 2026-10-01, see HISTORY); all 8,586 rows had a review status (#200, #223).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes
