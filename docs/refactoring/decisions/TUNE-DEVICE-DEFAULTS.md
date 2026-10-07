@@ -24,6 +24,10 @@ The one candidate, `DOTNET_TieredPGO=0`, was re-tested and is not adopted (see (
 
 Decision: **D**, chosen by the user on 2026-10-07 (the recommendation).
 
+Completion (2026-10-08): the remaining stages were run (S4 on F4 and F-small, S5 warm and cold disk cache, S6 at 8 and 12 GB balloon); no winner anywhere, defaults stay.
+S6 at 16 GB was aborted by the 2.5 GB available-RAM safety rule (16 GB balloon + about 9 GB working set on this 32 GB PC); not retried, 8/12 GB are the safe sizes. S7 (crossing of winners) is not needed because no stage has a winner.
+Details: [`../perf/2026-10-07-device-tuning-results.md`](../perf/2026-10-07-device-tuning-results.md).
+
 ## (b) DOTNET_TieredPGO=0
 
 Option (a) was run (48 runs, Repeat 8, [`../perf/2026-10-07-tieredpgo-confirmation.md`](../perf/2026-10-07-tieredpgo-confirmation.md)): median -8.6 % (geo), P95 +8 % (geo, noise 19.7 %), so it
@@ -40,4 +44,4 @@ Deleted locally; the ledger stays in tag `review-20261004-archive`.
 
 ## When to revisit
 
-(a) with real-world baseline comparison or memory-pressure data; (b) only with a High-performance-plan re-run on a quiet PC; (c) if the counters are ever used for decisions.
+(a) with real-world baseline comparison or on a PC with more RAM (S6 at 16 GB); (b) only with a High-performance-plan re-run on a quiet PC; (c) if the counters are ever used for decisions.

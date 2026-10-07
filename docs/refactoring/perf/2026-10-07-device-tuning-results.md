@@ -1,6 +1,6 @@
 # Device-tuning bench results for this PC (overnight 2026-10-06/07)
 
-Runs of `tools/diag/tune-matrix.ps1` ([plan](PLAN-device-config-bench.md), [S0 pilot](2026-10-06-s0-noise-floor.md)). Result: **no challenger beat the default in any stage; the default config is kept.**
+Runs of `tools/diag/tune-matrix.ps1` ([plan](PLAN-device-config-bench.md), [S0 pilot](2026-10-06-s0-noise-floor.md)). Result: **no challenger beat the default in any stage (including the completion round below); the default config is kept.**
 No app setting was changed. Run dirs are under `work\diag\tune-runs\` (untracked, local to this PC).
 
 ## Methodology
@@ -41,6 +41,23 @@ and the CIs touch the default; no violations in any S8 config (GC med <= 2.8 %, 
 S3 detail: the geo P95 ratios come from the short S2/S4 scenarios (123/186 pooled samples, P95 CIs reach 125-198 ms); in the S3 burst scenario (603 samples, the only one with tight CIs) NO smaller window is faster (P50 ratios 0.99-1.01 for 8/0, 8/16, 16/4) and the 128-image windows are 6-9 % SLOWER (P50 1.09, P95 1.06-1.08). A/A noise of this batch: P50 2.8 %, P95 21.5 % (S2 42.9 %). Conclusion: keep 32/8.
 S9 detail (12 runs per config, A/A noise P50 2.3 %, P95 15.0 %): pgo-0 vs default: S2 P50 1.50 vs 1.79 ms (ratio 0.837, 95 % CIs 1.45-1.54 vs 1.71-1.83 do not overlap), S2 P95 0.718 (CIs overlap), S3 P50 0.987 / P95 0.950, no violations, peak WS 14.29 GB, min avail RAM 7.7 GB. S8 and S9 are two independent batches and both rank pgo-0 first, so a small real gain (about 10 % on the early/slow-navigation latency, none on the burst scenario) is plausible; it is still below the 27 % bar derived from the noisiest scenario (S2 P95).
 
+## Completion round (2026-10-07 evening to 2026-10-08)
+
+All with CLI 2.0.350, F4 unless noted, same winner rule (>= 10 % and > 2x A/A noise, no hard-constraint violation). **No winner in any stage; defaults stay.**
+
+| Stage | What | Result (geo P95 ratio vs default) | Decision |
+|---|---|---|---|
+| S4-F4 | ImageCacheRamPercent 25/35/65/75 vs 50, F4 (window mode), run dir `tune-20261007-205448` | all 7-23 % SLOWER (r25/r35 use only about 1.75 GB WS but are clearly slower); A/A noise P50 1.6 %, P95 14.3 % | Keep 50 % |
+| S4-small | same knob, F-small (2.5 GB), 45 runs, 0 failed, `tune-20261007-211707` | r25 0.969 (best, 3.1 %), r65/r75 13-16 % slower; noise P95 16 % (8 % pooled estimate) | Keep 50 % |
+| S5-warm | disk-cache variants, F4, warm, 63 runs, `tune-20261007-214137` | best pd-2g 0.995, inside noise (P95 23.5 %); GC about 1.5 %, peak WS 14.3 GB, no memory pause | Keep 4 GB preview disk cache |
+| S5-cold | `-ColdDiskCache`, default/pd-0/pd-2g/pd-8g, 36 runs, 0 failed, `tune-20261007-222308` | pd-8g 1.061, pd-2g 1.210, pd-0 1.318 (all slower); noise P50 1.9 %, P95 25.9 % (S2 P95 67 %); peak WS <= 12.8 GB, min avail RAM 11.4 GB | Keep 4 GB |
+| S6-8g | pressure, 8 GB balloon, Repeat 2, `tune-s6-8g` | l90-m1g 1.017, l85-m4g/l85-m1g 1.031, l95-m1g 1.086, l95-m4g 1.093, l90-m4g 1.100, l95-m2g 1.125; noise P95 17.7 % | Keep default |
+| S6-12g | pressure, 12 GB balloon, S3+S4 only, Repeat 2, `tune-s6-12g-20261008-002921` | l95-m2g 0.934, l90-m1g 0.949, l85-m2g 0.950, l90-m4g 0.950 (inside noise P95 14.2 %, under 10 %) | Keep default |
+| S6-16g | pressure, 16 GB balloon | **aborted, no measured run** | Not safely runnable here |
+
+S6 safety judgement: 0 failed runs and no incomplete navigations at 8 and 12 GB. At 8 GB default and the l90/l85 variants paused preload in every run (62-292 pause events) yet all navigations completed (preload resumes); l95-* never paused but dipped to 2.6 GB available RAM; default min available RAM 2.7 GB / peak WS 14.2 GB, l85 variants 4.3 GB / 12.5 GB (safer, speed equal within noise, but l85-m4g S4 P95 was 1.20x, so not a clear "safer and not slower"). At 12 GB preload paused only in the first S3 run of default, l90-m4g (min 2.7 GB) and l95-m2g (min 1.9 GB, under the 2.5 GB abort line); all later runs held 10.5 GB with no pauses, which points to balloon timing, not the knob; l95-m2g was the riskiest. No variant is clearly safer and not slower, so the memory-pressure defaults stay.
+S6 at 16 GB: preconditions passed (AC, 25.0 GB available, C: 18.3 GB free), plan was 6 of 9 configs x 2 scenarios x Repeat 2 = 24 runs. With the balloon active the warm-up (Benchmark.Cli, WS about 8.7 GB) pushed available RAM to 1.67 GB, the guard stopped the batch, the balloon was released and the processes started by the bench were cleaned up (available RAM back to 25.1 GB). On this 32 GB PC a 16 GB balloon plus the roughly 9 GB F4 working set leaves about 0 GB free, so this size can never meet the 2.5 GB floor; 8 and 12 GB are the safe sizes. Not retried.
+
 ## Adopted config for this PC
 
 `{"decoder":null,"mode":null,"set":{},"env":{}}` = **all defaults** (WicDirect/Preview, PreloadWorkerCount 8, ImageCacheRamPercent 50, source-bytes cache off, preview disk cache 4 GB, stock .NET GC/PGO).
@@ -52,7 +69,7 @@ S9 detail (12 runs per config, A/A noise P50 2.3 %, P95 15.0 %): pgo-0 vs defaul
 ## Stages that did not run
 
 - S3 and S9 were first skipped by the stage runner (C: 11.07 GB free < 12 GB; free RAM 21.1 GB < 22 GB; both thresholds were arbitrary and were lowered to 10 GB / 20 GB) and then run by hand at 04:39-05:40 (S3 72 runs, S9 24 runs, results above). The superseded pilot dir `tune-20261006-195359` was found deleted afterwards; the stage runner's delete was not retried after the classifier denial.
-- S6 (memory pressure): no result reported, treated as not run.
+- S6 at 16 GB balloon: aborted by the safety rule, see the completion round below. (S4 on F4 and F-small, full S5 warm/cold and S6 at 8/12 GB were run afterwards, see below.)
 - Earlier first attempts at S1/S3/S4/S5/S8/S9 failed only because the stage files were missing before PR #358 merged; S1/S4/S5/S8 were re-run afterwards.
 
 ## What the user must verify
