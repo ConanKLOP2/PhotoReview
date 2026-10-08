@@ -61,4 +61,57 @@ public sealed class PhysicalIoJunctionNativeTests : IDisposable
             Directory.Delete(link);
         }
     }
+
+    [Fact]
+    public void ResolveRealPath_ChainOfJunctions_ResolvesToTheFinalTarget()
+    {
+        var target = _root.Dir("real");
+        var inner = MakeJunction(_root.Combine("inner"), target);
+        var outer = MakeJunction(_root.Combine("outer"), inner);
+        try
+        {
+            // returnFinalTarget: outer -> inner -> real must come back as real, not as the intermediate junction.
+            Assert.Equal(target, _fs.ResolveRealPath(outer), ignoreCase: true);
+        }
+        finally
+        {
+            Directory.Delete(outer);
+            Directory.Delete(inner);
+        }
+    }
+
+    [Fact]
+    public void ResolveRealPath_DanglingJunction_StillResolvesToItsMissingTarget()
+    {
+        var target = _root.Dir("gone");
+        var link = MakeJunction(_root.Combine("link"), target);
+        try
+        {
+            Directory.Delete(target); // the junction now points at nothing, but it is still a reparse point: containment checks must see where it leads
+            var path = Path.Combine(link, "photo.jpg");
+
+            Assert.Equal(Path.Combine(target, "photo.jpg"), _fs.ResolveRealPath(path), ignoreCase: true);
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
+    }
+
+    [Fact]
+    public void ResolveRealPath_RegularFolderAndFileBesideAJunction_AreNotRewritten()
+    {
+        var folder = _root.Dir("plain");
+        var file = _root.File(Path.Combine("plain", "a.jpg"), 1);
+        var link = MakeJunction(_root.Combine("link"), _root.Dir("real"));
+        try
+        {
+            Assert.Equal(folder, _fs.ResolveRealPath(folder), ignoreCase: true);
+            Assert.Equal(file, _fs.ResolveRealPath(file), ignoreCase: true);
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
+    }
 }
