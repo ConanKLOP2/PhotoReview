@@ -32,19 +32,48 @@ public sealed class ToolsSafetyReviewTests : IDisposable
         Assert.True(File.Exists(userFile), "the foreign raw folder content must survive");
     }
 
-    [Fact(DisplayName = "fullscreen-capture.ps1 captures into a unique per-run subfolder and its cleanup never touches other files in -Out")]
+    [Fact(DisplayName = "fullscreen-capture cleanup: only the run-* subfolder PNGs are deleted (also from a failure path); foreign files in -Out survive; a non-run folder is refused")]
     public void FullscreenCapture_CleanupIsScopedToPerRunFolder()
     {
-        // The rig needs a real monitor and a launched app, so this is a source-level guard: -Out is re-rooted to a unique run-* subfolder
-        // before anything is written, and the only PNG cleanup runs on that (re-rooted) folder.
-        var text = File.ReadAllText(Diag("fullscreen-capture.ps1"));
-        var reroot = text.IndexOf("$Out = Join-Path $Out ('run-'", StringComparison.Ordinal);
-        var firstUse = text.IndexOf("$backup = Join-Path $Out", StringComparison.Ordinal);
-        var cleanup = text.IndexOf("Remove-Item -Force", text.LastIndexOf("--- summary", StringComparison.Ordinal), StringComparison.Ordinal);
-        Assert.True(reroot > 0, "-Out must be re-rooted into a per-run subfolder");
-        Assert.True(reroot < firstUse, "re-root must precede the first write into $Out");
-        Assert.True(cleanup > reroot, "cleanup must come after the re-root (so it only sees the per-run folder)");
-        Assert.Equal(-1, text.IndexOf("Get-ChildItem $Out -Filter", StringComparison.Ordinal));
+        var outDir = _root.Dir("fs-out");
+        var foreignTop = Path.Combine(outDir, "mine.png");
+        File.WriteAllText(foreignTop, "user png");
+        var foreignDir = _root.Dir("fs-out/other");
+        var foreignNested = Path.Combine(foreignDir, "keep.png");
+        File.WriteAllText(foreignNested, "user png 2");
+        var script = _root.File("fs-cleanup.ps1", Encoding.UTF8.GetBytes("""
+            param($Lib, $Out, $Fail)
+            $ErrorActionPreference = 'Stop'
+            . $Lib
+            $run = New-CaptureRunDir $Out
+            if (-not (Test-Path -LiteralPath $run -PathType Container)) { throw 'run dir not created' }
+            [IO.File]::WriteAllText((Join-Path $run 'sheet_a.png'), 'frame')
+            [IO.File]::WriteAllText((Join-Path $run 'sheet_b.png'), 'frame')
+            [IO.File]::WriteAllText((Join-Path $run 'keepme.txt'), 'backup')
+            try {
+                try { if ($Fail -eq '1') { throw 'simulated no monitor X' } }
+                finally { Remove-CaptureFrames $run $Out }
+            }
+            catch { "CAUGHT=$($_.Exception.Message)" }
+            "RUN=$run"
+            $refused = $false
+            try { Remove-CaptureFrames $Out $Out } catch { $refused = $true }
+            "REFUSED_PARENT=$refused"
+            """));
+
+        foreach (var fail in new[] { "0", "1" })
+        {
+            var (code, output) = PowerShellRunner.Run("-File", script, "-Lib", Diag("Fullscreen-Capture-Cleanup.ps1"), "-Out", outDir, "-Fail", fail);
+            Assert.True(code == 0, output);
+            Assert.Equal(fail == "1", output.Contains("CAUGHT=simulated no monitor X", StringComparison.Ordinal));
+            Assert.Contains("REFUSED_PARENT=True", output, StringComparison.Ordinal);
+            var run = output.Split('\n').Select(l => l.Trim()).First(l => l.StartsWith("RUN=", StringComparison.Ordinal))[4..];
+            Assert.True(Directory.Exists(run), "run folder keeps the non-PNG backup file");
+            Assert.Empty(Directory.GetFiles(run, "*.png"));
+            Assert.True(File.Exists(Path.Combine(run, "keepme.txt")));
+            Assert.True(File.Exists(foreignTop), "a *.png the user already had in -Out must survive");
+            Assert.True(File.Exists(foreignNested), "a *.png in another subfolder of -Out must survive");
+        }
     }
 
     [Fact(DisplayName = "tune-rank A/A splits: 40 runs give 100 balanced splits and runs >= 32 are not pinned to run i-32")]
@@ -84,10 +113,22 @@ public sealed class ToolsSafetyReviewTests : IDisposable
             . $Lib
             $splits = New-AaSplits 6 (New-Object System.Random(1))
             "COUNT=$($splits.Count) LEN=$($splits[0].Length)"
+            $keys = @(); $bad = 0; $parts = @()
+            foreach ($s in $splits) {
+                $a = 0; $b = 0; $key = ''
+                for ($i = 0; $i -lt 6; $i++) { if ($s[$i]) { $a++; $key += 'A' } else { $b++; $key += 'B' } }
+                if ($a -ne 3 -or $b -ne 3) { $bad++ }
+                $keys += $key
+                # canonical unordered partition: the side containing run 0, as a string
+                $side = ''; for ($i = 0; $i -lt 6; $i++) { if ($s[$i] -eq $s[0]) { $side += "$i" } }
+                $parts += $side
+            }
+            "BAD=$bad DISTINCT=$(@($keys | Sort-Object -Unique).Count) PARTITIONS=$(@($parts | Sort-Object -Unique).Count)"
             """));
         var (code, output) = PowerShellRunner.Run("-File", script, "-Lib", Diag("Tune-Splits.ps1"));
         Assert.True(code == 0, output);
         Assert.Contains("COUNT=10 LEN=6", output, StringComparison.Ordinal);
+        Assert.Contains("BAD=0 DISTINCT=10 PARTITIONS=10", output, StringComparison.Ordinal);
     }
 
     private string RegisterAlias(string fixtures, string alias, string newPath)
