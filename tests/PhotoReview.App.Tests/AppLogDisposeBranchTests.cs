@@ -225,7 +225,7 @@ public sealed class AppLogDisposeBranchTests : IDisposable
             {
                 delayToken = token;
                 delayStarted.TrySetResult();
-                return Task.Delay(Timeout.Infinite, token);
+                return new TaskCompletionSource().Task.WaitAsync(token); // never completes; ends only by cancellation
             });
         coalescer.Submit(["a"]);
         await delayStarted.Task.WaitAsync(Bound);
