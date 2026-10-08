@@ -232,6 +232,12 @@ public partial class App : System.Windows.Application, IDisposable
         return moveOverride is null ? null : moveOverride.MoveAsync;
     }
 
+    /// <summary>Test seam (null in production): extra registrations layered over the production graph in <see cref="StartupCoreAsync"/>.</summary>
+    internal static Action<IServiceCollection>? StartupServiceOverrides { get; set; }
+
+    /// <summary>Test seam (the production prefix unless a test sets one): mutex/pipe name prefix of the startup <see cref="InstanceScope"/>.</summary>
+    internal static string StartupInstanceNamePrefix { get; set; } = InstanceKeys.DefaultPrefix;
+
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void App_Startup(object sender, StartupEventArgs e)
     {
@@ -270,7 +276,7 @@ public partial class App : System.Windows.Application, IDisposable
         _perfListener = PerfCsvListener.TryStartFromEnvironment();
         PhotoReviewPerf.StartupMark("appStartup");
 
-        _services = Composition.AppHost.BuildServices();
+        _services = Composition.AppHost.BuildServices(StartupServiceOverrides);
         PhotoReviewPerf.StartupMark("servicesBuilt");
 
         var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
@@ -328,7 +334,7 @@ public partial class App : System.Windows.Application, IDisposable
         _forwardCoalescer = new ForwardedOpenCoalescer(
             path => uiScheduler.Post(() => OpenForwarded(path)), ForwardCoalesceWindow, _services.GetRequiredService<ILog>());
         _instanceScope = new InstanceScope(
-            appSettings.InstanceMode, _forwardCoalescer.Submit, _services.GetRequiredService<ILog>(), allowServerForeground: true);
+            appSettings.InstanceMode, _forwardCoalescer.Submit, _services.GetRequiredService<ILog>(), StartupInstanceNamePrefix, allowServerForeground: true);
         // Listen right away (the scope starts the pipe with the lock): a second launch made while this one is still
         // starting waits for the pipe (up to its timeout).
         if (!_instanceScope.TryAcquire(launchFolder))
