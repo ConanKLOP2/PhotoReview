@@ -8,7 +8,7 @@
 ## Now
 
 - **Function review 2026-10-04:** no production finding is open (status table: [WORK-REVIEW](docs/refactoring/review-20261004/WORK-REVIEW.md)). Finished batches: [HISTORY](docs/refactoring/HISTORY.md). Open leftovers: [ACTIVE-TASKS](docs/ACTIVE-TASKS.md). F11 fullscreen fix (#351) verified OK by the user on Release 2.0.350.
-- **F11 re-check (user):** #372 changed the exit path for changed monitor layouts: check F11 exit on Release 2.0.361; if possible, unplug a monitor while fullscreen.
+- **F11:** #372 exit path verified OK by the user on Release 2.0.361 (2026-10-08).
 - **Static review 2026-10-08:** none open; all 9 confirmed fixed (#370-#372, [review-20261008](docs/refactoring/review-20261008/README.md)).
 - **RAW, still unverified:** `raw-corpus.yml` has never run (RAW corpus tests skip in CI); RAW-62 real-machine check waived by the user ([raw/PROGRESS](docs/refactoring/raw/PROGRESS.md)).
 - **Caution:** do not rerun `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` alone (see ACTIVE-TASKS).
