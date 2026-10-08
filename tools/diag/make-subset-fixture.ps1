@@ -49,6 +49,7 @@ $WhatIfPreference = $false
 $markerName = '.hardlink-subset.json'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'Fixture-Fingerprint.ps1')
+. (Join-Path $PSScriptRoot 'Fixture-Alias.ps1')
 
 function Resolve-WorkDir {
     $local = Join-Path $repoRoot 'work'
@@ -191,24 +192,10 @@ Write-Host ("Destination fingerprint: files={0} bytes={1} fp={2}" -f $dstFp.Coun
 # ---- register alias (text insert: keeps the user's file, formatting and keys) ---------------------------------------------------
 if ($Alias) {
     if ($Alias -notmatch '^[A-Za-z0-9_.-]+$') { throw "Alias '$Alias' must be letters, digits, . _ -" }
-    function ConvertTo-JsonString([string]$s) { '"' + ($s -replace '\\', '\\' -replace '"', '\"') + '"' }
     $desc = "Hard-link subset of $(if ($sourceAlias) { $sourceAlias } else { $srcRoot }): $made files, $([math]::Round($total / 1GB, 1)) GiB, seed $Seed (tools/diag/make-subset-fixture.ps1)"
     $line = '  ' + (ConvertTo-JsonString $Alias) + ': { "path": ' + (ConvertTo-JsonString $dstRoot) + ', "files": ' + $made + ', "desc": ' + (ConvertTo-JsonString $desc) + ' }'
     $raw = if (Test-Path -LiteralPath $FixturesFile) { [System.IO.File]::ReadAllText($FixturesFile, [System.Text.Encoding]::UTF8) } else { "{`r`n}" }
-    $aliasRegex = New-Object System.Text.RegularExpressions.Regex(('^[ \t]*"' + [regex]::Escape($Alias) + '"[ \t]*:[^\r\n]*$'), 'Multiline')
-    $existingLine = $aliasRegex.Match($raw)
-    if ($existingLine.Success) {
-        $trailingComma = if ($existingLine.Value.TrimEnd().EndsWith(',')) { ',' } else { '' }
-        $replacement = $line + $trailingComma
-        $raw = $aliasRegex.Replace($raw, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $replacement }, 1)
-    }
-    else {
-        $close = $raw.LastIndexOf('}')
-        if ($close -lt 0) { throw "$FixturesFile has no closing brace" }
-        $head = $raw.Substring(0, $close).TrimEnd()
-        $sep = if ($head.EndsWith('{')) { '' } else { ',' }
-        $raw = $head + $sep + "`r`n" + $line + "`r`n" + $raw.Substring($close)
-    }
+    $raw = Set-FixtureAliasText $raw $Alias $line
     [System.IO.File]::WriteAllText($FixturesFile, $raw, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "Alias $Alias -> $dstRoot registered in $FixturesFile"
 }

@@ -10,7 +10,7 @@
   - Backs up %LOCALAPPDATA%\PhotoReview\{config.json,window-placement.json} first and restores them byte-identical
     (hash verified) at the end; window-placement.json is rewritten per scenario to start on the wanted monitor/state.
   - Only OS input is PostMessage(F11) to the app's own window handle. No clicks.
-  - Captured frames may contain other windows: PNGs are written only to -Out and ALWAYS deleted on exit unless
+  - Captured frames may contain other windows: PNGs are written only to a unique per-run subfolder of -Out (created by the script) and ALWAYS deleted on exit (only files in that subfolder) unless
     -KeepFrames is given. Never commit or share them.
 
 .EXAMPLE
@@ -156,6 +156,9 @@ public static class Rig {
 "@
 [Rig]::Init()
 
+# Everything this run writes goes to a unique per-run subfolder of -Out; cleanup touches only that subfolder, never
+# files the script did not create in the user-given -Out.
+$Out = Join-Path $Out ('run-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $appData = Join-Path $env:LOCALAPPDATA 'PhotoReview'
 $files = 'config.json', 'window-placement.json'
 $backup = Join-Path $Out '_userbackup'
@@ -219,4 +222,5 @@ finally {
 }
 '--- summary'
 $results | Format-Table -AutoSize | Out-String
-if (-not $KeepFrames) { Get-ChildItem $Out -Filter '*.png' -ErrorAction SilentlyContinue | Remove-Item -Force; 'frames deleted' }
+if (-not $KeepFrames) { Get-ChildItem -LiteralPath $Out -Filter '*.png' -File -ErrorAction SilentlyContinue | Remove-Item -Force; 'frames deleted (per-run folder only)' }
+else { "frames kept in $Out" }

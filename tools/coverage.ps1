@@ -73,14 +73,22 @@ if ($Project.Count -gt 0) {
     if ($allProjects.Count -eq 0) { throw "-Project '$($Project -join ', ')' matches none of the test projects" }
 }
 
+# Only ever delete a 'raw' folder this script created (ownership marker written below); an existing foreign 'raw' folder in a
+# user-given -OutDir is user data: refuse (before any build/test work) instead of deleting it.
+$rawMarker = Join-Path $rawDir '.coverage-owned'
+if (-not $ReportOnly -and (Test-Path -LiteralPath $rawDir) -and -not (Test-Path -LiteralPath $rawMarker)) {
+    [Console]::Error.WriteLine("Refusing to delete '$rawDir': it exists but was not created by tools/coverage.ps1 (no .coverage-owned marker). Use another -OutDir or remove/rename that folder yourself.")
+    exit 2
+}
 if (-not $ReportOnly) {
     Push-Location $root
     try {
         dotnet tool restore | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'dotnet tool restore failed' }
 
-        if (Test-Path -LiteralPath $rawDir) { Remove-Item -Recurse -Force -LiteralPath $rawDir }
+        if (Test-Path -LiteralPath $rawDir) { Remove-Item -Recurse -Force -LiteralPath $rawDir }   # owned: verified by the marker check above
         New-Item -ItemType Directory -Force -Path $rawDir | Out-Null
+        Set-Content -LiteralPath $rawMarker -Value 'created by tools/coverage.ps1; safe to delete' -Encoding ascii
 
         # Run settings: the repo hang guard (same values as tests/test.runsettings) + the Code Coverage collector.
         $settings = Join-Path $OutDir 'coverage.runsettings'
