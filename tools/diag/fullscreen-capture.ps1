@@ -10,7 +10,7 @@
   - Backs up %LOCALAPPDATA%\PhotoReview\{config.json,window-placement.json} first and restores them byte-identical
     (hash verified) at the end; window-placement.json is rewritten per scenario to start on the wanted monitor/state.
   - Only OS input is PostMessage(F11) to the app's own window handle. No clicks.
-  - Captured frames may contain other windows: PNGs are written only to a unique per-run subfolder of -Out (created by the script) and ALWAYS deleted on exit (only files in that subfolder) unless
+  - Captured frames may contain other windows: PNGs are written only to a unique per-run subfolder of -Out (created by the script) and ALWAYS deleted on exit, including after an error or Ctrl+C (finally block; only *.png in that subfolder) unless
     -KeepFrames is given. Never commit or share them.
 
 .EXAMPLE
@@ -155,14 +155,16 @@ public static class Rig {
 }
 "@
 [Rig]::Init()
+. (Join-Path $PSScriptRoot 'Fullscreen-Capture-Cleanup.ps1')
 
 # Everything this run writes goes to a unique per-run subfolder of -Out; cleanup touches only that subfolder, never
 # files the script did not create in the user-given -Out.
-$Out = Join-Path $Out ('run-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+$OutRoot = $Out
+$Out = New-CaptureRunDir $OutRoot
 $appData = Join-Path $env:LOCALAPPDATA 'PhotoReview'
 $files = 'config.json', 'window-placement.json'
 $backup = Join-Path $Out '_userbackup'
-New-Item -ItemType Directory -Force $Out, $backup | Out-Null
+New-Item -ItemType Directory -Force $backup | Out-Null
 $hashes = @{}
 foreach ($f in $files) { Copy-Item (Join-Path $appData $f) (Join-Path $backup $f) -Force; $hashes[$f] = (Get-FileHash (Join-Path $appData $f)).Hash }
 if (Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)) -ErrorAction SilentlyContinue) { throw 'PhotoReview is already running (the launch would be forwarded to it); close it first.' }
@@ -216,11 +218,12 @@ try {
   }
 }
 finally {
-  foreach ($f in $files) { Copy-Item (Join-Path $backup $f) (Join-Path $appData $f) -Force
-    $ok = (Get-FileHash (Join-Path $appData $f)).Hash -eq $hashes[$f]; "restore $f identical=$ok" }
-  Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)) -ErrorAction SilentlyContinue | Out-Null
+  # Privacy first: frames go even when the run failed or was interrupted (only the per-run folder's PNGs), then restore the user's files.
+  try { if (-not $KeepFrames) { Remove-CaptureFrames $Out $OutRoot; 'frames deleted (per-run folder only)' } else { "frames kept in $Out" } }
+  finally {
+    foreach ($f in $files) { Copy-Item (Join-Path $backup $f) (Join-Path $appData $f) -Force
+      $ok = (Get-FileHash (Join-Path $appData $f)).Hash -eq $hashes[$f]; "restore $f identical=$ok" }
+  }
 }
 '--- summary'
 $results | Format-Table -AutoSize | Out-String
-if (-not $KeepFrames) { Get-ChildItem -LiteralPath $Out -Filter '*.png' -File -ErrorAction SilentlyContinue | Remove-Item -Force; 'frames deleted (per-run folder only)' }
-else { "frames kept in $Out" }
