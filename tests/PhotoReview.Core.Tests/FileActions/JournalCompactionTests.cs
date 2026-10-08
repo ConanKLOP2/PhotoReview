@@ -3,6 +3,7 @@ using System.Text.Json;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.FileActions;
 
@@ -546,6 +547,89 @@ public sealed class JournalCompactionTests : IDisposable
         var failed = await JournalStartupRecovery.RunAsync(journal, clock);
 
         Assert.Contains(failed, e => e.Id == "recycle-pending-2");
+    }
+
+    [Fact(DisplayName = "Startup recovery logs a successful compaction as Info with the byte counts before and after")]
+    public async Task RunAsync_Compacted_LogsInfoWithByteCounts()
+    {
+        var bytes = BuildCompactibleJournal(CompactibleCount);
+        WriteJournal(bytes);
+        var log = new MutationRecordingLog();
+        var clock = new FakeClock(BaseTime.AddHours(1));
+        var journal = new OperationJournal(_paths, new PhysicalFileSystem(), clock, compactionFiles: new HookedCompactionFiles(new PhysicalJournalCompactionFiles()));
+
+        await JournalStartupRecovery.RunAsync(journal, clock, log);
+
+        var after = File.ReadAllBytes(_paths.JournalFile).Length;
+        Assert.True(after < bytes.Length);
+        Assert.Equal($"Journal compacted: {bytes.Length} -> {after} bytes.", Assert.Single(log.Infos));
+        Assert.Empty(log.Warnings);
+        Assert.Empty(log.Errors);
+    }
+
+    [Fact(DisplayName = "Startup recovery warns when compaction failed and says the journal is unchanged")]
+    public async Task RunAsync_CompactionFailedOutcome_LogsWarningWithTheError()
+    {
+        var bytes = BuildCompactibleJournal(CompactibleCount);
+        WriteJournal(bytes);
+        var log = new MutationRecordingLog();
+        var clock = new FakeClock(BaseTime.AddHours(1));
+        var hooked = new HookedCompactionFiles(new PhysicalJournalCompactionFiles()) { ThrowInsteadOfReplace = true };
+        var journal = new OperationJournal(_paths, new PhysicalFileSystem(), clock, compactionFiles: hooked);
+
+        await JournalStartupRecovery.RunAsync(journal, clock, log);
+
+        var warning = Assert.Single(log.Warnings);
+        Assert.StartsWith("Journal compaction failed (journal unchanged): ", warning, StringComparison.Ordinal);
+        Assert.Contains("simulated crash before replace", warning, StringComparison.Ordinal);
+        Assert.Empty(log.Infos);
+        Assert.Equal(bytes, File.ReadAllBytes(_paths.JournalFile));
+    }
+
+    [Fact(DisplayName = "Startup recovery logs a skipped compaction (a writer holds the journal) as Info naming the outcome")]
+    public async Task RunAsync_CompactionBusy_LogsSkippedInfo()
+    {
+        var bytes = BuildCompactibleJournal(CompactibleCount);
+        WriteJournal(bytes);
+        var log = new MutationRecordingLog();
+        var clock = new FakeClock(BaseTime.AddHours(1));
+        FileStream? appendHandle = null;
+        var hooked = new HookedCompactionFiles(new PhysicalJournalCompactionFiles())
+        {
+            BeforeLock = () => appendHandle = new FileStream(_paths.JournalFile, FileMode.Append, FileAccess.Write, FileShare.Read),
+        };
+        var journal = new OperationJournal(_paths, new PhysicalFileSystem(), clock, compactionFiles: hooked);
+
+        try
+        {
+            await JournalStartupRecovery.RunAsync(journal, clock, log);
+        }
+        finally
+        {
+            appendHandle?.Dispose();
+        }
+
+        Assert.Equal("Journal compaction skipped (Busy); journal unchanged.", Assert.Single(log.Infos));
+        Assert.Empty(log.Warnings);
+        Assert.Equal(bytes, File.ReadAllBytes(_paths.JournalFile));
+    }
+
+    [Fact(DisplayName = "Startup recovery logs a skipped compaction when another process changed the journal as Info naming Changed")]
+    public async Task RunAsync_CompactionChanged_LogsSkippedInfo()
+    {
+        WriteJournal(BuildCompactibleJournal(CompactibleCount));
+        var rewritten = BuildCompactibleJournal(10);
+        var log = new MutationRecordingLog();
+        var clock = new FakeClock(BaseTime.AddHours(1));
+        var hooked = new HookedCompactionFiles(new PhysicalJournalCompactionFiles())
+        {
+            BeforeLock = () => File.WriteAllBytes(_paths.JournalFile, rewritten),
+        };
+        var journal = new OperationJournal(_paths, new PhysicalFileSystem(), clock, compactionFiles: hooked);
+
+        await JournalStartupRecovery.RunAsync(journal, clock, log);
+
+        Assert.Equal("Journal compaction skipped (Changed); journal unchanged.", Assert.Single(log.Infos));
     }
 
     private sealed class ThrowingCompactionFiles : IJournalCompactionFiles
