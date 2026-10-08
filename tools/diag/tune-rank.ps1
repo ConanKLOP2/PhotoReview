@@ -59,6 +59,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $inv = [System.Globalization.CultureInfo]::InvariantCulture
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+. (Join-Path $PSScriptRoot 'Tune-Splits.ps1')   # New-AaSplits
 $matrixPath = Join-Path $BatchDir 'matrix.json'
 if (-not (Test-Path -LiteralPath $matrixPath)) { throw "No matrix.json in $BatchDir" }
 if (-not $OutDir) { $OutDir = $BatchDir }
@@ -251,28 +252,12 @@ foreach ($sc in $GeoScenarios) {
         $runs = @($rows | Where-Object { $_.scenario -eq $sc -and $_.config -eq $cfg -and $_.status -eq 'ok' -and $samplesByDir.ContainsKey($_.outDir) -and $samplesByDir[$_.outDir].Count -gt 0 })
         $n = $runs.Count
         if ($n -lt 2) { continue }
-        $half = [int][math]::Floor($n / 2)
-        $splits = New-Object System.Collections.Generic.List[object]
-        if ($n -le 10) {
-            for ($mask = 1; $mask -lt (1 -shl $n); $mask++) {
-                $bits = 0; for ($i = 0; $i -lt $n; $i++) { if ($mask -band (1 -shl $i)) { $bits++ } }
-                if ($bits -ne $half) { continue }
-                if ($n % 2 -eq 0 -and -not ($mask -band 1)) { continue }   # even n: A and B are mirror images; keep one of each pair
-                $splits.Add($mask)
-            }
-        }
-        else {
-            for ($s = 0; $s -lt 100; $s++) {
-                $perm = @(0..($n - 1) | Sort-Object { $noiseRng.Next() }); $mask = 0
-                foreach ($i in $perm[0..($half - 1)]) { $mask = $mask -bor (1 -shl $i) }
-                $splits.Add($mask)
-            }
-        }
+        $splits = New-AaSplits $n $noiseRng
         $d50 = New-Object System.Collections.Generic.List[double]; $d95 = New-Object System.Collections.Generic.List[double]
-        foreach ($mask in $splits) {
+        foreach ($inA in $splits) {
             $pa = New-Object System.Collections.Generic.List[double]; $pb = New-Object System.Collections.Generic.List[double]
             for ($i = 0; $i -lt $n; $i++) {
-                if ($mask -band (1 -shl $i)) { $pa.AddRange($samplesByDir[$runs[$i].outDir]) } else { $pb.AddRange($samplesByDir[$runs[$i].outDir]) }   # not `$t = if ... { $emptyList }`: PowerShell unrolls an empty list to $null
+                if ($inA[$i]) { $pa.AddRange($samplesByDir[$runs[$i].outDir]) } else { $pb.AddRange($samplesByDir[$runs[$i].outDir]) }   # not `$t = if ... { $emptyList }`: PowerShell unrolls an empty list to $null
             }
             $a = $pa.ToArray(); $b = $pb.ToArray()
             foreach ($pair in @(@(50, $d50), @(95, $d95))) {
