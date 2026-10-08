@@ -48,6 +48,38 @@ public sealed partial class ZoomDetailLoaderGapTests
     }
 
     [Fact]
+    public async Task Reset_CancelsAQueuedDecodeSoItNeverStartsOnceTheSlotFrees()
+    {
+        // The original decodes run one at a time: a.jpg holds the slot (blocked in the decoder), b.jpg's load waits for it.
+        using var gateA = new SemaphoreSlim(0);
+        _decoder.GateByName["a.jpg"] = gateA;
+        _loader.SetZoom(1.0);
+        Present("a.jpg");
+        var loadA = _loader.PendingLoad;
+        Assert.NotNull(loadA);
+        Present("b.jpg"); // Reset() cancels A's token (A is already inside the decoder), then B queues behind A
+        var loadB = _loader.PendingLoad;
+        Assert.NotNull(loadB);
+        Assert.NotSame(loadA, loadB);
+
+        using var gateC = new SemaphoreSlim(0);
+        _decoder.GateByName["c.jpg"] = gateC;
+        Present("c.jpg"); // Reset() cancels B's token while B is still queued
+        var loadC = _loader.PendingLoad;
+        Assert.NotNull(loadC);
+
+        gateA.Release(); // the slot frees: a cancelled B must be dropped before it reaches the decoder
+        await loadA!;
+        await loadB!;
+        gateC.Release();
+        await loadC!;
+
+        Assert.Equal(0, _decoder.OriginalDecodes("b.jpg"));
+        Assert.Equal(1, _decoder.OriginalDecodes("c.jpg"));
+        Assert.True(_loader.IsShowingOriginal);
+    }
+
+    [Fact]
     public async Task ASupersededTarget_OnTheSameNavigation_DropsItsOriginalWhenItFinishesLate()
     {
         using var gateA = new SemaphoreSlim(0);
