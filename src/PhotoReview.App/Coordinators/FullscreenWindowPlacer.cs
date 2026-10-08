@@ -28,6 +28,14 @@ internal sealed class FullscreenWindowPlacer
     private Rect32 _windowRectBefore, _workBefore;
     private long _styleBefore;
     private IntPtr _monitorBefore;
+    private readonly IMonitorLayout _layout;
+
+    // Normal-window exit: a saved rect is still usable when this much of its caption band lies inside some work area.
+    private const int CaptionBand = 32, MinVisibleWidth = 120, MinVisibleHeight = 16;
+
+    public FullscreenWindowPlacer() : this(Win32MonitorLayout.Instance) { }
+
+    internal FullscreenWindowPlacer(IMonitorLayout layout) => _layout = layout;
 
     /// <summary>The state the window had before fullscreen (a minimized window counts as Normal).</summary>
     public WindowState StateBefore => _stateBefore;
@@ -102,13 +110,19 @@ internal sealed class FullscreenWindowPlacer
             // Same monitor with the same work area: the exact rect the window had goes back in one step (a maximized
             // window's rect already includes its frame overhang). Otherwise (taskbar/monitor changed meanwhile) let
             // Windows compute the maximized rect.
-            var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
-            var sameWork = MonitorFromWindow(hwnd, MonitorDefaultToNearest) == _monitorBefore
-                && GetMonitorInfo(_monitorBefore, ref info) && info.Work.Equals(_workBefore);
+            var sameWork = _layout.MonitorOf(hwnd) == _monitorBefore
+                && _layout.TryGetWork(_monitorBefore, out var workNow) && workNow == ToScreen(_workBefore);
             SetWindowLongPtr(hwnd, GwlStyle, new IntPtr(_styleBefore));
             if (sameWork || _stateBefore != WindowState.Maximized)
             {
                 var b = _windowRectBefore;
+                if (!sameWork)
+                {
+                    // Monitor layout changed while in fullscreen (dock/second monitor unplugged): the saved rect may now be
+                    // off-screen. Same layout -> the exact rect above, untouched (measured 0 bad frames).
+                    var fit = ResolveNormalExitRect(ToScreen(b), _layout.WorkAreas());
+                    b = new Rect32 { Left = fit.Left, Top = fit.Top, Right = fit.Right, Bottom = fit.Bottom };
+                }
                 SetWindowPos(hwnd, IntPtr.Zero, b.Left, b.Top, b.Right - b.Left, b.Bottom - b.Top, SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
             }
             else
@@ -120,6 +134,41 @@ internal sealed class FullscreenWindowPlacer
             window.WindowStyle = WindowStyle.SingleBorderWindow;
         }
         _hasNormalBounds = false;
+    }
+
+    private static ScreenRect ToScreen(Rect32 r) => new(r.Left, r.Top, r.Right, r.Bottom);
+
+    /// <summary>
+    /// Where a Normal window's saved rect goes when the monitor layout changed. Kept as is when the caption band (top
+    /// <see cref="CaptionBand"/> px) still shows at least <see cref="MinVisibleWidth"/> x <see cref="MinVisibleHeight"/> px
+    /// inside some work area (partially visible but draggable). Otherwise moved onto the nearest work area, keeping its size
+    /// (shrunk only if larger than that work area) and the closest position. No monitor info: unchanged.
+    /// </summary>
+    internal static ScreenRect ResolveNormalExitRect(ScreenRect saved, IReadOnlyList<ScreenRect> works)
+    {
+        if (works.Count == 0) return saved;
+        var bandBottom = Math.Min(saved.Bottom, saved.Top + CaptionBand);
+        foreach (var w in works)
+        {
+            var iw = Math.Min(saved.Right, w.Right) - Math.Max(saved.Left, w.Left);
+            var ih = Math.Min(bandBottom, w.Bottom) - Math.Max(saved.Top, w.Top);
+            if (iw >= MinVisibleWidth && ih >= MinVisibleHeight) return saved;
+        }
+        var cx = (saved.Left + saved.Right) / 2;
+        var cy = (saved.Top + saved.Bottom) / 2;
+        var best = works[0];
+        var bestDist = long.MaxValue;
+        foreach (var w in works)
+        {
+            long dx = Math.Max(Math.Max(w.Left - cx, cx - w.Right), 0), dy = Math.Max(Math.Max(w.Top - cy, cy - w.Bottom), 0);
+            var d = dx * dx + dy * dy;
+            if (d < bestDist) { bestDist = d; best = w; }
+        }
+        var width = Math.Min(saved.Width, best.Width);
+        var height = Math.Min(saved.Height, best.Height);
+        var left = Math.Clamp(saved.Left, best.Left, best.Right - width);
+        var top = Math.Clamp(saved.Top, best.Top, best.Bottom - height);
+        return new ScreenRect(left, top, left + width, top + height);
     }
 
     [StructLayout(LayoutKind.Sequential)]

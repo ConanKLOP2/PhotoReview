@@ -88,7 +88,9 @@ public sealed class InstanceScopeGapTests : IDisposable
         Assert.True(scope.Holds(folder)); // still the owner: nobody else may open this folder while the app shuts down
         Assert.Equal(InstanceClaimResult.AlreadyHeld, scope.Claim(folder));
         var outcome = await other.CreateClient(folder).SendAsync([folder], TimeSpan.FromMilliseconds(500));
-        Assert.NotEqual(ForwardOutcome.Delivered, outcome);
+        // The listener is gone, so no pipe instance exists: the client's bounded connect (the timeout above, not a sleep) ends
+        // with nothing written -> NoInstance. Rejected/Unknown would mean a server still answered or accepted the request.
+        Assert.Equal(ForwardOutcome.NoInstance, outcome);
         Assert.False(other.TryAcquire(folder)); // and the name is still taken
     }
 
