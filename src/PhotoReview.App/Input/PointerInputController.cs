@@ -454,7 +454,7 @@ internal sealed class PointerInputController
     /// like <see cref="ZoomActualSizeAsync"/> (the cursor over the viewport with <see cref="KeyboardZoomAnchor.Pointer"/>,
     /// the viewport centre otherwise) instead of always the cursor, and independent of <c>ClickToZoomEnabled</c> (which
     /// only governs the mouse click). Already at ClickZoomPercent it does nothing, unless
-    /// <see cref="AppSettings.ClickZoomKeyReturnsToFit"/> restores the mouse's Fit toggle.
+    /// <see cref="AppSettings.ClickZoomKeyTogglesFit"/> restores the mouse's Fit toggle.
     /// </summary>
     public Task ToggleClickZoomAsync()
     {
@@ -462,7 +462,7 @@ internal sealed class PointerInputController
         CancelPan();
         StopKinetic();
         var settings = _settings();
-        if (!settings.ClickZoomKeyReturnsToFit && PointerGestures.DecideClickZoom(
+        if (!settings.ClickZoomKeyTogglesFit && PointerGestures.DecideClickZoom(
                 _viewer.IsFit, _viewer.Zoom, PointerGestures.ClickZoomFactor(settings.ClickZoomPercent)) == ClickZoomTarget.Fit)
             return Task.CompletedTask; // already there: the key means "go to the click zoom", never "back to Fit"
         return ClickZoomAsync(ResolveKeyboardAnchor());

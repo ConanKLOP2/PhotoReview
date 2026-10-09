@@ -413,9 +413,9 @@ public sealed partial class PointerInputControllerTests
     }
 
     [Fact]
-    public async Task ToggleClickZoomAsync_AtTheClickZoomLevel_WithReturnsToFit_ReturnsToFit()
+    public async Task ToggleClickZoomAsync_AtTheClickZoomLevel_WithTogglesFit_ReturnsToFit()
     {
-        _settings.ClickZoomKeyReturnsToFit = true; // the old toggle, opt-in
+        _settings.ClickZoomKeyTogglesFit = true; // the old toggle, opt-in
         await _controller.ToggleClickZoomAsync(); // Fit -> click zoom
         await _controller.ToggleClickZoomAsync(); // click zoom -> Fit
 
@@ -427,7 +427,7 @@ public sealed partial class PointerInputControllerTests
     {
         // User report: with the 100 % key and a 100 % click level, the click-zoom key "did not work the first time" --
         // it was the toggle sending the image back to Fit. By default the key now only ever goes TO the click zoom.
-        Assert.False(new AppSettings().ClickZoomKeyReturnsToFit);
+        Assert.False(new AppSettings().ClickZoomKeyTogglesFit);
         _viewer.SetZoom(2.0); // e.g. reached by the 100 % key / a preset, at the click level (200 % in the fixture)
         var scrolls = _surface.Scrolls.Count;
 
@@ -442,9 +442,9 @@ public sealed partial class PointerInputControllerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ToggleClickZoomAsync_AtAnotherZoom_GoesToTheClickZoomLevel_WhateverTheSetting(bool returnsToFit)
+    public async Task ToggleClickZoomAsync_AtAnotherZoom_GoesToTheClickZoomLevel_WhateverTheSetting(bool togglesFit)
     {
-        _settings.ClickZoomKeyReturnsToFit = returnsToFit;
+        _settings.ClickZoomKeyTogglesFit = togglesFit;
         _viewer.SetZoom(0.5); // e.g. Fit width
 
         await _controller.ToggleClickZoomAsync();

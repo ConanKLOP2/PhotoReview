@@ -2,7 +2,7 @@
 id: CLICK-ZOOM-KEY
 order: 141
 summary: |-
-  The Click-zoom shortcut no longer toggles back to Fit when the image is already at the click zoom level (default: does nothing; use the Fit key); new setting `ClickZoomKeyReturnsToFit` (default off) restores the old toggle. The mouse click-to-zoom still toggles.
+  The Click-zoom shortcut no longer toggles back to Fit when the image is already at the click zoom level (default: does nothing; use the Fit key); new setting `ClickZoomKeyTogglesFit` (default off) restores the old toggle. The mouse click-to-zoom still toggles.
 ---
 
 # CLICK-ZOOM-KEY — Click-zoom shortcut does not toggle back to Fit (2026-10-09)
@@ -25,7 +25,7 @@ shared `ViewportOperationVersion` supersedes the older operation correctly. So n
 
 ## Decision
 
-- New setting `AppSettings.ClickZoomKeyReturnsToFit` (Settings > Mouse & zoom, default **off**).
+- New setting `AppSettings.ClickZoomKeyTogglesFit` (Settings > Mouse & zoom, default **off**).
 - Off: the key always means "go to the click zoom level"; already there, it does nothing (no zoom, no re-anchoring
   scroll). Least surprising for a key named after a zoom level: pressing it never moves AWAY from that level, and Fit has
   its own key (`F`). Re-applying the same zoom was rejected: it would re-run the anchored scroll and could shift the view.

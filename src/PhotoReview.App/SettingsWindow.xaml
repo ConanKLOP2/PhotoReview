@@ -237,8 +237,8 @@
                             <TextBlock x:Name="KeyboardZoomStepPercentLabel" Text="{loc:Tr settings.keyboardZoomStepPercent.label}" Grid.Row="13" Style="{StaticResource FormLabel}"/>
                             <TextBox x:Name="KeyboardZoomStepPercentBox" AutomationProperties.LabeledBy="{Binding ElementName=KeyboardZoomStepPercentLabel}" AutomationProperties.Name="{loc:Tr settings.keyboardZoomStepPercent.automationName}" Grid.Row="13" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
                             <TextBlock x:Name="KeyboardZoomStepPercentHint" Grid.Row="14" Grid.Column="1" Style="{StaticResource HelpText}"/>
-                            <CheckBox x:Name="ClickZoomKeyReturnsToFitCheck" Grid.Row="15" Grid.Column="1" Content="{loc:Tr settings.clickZoomKeyReturnsToFit.label}" AutomationProperties.Name="{loc:Tr settings.clickZoomKeyReturnsToFit.automationName}"/>
-                            <TextBlock Text="{loc:Tr settings.clickZoomKeyReturnsToFit.hint}" Grid.Row="16" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <CheckBox x:Name="ClickZoomKeyTogglesFitCheck" Grid.Row="15" Grid.Column="1" Content="{loc:Tr settings.clickZoomKeyTogglesFit.label}" AutomationProperties.Name="{loc:Tr settings.clickZoomKeyTogglesFit.automationName}"/>
+                            <TextBlock Text="{loc:Tr settings.clickZoomKeyTogglesFit.hint}" Grid.Row="16" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.mouseZoom}"><Grid>

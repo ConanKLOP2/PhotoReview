@@ -290,7 +290,7 @@ public class AppSettings
     /// for that. True: the old Fit &lt;-&gt; click-zoom toggle (returns to Fit). The mouse click-to-zoom always toggles
     /// (it has no other way back to Fit but a double-click). Absent in older configs = false; no migration step.
     /// </summary>
-    public bool ClickZoomKeyReturnsToFit { get; set; }
+    public bool ClickZoomKeyTogglesFit { get; set; }
 
     /// <summary>How far one arrow press moves a zoomed image, in percent of the viewport; [<see cref="MinArrowPanStepPercent"/>, <see cref="MaxArrowPanStepPercent"/>], default <see cref="DefaultArrowPanStepPercent"/>.</summary>
     public int ArrowPanStepPercent { get; set; } = DefaultArrowPanStepPercent;
