@@ -80,13 +80,13 @@ public sealed partial class MainViewModelZoomSwapTests
         {
             await vm.Presenter.PresentAsync(0);
             _viewer.DpiScale = 1.0;
-            _viewer.UpdateViewport(6000, 4000, force: true); // a Fit zoom of 1.0 would need the original...
-            _viewer.SetZoom(0.1); // ...but the view is zoomed to 600 px: the preview is enough
+            _viewer.UpdateViewport(600, 400, force: true); // Fit would need only 600 px = the preview...
+            _viewer.SetZoom(2.0); // ...but the view is zoomed to 12000 px: the original is needed (its decode is held on the gate)
 
             var outcome = vm.RefreshView();
 
-            Assert.Equal(ZoomDetailRefreshResult.PreviewSufficient, outcome!.Resolution);
-            Assert.Equal(0.1, _viewer.Zoom);
+            Assert.Equal(ZoomDetailRefreshResult.LoadingOriginal, outcome!.Resolution);
+            Assert.Equal(2.0, _viewer.Zoom);
             Assert.False(_viewer.IsFit);
         }
         finally
@@ -94,7 +94,6 @@ public sealed partial class MainViewModelZoomSwapTests
             decoder.OriginalGate.Release();
         }
     }
-
     [Fact]
     public async Task RefreshView_LinearScaling_IsForcedToHighQualityForThisImageOnly()
     {
