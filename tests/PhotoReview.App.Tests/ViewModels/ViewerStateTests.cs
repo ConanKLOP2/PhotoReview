@@ -487,6 +487,24 @@ public sealed class ViewerStateTests
         Assert.Equal(1.0 / 3.0, point.Y, 6);
     }
 
+    [Fact]
+    public void FitWidthAnchorPoint_BottomThird_IsTwoThirdsDownTheImage()
+    {
+        var point = MainWindowHelpers.CalculateFitWidthAnchorPoint(FitWidthAnchor.BottomThird);
+
+        Assert.Equal(0.5, point.X, 6);
+        Assert.Equal(2.0 / 3.0, point.Y, 6);
+    }
+
+    [Fact]
+    public void FitWidthAnchorFor_SecondCommandUsesAnchor2_EveryOtherCommandUsesAnchor1_NeverTheKeyboardZoomAnchor()
+    {
+        var settings = new AppSettings { FitWidthAnchor = FitWidthAnchor.TopThird, FitWidthAnchor2 = FitWidthAnchor.BottomThird, KeyboardZoomAnchor = KeyboardZoomAnchor.Pointer };
+
+        Assert.Equal(FitWidthAnchor.BottomThird, MainWindowHelpers.FitWidthAnchorFor(settings, PhotoReview.App.Input.ReviewCommandType.FitWidth2));
+        Assert.Equal(FitWidthAnchor.TopThird, MainWindowHelpers.FitWidthAnchorFor(settings, PhotoReview.App.Input.ReviewCommandType.FitWidth));
+    }
+
     // ---- PR-C: "set current zoom as click level" pure helper (round + clamp) ----
 
     [Fact]

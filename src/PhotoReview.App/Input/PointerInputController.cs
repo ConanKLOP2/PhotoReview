@@ -229,16 +229,17 @@ internal sealed class PointerInputController
     private Point ViewportCentre => new(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
 
     /// <summary>
-    /// FitWidth shortcut (PR-B): fills the viewport width. The vertical anchor always follows
-    /// <see cref="AppSettings.FitWidthAnchor"/> (centre by default), regardless of mouse position -- same as the
-    /// initial view (image change), see <see cref="ApplyInitialViewAsync"/>.
+    /// FitWidth shortcut (PR-B): fills the viewport width. The vertical anchor is the caller's choice
+    /// (<see cref="AppSettings.FitWidthAnchor"/> for the first Fit width command and the initial view,
+    /// <see cref="AppSettings.FitWidthAnchor2"/> for the second one), regardless of mouse position and of
+    /// <see cref="AppSettings.KeyboardZoomAnchor"/> (that setting does not affect Fit width).
     /// </summary>
-    public async Task FitWidthAsync()
+    public async Task FitWidthAsync(FitWidthAnchor fitWidthAnchor)
     {
         if (!_commands.HasImages()) return;
         CancelPan();
         StopKinetic();
-        var anchor = MainWindowHelpers.CalculateFitWidthAnchorPoint(_settings().FitWidthAnchor);
+        var anchor = MainWindowHelpers.CalculateFitWidthAnchorPoint(fitWidthAnchor);
         if (!await ZoomToImagePointAsync(anchor, ViewportCentre, ApplyFitWidth)) return;
         await CorrectForSideScrollbarAsync(anchor, ApplyFitWidth, widthOnly: true);
     }

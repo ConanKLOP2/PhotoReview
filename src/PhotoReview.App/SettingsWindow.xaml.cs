@@ -85,6 +85,7 @@ public partial class SettingsWindow : Window
         (nameof(ShortcutMappings.FitWidth), FitWidthText), (nameof(ShortcutMappings.FitHeight), FitHeightText),
         (nameof(ShortcutMappings.ToggleKeepZoom), ToggleKeepZoomText), (nameof(ShortcutMappings.OpenFolder), OpenFolderText),
         (nameof(ShortcutMappings.CustomZoom), CustomZoomText), (nameof(ShortcutMappings.ToggleCaptureMember), ToggleCaptureMemberText),
+        (nameof(ShortcutMappings.FitWidth2), FitWidth2Text),
     ];
 
     // ---- Left navigation: page list, remembers the last page for this process only (DR02) ----
@@ -322,8 +323,23 @@ public partial class SettingsWindow : Window
         base.OnClosed(e);
     }
 
+    /// <summary>Set before showing: opens on the Files page and focuses the External Editor path field (menu item with no editor configured).</summary>
+    internal bool FocusExternalEditorOnLoad { get; set; }
+
     private void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        if (FocusExternalEditorOnLoad)
+        {
+            var rememberedPage = s_lastPageKey; // a one-off jump must not change the page the next plain Settings open shows
+            foreach (ListBoxItem item in NavList.Items)
+            {
+                if (Equals(item.Tag, "Files")) { NavList.SelectedItem = item; break; }
+            }
+            s_lastPageKey = rememberedPage;
+            ExternalEditorPathText.BringIntoView();
+            _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => ExternalEditorPathText.Focus());
+            return;
+        }
         if (NavList.SelectedItem is ListBoxItem { Tag: string key } && _pages is not null && _pages.TryGetValue(key, out var page))
             page.Scroll.ScrollToHome();
         FocusManager.SetFocusedElement(this, null);
@@ -344,7 +360,7 @@ public partial class SettingsWindow : Window
         ClickZoomText.Text = Settings.Shortcuts.ClickZoom;
         FitWidthText.Text = Settings.Shortcuts.FitWidth; FitHeightText.Text = Settings.Shortcuts.FitHeight; ToggleKeepZoomText.Text = Settings.Shortcuts.ToggleKeepZoom;
         OpenFolderText.Text = Settings.Shortcuts.OpenFolder; CustomZoomText.Text = Settings.Shortcuts.CustomZoom;
-        ToggleCaptureMemberText.Text = Settings.Shortcuts.ToggleCaptureMember;
+        ToggleCaptureMemberText.Text = Settings.Shortcuts.ToggleCaptureMember; FitWidth2Text.Text = Settings.Shortcuts.FitWidth2;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         // PR-B: Percent400 was removed from the combo; SettingsNormalizer migrates a loaded value to Percent200 before
         // this window ever sees it, but a stray Percent400 (e.g. this window built directly on an unnormalized
@@ -358,7 +374,9 @@ public partial class SettingsWindow : Window
             InitialViewMode.Percent200 or InitialViewMode.Percent400 => 5,
             _ => 0
         };
-        FitWidthAnchorCombo.SelectedIndex = Settings.FitWidthAnchor == FitWidthAnchor.TopThird ? 1 : 0;
+        FitWidthAnchorCombo.SelectedIndex = AnchorToIndex(Settings.FitWidthAnchor, FitWidthAnchor.Centre);
+        FitWidthAnchor2Combo.SelectedIndex = AnchorToIndex(Settings.FitWidthAnchor2, FitWidthAnchor.BottomThird);
+        MiddleClickActionCombo.SelectedIndex = Enum.IsDefined(Settings.MiddleClickAction) ? (int)Settings.MiddleClickAction : (int)MiddleClickAction.ActualSize;
         KeepZoomAcrossImagesCheck.IsChecked = Settings.KeepZoomAcrossImages;
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
         SortModeCombo.SelectedIndex = Math.Max(0, SortModeCombo.Items.Cast<ComboBoxItem>().ToList().FindIndex(item => Equals(item.Tag, Settings.ImageSortMode.ToString())));
@@ -453,6 +471,11 @@ public partial class SettingsWindow : Window
     /// The zoom card lists the zoom shortcuts as currently typed on the Shortcuts page (read-only here: they are edited
     /// on that page), so the user sees which keys drive the zoom level without switching pages.
     /// </summary>
+    // The Fit width combos list the FitWidthAnchor members in enum order (Centre, Top third, Bottom third): index == value.
+    private static int AnchorToIndex(FitWidthAnchor anchor, FitWidthAnchor fallback) => (int)(Enum.IsDefined(anchor) ? anchor : fallback);
+
+    private static FitWidthAnchor IndexToAnchor(int index, FitWidthAnchor fallback) => index >= 0 && Enum.IsDefined((FitWidthAnchor)index) ? (FitWidthAnchor)index : fallback;
+
     private void UpdateZoomShortcutSummary()
     {
         if (ZoomShortcutsSummary is null) return; // can fire while InitializeComponent is still building the tree
@@ -464,6 +487,7 @@ public partial class SettingsWindow : Window
             $"{Tr.SettingsShortcutZoomIn}: {Key(ZoomInText)}",
             $"{Tr.SettingsShortcutZoomOut}: {Key(ZoomOutText)}",
             $"{Tr.SettingsShortcutFitWidth}: {Key(FitWidthText)}",
+            $"{Tr.SettingsShortcutFitWidth2}: {Key(FitWidth2Text)}",
             $"{Tr.SettingsShortcutFitHeight}: {Key(FitHeightText)}");
     }
 
@@ -524,6 +548,7 @@ public partial class SettingsWindow : Window
     private void ClearCopyToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(CopyToFolderText);
     private void ClearClickZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ClickZoomText);
     private void ClearFitWidth_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitWidthText);
+    private void ClearFitWidth2_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitWidth2Text);
     private void ClearFitHeight_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitHeightText);
     private void ClearToggleKeepZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleKeepZoomText);
     private void ClearOpenFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(OpenFolderText);
@@ -587,6 +612,7 @@ public partial class SettingsWindow : Window
         ClickZoom = ClickZoomText.Text,
         FitWidth = FitWidthText.Text, FitHeight = FitHeightText.Text, ToggleKeepZoom = ToggleKeepZoomText.Text,
         OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text, ToggleCaptureMember = ToggleCaptureMemberText.Text,
+        FitWidth2 = FitWidth2Text.Text,
     };
 
     /// <summary>
@@ -610,6 +636,7 @@ public partial class SettingsWindow : Window
         FitWidth = ShortcutKeyCanonical.Canonicalize(raw.FitWidth), FitHeight = ShortcutKeyCanonical.Canonicalize(raw.FitHeight),
         ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(raw.ToggleKeepZoom), OpenFolder = ShortcutKeyCanonical.Canonicalize(raw.OpenFolder),
         CustomZoom = ShortcutKeyCanonical.Canonicalize(raw.CustomZoom), ToggleCaptureMember = ShortcutKeyCanonical.Canonicalize(raw.ToggleCaptureMember),
+        FitWidth2 = ShortcutKeyCanonical.Canonicalize(raw.FitWidth2),
         MoveToFolder2 = existing.MoveToFolder2,
     };
 
@@ -713,6 +740,7 @@ public partial class SettingsWindow : Window
         Settings.SourceBytesCapacityBytes = PerformanceOptions.SourceBytesCapacityBytes;
         Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = new AppSettings().ImageSortMode; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.DecoderBackend = new AppSettings().DecoderBackend; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default();
         Settings.FitWidthAnchor = FitWidthAnchor.Centre; Settings.KeepZoomAcrossImages = false;
+        Settings.FitWidthAnchor2 = new AppSettings().FitWidthAnchor2; Settings.MiddleClickAction = new AppSettings().MiddleClickAction;
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ClickZoomKeyTogglesFit = new AppSettings().ClickZoomKeyTogglesFit; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomStepPercent = AppSettings.DefaultKeyboardZoomStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
@@ -763,7 +791,10 @@ public partial class SettingsWindow : Window
             5 => InitialViewMode.Percent200,
             _ => InitialViewMode.Fit
         };
-        Settings.FitWidthAnchor = FitWidthAnchorCombo.SelectedIndex == 1 ? FitWidthAnchor.TopThird : FitWidthAnchor.Centre;
+        Settings.FitWidthAnchor = IndexToAnchor(FitWidthAnchorCombo.SelectedIndex, FitWidthAnchor.Centre);
+        Settings.FitWidthAnchor2 = IndexToAnchor(FitWidthAnchor2Combo.SelectedIndex, FitWidthAnchor.BottomThird);
+        Settings.MiddleClickAction = MiddleClickActionCombo.SelectedIndex is >= 0 && Enum.IsDefined((MiddleClickAction)MiddleClickActionCombo.SelectedIndex)
+            ? (MiddleClickAction)MiddleClickActionCombo.SelectedIndex : MiddleClickAction.ActualSize;
         Settings.KeepZoomAcrossImages = KeepZoomAcrossImagesCheck.IsChecked == true;
         Settings.ImageSortMode = SortModeCombo.SelectedItem is ComboBoxItem { Tag: string sortTag } && Enum.TryParse<ImageSortMode>(sortTag, out var chosenSort) ? chosenSort : ImageSortMode.Name;
         Settings.ScalingQuality = ScalingQualityCombo.SelectedIndex == 1 ? ScalingQuality.Linear : ScalingQuality.HighQuality;

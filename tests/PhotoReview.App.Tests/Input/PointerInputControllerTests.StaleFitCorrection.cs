@@ -41,7 +41,7 @@ public sealed partial class PointerInputControllerTests
     public async Task FitWidthAsync_SupersededDuringFirstPass_CorrectionDoesNotReapplyFit()
     {
         ArrangeSupersededFirstPass();
-        await SupersedeThenReleaseAsync(_controller.FitWidthAsync());
+        await SupersedeThenReleaseAsync(_controller.FitWidthAsync(_settings.FitWidthAnchor));
         Assert.Equal(2.0, _viewer.Zoom, 6);
         AssertNewerZoomSurvived();
     }

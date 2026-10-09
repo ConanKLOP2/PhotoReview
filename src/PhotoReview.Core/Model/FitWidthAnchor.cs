@@ -14,5 +14,8 @@ public enum FitWidthAnchor
     Centre = 0,
 
     /// <summary>Image point (0.5, 1/3) at the viewport centre -- portraits usually have the face there.</summary>
-    TopThird = 1
+    TopThird = 1,
+
+    /// <summary>Image point (0.5, 2/3) at the viewport centre -- e.g. to see the lower body / feet of a full-length portrait.</summary>
+    BottomThird = 2
 }

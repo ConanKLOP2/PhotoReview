@@ -94,6 +94,8 @@ public static class SettingsNormalizer
         if (!Enum.IsDefined(settings.InstanceMode)) { settings.InstanceMode = InstanceMode.SingleWindow; fixedNames.Add(nameof(AppSettings.InstanceMode)); }
         if (!Enum.IsDefined(settings.FitWidthAnchor)) { settings.FitWidthAnchor = FitWidthAnchor.Centre; fixedNames.Add(nameof(AppSettings.FitWidthAnchor)); }
         if (!Enum.IsDefined(settings.KeyboardZoomAnchor)) { settings.KeyboardZoomAnchor = KeyboardZoomAnchor.ViewportCentre; fixedNames.Add(nameof(AppSettings.KeyboardZoomAnchor)); }
+        if (!Enum.IsDefined(settings.FitWidthAnchor2)) { settings.FitWidthAnchor2 = FitWidthAnchor.BottomThird; fixedNames.Add(nameof(AppSettings.FitWidthAnchor2)); }
+        if (!Enum.IsDefined(settings.MiddleClickAction)) { settings.MiddleClickAction = MiddleClickAction.ActualSize; fixedNames.Add(nameof(AppSettings.MiddleClickAction)); }
 
         if (settings.Actions is { } actions)
         {
@@ -138,6 +140,7 @@ public static class SettingsNormalizer
             shortcuts.ToggleCaptureMember = shortcuts.ToggleCaptureMember?.Trim() ?? "";
             shortcuts.ClickZoom = shortcuts.ClickZoom?.Trim() ?? "";
             shortcuts.FitWidth = shortcuts.FitWidth?.Trim() ?? "";
+            shortcuts.FitWidth2 = shortcuts.FitWidth2?.Trim() ?? "";
             shortcuts.FitHeight = shortcuts.FitHeight?.Trim() ?? "";
             shortcuts.ToggleKeepZoom = shortcuts.ToggleKeepZoom?.Trim() ?? "";
         }

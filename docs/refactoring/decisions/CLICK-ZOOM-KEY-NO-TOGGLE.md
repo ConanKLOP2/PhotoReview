@@ -1,11 +1,11 @@
----
+﻿---
 id: CLICK-ZOOM-KEY
-order: 141
+order: 142
 summary: |-
   The Click-zoom shortcut no longer toggles back to Fit when the image is already at the click zoom level (default: does nothing; use the Fit key); new setting `ClickZoomKeyTogglesFit` (default off) restores the old toggle. The mouse click-to-zoom still toggles.
 ---
 
-# CLICK-ZOOM-KEY — Click-zoom shortcut does not toggle back to Fit (2026-10-09)
+# CLICK-ZOOM-KEY â€” Click-zoom shortcut does not toggle back to Fit (2026-10-09)
 
 ## User report
 
