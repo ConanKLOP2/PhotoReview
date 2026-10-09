@@ -142,8 +142,9 @@ internal sealed class PointerInputController
     /// and then scrolls so the image-fraction point <paramref name="anchor"/> (see
     /// <see cref="MainWindowHelpers.ZoomImagePoint"/>) ends up under <paramref name="viewportPoint"/> (ImageScroll
     /// coordinates) instead of always the original cursor position -- e.g. the viewport centre for Fit width/height.
-    /// A navigation that starts while the render pass is awaited (<see cref="ViewportOperationVersion"/>) drops the
-    /// scroll, same guard as the original method. Returns false when the pass was superseded (or the surface unloaded),
+    /// The scroll is placed at once, in the same dispatcher operation as the zoom; after the render pass it is placed
+    /// again only if the layout changed meanwhile, and a navigation that starts while the render pass is awaited
+    /// (<see cref="ViewportOperationVersion"/>) drops that second placement. Returns false when the pass was superseded (or the surface unloaded),
     /// so a caller that chains a follow-up pass (the Fit scrollbar correction) must not run it.
     /// </summary>
     private async Task<bool> ZoomToImagePointAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, Action applyZoom)
@@ -153,13 +154,29 @@ internal sealed class PointerInputController
         try
         {
             applyZoom();
+            // Place the scroll in the SAME dispatcher operation as the zoom. Scrolling only after the render pass let
+            // that pass commit a frame with the new size at the OLD offsets (the image jumped towards its top-left for
+            // one frame before settling -- the reported intermittent "ghosting" on keyboard zoom; measured by the
+            // committed-frame probe in the PR). ScrollAnchorTo runs the layout itself, so the geometry is current.
+            LayoutMetrics? placed = null;
+            if (_surface.IsLoaded)
+            {
+                ScrollAnchorTo(anchor, viewportPoint);
+                placed = CaptureLayoutMetrics();
+            }
             await _surface.YieldToRenderAsync();
             if (version != _viewportVersion.Current || !_surface.IsLoaded) return false;
-            ScrollAnchorTo(anchor, viewportPoint);
+            // Re-anchor only if the render pass changed the layout the scroll was computed against (e.g. a bitmap swap).
+            if (placed != CaptureLayoutMetrics()) ScrollAnchorTo(anchor, viewportPoint);
             return true;
         }
         finally { _zoomsAwaitingLayout--; }
     }
+
+    private readonly record struct LayoutMetrics(double ImageWidth, double ImageHeight, double ExtentWidth, double ExtentHeight, double ViewportWidth, double ViewportHeight);
+
+    private LayoutMetrics CaptureLayoutMetrics() => new(
+        _surface.ImageActualWidth, _surface.ImageActualHeight, _surface.ExtentWidth, _surface.ExtentHeight, _surface.ViewportWidth, _surface.ViewportHeight);
 
     // Zoom gestures between applying the zoom and placing the scroll (the layout is stale meanwhile).
     private int _zoomsAwaitingLayout;
@@ -434,16 +451,21 @@ internal sealed class PointerInputController
     }
 
     /// <summary>
-    /// ClickZoom shortcut: the same Fit &lt;-&gt; ClickZoomPercent toggle as a mouse click-to-zoom (<see cref="ClickZoomAsync"/>),
-    /// anchored like <see cref="ZoomActualSizeAsync"/> (the cursor over the viewport with <see cref="KeyboardZoomAnchor.Pointer"/>,
+    /// ClickZoom shortcut: zooms to ClickZoomPercent like a mouse click-to-zoom (<see cref="ClickZoomAsync"/>), anchored
+    /// like <see cref="ZoomActualSizeAsync"/> (the cursor over the viewport with <see cref="KeyboardZoomAnchor.Pointer"/>,
     /// the viewport centre otherwise) instead of always the cursor, and independent of <c>ClickToZoomEnabled</c> (which
-    /// only governs the mouse click).
+    /// only governs the mouse click). Already at ClickZoomPercent it does nothing, unless
+    /// <see cref="AppSettings.ClickZoomKeyTogglesFit"/> restores the mouse's Fit toggle.
     /// </summary>
     public Task ToggleClickZoomAsync()
     {
         if (!_commands.HasImages()) return Task.CompletedTask;
         CancelPan();
         StopKinetic();
+        var settings = _settings();
+        if (!settings.ClickZoomKeyTogglesFit && PointerGestures.DecideClickZoom(
+                _viewer.IsFit, _viewer.Zoom, PointerGestures.ClickZoomFactor(settings.ClickZoomPercent)) == ClickZoomTarget.Fit)
+            return Task.CompletedTask; // already there: the key means "go to the click zoom", never "back to Fit"
         return ClickZoomAsync(ResolveKeyboardAnchor());
     }
 

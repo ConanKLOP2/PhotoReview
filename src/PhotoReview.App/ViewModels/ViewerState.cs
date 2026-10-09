@@ -92,10 +92,14 @@ public sealed partial class ViewerState : ObservableObject
     [ObservableProperty]
     private ScalingQuality _scalingQuality = ScalingQuality.HighQuality;
 
+    // FitZoom (and so the Fit HUD percent) is computed from the viewport bound: ResetFit sets it AFTER Stretch has
+    // already notified, so without this the HUD kept the value read while the bound was still +Infinity (100 %).
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayZoomPercent))]
     private double _maxImageWidth = double.PositiveInfinity;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayZoomPercent))]
     private double _maxImageHeight = double.PositiveInfinity;
 
     /// <summary>

@@ -127,11 +127,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // feat(zoom): leaving Fit requests the current image's full-resolution decode; Fit reverts
         // to the preview.
         _viewerState.ZoomModeChanged += (_, _) => _presenter.SetViewerZoom(_viewerState.EffectiveZoom);
-        // Q-R45: the zoom HUD text/visibility follows the zoom level and Fit/stretch changes (DisplayZoomPercent's
-        // own dependencies already notify through ImageWidth/ImageHeight, see ViewerState).
+        // Q-R45: the zoom HUD text/visibility follows the zoom level and Fit/stretch changes. DisplayZoomPercent is
+        // notified by every input it reads, including the Fit viewport bound (MaxImageWidth/Height), which does not
+        // change ImageWidth/ImageHeight (NaN in Fit).
         _viewerState.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(ViewerState.ImageWidth) or nameof(ViewerState.ImageHeight)) InfoOverlay.Refresh();
+            if (e.PropertyName is nameof(ViewerState.DisplayZoomPercent)) InfoOverlay.Refresh();
         };
         _presenter.SetViewerZoom(_viewerState.EffectiveZoom);
     }
