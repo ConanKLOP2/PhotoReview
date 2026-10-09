@@ -394,18 +394,23 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     [Fact]
-    public async Task UndoGroupRecycle_DoesNotRestoreIntoCatalogOrPresentAgain_BecauseTheCallerReloadsTheFolder()
+    public async Task UndoGroupRecycle_RestoresTheCaptureInPlaceAsOneEntry_WithoutPresentingOrReloading()
     {
-        var (_, jpeg, _, _, _) = LoadPairBetweenTwoPhotos();
+        var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        Assert.True(_catalog.SetCurrent(_catalog.IndexOf(jpeg)));
         var controller = NewController();
         await controller.RecycleAsync(null, jpeg);
+        Assert.Equal(after, _catalog.Current!.Path);
         var presentsBeforeUndo = _sink.Presented.Count;
 
         var result = await controller.UndoLastAsync(_root);
 
         Assert.True(result!.Succeeded, result.ErrorMessage);
-        Assert.Equal(presentsBeforeUndo, _sink.Presented.Count); // MainViewModel.UndoCoreAsync reloads and presents once
-        Assert.True(FileActionController.RestoresOutsideFolder(result, _root));
+        Assert.Equal([before, jpeg, after], _catalog.Paths); // back at its old position, one grouped entry
+        Assert.Equal(raw, _catalog.EntriesSnapshot()[1].CaptureGroup?.RawPath);
+        Assert.Equal(after, _catalog.Current!.Path);           // the review stays on the photo shown since the delete
+        Assert.Equal(presentsBeforeUndo, _sink.Presented.Count);
+        Assert.False(FileActionController.RestoresOutsideFolder(result, _root)); // MainViewModel does not reload
     }
 
     [Fact]
@@ -647,18 +652,22 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     [Fact]
-    public async Task GroupRecycle_PermanentDeleteSettingOffWithConfirmBeforeDelete_OnlyAsksTheOrdinaryQuestionAndStillRefuses()
+    public async Task GroupRecycle_PermanentDeleteSettingOffWithConfirmBeforeDelete_RefusesUpFrontWithoutAskingOrAdvancing()
     {
-        var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
+        var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        Assert.True(_catalog.SetCurrent(_catalog.IndexOf(jpeg)));
         _bin.NoBin = true;
         var controller = NewController(new AppSettings { AllowPermanentDeleteWithoutRecycleBin = false, ConfirmBeforeDelete = true });
 
         await controller.RecycleAsync(null, jpeg);
 
-        var prompt = Assert.Single(_dialog.Confirmations);
-        Assert.Equal(Tr.DialogConfirmActionTitle, prompt.Title); // not the permanent-delete title
+        Assert.Empty(_dialog.Confirmations); // no "delete?" question for a delete that cannot happen
+        Assert.Equal(Tr.DialogRecycleNoBinTitle, Assert.Single(_dialog.Errors).Title);
         Assert.Empty(_bin.Deleted);
         Assert.True(File.Exists(jpeg) && File.Exists(raw));
+        Assert.Equal([before, jpeg, after], _catalog.Paths);
+        Assert.Equal(jpeg, _catalog.Current!.Path); // the capture stays on screen
+        Assert.Empty(_sink.Presented);
     }
 
     [Fact]
@@ -759,7 +768,8 @@ public sealed class FileActionControllerGroupTests : IDisposable
         }
 
         public void ShowMessage(string title, string message) { }
-        public void ShowError(string title, string message) { }
+        public List<(string Title, string Message)> Errors { get; } = [];
+        public void ShowError(string title, string message) => Errors.Add((title, message));
         public string? PickFolder(string? initialFolder = null) => null;
         public bool ShowBatchReview(IReadOnlyList<string> paths) => false;
         public void ShowRecovery() { }

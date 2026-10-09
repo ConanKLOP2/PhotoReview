@@ -571,21 +571,59 @@ public sealed partial class FolderLoadCoordinatorTests
     }
 
     [Fact]
-    public async Task LoadAsync_DirectFileOpen_MovesInitialToFront()
+    public async Task LoadAsync_DirectFileOpen_KeepsTheFileAtItsSortedPosition()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+
+        using var coordinator = CreateCoordinator();
+        // Mở trực tiếp b.jpg (không có thứ tự Explorer): b.jpg giữ đúng vị trí thứ 2, không bị đưa lên đầu.
+        await coordinator.LoadAsync(folder, initialPath: b);
+
+        Assert.Equal(new[] { a, b, c }, _catalog.Paths);
+        Assert.Equal(b, _catalog.Current?.Path);
+        // The first frame (and with it the preload window) is centred on the real index, so a.jpg is "before" it.
+        Assert.Equal(1, Assert.Single(_sink.Presented).Index);
+    }
+
+    [Theory]
+    [InlineData(ImageSortMode.NameAscending)]
+    [InlineData(ImageSortMode.NameDescending)]
+    [InlineData(ImageSortMode.Name)]
+    [InlineData(ImageSortMode.SizeAscending)]
+    public async Task LoadAsync_DirectFileOpen_AppSortedModes_PresentTheFileAtItsSortedIndex(ImageSortMode mode)
     {
         var folder = @"C:\photos";
         _fs.CreateDirectory(folder);
-        var f1 = @"C:\photos\a.jpg";
-        var f2 = @"C:\photos\b.jpg";
-        _fs.WriteAllTextAtomic(f1, "1");
-        _fs.WriteAllTextAtomic(f2, "2");
+        var c = Path.Combine(folder, "c.jpg");
+        var a = Path.Combine(folder, "a.jpg");
+        var b = Path.Combine(folder, "b.jpg");
+        _fs.WriteAllTextAtomic(c, "333");
+        _fs.WriteAllTextAtomic(a, "1");
+        _fs.WriteAllTextAtomic(b, "22");
+        _settingsStore.Current.ImageSortMode = mode;
 
         using var coordinator = CreateCoordinator();
-        // Mở trực tiếp b.jpg
-        await coordinator.LoadAsync(folder, initialPath: f2);
+        await coordinator.LoadAsync(folder, initialPath: b);
 
-        // b.jpg được đưa lên đầu catalog
-        Assert.Equal(f2, _catalog.Paths[0]);
+        var expected = mode == ImageSortMode.NameDescending ? new[] { c, b, a } : new[] { a, b, c };
+        Assert.Equal(expected, _catalog.Paths);
+        Assert.Equal(b, _catalog.Current?.Path);
+        Assert.Equal(1, Assert.Single(_sink.Presented).Index);
+    }
+
+    [Fact]
+    public async Task LoadAsync_DirectFileOpen_NonNormalizedPath_IsFoundAtItsPosition()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder, initialPath: @"C:\photos\sub\..\c.jpg");
+
+        Assert.Equal(new[] { a, b, c }, _catalog.Paths);
+        Assert.Equal(c, _catalog.Current?.Path);
+        Assert.Equal(2, Assert.Single(_sink.Presented).Index);
     }
 
     private static Task WaitUntilAsync(Func<bool> condition, string what) => Wait.UntilAsync(condition, what);
@@ -673,9 +711,10 @@ public sealed partial class FolderLoadCoordinatorTests
 
         Assert.True(pendingOrder.IsCompleted);
         Assert.Equal(0, _sink.OrderAppliedCount);
-        // Fallback order is unchanged: opened file first, then the natural sort.
-        Assert.Equal(new[] { c, a, b }, _catalog.Paths);
+        // Fallback order is the natural sort; the opened file stays at its own place in it.
+        Assert.Equal(new[] { a, b, c }, _catalog.Paths);
         Assert.Equal(c, _catalog.Current?.Path);
+        Assert.Equal(2, Assert.Single(_sink.Presented).Index);
     }
 
     [Fact]
@@ -879,17 +918,20 @@ public sealed partial class FolderLoadCoordinatorTests
     }
 
     [Fact]
-    public async Task LoadAsync_DefaultSort_InitialPathMovesToFront_RestInScanOrder()
+    public async Task LoadAsync_DefaultSort_InitialPathKeepsItsScanPosition()
     {
         var folder = @"C:\photos";
         var (a, b, c) = CreateImagesScanOrderCab(folder);
         _settingsStore.Current.ImageSortMode = ImageSortMode.Default;
 
         using var coordinator = CreateCoordinator();
-        await coordinator.LoadAsync(folder, initialPath: b);
+        await coordinator.LoadAsync(folder, initialPath: a);
 
-        Assert.Equal(new[] { b, c, a }, _catalog.Paths);
-        Assert.Equal(b, _catalog.Current?.Path);
+        // Scan order c, a, b: the opened a.jpg stays second instead of becoming photo 1.
+        Assert.Equal(new[] { c, a, b }, _catalog.Paths);
+        Assert.Equal(a, _catalog.Current?.Path);
+        Assert.Equal(1, _catalog.CurrentIndex);
+        Assert.Equal(1, Assert.Single(_sink.Presented).Index);
     }
 
     [Fact]

@@ -34,6 +34,48 @@ public sealed class ViewerStateTests
     }
 
     [Fact]
+    public void DisplayZoomPercent_IsNotifiedWhenTheFitViewportBoundChanges()
+    {
+        var state = new ViewerState();
+        state.SetSourceSize(4000, 3000, newImage: true);
+        state.ResetFit(1000, 750);
+        state.ZoomToActualSize();
+        var notified = new List<int>();
+        state.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ViewerState.DisplayZoomPercent)) notified.Add(state.DisplayZoomPercent);
+        };
+
+        state.ResetFit(1000, 750);
+
+        Assert.Equal(25, state.DisplayZoomPercent);
+        Assert.Equal(25, notified[^1]); // a binding reads the value at its last notification
+
+        state.UpdateViewport(2000, 1500); // window resized while in Fit
+        Assert.Equal(50, notified[^1]);
+    }
+
+    [Theory]
+    [InlineData(4000, 1000, 2000, 750, 50)] // wide image: only the width bound changes (and limits the fit)
+    [InlineData(1000, 4000, 1000, 1500, 38)] // tall image: only the height bound changes
+    public void DisplayZoomPercent_IsNotifiedWhenOnlyOneViewportBoundChanges(int sourceWidth, int sourceHeight, double width, double height, int expected)
+    {
+        var state = new ViewerState();
+        state.SetSourceSize(sourceWidth, sourceHeight, newImage: true);
+        state.ResetFit(1000, 750);
+        var notified = new List<int>();
+        state.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ViewerState.DisplayZoomPercent)) notified.Add(state.DisplayZoomPercent);
+        };
+
+        state.UpdateViewport(width, height);
+
+        Assert.Equal(expected, state.DisplayZoomPercent);
+        Assert.Equal(expected, notified[^1]);
+    }
+
+    [Fact]
     public void DefaultState_IsFitAndUniform()
     {
         var state = new ViewerState();

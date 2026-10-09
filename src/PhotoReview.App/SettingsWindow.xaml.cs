@@ -543,6 +543,7 @@ public partial class SettingsWindow : Window
         KineticGlideSmoothingCombo.SelectedIndex = Settings.KineticGlideSmoothing == KineticGlideSmoothing.Predict ? 1 : 0;
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
         LoadContextMenuChecks();
+        ClickZoomKeyTogglesFitCheck.IsChecked = Settings.ClickZoomKeyTogglesFit;
         ArrowPanStepBox.Text = Settings.ArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeyboardZoomStepPercentBox.Text = Settings.KeyboardZoomStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeyboardZoomAnchorCombo.SelectedIndex = Settings.KeyboardZoomAnchor == KeyboardZoomAnchor.ViewportCentre ? 1 : 0;
@@ -860,7 +861,7 @@ public partial class SettingsWindow : Window
         Settings.FitWidthAnchor2 = new AppSettings().FitWidthAnchor2; Settings.MiddleClickAction = new AppSettings().MiddleClickAction;
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
-        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomStepPercent = AppSettings.DefaultKeyboardZoomStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
+        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ClickZoomKeyTogglesFit = new AppSettings().ClickZoomKeyTogglesFit; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomStepPercent = AppSettings.DefaultKeyboardZoomStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
         Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems; Settings.ShowZoomMenuItems = new AppSettings().ShowZoomMenuItems; Settings.ShowRecycleMenuItem = new AppSettings().ShowRecycleMenuItem; Settings.HiddenContextMenuItems = null; // null = derive from the legacy defaults = the default hidden set
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ImageTransition = new AppSettings().ImageTransition; Settings.ImageTransitionMs = AppSettings.DefaultImageTransitionMs;
@@ -943,6 +944,7 @@ public partial class SettingsWindow : Window
         Settings.KineticGlideSmoothing = KineticGlideSmoothingCombo.SelectedIndex == 1 ? KineticGlideSmoothing.Predict : KineticGlideSmoothing.Off;
         Settings.ArrowKeyNavigatesAtZoomEdge = ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked == true;
         ContextMenuItems.ApplyHidden(Settings, _contextMenuChecks.Where(pair => pair.Value.IsChecked != true).Select(pair => pair.Key));
+        Settings.ClickZoomKeyTogglesFit = ClickZoomKeyTogglesFitCheck.IsChecked == true;
         Settings.KeyboardZoomAnchor = KeyboardZoomAnchorCombo.SelectedIndex == 1 ? KeyboardZoomAnchor.ViewportCentre : KeyboardZoomAnchor.Pointer;
         Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
         Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;

@@ -34,15 +34,16 @@ public sealed partial class FolderLoadCoordinatorTests
     }
 
     [Fact]
-    public async Task LoadAsync_InitialPathInTheMiddleDifferentCase_IsMovedToTheFront()
+    public async Task LoadAsync_InitialPathInTheMiddleDifferentCase_IsPresentedWhereItSits()
     {
         var (a, b, c) = CreateThreeImages(@"C:\photos");
 
         using var coordinator = CreateCoordinator();
         await coordinator.LoadAsync(@"C:\photos", initialPath: b.ToUpperInvariant());
 
-        Assert.Equal([b, a, c], _catalog.Paths);
+        Assert.Equal([a, b, c], _catalog.Paths);
         Assert.Equal(b, _catalog.Current?.Path);
+        Assert.Equal(1, Assert.Single(_sink.Presented).Index);
     }
 
     [Fact]

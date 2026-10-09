@@ -225,7 +225,7 @@
                     <StackPanel x:Name="MousePage" KeyboardNavigation.TabNavigation="Local">
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.zoom}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock x:Name="ClickZoomPercentLabel" Text="{loc:Tr settings.clickZoomPercent.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
                             <TextBox x:Name="ClickZoomPercentBox" AutomationProperties.LabeledBy="{Binding ElementName=ClickZoomPercentLabel}" AutomationProperties.Name="{loc:Tr settings.clickZoomPercent.automationName}" Grid.Row="0" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
                             <TextBlock Text="{loc:Tr settings.clickZoomPercent.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
@@ -253,6 +253,8 @@
                             <TextBlock x:Name="MiddleClickActionLabel" Text="{loc:Tr settings.middleClickAction.label}" Grid.Row="17" Style="{StaticResource FormLabel}"/>
                             <ComboBox x:Name="MiddleClickActionCombo" AutomationProperties.LabeledBy="{Binding ElementName=MiddleClickActionLabel}" AutomationProperties.Name="{loc:Tr settings.middleClickAction.automationName}" Grid.Row="17" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.middleClickAction.none}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.clickZoom}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.actualSize}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.fit}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.fitWidth}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.fitWidth2}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.previousImage}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.nextImage}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.previousFolder}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.nextFolder}"/><ComboBoxItem Content="{loc:Tr enum.middleClickAction.openFolder}"/></ComboBox>
                             <TextBlock Text="{loc:Tr settings.middleClickAction.hint}" Grid.Row="18" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <CheckBox x:Name="ClickZoomKeyTogglesFitCheck" Grid.Row="19" Grid.Column="1" Content="{loc:Tr settings.clickZoomKeyTogglesFit.label}" AutomationProperties.Name="{loc:Tr settings.clickZoomKeyTogglesFit.automationName}"/>
+                            <TextBlock Text="{loc:Tr settings.clickZoomKeyTogglesFit.hint}" Grid.Row="20" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.mouseZoom}"><Grid>
@@ -359,7 +361,8 @@
                             </Grid>
                             <CheckBox x:Name="MoveCopyReuseLastFolderCheck" Content="{loc:Tr settings.moveCopyReuseLastFolder.label}" Margin="0,4,0,0"/>
                             <TextBlock Text="{loc:Tr settings.moveCopyReuseLastFolder.hint}" Style="{StaticResource HelpText}" Margin="20,0,0,4"/>
-                            <Button Content="{loc:Tr settings.editActionProfiles}" HorizontalAlignment="Left" Click="EditActions_Click" Margin="0,6,0,0"/>
+                            <TextBlock x:Name="ActionProfilesDefaultsHint" Text="{loc:Tr settings.editActionProfiles.hint}" Style="{StaticResource HelpText}" Margin="0,8,0,0"/>
+                            <Button Content="{loc:Tr settings.editActionProfiles}" ToolTip="{loc:Tr settings.editActionProfiles.hint}" HorizontalAlignment="Left" Click="EditActions_Click" Margin="0,6,0,0"/>
                         </StackPanel></GroupBox>
                     </StackPanel>
                 </ScrollViewer>

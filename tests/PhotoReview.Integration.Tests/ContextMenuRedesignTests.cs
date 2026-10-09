@@ -35,7 +35,7 @@ public sealed class ContextMenuRedesignTests
     private static MenuItem Preset(MainWindow window, int percent) =>
         window.ZoomMenu.Items.OfType<MenuItem>().Single(i => i.Tag is int tag && tag == percent);
 
-    private static async Task WithWindowAsync(string? folder, Func<MainWindow, Task> body)
+    private static async Task WithWindowAsync(string? folder, Func<MainWindow, Task> body, PhotoReview.Core.Abstractions.IRecycleBin? recycleBin = null)
     {
         using var dataRoot = new DataRootFixture();
         MainWindow? window = null;
@@ -44,7 +44,7 @@ public sealed class ContextMenuRedesignTests
             await StaTestHost.RunAsync(async () =>
             {
                 var presented = new List<string>();
-                window = TestAppHost.CreateMainWindow(folder, new TestHostHooks { OnPresented = presented.Add });
+                window = TestAppHost.CreateMainWindow(folder, new TestHostHooks { OnPresented = presented.Add, RecycleBin = recycleBin });
                 if (folder is not null)
                     Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, TimeSpan.FromSeconds(10)), "Image never presented");
                 await body(window);
@@ -466,16 +466,35 @@ public sealed class ContextMenuRedesignTests
         using var folder = new TempRoot("context-menu-delete");
         var png = Path.Combine(folder.Path, "test.png");
         WriteImage(png);
+        // A fake bin (never the user's real one). Before, the default throwing bin made the delete FAIL and the test passed on
+        // the failure path; a failed delete now also shows a real MessageBox, which would block this UI test.
+        var bin = new DeletingRecycleBin();
         await WithWindowAsync(folder.Path, async window =>
         {
             Assert.True(await StaTestHost.WaitForAsync(() => window.ViewModel.HasImages && File.Exists(png), TimeSpan.FromSeconds(5)));
             window.Settings.ShowRecycleMenuItem = true;
             OpenMenu(window);
             Click(window.RecycleMenuItem);
-            // RecycleAsync should move the file; verify the current image index changed or folder is empty
-            Assert.True(await StaTestHost.WaitForAsync(() => !window.ViewModel.HasImages || window.ViewModel.CurrentIndex != 0, TimeSpan.FromSeconds(5)),
-                "File should have been moved to Recycle or folder emptied");
-        });
+            Assert.True(await StaTestHost.WaitForAsync(() => !window.ViewModel.HasImages && !window.ViewModel.IsFileActionInProgress, TimeSpan.FromSeconds(5)),
+                "The only photo should have left the list");
+            Assert.Equal([png], bin.Recycled);
+            Assert.False(File.Exists(png));
+        }, bin);
+    }
+
+    /// <summary>Test-only bin: "recycling" deletes the temp file; nothing reaches the real Recycle Bin.</summary>
+    private sealed class DeletingRecycleBin : PhotoReview.Core.Abstractions.IRecycleBin
+    {
+        public List<string> Recycled { get; } = [];
+
+        public void SendToRecycleBin(string path)
+        {
+            Recycled.Add(path);
+            File.Delete(path);
+        }
+
+        public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) =>
+            throw new InvalidOperationException("not used by this test");
     }
 
     private static void WriteImage(string path)

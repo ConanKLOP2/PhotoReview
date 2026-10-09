@@ -234,6 +234,28 @@ public sealed partial class MainViewModelAdvancedTests
         Assert.Contains(nameof(InfoOverlayViewModel.ZoomIndicatorText), overlayChanges);
     }
 
+    [Fact]
+    public void ZoomHud_BackToFitAfterActualSize_ShowsTheFitPercent_NotTheStale100()
+    {
+        // User report: Fit shows 72 %, the 100 % key shows 100 %, Fit again showed 100 % instead of 72 %. ResetFit
+        // raised the HUD refresh (Stretch -> Uniform) while the viewport bound was still +Infinity from the zoom,
+        // then set the bound without telling anyone.
+        var (vm, _) = CreateViewModel();
+        vm.Viewer.SetSourceSize(4000, 3000, newImage: true);
+        vm.Viewer.ResetFit(1000, 750); // Fit zoom = 0.25
+        var shown = new List<string>();
+        vm.InfoOverlay.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(InfoOverlayViewModel.ZoomIndicatorText)) shown.Add(vm.InfoOverlay.ZoomIndicatorText);
+        };
+
+        vm.Viewer.ZoomToActualSize();
+        Assert.Equal("100%", shown[^1]);
+
+        vm.Viewer.ResetFit(1000, 750);
+        Assert.Equal("25%", shown[^1]); // the last value the HUD was told about is what stays on screen
+    }
+
     // ---- sink callbacks used by the controllers ----
 
     [Fact]

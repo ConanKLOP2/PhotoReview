@@ -168,17 +168,11 @@ public sealed class FolderLoadCoordinator : IDisposable
             }, loadToken);
             perf.Mark("sortResumed");
 
-            if (initialPath is not null)
-            {
-                var requested = Path.GetFullPath(initialPath);
-                var requestedIndex = entries.FindIndex(e => string.Equals(e.Path, requested, StringComparison.OrdinalIgnoreCase));
-                if (requestedIndex > 0)
-                {
-                    var selected = entries[requestedIndex];
-                    entries.RemoveAt(requestedIndex);
-                    entries.Insert(0, selected);
-                }
-            }
+            // A file opened directly keeps its real place in the sorted order: the resume below looks it up by path
+            // (_catalog.IndexOf), so it is presented where it sits and preload covers the photos before AND after it.
+            // It is never moved to the front: that showed it as photo 1 and broke the order whenever the Explorer order
+            // is not applied (Default / Name A-Z / Z-A, no Explorer window, timed-out query).
+            var requestedPath = initialPath is null ? null : Path.GetFullPath(initialPath);
 
             if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
             {
@@ -199,7 +193,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             perf.Mark("catalogReady");
 
             var interactionGeneration = _clock.CurrentInteraction;
-            var resumePath = initialPath ?? session.CurrentPath;
+            var resumePath = requestedPath ?? session.CurrentPath;
 
             // perf(startup): with the batched Explorer read and the startup prefetch the snapshot is
             // usually in before the catalog. Applying it before the first frame reaches the same end
