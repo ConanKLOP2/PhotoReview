@@ -713,5 +713,16 @@
   "settings.shortcut.fitWidth2": "Shortcuts page row label of the second Fit width command, default key 4.",
   "settings.shortcut.fitWidth2.clearAutomationName": "Screen-reader name of the x button that clears the Fit width 2 shortcut.",
   "main.menu.zoom.fitWidth2": "Context menu > Zoom item of the second Fit width command.",
-  "main.menu.zoom.fitWidth2.automationName": "Screen-reader name of the second Fit width menu item."
+  "main.menu.zoom.fitWidth2.automationName": "Screen-reader name of the second Fit width menu item.",
+  "main.menu.refresh": "Context menu item (right after the Zoom submenu): re-renders the current view at the best quality; same command as the Refresh shortcut (default R).",
+  "main.menu.refresh.automationName": "Screen-reader name of the Refresh context-menu item.",
+  "settings.shortcut.refresh": "Shortcuts page row label of the Refresh command, default key R.",
+  "settings.shortcut.refresh.clearAutomationName": "Screen-reader name of the x button that clears the Refresh shortcut.",
+  "settings.touchpadSwipe.label": "Settings > Mouse & zoom: check box for AppSettings.TouchpadSwipeEnabled (default on).",
+  "settings.touchpadSwipe.automationName": "AutomationProperties.Name of the touchpad swipe check box.",
+  "settings.touchpadSwipe.hint": "Help text under the touchpad swipe check box.",
+  "settings.touchpadSwipeDistance.label": "Settings > Mouse & zoom: label of the TouchpadSwipeDistancePerImage number box.",
+  "settings.touchpadSwipeDistance.automationName": "AutomationProperties.Name of the touchpad swipe distance box.",
+  "settings.touchpadSwipeDistance.hint": "Help text under the touchpad swipe distance box. Keep \"120\" and \"200\" as numbers.",
+  "dialog.settingsInvalid.touchpadSwipeDistance": "Validation message when the touchpad swipe distance is not a whole number in range. {min}/{max}: the bounds."
 }

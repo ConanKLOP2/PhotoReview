@@ -62,6 +62,8 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.ExternalEditorPath),
         // Second Fit width + middle-click action (Mouse & zoom page)
         nameof(AppSettings.FitWidthAnchor2), nameof(AppSettings.MiddleClickAction),
+        // Q-TOUCHPAD-REFRESH: TouchpadSwipeCheck/TouchpadSwipeDistanceBox in the Mouse & zoom card
+        nameof(AppSettings.TouchpadSwipeEnabled), nameof(AppSettings.TouchpadSwipeDistancePerImage),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]

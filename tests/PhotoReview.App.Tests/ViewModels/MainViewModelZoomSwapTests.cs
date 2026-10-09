@@ -25,7 +25,7 @@ namespace PhotoReview.App.Tests.ViewModels;
 /// <see cref="ViewerState.SetSourceSize"/> and never raise the swapping event.
 /// </summary>
 [Trait("Category", "HotPath")]
-public sealed class MainViewModelZoomSwapTests : IDisposable
+public sealed partial class MainViewModelZoomSwapTests : IDisposable
 {
     private readonly string _tempDir;
     private readonly ReviewCatalog _catalog = new();

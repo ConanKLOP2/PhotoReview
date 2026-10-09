@@ -106,6 +106,7 @@ public partial class MainWindow : Window
         viewport.Get = GetViewportSize;
         _viewport = viewport;
         DpiChanged += MainWindow_DpiChanged;
+        SourceInitialized += (_, _) => System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle)?.AddHook(WindowMessageHook);
         UpdateTargetDecodeBox();
         WireViewModelEvents();
         InitToolbarAutoHide();
@@ -506,9 +507,27 @@ public partial class MainWindow : Window
     {
         e.Handled = true;
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-        var delta = e.Delta;
+        // Q-TOUCHPAD-REFRESH: the device hint is read while the WM_MOUSEWHEEL is still being dispatched (WPF raises this synchronously).
+        var input = new WheelInput(e.Delta, Horizontal: false, ctrl, e.Timestamp, WheelMessageSource.Current());
         var position = e.GetPosition(ImageScroll);
-        await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.OnWheelAsync(delta, ctrl, position));
+        await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.OnWheelAsync(input, position));
+    }
+
+    /// <summary>
+    /// Q-TOUCHPAD-REFRESH: WPF has no horizontal-wheel event, so WM_MOUSEHWHEEL (a sideways two-finger swipe) is taken from the
+    /// window's message hook and fed to the same controller -- only over the image viewport and not while Compare covers it.
+    /// </summary>
+    private IntPtr WindowMessageHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != WheelMessageSource.WmMouseHWheel || !IsLoaded || _viewModel.Compare.IsVisible) return IntPtr.Zero;
+        var position = ImageScroll.PointFromScreen(WheelMessageSource.ScreenPoint(lParam));
+        if (position.X < 0 || position.Y < 0 || position.X >= ImageScroll.ViewportWidth || position.Y >= ImageScroll.ViewportHeight) return IntPtr.Zero;
+        handled = true;
+        NoteInfoActivity();
+        var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        var input = new WheelInput(WheelMessageSource.Delta(wParam), Horizontal: true, ctrl, Environment.TickCount, WheelMessageSource.Current());
+        RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.OnWheelAsync(input, position)).FireAndLog("Horizontal wheel failed");
+        return IntPtr.Zero;
     }
 
     /// <summary>
@@ -691,6 +710,7 @@ public partial class MainWindow : Window
             case ReviewCommandType.ToggleKeepZoom: ToggleKeepZoomAcrossImages(); break;
             case ReviewCommandType.OpenFolder: await RunGuardedAsync(TrimEllipsis(Tr.MainMenuOpenFolder), () => _viewModel.PickAndOpenFolderAsync()); break;
             case ReviewCommandType.CustomZoom: await RunGuardedAsync(Tr.MainMenuZoom, OpenClickZoomCustomDialogAsync); break;
+            case ReviewCommandType.Refresh: RefreshView(); break;
         }
     }
 
@@ -855,6 +875,20 @@ public partial class MainWindow : Window
 
     private void ClickZoomFit_Click(object sender, RoutedEventArgs e) => ApplyFitViewAsync().FireAndLog("Fit view failed");
 
+    /// <summary>Q-TOUCHPAD-REFRESH: context menu "Refresh", the same command as its shortcut.</summary>
+    private void Refresh_Click(object sender, RoutedEventArgs e) => RefreshView();
+
+    /// <summary>
+    /// Refresh: best-quality re-render of the current view (<see cref="MainViewModel.RefreshView"/>). Stops a glide first so the
+    /// view is still; zoom and scroll offsets are never changed here.
+    /// </summary>
+    private void RefreshView()
+    {
+        _pointer.StopKinetic();
+        _viewModel.RefreshView();
+        MainImage.InvalidateVisual();
+    }
+
     /// <summary>"Zoom to N%": zooms to the configured level (does not change it; the presets below do).</summary>
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent));
@@ -895,6 +929,7 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(ZoomToLevelMenuItem, Tr.MainMenuZoomToLevelAutomationName(percent));
         ZoomToLevelMenuItem.InputGestureText = _settings.Shortcuts.ClickZoom;
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
+        RefreshMenuItem.InputGestureText = _settings.Shortcuts.Refresh;
 
         RecycleMenuItem.Visibility = _settings.ShowRecycleMenuItem ? Visibility.Visible : Visibility.Collapsed;
         RecycleMenuItem.InputGestureText = _settings.Shortcuts.SendToRecycleBin;

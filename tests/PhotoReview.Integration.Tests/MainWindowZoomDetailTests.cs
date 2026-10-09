@@ -87,6 +87,108 @@ public sealed class MainWindowZoomDetailTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Q-TOUCHPAD-REFRESH: the Refresh command on the real window keeps the zoom, the element size and the scroll position
+    /// exactly, keeps the full-resolution bitmap, and switches the main image to HighQuality scaling when the setting is Linear.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_WhileZoomed_KeepsLayoutAndScroll_AndForcesHighQualityScaling()
+    {
+        using var root = new TempRoot("zoom-refresh");
+        using var dataRoot = new DataRootFixture();
+        using var noDiskCache = new EnvironmentScope(DisableDiskCacheVariable, "1");
+        var path = WriteJpeg(Path.Combine(root.Dir("images"), "big.jpg"), 4000, 3000);
+        MainWindow? window = null;
+        var presented = new List<string>();
+
+        try
+        {
+            await StaTestHost.RunAsync(async () =>
+            {
+                window = OpenWindow(path, presented.Add, DecoderBackend.Wpf);
+                Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, PresentTimeout), "The image was never presented.");
+                var layoutRoot = (FrameworkElement)window.Content;
+                await LayoutAsync(layoutRoot);
+                window.ViewModel.Viewer.ScalingQuality = ScalingQuality.Linear;
+
+                window.SetZoom(1.0);
+                await LayoutAsync(layoutRoot);
+                window.ImageScroll.ScrollToHorizontalOffset(700);
+                window.ImageScroll.ScrollToVerticalOffset(500);
+                Assert.True(await StaTestHost.WaitForAsync(() => window.ViewModel.Presenter.ZoomDetail.IsShowingOriginal, PresentTimeout), "The original never replaced the preview.");
+                await LayoutAsync(layoutRoot);
+                var before = Snapshot(window);
+                var source = window.MainImage.Source;
+                Assert.Equal(BitmapScalingMode.Linear, RenderOptions.GetBitmapScalingMode(window.MainImage));
+
+                typeof(MainWindow).GetMethod("Refresh_Click", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(window, [window, new RoutedEventArgs()]);
+                await LayoutAsync(layoutRoot);
+
+                Assert.Equal(before, Snapshot(window));
+                Assert.Same(source, window.MainImage.Source);
+                Assert.Equal(1.0, window.ViewModel.Viewer.Zoom);
+                Assert.Equal(BitmapScalingMode.HighQuality, RenderOptions.GetBitmapScalingMode(window.MainImage));
+            });
+        }
+        finally
+        {
+            if (window is not null) await StaTestHost.RunAsync(() => { window.Close(); return Task.CompletedTask; });
+        }
+    }
+
+    /// <summary>
+    /// Q-TOUCHPAD-REFRESH evidence for the PR (not a gate): what Refresh changes at Fit. The preview is decoded for the viewport
+    /// the image was first shown in; when the viewport then grows (window maximised, F11), Fit upscales that preview until the
+    /// next image. Prints the shown bitmap's pixels, the device pixels Fit needs, and what Refresh did.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Manual")]
+    public async Task Measure_RefreshAtFit_AfterTheViewportGrew()
+    {
+        using var root = new TempRoot("zoom-refresh-measure");
+        using var dataRoot = new DataRootFixture();
+        using var noDiskCache = new EnvironmentScope(DisableDiskCacheVariable, "1");
+        var path = WriteJpeg(Path.Combine(root.Dir("images"), "big.jpg"), 6000, 4000);
+        MainWindow? window = null;
+        var presented = new List<string>();
+        var small = new Size(900, 600);
+        var large = new Size(2400, 1600);
+
+        try
+        {
+            await StaTestHost.RunAsync(async () =>
+            {
+                window = TestAppHost.CreateMainWindow(null, new TestHostHooks { OnPresented = presented.Add, DisablePreload = true });
+                window.Settings.LoadingMode = LoadingMode.Preview;
+                window.Settings.InitialViewMode = InitialViewMode.Fit;
+                window.Settings.DecoderBackend = DecoderBackend.Wpf;
+                var layoutRoot = (FrameworkElement)window.Content;
+                await LayoutAsync(layoutRoot, small);
+                _ = window.ViewModel.OpenPathAsync(path);
+                Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, PresentTimeout), "The image was never presented.");
+                await LayoutAsync(layoutRoot, small);
+                var viewer = window.ViewModel.Viewer;
+                var previewWidth = Assert.IsAssignableFrom<BitmapSource>(window.MainImage.Source).PixelWidth;
+                output.WriteLine($"viewport {small.Width}x{small.Height} DIP, dpi {viewer.DpiScale}: preview {previewWidth} px, Fit needs {viewer.FitZoom * 6000:0} px");
+
+                await LayoutAsync(layoutRoot, large);
+                var needed = viewer.FitZoom * 6000;
+                output.WriteLine($"viewport grown to {large.Width}x{large.Height} DIP: still the {previewWidth} px preview, Fit needs {needed:0} px (upscaled x{needed / previewWidth:0.00})");
+
+                var outcome = window.ViewModel.RefreshView();
+                output.WriteLine($"Refresh: {outcome}");
+                Assert.True(await StaTestHost.WaitForAsync(() => window.ViewModel.Presenter.ZoomDetail.IsShowingOriginal, PresentTimeout), "Refresh did not bring the original.");
+                await LayoutAsync(layoutRoot, large);
+                output.WriteLine($"after Refresh: {Assert.IsAssignableFrom<BitmapSource>(window.MainImage.Source).PixelWidth} px shown, still Fit={viewer.IsFit}");
+            });
+        }
+        finally
+        {
+            if (window is not null) await StaTestHost.RunAsync(() => { window.Close(); return Task.CompletedTask; });
+        }
+    }
+
+    /// <summary>
     /// Measurement for the PR (not a gate): time from the zoom command to the sharp 24 MP image on
     /// screen, per navigation, on a synthetic 6000x4000 JPEG with the default decoder backend.
     /// </summary>
@@ -160,12 +262,14 @@ public sealed class MainWindowZoomDetailTests(ITestOutputHelper output)
         return window;
     }
 
-    private static async Task LayoutAsync(FrameworkElement layoutRoot)
+    private static Task LayoutAsync(FrameworkElement layoutRoot) => LayoutAsync(layoutRoot, WindowContent);
+
+    private static async Task LayoutAsync(FrameworkElement layoutRoot, Size content)
     {
         for (var pass = 0; pass < 2; pass++)
         {
-            layoutRoot.Measure(WindowContent);
-            layoutRoot.Arrange(new Rect(WindowContent));
+            layoutRoot.Measure(content);
+            layoutRoot.Arrange(new Rect(content));
             layoutRoot.UpdateLayout();
             await StaTestHost.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
         }

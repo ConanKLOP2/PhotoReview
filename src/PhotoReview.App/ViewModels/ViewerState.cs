@@ -90,7 +90,19 @@ public sealed partial class ViewerState : ObservableObject
     private bool _isFullscreen;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveScalingQuality))]
     private ScalingQuality _scalingQuality = ScalingQuality.HighQuality;
+
+    /// <summary>
+    /// Q-TOUCHPAD-REFRESH: set by the Refresh command for the image on screen (cleared when another image is shown) so the main
+    /// image uses <see cref="ScalingQuality.HighQuality"/> even when the <see cref="ScalingQuality"/> setting is Linear.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EffectiveScalingQuality))]
+    private bool _forceHighQualityScaling;
+
+    /// <summary>The scaling the main image is drawn with: <see cref="ScalingQuality"/>, or HighQuality after a Refresh.</summary>
+    public ScalingQuality EffectiveScalingQuality => ForceHighQualityScaling ? ScalingQuality.HighQuality : ScalingQuality;
 
     // FitZoom (and so the Fit HUD percent) is computed from the viewport bound: ResetFit sets it AFTER Stretch has
     // already notified, so without this the HUD kept the value read while the bound was still +Infinity (100 %).

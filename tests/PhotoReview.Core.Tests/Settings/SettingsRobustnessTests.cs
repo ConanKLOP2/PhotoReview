@@ -335,8 +335,8 @@ public sealed class SettingsRobustnessTests : IDisposable
     private static AppSettings RandomSettings(Random r)
     {
         var keys = new[] { "F1", "F2", "F6", "F7", "F8", "F9", "F10", "F12", "Q", "W", "E", "R", "T", "U", "O", "P", "A", "S", "G", "H", "J", "K", "L", "X", "V", "B", "N",
-            // enough distinct keys for 14 mandatory + 12 optional shortcuts + up to 3 action shortcuts
-            "F3", "F4", "F5", "F11", "I", "D", "Z", "Y" };
+            // enough distinct keys for 14 mandatory + 14 optional shortcuts + up to 3 action shortcuts
+            "F3", "F4", "F5", "F11", "I", "D", "Z", "Y", "C", "M" };
         var pool = new Queue<string>(keys.OrderBy(_ => r.Next()));
         string Key() => pool.Dequeue();
         var text = new[] { "", "Group-2", "Đích \u65E5\u672C\u8A9E", "\u0645\u062C\u0644\u062F", "tr\u0130\u0131", "a\"b\\c", "{name}", "line\nbreak", new string('x', 500) };
@@ -400,6 +400,7 @@ public sealed class SettingsRobustnessTests : IDisposable
                 // "O"/"D3" defaults either.
                 OpenFolder = r.Next(3) == 0 ? "" : Key(), CustomZoom = r.Next(3) == 0 ? "" : Key(),
                 ToggleCaptureMember = r.Next(3) == 0 ? "" : Key(), FitWidth2 = r.Next(3) == 0 ? "" : Key(),
+                Refresh = r.Next(3) == 0 ? "" : Key(),
             },
             Actions = [],
         };

@@ -78,6 +78,7 @@ public sealed class SettingsWindowFieldMapTests
         nameof(AppSettings.ArrowPanStepPercent) => AppSettings.MaxArrowPanStepPercent,
         nameof(AppSettings.KeyboardZoomStepPercent) => AppSettings.MaxKeyboardZoomStepPercent,
         nameof(AppSettings.ImageTransitionMs) => AppSettings.MaxImageTransitionMs,
+        nameof(AppSettings.TouchpadSwipeDistancePerImage) => AppSettings.MaxTouchpadSwipeDistancePerImage,
         nameof(AppSettings.PreloadForwardCount) => PerformanceOptions.MaxPreloadCount,
         nameof(AppSettings.PreloadBackwardCount) => PerformanceOptions.MaxPreloadCount,
         nameof(AppSettings.ToolbarAutoHideDelayMs) => AppSettings.MaxToolbarAutoHideDelayMs,
@@ -202,7 +203,7 @@ public sealed class SettingsWindowFieldMapTests
         nameof(ShortcutMappings.ClickZoom),
         nameof(ShortcutMappings.FitWidth), nameof(ShortcutMappings.FitHeight), nameof(ShortcutMappings.ToggleKeepZoom),
         nameof(ShortcutMappings.OpenFolder), nameof(ShortcutMappings.CustomZoom), nameof(ShortcutMappings.ToggleCaptureMember),
-        nameof(ShortcutMappings.FitWidth2),
+        nameof(ShortcutMappings.FitWidth2), nameof(ShortcutMappings.Refresh),
     };
 
     /// <summary>ShortcutMappings properties with no UI control, that CanonicalizeShortcuts must carry over from the pre-Save value instead of dropping.</summary>

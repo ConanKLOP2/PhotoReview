@@ -33,7 +33,8 @@ public enum ReviewCommandType
     OpenFolder,
     CustomZoom,
     ToggleCaptureMember,
-    FitWidth2
+    FitWidth2,
+    Refresh
 }
 
 /// <summary>Rules about how a resolved command reacts to keyboard auto-repeat.</summary>
@@ -47,14 +48,15 @@ public static class ReviewCommandTypeExtensions
     /// and rewrite config.json on every repeat. Fullscreen, ToggleCompare and ClickZoom are pure toggles: holding the key
     /// would flip them at the key-repeat rate (and re-present the image for ToggleCompare), so they act once.
     /// ToggleKeepZoom (PR-B) is the same kind of toggle-and-save as ToggleInfoOverlay. OpenFolder (Q-R42) and
-    /// CustomZoom (Q-R43) each open a modal dialog: holding the key must not stack up several of them.
+    /// CustomZoom (Q-R43) each open a modal dialog: holding the key must not stack up several of them. Refresh may start a
+    /// full-resolution decode: once per press is enough.
     /// </summary>
     public static bool IgnoresAutoRepeat(this ReviewCommandType type) =>
         type is ReviewCommandType.Recycle or ReviewCommandType.RunAction or ReviewCommandType.Undo
             or ReviewCommandType.MoveToFolder or ReviewCommandType.CopyToFolder or ReviewCommandType.ToggleInfoOverlay
             or ReviewCommandType.Fullscreen or ReviewCommandType.ToggleCompare or ReviewCommandType.ClickZoom
             or ReviewCommandType.ToggleKeepZoom or ReviewCommandType.OpenFolder or ReviewCommandType.CustomZoom
-            or ReviewCommandType.ToggleCaptureMember;
+            or ReviewCommandType.ToggleCaptureMember or ReviewCommandType.Refresh;
 }
 
 /// <summary>
@@ -92,4 +94,5 @@ public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIn
     public static ReviewCommand CustomZoom => new(ReviewCommandType.CustomZoom);
     public static ReviewCommand ToggleCaptureMember => new(ReviewCommandType.ToggleCaptureMember);
     public static ReviewCommand FitWidth2 => new(ReviewCommandType.FitWidth2);
+    public static ReviewCommand Refresh => new(ReviewCommandType.Refresh);
 }
