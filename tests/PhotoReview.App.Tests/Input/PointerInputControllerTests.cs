@@ -89,15 +89,38 @@ public sealed partial class PointerInputControllerTests
     }
 
     [Fact]
-    public async Task ZoomAtPoint_SupersededByALaterOperation_DoesNotScroll()
+    public async Task ZoomAtPoint_SupersededByALaterOperation_DoesNotScrollAfterIt()
     {
         _surface.HoldYields = true;
         var first = _controller.OnWheelAsync(120, ctrl: false, new Point(400, 300));
+        Assert.Single(_surface.Scrolls); // placed together with the zoom, before the render pass
         _version.Next(); // e.g. Fit started while the zoom waited for the render pass
+        _surface.ViewportWidth = 700; // even a changed layout must not make the superseded zoom scroll again
         _surface.ReleaseYields();
         await first;
 
-        Assert.Empty(_surface.Scrolls);
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ZoomAtPoint_PlacesTheScrollBeforeTheRenderPass_AndOnlyAgainIfTheLayoutChanged()
+    {
+        // Ghosting fix: the render pass between "zoom applied" and "scroll placed" committed a frame at the new size
+        // and the OLD offsets. The scroll must already be placed when the render pass is awaited.
+        _surface.HoldYields = true;
+        var zoom = _controller.ZoomInAsync();
+        Assert.Single(_surface.Scrolls);
+        _surface.ReleaseYields();
+        await zoom;
+        Assert.Single(_surface.Scrolls); // same layout after the render pass: no second placement
+
+        _surface.HoldYields = true;
+        zoom = _controller.ZoomInAsync();
+        Assert.Equal(2, _surface.Scrolls.Count);
+        _surface.ExtentWidth += 40; // the render pass changed the layout (e.g. the full-resolution bitmap arrived)
+        _surface.ReleaseYields();
+        await zoom;
+        Assert.Equal(3, _surface.Scrolls.Count); // re-anchored against the new layout
     }
 
     // ---- PR-B: Fit width / Fit height / keep zoom across images ----
@@ -171,7 +194,8 @@ public sealed partial class PointerInputControllerTests
         await _controller.FitWidthAsync();
 
         Assert.Equal(2, _surface.YieldCount);
-        Assert.Equal(2, _surface.Scrolls.Count);
+        // Pass 1 places the scroll at once, re-anchors after its render pass (the viewport changed), then pass 2 places it.
+        Assert.Equal(3, _surface.Scrolls.Count);
     }
 
     [Fact]
@@ -198,7 +222,8 @@ public sealed partial class PointerInputControllerTests
         await _controller.FitHeightAsync();
 
         Assert.Equal(2, _surface.YieldCount);
-        Assert.Equal(2, _surface.Scrolls.Count);
+        // Pass 1 places the scroll at once, re-anchors after its render pass (the viewport changed), then pass 2 places it.
+        Assert.Equal(3, _surface.Scrolls.Count);
     }
 
     [Fact]
@@ -212,7 +237,8 @@ public sealed partial class PointerInputControllerTests
         await _controller.ApplyInitialViewAsync(InitialViewMode.FitWidth, AppSettings.DefaultClickZoomPercent);
 
         Assert.Equal(2, _surface.YieldCount);
-        Assert.Equal(2, _surface.Scrolls.Count);
+        // Pass 1 places the scroll at once, re-anchors after its render pass (the viewport changed), then pass 2 places it.
+        Assert.Equal(3, _surface.Scrolls.Count);
     }
 
     [Fact]
@@ -387,12 +413,44 @@ public sealed partial class PointerInputControllerTests
     }
 
     [Fact]
-    public async Task ToggleClickZoomAsync_AtTheClickZoomLevel_ReturnsToFit()
+    public async Task ToggleClickZoomAsync_AtTheClickZoomLevel_WithReturnsToFit_ReturnsToFit()
     {
+        _settings.ClickZoomKeyReturnsToFit = true; // the old toggle, opt-in
         await _controller.ToggleClickZoomAsync(); // Fit -> click zoom
         await _controller.ToggleClickZoomAsync(); // click zoom -> Fit
 
         Assert.Equal(1, _fits);
+    }
+
+    [Fact]
+    public async Task ToggleClickZoomAsync_AtTheClickZoomLevel_ByDefault_DoesNothing()
+    {
+        // User report: with the 100 % key and a 100 % click level, the click-zoom key "did not work the first time" --
+        // it was the toggle sending the image back to Fit. By default the key now only ever goes TO the click zoom.
+        Assert.False(new AppSettings().ClickZoomKeyReturnsToFit);
+        _viewer.SetZoom(2.0); // e.g. reached by the 100 % key / a preset, at the click level (200 % in the fixture)
+        var scrolls = _surface.Scrolls.Count;
+
+        await _controller.ToggleClickZoomAsync();
+
+        Assert.Equal(0, _fits);
+        Assert.False(_viewer.IsFit);
+        Assert.Equal(2.0, _viewer.Zoom, 6);
+        Assert.Equal(scrolls, _surface.Scrolls.Count); // no re-anchoring scroll either: nothing happened
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ToggleClickZoomAsync_AtAnotherZoom_GoesToTheClickZoomLevel_WhateverTheSetting(bool returnsToFit)
+    {
+        _settings.ClickZoomKeyReturnsToFit = returnsToFit;
+        _viewer.SetZoom(0.5); // e.g. Fit width
+
+        await _controller.ToggleClickZoomAsync();
+
+        Assert.Equal(0, _fits);
+        Assert.Equal(2.0, _viewer.Zoom, 6);
     }
 
     [Fact]

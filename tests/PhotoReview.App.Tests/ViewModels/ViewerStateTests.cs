@@ -34,6 +34,28 @@ public sealed class ViewerStateTests
     }
 
     [Fact]
+    public void DisplayZoomPercent_IsNotifiedWhenTheFitViewportBoundChanges()
+    {
+        var state = new ViewerState();
+        state.SetSourceSize(4000, 3000, newImage: true);
+        state.ResetFit(1000, 750);
+        state.ZoomToActualSize();
+        var notified = new List<int>();
+        state.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ViewerState.DisplayZoomPercent)) notified.Add(state.DisplayZoomPercent);
+        };
+
+        state.ResetFit(1000, 750);
+
+        Assert.Equal(25, state.DisplayZoomPercent);
+        Assert.Equal(25, notified[^1]); // a binding reads the value at its last notification
+
+        state.UpdateViewport(2000, 1500); // window resized while in Fit
+        Assert.Equal(50, notified[^1]);
+    }
+
+    [Fact]
     public void DefaultState_IsFitAndUniform()
     {
         var state = new ViewerState();

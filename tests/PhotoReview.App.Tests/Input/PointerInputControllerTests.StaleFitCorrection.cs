@@ -17,8 +17,12 @@ public sealed partial class PointerInputControllerTests
         _surface.HoldYields = true;
     }
 
+    private int _scrollsBeforeSupersede = -1;
+
     private async Task SupersedeThenReleaseAsync(Task fit)
     {
+        // The first pass placed its scroll synchronously, together with its zoom (no frame at new size + old offsets).
+        _scrollsBeforeSupersede = _surface.Scrolls.Count;
         _version.Next();
         _viewer.SetZoom(2.0); // a newer viewport operation wins
         _surface.HoldYields = false; // before releasing, so a (wrong) correction pass would run to completion
@@ -28,7 +32,8 @@ public sealed partial class PointerInputControllerTests
 
     private void AssertNewerZoomSurvived()
     {
-        Assert.Empty(_surface.Scrolls);
+        Assert.Equal(1, _scrollsBeforeSupersede);
+        Assert.Equal(_scrollsBeforeSupersede, _surface.Scrolls.Count); // nothing scrolled after the newer operation began
         Assert.Equal(1, _surface.YieldCount);
     }
 
