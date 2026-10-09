@@ -30,6 +30,7 @@ public sealed class ReviewCommandAutoRepeatTests
     [InlineData(ReviewCommandType.NextFolder)]
     [InlineData(ReviewCommandType.PreviousFolder)]
     [InlineData(ReviewCommandType.FitWidth)] // PR-B: like ToggleFit, harmless to re-apply on repeat
+    [InlineData(ReviewCommandType.FitWidth2)]
     [InlineData(ReviewCommandType.FitHeight)]
     public void NavigationCommandsKeepAutoRepeat(ReviewCommandType type) =>
         Assert.False(type.IgnoresAutoRepeat());

@@ -155,7 +155,7 @@ public sealed partial class PointerInputControllerTests
         _viewer.DpiScale = 1.0;
         _surface.ExtentWidth = 800.5;
 
-        await _controller.FitWidthAsync();
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor);
 
         Assert.Equal(1, _surface.YieldCount);
     }

@@ -64,7 +64,7 @@
             </ContextMenu>
         </Grid.ContextMenu>
         <Border Background="{DynamicResource Dark.Canvas}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-            <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
+            <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseDown="ImageScroll_PreviewMouseDown" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
                 <Image x:Name="MainImage"
                        Source="{Binding CurrentImage}"
                        Stretch="{Binding Viewer.Stretch, Converter={StaticResource StretchConverter}}"

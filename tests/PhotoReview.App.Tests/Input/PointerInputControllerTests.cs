@@ -108,7 +108,7 @@ public sealed partial class PointerInputControllerTests
         _viewer.SetSourceSize(2000, 4000);
         _viewer.DpiScale = 1.0;
 
-        await _controller.FitWidthAsync();
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor);
 
         Assert.False(_viewer.IsFit);
         // SetZoom (inside ZoomToFitWidth) resets MaxImageWidth to Infinity, so FitWidthZoom reads back 0 afterwards --
@@ -126,7 +126,7 @@ public sealed partial class PointerInputControllerTests
         _viewer.DpiScale = 1.0;
         _settings.FitWidthAnchor = FitWidthAnchor.Centre;
 
-        await _controller.FitWidthAsync();
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor);
         var centreVertical = _surface.Scrolls[^1].V;
 
         _surface.Scrolls.Clear();
@@ -134,11 +134,56 @@ public sealed partial class PointerInputControllerTests
         _viewer.SetZoom(1.0); // undo the previous FitWidth so the second call starts from the same place
         _settings.FitWidthAnchor = FitWidthAnchor.TopThird;
 
-        await _controller.FitWidthAsync();
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor);
         var topThirdVertical = _surface.Scrolls[^1].V;
 
         // Top-third keeps a point further UP the image at the viewport centre, so it needs LESS downward scroll.
         Assert.True(topThirdVertical < centreVertical);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_BottomThirdAnchor_ScrollsFurtherThanCentre_AndTheAnchorIsTheParameterNotTheSetting()
+    {
+        _surface.ExtentHeight = 1200;
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+        _settings.FitWidthAnchor = FitWidthAnchor.Centre;
+        _settings.FitWidthAnchor2 = FitWidthAnchor.BottomThird;
+
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor);
+        var centreVertical = _surface.Scrolls[^1].V;
+
+        _surface.Scrolls.Clear();
+        _surface.VerticalOffset = 0;
+        _viewer.SetZoom(1.0);
+
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor2);
+        var bottomThirdVertical = _surface.Scrolls[^1].V;
+
+        // Bottom-third keeps a point further DOWN the image at the viewport centre, so it needs MORE downward scroll.
+        Assert.True(bottomThirdVertical > centreVertical);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_IgnoresTheKeyboardZoomAnchorSetting()
+    {
+        _surface.ExtentHeight = 1200;
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+        _surface.PointerPosition = new Point(100, 500); // the mouse is over the viewport, far from the centre
+
+        _settings.KeyboardZoomAnchor = KeyboardZoomAnchor.ViewportCentre;
+        await _controller.FitWidthAsync(FitWidthAnchor.Centre);
+        var withCentreSetting = _surface.Scrolls[^1];
+
+        _surface.Scrolls.Clear();
+        _surface.VerticalOffset = 0;
+        _surface.HorizontalOffset = 0;
+        _viewer.SetZoom(1.0);
+        _settings.KeyboardZoomAnchor = KeyboardZoomAnchor.Pointer;
+        await _controller.FitWidthAsync(FitWidthAnchor.Centre);
+
+        Assert.Equal(withCentreSetting, _surface.Scrolls[^1]);
     }
 
     [Fact]
@@ -168,7 +213,7 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentWidth = 800;
         _surface.OnYieldOnce = () => _surface.ViewportWidth = 780;
 
-        await _controller.FitWidthAsync();
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor);
 
         Assert.Equal(2, _surface.YieldCount);
         Assert.Equal(2, _surface.Scrolls.Count);
@@ -181,7 +226,7 @@ public sealed partial class PointerInputControllerTests
         _viewer.DpiScale = 1.0;
         _surface.ExtentWidth = 800; // matches ViewportWidth: no overflow, no scrollbar
 
-        await _controller.FitWidthAsync();
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor);
 
         Assert.Equal(1, _surface.YieldCount);
         Assert.Single(_surface.Scrolls);
@@ -220,7 +265,7 @@ public sealed partial class PointerInputControllerTests
     {
         _hasImages = false;
 
-        await _controller.FitWidthAsync();
+        await _controller.FitWidthAsync(_settings.FitWidthAnchor);
 
         Assert.True(_viewer.IsFit);
         Assert.Empty(_surface.Scrolls);

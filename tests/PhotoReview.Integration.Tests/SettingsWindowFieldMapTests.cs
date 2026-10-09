@@ -190,7 +190,7 @@ public sealed class SettingsWindowFieldMapTests
     // user's persisted value. The two guards below catch that class of regression: one for the concrete property,
     // one generic so a *future* ShortcutMappings property gets the same protection automatically. ----
 
-    /// <summary>The 25 ShortcutMappings properties ReadShortcutsFromUi reads from a shortcut text box.</summary>
+    /// <summary>The 26 ShortcutMappings properties ReadShortcutsFromUi reads from a shortcut text box.</summary>
     private static readonly HashSet<string> ShortcutPropertiesReadFromUi = new(StringComparer.Ordinal)
     {
         nameof(ShortcutMappings.Next), nameof(ShortcutMappings.Previous), nameof(ShortcutMappings.FirstImage), nameof(ShortcutMappings.LastImage),
@@ -202,6 +202,7 @@ public sealed class SettingsWindowFieldMapTests
         nameof(ShortcutMappings.ClickZoom),
         nameof(ShortcutMappings.FitWidth), nameof(ShortcutMappings.FitHeight), nameof(ShortcutMappings.ToggleKeepZoom),
         nameof(ShortcutMappings.OpenFolder), nameof(ShortcutMappings.CustomZoom), nameof(ShortcutMappings.ToggleCaptureMember),
+        nameof(ShortcutMappings.FitWidth2),
     };
 
     /// <summary>ShortcutMappings properties with no UI control, that CanonicalizeShortcuts must carry over from the pre-Save value instead of dropping.</summary>
