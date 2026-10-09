@@ -117,7 +117,7 @@ public sealed class WindowLocalizationTests
                 // (Open/Next/Previous folder), a Separator, Q-R48's "Open in External Editor" (hidden unless
                 // configured, but still present in the item list), a Separator, Settings.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(10, menuItems.Count);
+                Assert.Equal(12, menuItems.Count);
                 var undo = menuItems[0];
                 var delete = menuItems[1];
                 var fit = menuItems[2];
@@ -127,7 +127,9 @@ public sealed class WindowLocalizationTests
                 var nextFolder = menuItems[6];
                 var previousFolder = menuItems[7];
                 var openInExternalEditor = menuItems[8];
-                var settings = menuItems[9];
+                var copyFileName = menuItems[9];
+                var copyFullPath = menuItems[10];
+                var settings = menuItems[11];
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
                 Assert.Equal("Đưa vào Thùng rác", delete.Header);
@@ -145,6 +147,10 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("Thư mục trước", previousFolder.Header);
                 Assert.Equal("Mở bằng trình chỉnh sửa ngoài", openInExternalEditor.Header);
                 Assert.Equal("Mở ảnh hiện tại bằng trình chỉnh sửa ngoài", AutomationProperties.GetName(openInExternalEditor));
+                Assert.Equal("Sao chép tên tệp", copyFileName.Header);
+                Assert.Equal("Sao chép tên tệp của ảnh hiện tại vào bộ nhớ tạm", AutomationProperties.GetName(copyFileName));
+                Assert.Equal("Sao chép đường dẫn đầy đủ", copyFullPath.Header);
+                Assert.Equal("Sao chép đường dẫn đầy đủ của ảnh hiện tại vào bộ nhớ tạm", AutomationProperties.GetName(copyFullPath));
                 Assert.Equal("Cài đặt…", settings.Header);
                 Assert.Equal("Mở cài đặt", AutomationProperties.GetName(settings));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
