@@ -64,6 +64,8 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.FitWidthAnchor2), nameof(AppSettings.MiddleClickAction),
         // Q-TOUCHPAD-REFRESH: TouchpadSwipeCheck/TouchpadSwipeDistanceBox in the Mouse & zoom card
         nameof(AppSettings.TouchpadSwipeEnabled), nameof(AppSettings.TouchpadSwipeDistancePerImage),
+        // Right-click menu tick boxes (SettingsWindowContextMenuTests)
+        nameof(AppSettings.HiddenContextMenuItems),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]

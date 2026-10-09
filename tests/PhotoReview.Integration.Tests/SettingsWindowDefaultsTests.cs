@@ -105,6 +105,7 @@ public sealed class SettingsWindowDefaultsTests
                 if (!Equals(value, defaultValue)) return value;
             throw new InvalidOperationException($"Enum {type} has no value other than the default -- teach this test another one.");
         }
+        if (type == typeof(List<string>) && name == nameof(AppSettings.HiddenContextMenuItems)) return new List<string> { "Undo", "OpenFolder" };
         if (type == typeof(ShortcutMappings)) return new ShortcutMappings { Next = "F12" };
         if (type == typeof(List<ReviewAction>))
             return new List<ReviewAction> { new() { Name = "Mutated", Shortcut = "F9", Operation = PhotoReview.Core.Model.FileOperationType.Copy, Destination = "Mutated-Dest", Confirm = true } };

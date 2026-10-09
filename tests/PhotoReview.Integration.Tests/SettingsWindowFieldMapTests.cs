@@ -62,6 +62,8 @@ public sealed class SettingsWindowFieldMapTests
         // Defaults_Click resets it, but LoadFields/Save_Click have no control for it -- a pre-existing gap this
         // refactor does not introduce or fix; flagged here rather than silently mutated by the generic walker.
         nameof(AppSettings.SetZoomAlsoSetsClickLevel),
+        // A list of ids, not a scalar: one tick box per menu item; covered by SettingsWindowContextMenuTests.
+        nameof(AppSettings.HiddenContextMenuItems),
     };
 
     /// <summary>

@@ -364,6 +364,19 @@ public sealed class AppStartupBranchTests
     }
 
     [Fact]
+    public async Task StartupCore_FolderArgumentFromExplorerMenu_IsMadeCanonicalBeforeThePrefetch()
+    {
+        using var rig = new Rig();
+        using var photos = new TempRoot("startup");
+
+        // Explorer's "Browse with PhotoReview" substitutes the folder into "%1"; a trailing separator or dot segment must not
+        // change the folder identity the instance lock, the Explorer prefetch and the folder load use.
+        await StartedAsync(rig, photos.Path + Path.DirectorySeparatorChar + ".");
+
+        Assert.Equal(photos.Path, Assert.Single(rig.Explorer.Prefetches).Folder);
+    }
+
+    [Fact]
     public async Task StartupCore_FileAndFolderArguments_TheFileDecidesTheLaunchFolder()
     {
         using var rig = new Rig();
@@ -672,6 +685,24 @@ public sealed class AppStartupBranchTests
         Assert.Null(Field<object?>(app, "_forwardCoalescer"));
         Assert.True(AppBase<bool>(app, "_isShuttingDown"));
         Assert.Equal(0, AppBase<int>(app, "_exitCode"));
+    }
+
+    [Fact]
+    public async Task StartupCore_SecondLaunchWithAFolderFromTheExplorerMenu_ForwardsTheCanonicalFolder()
+    {
+        using var rig = new Rig();
+        using var photos = new TempRoot("startup");
+        var received = new TaskCompletionSource<IReadOnlyList<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var owner = new PhotoReview.Platform.Windows.InstanceScope(
+            InstanceMode.SingleWindow, paths => received.TrySetResult(paths), NullLog.Instance, rig.Prefix);
+        Assert.True(owner.TryAcquire(null));
+
+        var app = await StartedAsync(rig, photos.Path + Path.DirectorySeparatorChar);
+
+        Assert.Equal([photos.Path], await received.Task.WaitAsync(Bound));
+        Assert.Empty(rig.Dialogs.Messages);
+        Assert.Null(MainWindowOf(rig, app));
+        Assert.True(AppBase<bool>(app, "_isShuttingDown"));
     }
 
     [Fact]

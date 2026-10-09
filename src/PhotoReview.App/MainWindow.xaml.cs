@@ -792,6 +792,8 @@ public partial class MainWindow : Window
     private System.Windows.Controls.MenuItem? _zoomFitWidth2Item;
     private System.Windows.Controls.MenuItem? _zoomFitHeightItem;
     private System.Windows.Controls.MenuItem? _alsoSetClickLevelItem;
+    private System.Windows.Controls.Separator? _zoomSeparatorPresets;  // Zoom submenu: before the preset group
+    private System.Windows.Controls.Separator? _zoomSeparatorLevelOptions; // Zoom submenu: before "also set"/"set current"
     private System.Windows.Controls.MenuItem? _setCurrentZoomAsClickLevelItem;
 
     private void ZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
@@ -844,7 +846,8 @@ public partial class MainWindow : Window
         fitHeight.Click += ZoomFitHeight_Click;
         ZoomMenu.Items.Add(fitHeight);
 
-        ZoomMenu.Items.Add(new System.Windows.Controls.Separator());
+        _zoomSeparatorPresets = new System.Windows.Controls.Separator();
+        ZoomMenu.Items.Add(_zoomSeparatorPresets);
 
         _clickZoomPresetItems = [];
         foreach (var percent in ZoomPresets)
@@ -860,7 +863,8 @@ public partial class MainWindow : Window
         custom.Click += ClickZoomCustom_Click;
         ZoomMenu.Items.Add(custom);
 
-        ZoomMenu.Items.Add(new System.Windows.Controls.Separator());
+        _zoomSeparatorLevelOptions = new System.Windows.Controls.Separator();
+        ZoomMenu.Items.Add(_zoomSeparatorLevelOptions);
 
         var alsoSet = _alsoSetClickLevelItem = new System.Windows.Controls.MenuItem { IsCheckable = true, Header = Tr.MainMenuZoomAlsoSetClickLevel };
         AutomationProperties.SetName(alsoSet, Tr.MainMenuZoomAlsoSetClickLevelAutomationName);
@@ -931,27 +935,55 @@ public partial class MainWindow : Window
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
         RefreshMenuItem.InputGestureText = _settings.Shortcuts.Refresh;
 
-        RecycleMenuItem.Visibility = _settings.ShowRecycleMenuItem ? Visibility.Visible : Visibility.Collapsed;
         RecycleMenuItem.InputGestureText = _settings.Shortcuts.SendToRecycleBin;
-
-        var zoomClusterVisibility = _settings.ShowZoomMenuItems ? Visibility.Visible : Visibility.Collapsed;
-        ZoomGroupSeparator.Visibility = zoomClusterVisibility;
-        FitMenuItem.Visibility = zoomClusterVisibility;
-        ZoomToLevelMenuItem.Visibility = zoomClusterVisibility;
-        ZoomMenu.Visibility = zoomClusterVisibility;
-
-        var folderGroupVisibility = _settings.ShowFolderMenuItems ? Visibility.Visible : Visibility.Collapsed;
-        FolderGroupSeparator.Visibility = folderGroupVisibility;
-        OpenFolderMenuItem.Visibility = folderGroupVisibility;
-        NextFolderMenuItem.Visibility = folderGroupVisibility;
-        PreviousFolderMenuItem.Visibility = folderGroupVisibility;
         NextFolderMenuItem.InputGestureText = _settings.Shortcuts.NextFolder;
         PreviousFolderMenuItem.InputGestureText = _settings.Shortcuts.PreviousFolder;
-        // Copy group: its own separator + items, shown only while a photo is open (hidden together so no dangling separator).
-        var copyVisibility = _viewModel.CanCopyCurrentFilePath ? Visibility.Visible : Visibility.Collapsed;
-        CopyGroupSeparator.Visibility = copyVisibility;
-        CopyFileNameMenuItem.Visibility = copyVisibility;
-        CopyFullPathMenuItem.Visibility = copyVisibility;
+        ApplyContextMenuLayout();
+    }
+
+    /// <summary>
+    /// Shows/hides every menu element from the pure rule in <see cref="ContextMenuItems.Compute"/>: the user's hidden list
+    /// (<see cref="AppSettings.HiddenContextMenuItems"/>, or the legacy flags of an old config) plus the context (Copy items need an
+    /// open photo). A group separator is shown only between two groups that both have a visible item, so no stray line is left.
+    /// </summary>
+    private void ApplyContextMenuLayout()
+    {
+        var hidden = ContextMenuItems.EffectiveHidden(_settings);
+        var context = new ContextMenuContext(_viewModel.CanCopyCurrentFilePath);
+        var top = ContextMenuItems.Compute(hidden, context);
+        static Visibility Vis(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+
+        UndoMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.Undo));
+        RecycleMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.MoveToRecycleBin));
+        FitMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.Fit));
+        ZoomToLevelMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.ZoomToLevel));
+        ZoomMenu.Visibility = Vis(top.IsVisible(ContextMenuItemId.ZoomSubmenu));
+        RefreshMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.Refresh));
+        OpenFolderMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.OpenFolder));
+        NextFolderMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.NextFolder));
+        PreviousFolderMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.PreviousFolder));
+        OpenInExternalEditorMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.ExternalEditor));
+        CopyFileNameMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.CopyFileName));
+        CopyFullPathMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.CopyFullPath));
+        SettingsMenuItem.Visibility = Vis(top.IsVisible(ContextMenuItemId.Settings));
+        ZoomGroupSeparator.Visibility = Vis(top.HasSeparatorBefore(2));
+        FolderGroupSeparator.Visibility = Vis(top.HasSeparatorBefore(3));
+        ExternalEditorGroupSeparator.Visibility = Vis(top.HasSeparatorBefore(4));
+        CopyGroupSeparator.Visibility = Vis(top.HasSeparatorBefore(5));
+        SettingsGroupSeparator.Visibility = Vis(top.HasSeparatorBefore(6));
+
+        var zoom = ContextMenuItems.Compute(hidden, context, ContextMenuItemId.ZoomSubmenu);
+        _zoomFitWidthItem!.Visibility = Vis(zoom.IsVisible(ContextMenuItemId.ZoomFitWidth));
+        _zoomFitWidth2Item!.Visibility = Vis(zoom.IsVisible(ContextMenuItemId.ZoomFitWidth2));
+        _zoomFitHeightItem!.Visibility = Vis(zoom.IsVisible(ContextMenuItemId.ZoomFitHeight));
+        _zoomSeparatorPresets!.Visibility = Vis(zoom.HasSeparatorBefore(2));
+        var presets = Vis(zoom.IsVisible(ContextMenuItemId.ZoomPresets));
+        foreach (var item in _clickZoomPresetItems!) item.Visibility = presets;
+        _clickZoomCustomItem!.Visibility = presets;
+        _zoomSeparatorLevelOptions!.Visibility = Vis(zoom.HasSeparatorBefore(3));
+        var levelOptions = Vis(zoom.IsVisible(ContextMenuItemId.ZoomLevelOptions));
+        _alsoSetClickLevelItem!.Visibility = levelOptions;
+        _setCurrentZoomAsClickLevelItem!.Visibility = levelOptions;
     }
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]

@@ -36,6 +36,7 @@ public sealed class SettingsWindowRoundTripTests
     private static readonly HashSet<string> ExcludedFromThisTest = new(StringComparer.Ordinal)
     {
         nameof(AppSettings.ConfigVersion), nameof(AppSettings.Actions), nameof(AppSettings.Shortcuts), nameof(AppSettings.UiLanguage),
+        nameof(AppSettings.HiddenContextMenuItems), // a list with one tick box per item: SettingsWindowContextMenuTests
     };
 
     /// <summary>

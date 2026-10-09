@@ -240,10 +240,12 @@ public sealed class ContextMenuRedesignTests
             window.Settings.ShowZoomMenuItems = false;
             OpenMenu(window);
 
-            Assert.Equal(Visibility.Collapsed, window.ZoomGroupSeparator.Visibility);
             Assert.Equal(Visibility.Collapsed, window.FitMenuItem.Visibility);
             Assert.Equal(Visibility.Collapsed, window.ZoomToLevelMenuItem.Visibility);
             Assert.Equal(Visibility.Collapsed, window.ZoomMenu.Visibility);
+            // Refresh is its own customisable item: it keeps the group (and the separator before it) alive.
+            Assert.Equal(Visibility.Visible, window.RefreshMenuItem.Visibility);
+            Assert.Equal(Visibility.Visible, window.ZoomGroupSeparator.Visibility);
 
             // Refreshed on every open, not just the first.
             window.Settings.ShowZoomMenuItems = true;
@@ -310,6 +312,81 @@ public sealed class ContextMenuRedesignTests
             return Task.CompletedTask;
         });
     }
+
+    private static Visibility Vis(FrameworkElement element) => element.Visibility;
+
+    [Fact]
+    public async Task HiddenList_HidesEachNamedItem_AndTheListWinsOverTheLegacyFlags()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            window.Settings.ShowFolderMenuItems = true; // legacy flag says visible, the list says hidden: the list wins
+            window.Settings.HiddenContextMenuItems = ["Undo", "NextFolder", "ExternalEditor"];
+            OpenMenu(window);
+
+            Assert.Equal(Visibility.Collapsed, Vis(window.UndoMenuItem));
+            Assert.Equal(Visibility.Collapsed, Vis(window.NextFolderMenuItem));
+            Assert.Equal(Visibility.Collapsed, Vis(window.OpenInExternalEditorMenuItem));
+            // The rest of the list-hidden state is "show everything": Recycle and the zoom cluster are now visible too.
+            Assert.Equal(Visibility.Visible, Vis(window.OpenFolderMenuItem));
+            Assert.Equal(Visibility.Visible, Vis(window.PreviousFolderMenuItem));
+            Assert.Equal(Visibility.Visible, Vis(window.RecycleMenuItem));
+            Assert.Equal(Visibility.Visible, Vis(window.FitMenuItem));
+            Assert.Equal(Visibility.Visible, Vis(window.SettingsMenuItem));
+            // External editor was the only member of its group: its separator goes with it.
+            Assert.Equal(Visibility.Collapsed, Vis(window.ExternalEditorGroupSeparator));
+            Assert.Equal(Visibility.Visible, Vis(window.FolderGroupSeparator));
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task HiddenList_EverythingHidden_LeavesOnlySettings_WithNoSeparator()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            window.Settings.HiddenContextMenuItems = [.. ContextMenuItems.Items.Where(i => !i.Locked).Select(i => i.Id.ToString())];
+            OpenMenu(window);
+
+            var shown = window.ImageContextMenu.Items.OfType<FrameworkElement>().Where(i => i.Visibility == Visibility.Visible).ToList();
+            Assert.Same(window.SettingsMenuItem, Assert.Single(shown));
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task HiddenList_NeverHidesSettings_EvenWhenListed()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            window.Settings.HiddenContextMenuItems = ["Settings"];
+            OpenMenu(window);
+
+            Assert.Equal(Visibility.Visible, Vis(window.SettingsMenuItem));
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task HiddenList_ZoomSubmenuChildren_AreToggledIndividually()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            window.Settings.HiddenContextMenuItems = ["ZoomFitWidth2", "ZoomLevelOptions"];
+            OpenMenu(window);
+            var children = window.ZoomMenu.Items.OfType<FrameworkElement>().ToList();
+
+            Assert.Equal(Visibility.Visible, window.ZoomMenu.Visibility);
+            Assert.Equal([PhotoReview.Core.Localization.Tr.MainMenuZoomFitWidth, PhotoReview.Core.Localization.Tr.MainMenuZoomFitHeight], VisibleHeadersBeforePresets(children));
+            Assert.Equal(Visibility.Collapsed, AlsoSetClickLevelItem(window).Visibility);
+            Assert.Equal(Visibility.Collapsed, SetCurrentAsClickLevelItem(window).Visibility);
+            Assert.Equal(Visibility.Visible, Preset(window, 100).Visibility);
+            return Task.CompletedTask;
+        });
+    }
+
+    private static List<string> VisibleHeadersBeforePresets(List<FrameworkElement> children) =>
+        [.. children.TakeWhile(c => c is not Separator).OfType<MenuItem>().Where(m => m.Visibility == Visibility.Visible).Select(m => (string)m.Header)];
 
     private sealed class RecordingClipboard : PhotoReview.App.Services.IClipboardService
     {

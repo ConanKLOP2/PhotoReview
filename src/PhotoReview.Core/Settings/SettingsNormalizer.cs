@@ -236,6 +236,17 @@ public static class SettingsNormalizer
             fixedNames.Add(nameof(AppSettings.TouchpadSwipeDistancePerImage));
         }
 
+        // Context menu customisation: keep only known, unlocked, distinct ids in menu order (a hand-edited or newer-version list).
+        if (settings.HiddenContextMenuItems is { } hiddenMenuItems)
+        {
+            var canonical = ContextMenuItems.ToStored(ContextMenuItems.ParseHidden(hiddenMenuItems));
+            if (!canonical.SequenceEqual(hiddenMenuItems, StringComparer.Ordinal))
+            {
+                settings.HiddenContextMenuItems = canonical;
+                fixedNames.Add(nameof(AppSettings.HiddenContextMenuItems));
+            }
+        }
+
         return fixedNames;
     }
 
