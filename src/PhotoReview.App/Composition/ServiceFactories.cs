@@ -1,5 +1,8 @@
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.LibRaw;
 using PhotoReview.Imaging.Raw;
 
@@ -35,5 +38,27 @@ internal static class ServiceFactories
             previewFallback: rawPreviewFallback,
             // A RAW with no embedded JPEG (Leica M8 DNG, some phone DNGs) is decoded by LibRaw instead of failing.
             noPreviewDecoder: rawPreviewFallback is null ? null : createLibRawDecoder());
+    }
+
+    /// <summary>
+    /// Q-FMT-WEBP-HEIC: the decoder chain every WebP/HEIC path takes, whatever backend the user picked -- WicDirect (colour
+    /// management, EXIF orientation, premultiplied alpha, DCT/codec pre-scaling) with the usual WPF fallback, both reading
+    /// through the shared <paramref name="sourceReader"/>.
+    /// </summary>
+    public static IImageDecoder CreateWebpHeicDecoder(ISourceReader sourceReader, ILog? log, ReviewMetrics? metrics)
+        => new FallbackImageDecoder(new WicDirectDecoder(sourceReader), DecoderBackend.WicDirect,
+            new WpfBitmapImageDecoder(sourceReader), log, metrics);
+
+    /// <summary>
+    /// The preload's source-bytes prefetch. Q-FMT-WEBP-HEIC: a WebP/HEIC file the router will refuse (switch off, or no Windows
+    /// codec) is not read at all -- no decode could use its bytes (AGENTS.md priority 1: no wasted disk reads).
+    /// </summary>
+    public static Func<string, CancellationToken, Task> CreateSourcePrefetch(SourceBytesCache cache, Func<bool> isWebpHeicEnabled,
+        Func<WicCodecSupport> codecs)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        return (path, token) => WebpHeicRoutingDecoder.WillRefuse(path, isWebpHeicEnabled, codecs)
+            ? Task.CompletedTask
+            : Task.Run(() => cache.TryPrefetch(path), token);
     }
 }

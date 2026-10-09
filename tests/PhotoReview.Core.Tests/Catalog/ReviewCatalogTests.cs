@@ -31,6 +31,18 @@ public class ReviewCatalogTests
     }
 
     [Fact]
+    public void RestoreMembers_WebpAndHeic_AreRestoredAsPlainEntriesWhateverTheRawSwitch()
+    {
+        // Q-FMT-WEBP-HEIC: an undone action brings back a WebP/HEIC file that was listed; dropping it would look like a failed undo.
+        var catalog = new ReviewCatalog();
+        catalog.Reset([new CatalogEntry(@"C:\photos\before.jpg")]);
+
+        catalog.RestoreMembers([@"C:\photos\web.webp", @"C:\photos\IMG_1.HEIC", @"C:\photos\x.heif", @"C:\photos\y.avif"], 1, rawEnabled: false);
+
+        Assert.Equal([@"C:\photos\before.jpg", @"C:\photos\web.webp", @"C:\photos\IMG_1.HEIC", @"C:\photos\x.heif"], catalog.Paths);
+    }
+
+    [Fact]
     public void Reset_PathsOverload_ForgetsThePreviousPairMode()
     {
         var catalog = PairCatalog(RawPairMode.PreferJpeg);

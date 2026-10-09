@@ -63,7 +63,7 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 
 ### File Associations (Optional)
 
-Register "Open with" for the seven raster extensions (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); the uninstall script removes exactly these seven. Camera RAW extensions are not registered: with Camera RAW support enabled in Settings, open RAW files by dragging them onto the window or by opening their folder.
+Register "Open with" for the seven raster extensions (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); the uninstall script removes exactly these seven. Camera RAW extensions are not registered: with Camera RAW support enabled in Settings, open RAW files by dragging them onto the window or by opening their folder. WebP/HEIC/HEIF (`.webp`, `.heic`, `.heif`, Settings > WebP and HEIC/HEIF, on by default) are not registered either; they decode through the Windows codecs only (HEIC needs "HEIF Image Extensions" + "HEVC Video Extensions" from the Microsoft Store, see Q-FMT-WEBP-HEIC).
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
@@ -157,7 +157,7 @@ Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh
 
 ### File association (tùy chọn)
 
-Đăng ký Open With cho bảy đuôi ảnh thường (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); script gỡ đăng ký xóa đúng bảy đuôi này. Các đuôi Camera RAW không được đăng ký: khi đã bật hỗ trợ Camera RAW trong Cài đặt, hãy mở tệp RAW bằng cách kéo thả vào cửa sổ hoặc mở thư mục chứa chúng:
+Đăng ký Open With cho bảy đuôi ảnh thường (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); script gỡ đăng ký xóa đúng bảy đuôi này. Các đuôi Camera RAW không được đăng ký: khi đã bật hỗ trợ Camera RAW trong Cài đặt, hãy mở tệp RAW bằng cách kéo thả vào cửa sổ hoặc mở thư mục chứa chúng. WebP/HEIC/HEIF (`.webp`, `.heic`, `.heif`, Cài đặt > WebP và HEIC/HEIF, mặc định bật) cũng không được đăng ký; chúng chỉ được giải mã qua codec của Windows (HEIC cần "HEIF Image Extensions" + "HEVC Video Extensions" từ Microsoft Store, xem Q-FMT-WEBP-HEIC):
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'

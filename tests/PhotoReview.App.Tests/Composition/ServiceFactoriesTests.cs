@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Composition;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
@@ -152,5 +153,55 @@ public sealed class ServiceFactoriesTests
         Assert.Null(Field(decoder, "_previewFallback"));
         Assert.Null(Field(decoder, "_noPreviewDecoder"));
         Assert.Equal(0, created);
+    }
+
+    private sealed class CountingSourceReader : ISourceReader
+    {
+        public List<string> Opened { get; } = [];
+
+        public Stream OpenSource(string path, SourceReadPriority priority, int bufferSize = 1024 * 1024)
+        {
+            lock (Opened) Opened.Add(path);
+            return new MemoryStream([1, 2, 3, 4]);
+        }
+    }
+
+    // Q-FMT-WEBP-HEIC: preload must not read a WebP/HEIC file the router will refuse (no codec / switch off).
+    [Theory]
+    [InlineData("a.jpg", true, false, true)]
+    [InlineData("a.heic", true, false, false)] // HEIF codec missing
+    [InlineData("a.webp", true, false, true)]  // WebP codec present
+    [InlineData("a.webp", false, false, false)] // switch off
+    [InlineData("a.heic", true, true, true)]
+    public async Task SourcePrefetch_SkipsTheReadOnlyForFilesTheRouterWouldRefuse(string name, bool enabled, bool heif, bool expectRead)
+    {
+        using var root = new TempRoot("webp-heic-prefetch");
+        var path = root.File(name, 1, 2, 3, 4);
+        var reader = new CountingSourceReader();
+        var codecs = new PhotoReview.Imaging.Decoding.Wic.WicCodecSupport(WebP: true, HeifContainer: heif, HevcDecoder: heif, "t");
+        var prefetch = ServiceFactories.CreateSourcePrefetch(new PhotoReview.Imaging.Caching.SourceBytesCache(1 << 20, reader), () => enabled, () => codecs);
+
+        await prefetch(path, CancellationToken.None);
+
+        Assert.Equal(expectRead ? [path] : [], reader.Opened);
+    }
+
+    [Theory]
+    [InlineData(DecoderBackend.Wpf)]
+    [InlineData(DecoderBackend.WicDirect)]
+    public void AppDecoderFactory_EveryBackendGoesThroughTheWebpHeicSwitch(DecoderBackend backend)
+    {
+        using var root = new TempRoot("webp-heic-composition");
+        var paths = new AppPaths(root.Combine("data"));
+        var store = new SettingsStore(paths, new PhysicalFileSystem(), NullLog.Instance);
+        store.Save(new AppSettings { WebpHeicSupportEnabled = false });
+        using var provider = AppHost.BuildServices(s => s.AddSingleton(store));
+        var decoder = provider.GetRequiredService<IImageDecoderFactory>().Create(backend);
+
+        // Refused before any read (the file does not exist), with the localized "turned off" sentence, not a file-not-found.
+        var error = Assert.Throws<NotSupportedException>(() => decoder.Decode(new DecodeRequest(root.Combine("nope.webp"), TargetWidth: 0)));
+        Assert.IsNotType<MissingImageCodecException>(error);
+        Assert.True(PhotoReview.Core.Localization.UserFacingError.IsLocalized(error));
+        Assert.Throws<NotSupportedException>(() => decoder.ReadInfo(root.Combine("nope.heic")));
     }
 }

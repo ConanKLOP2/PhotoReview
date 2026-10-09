@@ -870,6 +870,11 @@ public sealed class PreloadScheduler : IDisposable
                 // Failed (not retried this lifetime) on purpose: a source that keeps cancelling must not be re-read every pass.
                 _log.Warn($"Preload cancelled by another source: {path} ({ex.Message})");
             }
+            catch (MissingImageCodecException)
+            {
+                // Q-FMT-WEBP-HEIC: the codec is not installed. The router already logged the install guidance once for the whole
+                // format; one Error line per HEIC file of a phone folder would only bury it.
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // A corrupt/unsupported file (FileFormatException, NotSupportedException, ...) must skip only itself:

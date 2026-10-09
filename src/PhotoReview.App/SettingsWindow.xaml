@@ -396,6 +396,13 @@
                             <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource HelpText}" Text="{loc:Tr settings.rawPairMode.hint}"/>
                         </Grid></GroupBox>
 
+                        <!-- WebP and HEIC/HEIF through the Windows codecs (Q-FMT-WEBP-HEIC) -->
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.webpHeic}"><StackPanel>
+                            <CheckBox x:Name="WebpHeicSupportEnabledCheck" Content="{loc:Tr settings.webpHeicSupportEnabled.label}" AutomationProperties.Name="{loc:Tr settings.webpHeicSupportEnabled.automationName}"/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="{loc:Tr settings.webpHeicSupportEnabled.hint}" Margin="20,4,0,0"/>
+                            <TextBlock x:Name="WebpHeicCodecStatusText" Style="{StaticResource HelpText}" Margin="20,4,0,0" TextWrapping="Wrap"/>
+                        </StackPanel></GroupBox>
+
                         <StackPanel Margin="0,0,0,10">
                             <CheckBox x:Name="AllowPermanentDeleteCheck" AutomationProperties.Name="{loc:Tr settings.allowPermanentDelete.label}" Content="{loc:Tr settings.allowPermanentDelete.label}"/>
                             <TextBlock x:Name="AllowPermanentDeleteHint" Text="{loc:Tr settings.allowPermanentDelete.hint}" Style="{StaticResource HelpText}" Margin="20,4,0,0"/>

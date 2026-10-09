@@ -17,6 +17,7 @@ public sealed class SiblingFolderNavigator
     private readonly ISiblingNavigatorSink _sink;
     private readonly Func<SessionState?> _getCurrentSession;
     private readonly Func<bool>? _getRawEnabled;
+    private readonly Func<bool>? _getWebpHeicEnabled;
 
     public SiblingFolderNavigator(
         GenerationClock clock,
@@ -24,7 +25,8 @@ public sealed class SiblingFolderNavigator
         IFileSystem fileSystem,
         ISiblingNavigatorSink sink,
         Func<SessionState?> getCurrentSession,
-        Func<bool>? getRawEnabled = null)
+        Func<bool>? getRawEnabled = null,
+        Func<bool>? getWebpHeicEnabled = null)
     {
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -32,6 +34,7 @@ public sealed class SiblingFolderNavigator
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
         _getCurrentSession = getCurrentSession ?? throw new ArgumentNullException(nameof(getCurrentSession));
         _getRawEnabled = getRawEnabled;
+        _getWebpHeicEnabled = getWebpHeicEnabled;
     }
 
     public async Task NavigateSiblingFolderAsync(int direction)
@@ -106,13 +109,14 @@ public sealed class SiblingFolderNavigator
     {
         if (direction is not (-1 or 1)) throw new ArgumentOutOfRangeException(nameof(direction));
         var rawEnabled = _getRawEnabled?.Invoke() ?? false;
+        var webpHeicEnabled = _getWebpHeicEnabled?.Invoke() ?? false;
         for (var i = index + direction; i >= 0 && i < folders.Count; i += direction)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var candidates = _fileSystem.EnumerateFiles(folders[i], "*")
-                    .Where(path => ImageFileTypes.IsSupported(path, rawEnabled));
+                    .Where(path => ImageFileTypes.IsSupported(path, rawEnabled, webpHeicEnabled));
                 if (candidates.Any()) return folders[i];
             }
             catch (IOException) { }

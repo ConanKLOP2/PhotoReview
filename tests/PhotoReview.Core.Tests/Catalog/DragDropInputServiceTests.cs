@@ -41,6 +41,21 @@ public class DragDropInputServiceTests
         Assert.Equal(image, parsed.InitialImagePath);
     }
 
+    [Theory(DisplayName = "Q-FMT-WEBP-HEIC: a dropped .heic opens only while the WebP/HEIC switch is on")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ParseHeicFile_FollowsTheWebpHeicSwitch(bool enabled)
+    {
+        using var root = new TempRoot("dragdrop");
+        root.Dir("iphone");
+        var image = root.File(Path.Combine("iphone", "IMG_0001.HEIC"), 1);
+
+        var parsed = DragDropInputService.Parse([image], rawEnabled: false, webpHeicEnabled: enabled);
+
+        Assert.Equal(enabled, parsed.IsValid);
+        Assert.Equal(enabled ? image : null, parsed.InitialImagePath);
+    }
+
     [Fact(DisplayName = "Drag-drop rejects unsupported input")]
     public void ParseUnsupportedFileIsInvalid()
     {

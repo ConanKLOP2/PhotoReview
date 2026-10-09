@@ -36,6 +36,7 @@ Thumbnail có RAM/disk cache và quota riêng. Hủy waiter không nên làm h�
 |---|---|---|
 | `DecoderBackend` | `WicDirect` | Chọn `Wpf`, `WicDirect` hoặc `TurboJpeg`. WIC/TurboJPEG fallback về WPF khi gặp lỗi codec được hỗ trợ. Đổi backend khi đang xem sẽ clear cache liên quan và trình diễn lại ảnh hiện tại. |
 | `RawSupportEnabled` / `RawFullDecode` / `RawPairMode` | `true` / `Never` / `Separate` | Mặc định mở CR2/CR3/NEF/ARW/DNG/RAF/ORF/RW2 bằng embedded JPEG preview; `OnZoom` mới giải mã cảm biến bằng LibRaw. Ghép JPG+RAW là tuỳ chọn riêng; default `Separate` (ADR 0009). |
+| `WebpHeicSupportEnabled` | `true` | Mở WebP/HEIC/HEIF qua codec có sẵn của Windows (không đóng gói thư viện); máy thiếu codec vẫn liệt kê file nhưng báo cần cài gì từ Microsoft Store. WebP động: khung đầu (Q-FMT-WEBP-HEIC). |
 | `ScalingQuality` | `HighQuality` | `HighQuality` ưu tiên chất lượng scale; `Linear` ưu tiên độ mượt khi zoom/chuyển khung. Không thay đổi pixel decode hoặc cache identity. |
 | `UseSourceBytesCache` | `false` | Bật cache byte nguồn trong RAM. Đây là feature flag; chỉ bật sau khi đo source-open, working set và độ trễ trên folder thật. |
 | `PreloadForwardCount` / `PreloadBackwardCount` | `32` / `8` | Số ảnh tải trước phía trước/phía sau vị trí hiện tại (`PreloadOrderService`/`PreloadScheduler`). Cho phép `1`-`500` (forward) và `0`-`500` (backward); sàn của thanh trượt RAM (`RamBudgetPolicy.MinimumCachePercent`) đi theo cửa sổ này. Chụp lúc composition trong `App.xaml.cs`; có hiệu lực sau khi khởi động lại. |
