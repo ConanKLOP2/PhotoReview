@@ -920,5 +920,15 @@
   "settings.contextMenu.item.zoomFitWidth2": "Vừa chiều rộng 2",
   "settings.contextMenu.item.zoomFitHeight": "Vừa chiều cao",
   "settings.contextMenu.item.zoomPresets": "Mức thu phóng có sẵn và Tùy chỉnh...",
-  "settings.contextMenu.item.zoomLevelOptions": "Tùy chọn mức thu phóng khi nhấp (cũng đặt / đặt mức hiện tại)"
+  "settings.contextMenu.item.zoomLevelOptions": "Tùy chọn mức thu phóng khi nhấp (cũng đặt / đặt mức hiện tại)",
+  "settings.shell.group": "Tích hợp Explorer",
+  "settings.shell.add": "Thêm vào menu Explorer",
+  "settings.shell.update": "Cập nhật đường dẫn",
+  "settings.shell.remove": "Gỡ khỏi menu Explorer",
+  "settings.shell.status.notRegistered": "Chưa có trong menu chuột phải của Explorer.",
+  "settings.shell.status.registered": "Đã thêm: nhấp chuột phải vào thư mục, hoặc vào chỗ trống bên trong thư mục, trong Explorer rồi chọn \"Browse with PhotoReview\".",
+  "settings.shell.status.elsewhere": "Đã thêm nhưng đang mở bản ứng dụng khác (ứng dụng đã được di chuyển?) hoặc mới có một nửa. Nhấn \"Cập nhật đường dẫn\" để dùng bản này.",
+  "settings.shell.status.unavailable": "Không dùng được ở đây: ứng dụng không chạy từ tệp .exe của chính nó.",
+  "settings.shell.status.error": "Không đọc hoặc thay đổi được mục menu Explorer: {message}",
+  "settings.shell.hint": "Thêm \"Browse with PhotoReview\" vào menu chuột phải của Explorer trên thư mục và trên chỗ trống bên trong thư mục. Chỉ cho tài khoản Windows của bạn (không cần quyền quản trị). Có hiệu lực ngay, không cần Lưu; khi gỡ chỉ xóa đúng hai mục đó."
 }

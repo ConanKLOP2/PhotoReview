@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.App.Localization;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Updates;
@@ -53,6 +54,7 @@ public partial class SettingsWindow : Window
         Settings = AppSettings.Clone(current);
 
         InitializePages();
+        RefreshShellStatus();
 
         // Single source of truth for the shortcut boxes: input capture, duplicate warning and the "must parse" checks in
         // Save_Click all derive from this list, so a box missing here cannot silently miss one of them.
@@ -348,6 +350,66 @@ public partial class SettingsWindow : Window
         {
             Keyboard.ClearFocus();
         });
+    }
+
+    // ---- Explorer integration: "Browse with PhotoReview" on folders (HKCU, no administrator rights; applies immediately) ----
+
+    /// <summary>The registry seam (test seam: a fake replaces it).</summary>
+    internal IShellIntegration ShellIntegration { get; set; } = new PhotoReview.Platform.Windows.WindowsShellIntegration();
+
+    /// <summary>The executable the command should launch; null/dotnet host = unavailable (test seam).</summary>
+    internal string? ExecutablePath { get; set; } = Environment.ProcessPath;
+
+    /// <summary>Shows the current registration state and enables the buttons that make sense for it.</summary>
+    internal void RefreshShellStatus()
+    {
+        var exe = ExecutablePath;
+        if (!ShellMenuCommand.IsValidExecutablePath(exe) || string.Equals(Path.GetFileNameWithoutExtension(exe), "dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            ShellStatusText.Text = Tr.SettingsShellStatusUnavailable;
+            ShellAddButton.IsEnabled = false;
+            ShellRemoveButton.IsEnabled = false;
+            return;
+        }
+        ShellMenuState state;
+        try { state = ShellIntegration.GetState(exe!); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            ShellStatusText.Text = Tr.SettingsShellStatusError(ex.Message);
+            ShellAddButton.IsEnabled = true;
+            ShellRemoveButton.IsEnabled = false;
+            return;
+        }
+        ShellStatusText.Text = state switch
+        {
+            ShellMenuState.Registered => Tr.SettingsShellStatusRegistered,
+            ShellMenuState.RegisteredElsewhere => Tr.SettingsShellStatusElsewhere,
+            _ => Tr.SettingsShellStatusNotRegistered,
+        };
+        ShellAddButton.Content = state == ShellMenuState.RegisteredElsewhere ? Tr.SettingsShellUpdate : Tr.SettingsShellAdd;
+        ShellAddButton.IsEnabled = state != ShellMenuState.Registered;
+        ShellRemoveButton.IsEnabled = state != ShellMenuState.NotRegistered;
+    }
+
+    private void ShellAdd_Click(object sender, RoutedEventArgs e) => ChangeShellRegistration(register: true);
+
+    private void ShellRemove_Click(object sender, RoutedEventArgs e) => ChangeShellRegistration(register: false);
+
+    private void ChangeShellRegistration(bool register)
+    {
+        try
+        {
+            if (register) ShellIntegration.Register(ExecutablePath!);
+            else ShellIntegration.Unregister();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+        {
+            AppLog.Error("Explorer integration change failed", ex);
+            RefreshShellStatus();
+            ShellStatusText.Text = Tr.SettingsShellStatusError(ex.Message);
+            return;
+        }
+        RefreshShellStatus();
     }
 
     private readonly Dictionary<ContextMenuItemId, CheckBox> _contextMenuChecks = [];

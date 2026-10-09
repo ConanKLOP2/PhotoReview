@@ -75,6 +75,8 @@ Unregister:
 .\deploy\uninstall-photo-review-association.ps1
 ```
 
+The same script also adds **Browse with PhotoReview** to Explorer's right-click menu of folders (and of the empty space inside a folder); pass `-NoFolderMenu` to skip it. It is per user (HKCU, no administrator rights). The app can also add or remove it itself: Settings → General → Explorer integration (it also repairs the path after the app is moved).
+
 ### Languages
 
 The UI ships in English and Vietnamese (Settings → Language; `auto` follows Windows). Texts live in plain JSON files that anyone can edit or extend without rebuilding — see [docs/TRANSLATING.md](docs/TRANSLATING.md).
@@ -166,6 +168,8 @@ Gỡ đăng ký:
 ```powershell
 .\deploy\uninstall-photo-review-association.ps1
 ```
+
+Script này cũng thêm mục **Browse with PhotoReview** vào menu chuột phải của thư mục (và của chỗ trống bên trong thư mục) trong Explorer; thêm `-NoFolderMenu` để bỏ qua. Chỉ cho tài khoản Windows hiện tại (HKCU, không cần quyền quản trị). Ứng dụng cũng tự thêm/gỡ được: Cài đặt → Chung → Tích hợp Explorer (và sửa lại đường dẫn khi ứng dụng bị di chuyển).
 
 ### Ngôn ngữ
 

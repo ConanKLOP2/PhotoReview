@@ -117,6 +117,16 @@
                             <TextBlock x:Name="UpdateStatusText" TextWrapping="Wrap" Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite"/>
                             <TextBlock Text="{loc:Tr update.hint}" Style="{StaticResource HelpText}" Margin="0,8,0,0"/>
                         </StackPanel></GroupBox>
+
+                        <!-- Explorer integration: "Browse with PhotoReview" on folders (per user, HKCU); applies immediately, not on Save. -->
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.shell.group}"><StackPanel>
+                            <TextBlock x:Name="ShellStatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="ShellAddButton" Content="{loc:Tr settings.shell.add}" AutomationProperties.Name="{loc:Tr settings.shell.add}" Click="ShellAdd_Click" Margin="0,0,8,0"/>
+                                <Button x:Name="ShellRemoveButton" Content="{loc:Tr settings.shell.remove}" AutomationProperties.Name="{loc:Tr settings.shell.remove}" Click="ShellRemove_Click"/>
+                            </StackPanel>
+                            <TextBlock Text="{loc:Tr settings.shell.hint}" Style="{StaticResource HelpText}" Margin="0,8,0,0"/>
+                        </StackPanel></GroupBox>
                     </StackPanel>
                 </ScrollViewer>
 

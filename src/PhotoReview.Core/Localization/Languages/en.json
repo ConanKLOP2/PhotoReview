@@ -928,5 +928,15 @@
   "settings.contextMenu.item.zoomFitWidth2": "Fit width 2",
   "settings.contextMenu.item.zoomFitHeight": "Fit height",
   "settings.contextMenu.item.zoomPresets": "Zoom presets and Custom...",
-  "settings.contextMenu.item.zoomLevelOptions": "Click zoom level options (also set / set current)"
+  "settings.contextMenu.item.zoomLevelOptions": "Click zoom level options (also set / set current)",
+  "settings.shell.group": "Explorer integration",
+  "settings.shell.add": "Add to Explorer menu",
+  "settings.shell.update": "Update path",
+  "settings.shell.remove": "Remove from Explorer menu",
+  "settings.shell.status.notRegistered": "Not in Explorer's right-click menu.",
+  "settings.shell.status.registered": "Added: right-click a folder, or empty space inside a folder, in Explorer and choose \"Browse with PhotoReview\".",
+  "settings.shell.status.elsewhere": "Added, but it opens another copy of the app (was the app moved?) or only half of it is present. Click \"Update path\" to use this copy.",
+  "settings.shell.status.unavailable": "Not available here: the app is not running from its own .exe file.",
+  "settings.shell.status.error": "Could not read or change the Explorer menu entry: {message}",
+  "settings.shell.hint": "Adds \"Browse with PhotoReview\" to Explorer's right-click menu on folders and on empty space inside a folder. Only for your Windows user (no administrator rights). It applies immediately, not on Save; removing it deletes just those two entries."
 }
