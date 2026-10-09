@@ -143,6 +143,7 @@ Camera RAW (ADR 0009) đi qua `FormatRoutingDecoder` khi `RawSupportEnabled` (m�
 | `SetZoomAlsoSetsClickLevel` | `true` mặc định | Chọn preset/Custom trong submenu "Zoom" của menu chuột phải: bật thì ghi đè cả `ClickZoomPercent` (`MainWindow.ApplyClickZoomLevelAsync`); tắt thì chỉ zoom một lần qua `PointerInputController.SetClickZoomLevelAsync`. `MainWindow.ApplyZoomMenuSelectionAsync` chọn nhánh. |
 | `ShowFolderMenuItems` | `true` mặc định | Ẩn/hiện cụm "Open folder / Next folder / Previous folder" trong menu chuột phải, đọc lại mỗi lần mở (`MainWindow.ImageContextMenu_Opened`); phím tắt `NextFolder`/`PreviousFolder` vẫn hoạt động. |
 | `ShowRecycleMenuItem` | `false` mặc định | Ẩn/hiện riêng mục "Đưa vào Thùng rác" trong menu chuột phải, đọc lại mỗi lần mở; phím tắt vẫn hoạt động. Mục hiện kèm phím tắt đang cấu hình (`Shortcuts.SendToRecycleBin`). |
+| `HiddenContextMenuItems` | `null` = suy từ 3 cờ cũ (`ShowZoomMenuItems`/`ShowFolderMenuItems`/`ShowRecycleMenuItem`, vẫn được ghi song song); `[]` = hiện hết | Danh sách id mục menu chuột phải bị TẮT (`ContextMenuItemId`, tên enum là khoá lưu; `Settings` không bao giờ tắt được). Bộ tính hiển thị thuần `ContextMenuItems.Compute` (mục + tập ẩn + ngữ cảnh → mục & separator), áp dụng mỗi lần mở menu (`MainWindow.ApplyContextMenuLayout`). Config cũ không có khoá này được migrate từ 3 cờ cũ khi load. Chi tiết: `decisions/CTX-MENU-CUSTOMIZE.md`. |
 
 ## Kiểm tra cập nhật thủ công (chỉ dùng mạng ở đây)
 
