@@ -862,10 +862,6 @@ public partial class MainWindow : Window
         PreviousFolderMenuItem.Visibility = folderGroupVisibility;
         NextFolderMenuItem.InputGestureText = _settings.Shortcuts.NextFolder;
         PreviousFolderMenuItem.InputGestureText = _settings.Shortcuts.PreviousFolder;
-        var externalEditorVisibility = _viewModel.CanOpenInExternalEditor ? Visibility.Visible : Visibility.Collapsed;
-        ExternalEditorGroupSeparator.Visibility = externalEditorVisibility;
-        OpenInExternalEditorMenuItem.Visibility = externalEditorVisibility;
-
         // Copy group: its own separator + items, shown only while a photo is open (hidden together so no dangling separator).
         var copyVisibility = _viewModel.CanCopyCurrentFilePath ? Visibility.Visible : Visibility.Collapsed;
         CopyGroupSeparator.Visibility = copyVisibility;

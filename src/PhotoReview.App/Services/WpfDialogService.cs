@@ -94,7 +94,9 @@ public sealed class WpfDialogService : IDialogService
         _host.ShowDialog(window);
     }
 
-    public bool ShowSettings()
+    public bool ShowSettings() => ShowSettings(SettingsTarget.Default);
+
+    public bool ShowSettings(SettingsTarget target)
     {
         var store = serviceProvider.GetService<SettingsStore>();
         if (store is null) return false;
@@ -104,6 +106,7 @@ public sealed class WpfDialogService : IDialogService
         {
             Owner = _host.Owner
         };
+        if (target == SettingsTarget.ExternalEditor) window.FocusExternalEditorOnLoad = true;
         return _host.ShowDialog(window) == true;
     }
 

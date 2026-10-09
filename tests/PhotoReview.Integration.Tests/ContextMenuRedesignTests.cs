@@ -100,11 +100,10 @@ public sealed class ContextMenuRedesignTests
             var settings = Assert.IsType<MenuItem>(items[16]);
             Assert.False(string.IsNullOrEmpty(settings.Header as string));
 
-            // Q-R48: with no external editor configured (the default) its item AND its leading separator are hidden,
-            // so the menu never shows two separators in a row.
+            // Q-R48: the External Editor item stays visible even with no editor configured (discoverability: clicking it opens Settings).
             OpenMenu(window);
-            Assert.Equal(Visibility.Collapsed, window.OpenInExternalEditorMenuItem.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.ExternalEditorGroupSeparator.Visibility);
+            Assert.Equal(Visibility.Visible, window.OpenInExternalEditorMenuItem.Visibility);
+            Assert.Equal(Visibility.Visible, window.ExternalEditorGroupSeparator.Visibility);
 
             // Copy File Name / Copy Full Pathname (+ their separator) need an open photo; none is open here.
             Assert.Equal(Visibility.Collapsed, window.CopyFileNameMenuItem.Visibility);
