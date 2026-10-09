@@ -871,5 +871,10 @@
   "status.lateBatchRecycled": "Dọn ảnh trùng đã xong sau khi bạn rời thư mục này: {done} tệp đã vào Thùng rác, {failed} tệp lỗi. Không thể hoàn tác đợt dọn này bằng Ctrl+Z; hãy mở Thùng rác để khôi phục tệp.",
   "core.recovery.conflict": "Tệp tồn tại ở cả nguồn lẫn đích; từ chối thử lại để không ghi đè. Hãy tự xử lý bản trùng.",
   "core.recovery.destinationChanged": "Tệp ở đích không còn là tệp đã được di chuyển; từ chối thử lại để bảo vệ dữ liệu.",
-  "core.fileAction.groupNeedsTwoPaths": "Thao tác theo nhóm cần ít nhất hai tệp."
+  "core.fileAction.groupNeedsTwoPaths": "Thao tác theo nhóm cần ít nhất hai tệp.",
+  "dialog.recycleNoBin.title": "Ảnh CHƯA bị xóa",
+  "dialog.recycleNoBin.message": "\"{fileName}\" CHƯA bị xóa và vẫn đang hiển thị. Tệp nằm trên ổ mạng (NAS) hoặc ổ đĩa rời, các ổ này không có Thùng rác, và tùy chọn xóa vĩnh viễn đang tắt nên PhotoReview không xóa tệp. Muốn xóa vĩnh viễn ảnh trên các ổ này (không thể khôi phục, kể cả bằng Hoàn tác), hãy bật \"{settingName}\" trong Cài đặt > {settingsPage}.",
+  "dialog.recycleFailed.title": "Xóa không thành công",
+  "dialog.recycleFailed.message": "\"{fileName}\" CHƯA bị xóa và vẫn còn trong danh sách (ngay trước ảnh đang hiển thị). Lý do: {message}",
+  "settings.editActionProfiles.hint": "Thiết lập hành động mặc định: Enter chuyển ảnh vào thư mục con \"Group-2\", F3 / F4 vào \"Group-3\" / \"Group-4\", F5 sao chép ảnh vào \"Backup\". Đổi hoặc xóa chúng bằng nút bên dưới."
 }

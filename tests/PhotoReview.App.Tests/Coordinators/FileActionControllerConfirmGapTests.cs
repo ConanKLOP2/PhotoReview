@@ -117,7 +117,7 @@ public sealed class FileActionControllerConfirmGapTests : IDisposable
     }
 
     [Fact]
-    public async Task RunAction_RecycleConfirmGroupWithoutBinButPermanentDeleteOff_AsksTheGenericPromptOnce()
+    public async Task RunAction_RecycleConfirmGroupWithoutBinButPermanentDeleteOff_RefusesWithoutAnyPrompt()
     {
         var jpeg = Make("pair.jpg");
         var raw = Make("pair.cr2");
@@ -129,8 +129,8 @@ public sealed class FileActionControllerConfirmGapTests : IDisposable
 
         await controller.RunActionAsync(0, null, jpeg);
 
-        Assert.Single(dialog.Confirmations);
-        Assert.Equal(Tr.DialogConfirmActionTitle, dialog.Confirmations[0].Title);
+        Assert.Empty(dialog.Confirmations);
+        Assert.Equal(Tr.DialogRecycleNoBinTitle, Assert.Single(dialog.Errors).Title);
         Assert.True(File.Exists(jpeg));
         Assert.True(File.Exists(raw));
     }

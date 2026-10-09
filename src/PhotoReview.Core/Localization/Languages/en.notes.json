@@ -671,5 +671,10 @@
   "status.lateBatchRecycled": "Status bar (RV-A10, RV-D5) when a batch duplicate cleanup (Recycle of the numbered copies) finished after the user had already opened another folder. {done} = files moved to the Recycle Bin, {failed} = files that failed. The batch is not registered for Undo, so the text must say Ctrl+Z does not undo it. Only shown when the new folder status line is idle.",
   "core.recovery.conflict": "RecoveryRetryResult.Message when a group retry finds the source and the destination both present (Conflict verdict) so retrying could overwrite or duplicate a file. Shown in the Recovery window.",
   "core.recovery.destinationChanged": "RecoveryRetryResult.Message when a group retry finds the source gone but the destination no longer matching the journaled size/time (DestinationChanged verdict). Shown in the Recovery window.",
-  "core.fileAction.groupNeedsTwoPaths": "FileActionService group action failure message (defensive guard; the UI only builds groups of two or more files)."
+  "core.fileAction.groupNeedsTwoPaths": "FileActionService group action failure message (defensive guard; the UI only builds groups of two or more files).",
+  "dialog.recycleNoBin.title": "MessageBox caption (warning) when Delete is refused BEFORE anything changes: the photo is on a drive without a Recycle Bin and the permanent-delete setting is off (Q-R8).",
+  "dialog.recycleNoBin.message": "MessageBox text for the refusal above. {settingName} = the text of settings.allowPermanentDelete.label, {settingsPage} = settings.nav.files; keep both quoted/named so the user can find the checkbox.",
+  "dialog.recycleFailed.title": "MessageBox caption (warning) when a Delete that already showed the next photo failed during the file operation.",
+  "dialog.recycleFailed.message": "MessageBox text for that failure. {message} is the error text (already translated or from the OS). The photo went back into the list right before the one now shown.",
+  "settings.editActionProfiles.hint": "Help text above the 'Edit action profiles' button (Settings > Shortcuts). Group-2/Group-3/Group-4/Backup are the default destination folder names (data, do not translate); Enter/F3/F4/F5 are key names."
 }

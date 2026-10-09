@@ -79,6 +79,9 @@ public sealed class FileActionController
             return;
         }
 
+        // A Delete that will be refused anyway (no Recycle Bin, permanent delete off) is refused before any confirmation.
+        if (action.Operation == FileOperationType.Recycle && RefuseRecycleWithoutBin(compareSelectedPath ?? currentPath)) return;
+
         // Q-R8: a permanent delete gets its own explicit confirmation (in the core step), which replaces the generic one.
         var permanentPrompt = action.Operation == FileOperationType.Recycle && WillAskPermanentDelete(compareSelectedPath ?? currentPath);
         // A capture that gets its own confirmation in the core step (which already names the files) must not be asked twice.
@@ -117,6 +120,7 @@ public sealed class FileActionController
         // Q-R44: general "confirm before delete", off by default. Skipped when the permanent-delete prompt
         // (Q-R8, WillAskPermanentDelete) will already ask -- same "one prompt, not two" rule as RunActionAsync.
         var source = compareSelectedPath ?? currentPath;
+        if (RefuseRecycleWithoutBin(source)) return; // before "confirm before delete": the answer would not matter
         var selectedGroup = source is null ? null : _catalog.Find(source)?.CaptureGroup;
         var permanentPrompt = selectedGroup is null && WillAskPermanentDelete(source);
         if (selectedGroup is null && _getSettings().ConfirmBeforeDelete && _dialogService is not null && !permanentPrompt)
@@ -146,6 +150,38 @@ public sealed class FileActionController
         return settings.ConfirmBeforeDelete
             || (settings.AllowPermanentDeleteWithoutRecycleBin && group.Paths.Any(_fileActions.LacksRecycleBin));
     }
+
+    /// <summary>
+    /// Q-R8: with "allow permanent delete" OFF (the default) a Delete of a photo on a drive without a Recycle Bin (NAS / network
+    /// share, USB stick) is refused by the service anyway. Checked here first -- before any confirmation, before the photo
+    /// leaves the list and before the next photo is presented (INV-3 only applies to an action that reaches its I/O) -- so the
+    /// photo stays on screen and the user gets a dialog that names the Settings option instead of a status line that is easy
+    /// to miss while the view has already moved on. Every member of a capture is checked, like the service does.
+    /// </summary>
+    /// <returns>True when the Delete was refused (status + dialog shown); nothing was changed.</returns>
+    private bool RefuseRecycleWithoutBin(string? source)
+    {
+        if (string.IsNullOrEmpty(source) || _fileActions is null || _catalog.Count == 0) return false;
+        if (_getSettings().AllowPermanentDeleteWithoutRecycleBin) return false; // the permanent-delete prompt handles it
+        IEnumerable<string> paths = _catalog.Find(source)?.CaptureGroup?.Paths ?? (IEnumerable<string>)[source];
+        var withoutBin = paths.FirstOrDefault(_fileActions.LacksRecycleBin);
+        if (withoutBin is null) return false;
+
+        var fileName = Path.GetFileName(withoutBin);
+        _sink.SetStatusText(Tr.CoreRecycleUnsupportedDrive(fileName));
+        _dialogService?.ShowError(Tr.DialogRecycleNoBinTitle,
+            Tr.DialogRecycleNoBinMessage(fileName: fileName, settingName: Tr.SettingsAllowPermanentDeleteLabel, settingsPage: Tr.SettingsNavFiles));
+        _sink.NotifyNavigationStateChanged();
+        return true;
+    }
+
+    /// <summary>
+    /// A Delete that already showed the next photo (INV-3) and then failed: the photo went back into the list (INV-5) but
+    /// the view stays where it is, so a status line alone is easy to miss. Says it in a dialog as well.
+    /// </summary>
+    private void ReportRecycleFailure(string source, string? reason) =>
+        _dialogService?.ShowError(Tr.DialogRecycleFailedTitle,
+            Tr.DialogRecycleFailedMessage(fileName: Path.GetFileName(source), message: reason ?? string.Empty));
 
     /// <summary>Q-R8: the setting is on and <paramref name="source"/> is on a drive without a Recycle Bin, so Recycle would delete permanently.</summary>
     private bool WillAskPermanentDelete(string? source) =>
@@ -178,6 +214,8 @@ public sealed class FileActionController
 
         var source = compareSelectedPath ?? currentPath;
         if (string.IsNullOrEmpty(source)) return false;
+        // Backstop for every entry point: the refusal happens before the photo leaves the list, so it stays on screen.
+        if (operation == FileOperationType.Recycle && RefuseRecycleWithoutBin(source)) return false;
         var selectedGroup = _catalog.Find(source)?.CaptureGroup;
         if (selectedGroup is not null && _fileSystem is null) return false;
 
@@ -428,7 +466,11 @@ public sealed class FileActionController
             }
             // R08: the present awaited; the failure text belongs to the folder the action ran in, not to one opened since.
             if (!_clock.IsFolderCurrent(folderGen)) return false;
-            _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, groupResult?.Error ?? singleResult!.Error));
+            var failure = groupResult?.Error ?? singleResult!.Error;
+            _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, failure));
+            // Only when nothing at all was deleted: a capture whose members partly reached the Recycle Bin keeps its status text.
+            if (operation == FileOperationType.Recycle && (groupResult is null || !groupResult.Members.Any(member => member.Completed)))
+                ReportRecycleFailure(source, failure);
             return false;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -476,6 +518,7 @@ public sealed class FileActionController
             }
             if (!_clock.IsFolderCurrent(folderGen)) return false; // R08: never write this status into a newly opened folder
             _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, UserFacingError.Describe(ex)));
+            if (operation == FileOperationType.Recycle) ReportRecycleFailure(source, UserFacingError.Describe(ex));
             return false;
         }
         finally
@@ -614,13 +657,13 @@ public sealed class FileActionController
 
         if (!_clock.IsFolderCurrent(folderGen)) return result;
 
-        // R7-2: a Move made in another folder is restored there, not into this folder's catalog; the caller opens
-        // that folder at the restored file, as for a Recycle undo (see RestoresOutsideFolder).
+        // R7-2: a Move/Recycle made in another folder is restored there, not into this folder's catalog; the caller opens
+        // that folder at the restored file (see RestoresOutsideFolder).
         if (RestoresOutsideFolder(result, currentFolder))
         {
             // The caller reloads the folder, which rebuilds the catalog from disk and presents the restored photo once:
-            // restoring into the catalog and presenting here as well would decode the same image twice (a Recycle undo,
-            // or a Move whose members are split across folders, so that part of them is in this one).
+            // restoring into the catalog and presenting here as well would decode the same image twice (a capture whose
+            // members are split across folders, so that part of them is in this one).
             // Only for the current folder: a restore made in another folder must not write its path into THIS folder's session.
             TakeMovePosition(result.Source);
             if (IsInFolder(result.Source, currentFolder))
@@ -628,6 +671,31 @@ public sealed class FileActionController
                 _sink.OnCatalogChanged(null);
                 _sink.UpdateSessionPath(result.Source);
             }
+        }
+        else if (result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source)
+            && IsInFolder(result.Source, currentFolder))
+        {
+            // A Recycle undone in the folder it was made in: the restored photo goes back to its remembered review position
+            // (RememberMovePosition at delete time) without reloading the folder, and the photo on screen stays the one the
+            // user is reviewing -- a reload reopened the folder AT the restored photo, which lost the review position.
+            // Only when nothing is on screen (the delete removed the last photo) is the restored photo presented.
+            var wasEmpty = _catalog.Count == 0;
+            InsertRestoredMove(result.Source, result.RestoredPaths is { Count: > 0 } restored
+                ? restored.Where(path => IsInFolder(path, currentFolder)).ToArray()
+                : null);
+            _sink.OnCatalogChanged(null);
+            if (wasEmpty && _catalog.Count > 0)
+            {
+                var restoredIndex = _catalog.IndexOf(ReloadPathAfterUndo(result) ?? result.Source);
+                await _sink.PresentAsync(restoredIndex >= 0 ? restoredIndex : Math.Max(_catalog.CurrentIndex, 0));
+                if (!_clock.IsFolderCurrent(folderGen)) return result;
+            }
+            else
+            {
+                // The neighbour window shifted by one: warm the restored photo so stepping back to it is instant.
+                _preloadController?.PreloadAroundAsync(Math.Max(_catalog.CurrentIndex, 0)).FireAndLog("Preload after Recycle undo failed");
+            }
+            _sink.UpdateSessionPath(_catalog.Current?.Path ?? result.Source);
         }
         else if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source)
             && IsInFolder(result.Source, currentFolder))
@@ -747,16 +815,16 @@ public sealed class FileActionController
     }
 
     /// <summary>
-    /// R7-2: a successful undo whose restored file is not in <paramref name="currentFolder"/> -- a Recycle (always
-    /// reloaded) or a Move made in a previous folder -- so the caller opens the file's folder at that file.
+    /// R7-2: a successful undo whose restored file is not in <paramref name="currentFolder"/> -- a Move or Recycle made in
+    /// a previous folder (or a capture whose members are split across folders) -- so the caller opens the file's folder
+    /// at that file. A Recycle or Move undone in the open folder is put back in place by <see cref="UndoLastAsync"/>.
     /// </summary>
     public static bool RestoresOutsideFolder(UndoResult? result, string? currentFolder) =>
         result is { Succeeded: true } && !string.IsNullOrEmpty(result.Source)
-        && (result.Operation == FileOperationType.Recycle
-            || (result.Operation == FileOperationType.Move
-                && (result.RestoredPaths is { Count: > 0 } paths
-                    ? paths.Any(path => !IsInFolder(path, currentFolder))
-                    : !IsInFolder(result.Source, currentFolder))));
+        && result.Operation is FileOperationType.Recycle or FileOperationType.Move
+        && (result.RestoredPaths is { Count: > 0 } paths
+            ? paths.Any(path => !IsInFolder(path, currentFolder))
+            : !IsInFolder(result.Source, currentFolder));
 
     /// <summary>
     /// The file a reload after <paramref name="result"/> should open at. <c>Source</c> is the first manifest member, which

@@ -347,7 +347,8 @@
                             </Grid>
                             <CheckBox x:Name="MoveCopyReuseLastFolderCheck" Content="{loc:Tr settings.moveCopyReuseLastFolder.label}" Margin="0,4,0,0"/>
                             <TextBlock Text="{loc:Tr settings.moveCopyReuseLastFolder.hint}" Style="{StaticResource HelpText}" Margin="20,0,0,4"/>
-                            <Button Content="{loc:Tr settings.editActionProfiles}" HorizontalAlignment="Left" Click="EditActions_Click" Margin="0,6,0,0"/>
+                            <TextBlock x:Name="ActionProfilesDefaultsHint" Text="{loc:Tr settings.editActionProfiles.hint}" Style="{StaticResource HelpText}" Margin="0,8,0,0"/>
+                            <Button Content="{loc:Tr settings.editActionProfiles}" ToolTip="{loc:Tr settings.editActionProfiles.hint}" HorizontalAlignment="Left" Click="EditActions_Click" Margin="0,6,0,0"/>
                         </StackPanel></GroupBox>
                     </StackPanel>
                 </ScrollViewer>

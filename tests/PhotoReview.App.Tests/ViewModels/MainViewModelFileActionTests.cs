@@ -14,6 +14,7 @@ using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
+using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
@@ -714,6 +715,47 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
 
         Assert.True(File.Exists(img1));
         Assert.Equal(1, vm.TotalFiles);
+        // Nothing was on screen after the delete, so the restored photo is the one shown now.
+        Assert.Equal(img1, vm.Catalog.Current?.Path);
+        await Wait.UntilAsync(() => _sink.PresentedPaths.LastOrDefault() == img1, "restored photo presented");
+    }
+
+    [Fact]
+    public async Task UndoRecycle_InTheSameFolder_PutsThePhotoBackAtItsPosition_KeepsTheCurrentPhoto_WithoutReload()
+    {
+        var folder = Path.Combine(_tempDir, "undo_recycle_in_place");
+        Directory.CreateDirectory(folder);
+        var paths = Enumerable.Range(1, 5).Select(i => CreateImageFile(folder, $"{i}.jpg")).ToArray();
+        _settingsStore.Current.ImageSortMode = ImageSortMode.Name; // a mode that queries Explorer on every folder load
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        await vm.NextAsync();
+        await vm.NextAsync();
+        Assert.Equal(paths[2], vm.Catalog.Current?.Path);
+        var queriesBefore = _explorerOrder.QueryCount;
+        Assert.True(queriesBefore > 0);
+
+        await vm.RecycleAsync();
+        Assert.Equal(paths[3], vm.Catalog.Current?.Path);
+        await Wait.UntilAsync(() => _sink.PresentedPaths.LastOrDefault() == paths[3], "next photo presented after the delete");
+        var presentsBeforeUndo = _sink.PresentedPaths.Count;
+
+        await vm.UndoAsync();
+
+        Assert.True(File.Exists(paths[2]));
+        // Back at its old place (3rd), not at the front; the photo under review is still 4.jpg.
+        Assert.Equal(paths, vm.Catalog.Paths);
+        Assert.Equal(paths[3], vm.Catalog.Current?.Path);
+        Assert.Equal(3, vm.CurrentIndex);
+        // No folder reload (it would query the Explorer order again) and the restored photo is not presented.
+        Assert.Equal(queriesBefore, _explorerOrder.QueryCount);
+        Assert.DoesNotContain(paths[2], _sink.PresentedPaths.Skip(presentsBeforeUndo));
+        Assert.Equal(paths[3], vm.Session?.CurrentPath);
+
+        // Stepping back reaches the restored photo.
+        await vm.PreviousAsync();
+        Assert.Equal(paths[2], vm.Catalog.Current?.Path);
     }
 
     [Fact]
@@ -761,12 +803,75 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
     {
         var (vm, _, img1) = await OpenPermanentDeleteAlbumAsync("qr8_off", noRecycleBin: true, allowSetting: false);
 
+        await Wait.UntilAsync(() => _sink.PresentedPaths.LastOrDefault() == img1, "first photo presented");
+        var presentsBefore = _sink.PresentedPaths.Count;
+
         await vm.RecycleAsync();
 
         Assert.True(File.Exists(img1));
         Assert.Empty(_recycleBin.PermanentlyDeleted);
+        Assert.Empty(_recycleBin.RecycledPaths);
         Assert.Empty(_dialogService.Confirmations);
-        Assert.Equal(2, vm.TotalFiles); // INV-5: the source went back into the catalog
+        Assert.Equal(2, vm.TotalFiles);
+        // Refused before the photo left the list: the view does NOT move on to the next photo...
+        Assert.Equal(img1, vm.Catalog.Current?.Path);
+        Assert.Equal(presentsBefore, _sink.PresentedPaths.Count);
+        // ...and the user is told clearly, with the Settings option that would allow it.
+        Assert.Equal(PhotoReview.Core.Localization.Tr.CoreRecycleUnsupportedDrive("1.jpg"), vm.StatusText);
+        var error = Assert.Single(_dialogService.Errors);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRecycleNoBinTitle, error.Title);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRecycleNoBinMessage(
+            fileName: "1.jpg",
+            settingName: PhotoReview.Core.Localization.Tr.SettingsAllowPermanentDeleteLabel,
+            settingsPage: PhotoReview.Core.Localization.Tr.SettingsNavFiles), error.Message);
+        Assert.Contains(PhotoReview.Core.Localization.Tr.SettingsAllowPermanentDeleteLabel, error.Message, StringComparison.Ordinal);
+        Assert.False(vm.IsFileActionInProgress);
+    }
+
+    [Fact]
+    public async Task Recycle_NoRecycleBinDriveAndSettingOff_WithConfirmBeforeDelete_RefusesWithoutAskingFirst()
+    {
+        var (vm, _, img1) = await OpenPermanentDeleteAlbumAsync("qr8_off_confirm", noRecycleBin: true, allowSetting: false);
+        _settings.ConfirmBeforeDelete = true;
+
+        await vm.RecycleAsync();
+
+        Assert.Empty(_dialogService.Confirmations); // a "delete?" question would be pointless: the answer cannot delete it
+        Assert.Single(_dialogService.Errors);
+        Assert.True(File.Exists(img1));
+        Assert.Equal(img1, vm.Catalog.Current?.Path);
+    }
+
+    [Fact]
+    public async Task RunAction_RecycleProfileWithConfirm_NoRecycleBinDriveAndSettingOff_RefusesWithoutAskingFirst()
+    {
+        var (vm, _, img1) = await OpenPermanentDeleteAlbumAsync("qr8_off_profile", noRecycleBin: true, allowSetting: false);
+
+        await vm.RunActionAsync(2); // "ConfirmRecycle": Recycle with Confirm = true
+
+        Assert.Empty(_dialogService.Confirmations);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRecycleNoBinTitle, Assert.Single(_dialogService.Errors).Title);
+        Assert.True(File.Exists(img1));
+        Assert.Equal(img1, vm.Catalog.Current?.Path);
+    }
+
+    [Fact]
+    public async Task Recycle_FailingDuringTheFileOperation_KeepsTheAdvance_RestoresThePhotoAndShowsADialog()
+    {
+        var (vm, _, img1) = await OpenPermanentDeleteAlbumAsync("recycle_io_fail", noRecycleBin: false, allowSetting: false);
+        _recycleBin.FailSend = true;
+
+        await vm.RecycleAsync();
+
+        Assert.True(File.Exists(img1));
+        // INV-3: the next photo was presented before the I/O and is not taken back; INV-5: the photo is back in the list.
+        Assert.Equal(Path.Combine(Path.GetDirectoryName(img1)!, "2.jpg"), vm.Catalog.Current?.Path);
+        Assert.Equal(2, vm.TotalFiles);
+        Assert.Equal(img1, vm.Catalog.Paths[0]);
+        var error = Assert.Single(_dialogService.Errors);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRecycleFailedTitle, error.Title);
+        Assert.Contains("1.jpg", error.Message, StringComparison.Ordinal);
+        Assert.Contains("locked by another process", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -859,9 +964,13 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         /// <summary>APP-03: makes the recycle "slow" (I/O in flight) until the test releases it.</summary>
         public Task? SendGate { get; set; }
 
+        /// <summary>The shell call fails on a drive that HAS a Recycle Bin (a locked file): the failure comes after the advance.</summary>
+        public bool FailSend { get; set; }
+
         public void SendToRecycleBin(string path)
         {
             if (HasNoRecycleBin) throw new IOException("no recycle bin");
+            if (FailSend) throw new IOException("locked by another process");
             SendGate?.GetAwaiter().GetResult();
             RecycledPaths.Add(path);
             if (File.Exists(path))
@@ -907,7 +1016,8 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
             return ConfirmationResponse;
         }
         public void ShowMessage(string title, string message) { }
-        public void ShowError(string title, string message) { }
+        public List<(string Title, string Message)> Errors { get; } = [];
+        public void ShowError(string title, string message) => Errors.Add((title, message));
         public string? PickFolder(string? initialFolder = null) => null;
         public bool ShowBatchReview(IReadOnlyList<string> paths) => true;
         public void ShowRecovery() { }
@@ -971,8 +1081,14 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
     {
-        public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout, IProgress<ExplorerQueryProgress>? progress = null, int progressiveBatchSize = 16, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
+        /// <summary>One query per folder load: an unchanged count proves that no reload happened.</summary>
+        public int QueryCount { get; private set; }
+
+        public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout, IProgress<ExplorerQueryProgress>? progress = null, int progressiveBatchSize = 16, CancellationToken cancellationToken = default)
+        {
+            QueryCount++;
+            return Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
+        }
 
         public void Dispose() { }
     }
