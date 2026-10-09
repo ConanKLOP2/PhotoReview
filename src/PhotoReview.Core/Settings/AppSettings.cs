@@ -303,6 +303,23 @@ public class AppSettings
     public Model.FitWidthAnchor FitWidthAnchor { get; set; } = Model.FitWidthAnchor.Centre;
 
     /// <summary>
+    /// Vertical anchor of the SECOND, independent Fit width command (<see cref="ShortcutMappings.FitWidth2"/>, the
+    /// "Fit width 2" context-menu item, the middle-click "Fit width 2" choice). Does not affect the initial view
+    /// (that is <see cref="FitWidthAnchor"/>). Default <see cref="Model.FitWidthAnchor.BottomThird"/>; absent in older
+    /// configs loads as that default, and an unparsable value is reset to it and reported (RV-D2).
+    /// </summary>
+    [JsonConverter(typeof(SettingsEnumConverter<Model.FitWidthAnchor>))]
+    public Model.FitWidthAnchor FitWidthAnchor2 { get; set; } = Model.FitWidthAnchor.BottomThird;
+
+    /// <summary>
+    /// What a middle-button click on the main image does (<see cref="Model.MiddleClickAction"/>). Default
+    /// <see cref="Model.MiddleClickAction.ActualSize"/> (100 %). Absent in older configs loads as the default; an
+    /// unparsable value is reset to it and reported (RV-D2).
+    /// </summary>
+    [JsonConverter(typeof(SettingsEnumConverter<Model.MiddleClickAction>))]
+    public Model.MiddleClickAction MiddleClickAction { get; set; } = Model.MiddleClickAction.ActualSize;
+
+    /// <summary>
     /// feat/zoom-key-anchor: what point stays under the zoom for +/- (keyboard zoom in/out), 100 % and the
     /// click-zoom shortcut/menu (mouse wheel and click-to-zoom already anchor at the cursor regardless of this
     /// setting). Default <see cref="KeyboardZoomAnchor.ViewportCentre"/>; absent in older configs also loads as

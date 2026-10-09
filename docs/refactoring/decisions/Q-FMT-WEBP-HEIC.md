@@ -1,49 +1,49 @@
----
+﻿---
 id: Q-FMT-WEBP-HEIC
-order: 141
+order: 143
 summary: |-
   WebP + HEIC/HEIF supported through the Windows codecs (WIC), no bundled libheif/libde265 (reverses Q-R52 for these two formats only, user request 2026-10-09); setting WebpHeicSupportEnabled (default on); a missing Store codec is a localized per-file error with install guidance, logged once; animated WebP shows frame 1; JXL/AVIF/PSD stay deferred.
 ---
 
-# Q-FMT-WEBP-HEIC — WebP và HEIC/HEIF qua codec của Windows (2026-10-09)
+# Q-FMT-WEBP-HEIC â€” WebP vÃ  HEIC/HEIF qua codec cá»§a Windows (2026-10-09)
 
-**Bối cảnh.** Người dùng không xem được ảnh HEIC (iPhone) và muốn xem WebP (ảnh tải từ web). [Q-R52](Q-R41-Q-R52-user-feedback.md)
-đã DECLINED "định dạng mới" cho tới khi có quyết định kiến trúc riêng (thư viện, giấy phép, kế hoạch test). Ngày 2026-10-09
-người dùng yêu cầu lại; quyết định này đảo Q-R52 **chỉ cho WebP và HEIC/HEIF**. JXL, AVIF, PSD vẫn để sau.
+**Bá»‘i cáº£nh.** NgÆ°á»i dÃ¹ng khÃ´ng xem Ä‘Æ°á»£c áº£nh HEIC (iPhone) vÃ  muá»‘n xem WebP (áº£nh táº£i tá»« web). [Q-R52](Q-R41-Q-R52-user-feedback.md)
+Ä‘Ã£ DECLINED "Ä‘á»‹nh dáº¡ng má»›i" cho tá»›i khi cÃ³ quyáº¿t Ä‘á»‹nh kiáº¿n trÃºc riÃªng (thÆ° viá»‡n, giáº¥y phÃ©p, káº¿ hoáº¡ch test). NgÃ y 2026-10-09
+ngÆ°á»i dÃ¹ng yÃªu cáº§u láº¡i; quyáº¿t Ä‘á»‹nh nÃ y Ä‘áº£o Q-R52 **chá»‰ cho WebP vÃ  HEIC/HEIF**. JXL, AVIF, PSD váº«n Ä‘á»ƒ sau.
 
-## Quyết định
+## Quyáº¿t Ä‘á»‹nh
 
-| Mục | Nội dung |
+| Má»¥c | Ná»™i dung |
 |---|---|
-| Đường giải mã | Windows Imaging Component (WIC) có sẵn: WebP qua "Microsoft Webp Decoder" (Windows 11 / gói Store "WebP Image Extensions"); HEIC/HEIF qua "HEIF Image Extensions" + "HEVC Video Extensions" (Store). Luôn đi `WicDirectDecoder` (+ fallback WPF như mọi backend), bất kể backend người dùng chọn (`WebpHeicRoutingDecoder`). |
-| Không đóng gói | Không libheif, libde265, libwebp hay DLL native mới; `THIRD-PARTY-NOTICES.md` không đổi. |
-| Danh sách đuôi | `.webp`, `.heic`, `.heif` (`ImageFileTypes.WebpHeicExtensions`); `.hif`/`.avif`/`.heics`/`.jxl` không được liệt kê dù codec HEIF/JXL của Windows nhận chúng. |
-| Setting | `WebpHeicSupportEnabled`, mặc định BẬT (cả config cũ không có trường này), Cài đặt > "WebP và HEIC/HEIF"; đổi giá trị thì nạp lại thư mục đang mở (giống `RawSupportEnabled`). Cửa sổ Cài đặt hiện dòng trạng thái codec của máy. |
-| Probe lúc chạy | `WicCodecAvailability`: liệt kê decoder WIC (`CreateComponentEnumerator`, thấy cả codec gói Store) + hỏi Media Foundation có decoder HEVC (`MFTEnumEx`). Chạy một lần/tiến trình, lười (lần đầu gặp đường dẫn WebP/HEIC hoặc mở Cài đặt) — không chạm đường khởi động. Cài codec khi app đang chạy: cần khởi động lại. |
-| Máy thiếu codec | File VẪN được liệt kê (người dùng thấy ảnh iPhone của mình và được bảo cần cài gì). Khi hiển thị: lỗi `MissingImageCodecException` (một `NotSupportedException`) có câu hướng dẫn đã dịch (en/vi) "cài ... từ Microsoft Store rồi khởi động lại". Bị từ chối trước mọi lần đọc đĩa; preload không prefetch byte của file đó, không ghi lỗi từng file (router ghi log một lần cho mỗi định dạng). Các ảnh khác duyệt bình thường. |
-| Setting tắt | File không được liệt kê; nếu vẫn tới decoder (kéo thả cũ, Undo) thì lỗi đã dịch "WebP/HEIC đang tắt". Undo khôi phục file WebP/HEIC bất kể setting (tránh trông như Undo hỏng). |
-| Hướng ảnh / alpha / động | Hướng EXIF: chuỗi đọc metadata sẵn có của WicDirect (`System.Photo.Orientation`). Alpha: WebP trong suốt ra Pbgra32 như PNG; cache đĩa JPEG từ chối ảnh có pixel trong suốt (IMG-01/Q-R7), ảnh đục được cache bình thường. WebP động: chỉ khung đầu. `ImageCacheKey` và định dạng `PreviewCacheFile` không đổi. |
+| ÄÆ°á»ng giáº£i mÃ£ | Windows Imaging Component (WIC) cÃ³ sáºµn: WebP qua "Microsoft Webp Decoder" (Windows 11 / gÃ³i Store "WebP Image Extensions"); HEIC/HEIF qua "HEIF Image Extensions" + "HEVC Video Extensions" (Store). LuÃ´n Ä‘i `WicDirectDecoder` (+ fallback WPF nhÆ° má»i backend), báº¥t ká»ƒ backend ngÆ°á»i dÃ¹ng chá»n (`WebpHeicRoutingDecoder`). |
+| KhÃ´ng Ä‘Ã³ng gÃ³i | KhÃ´ng libheif, libde265, libwebp hay DLL native má»›i; `THIRD-PARTY-NOTICES.md` khÃ´ng Ä‘á»•i. |
+| Danh sÃ¡ch Ä‘uÃ´i | `.webp`, `.heic`, `.heif` (`ImageFileTypes.WebpHeicExtensions`); `.hif`/`.avif`/`.heics`/`.jxl` khÃ´ng Ä‘Æ°á»£c liá»‡t kÃª dÃ¹ codec HEIF/JXL cá»§a Windows nháº­n chÃºng. |
+| Setting | `WebpHeicSupportEnabled`, máº·c Ä‘á»‹nh Báº¬T (cáº£ config cÅ© khÃ´ng cÃ³ trÆ°á»ng nÃ y), CÃ i Ä‘áº·t > "WebP vÃ  HEIC/HEIF"; Ä‘á»•i giÃ¡ trá»‹ thÃ¬ náº¡p láº¡i thÆ° má»¥c Ä‘ang má»Ÿ (giá»‘ng `RawSupportEnabled`). Cá»­a sá»• CÃ i Ä‘áº·t hiá»‡n dÃ²ng tráº¡ng thÃ¡i codec cá»§a mÃ¡y. |
+| Probe lÃºc cháº¡y | `WicCodecAvailability`: liá»‡t kÃª decoder WIC (`CreateComponentEnumerator`, tháº¥y cáº£ codec gÃ³i Store) + há»i Media Foundation cÃ³ decoder HEVC (`MFTEnumEx`). Cháº¡y má»™t láº§n/tiáº¿n trÃ¬nh, lÆ°á»i (láº§n Ä‘áº§u gáº·p Ä‘Æ°á»ng dáº«n WebP/HEIC hoáº·c má»Ÿ CÃ i Ä‘áº·t) â€” khÃ´ng cháº¡m Ä‘Æ°á»ng khá»Ÿi Ä‘á»™ng. CÃ i codec khi app Ä‘ang cháº¡y: cáº§n khá»Ÿi Ä‘á»™ng láº¡i. |
+| MÃ¡y thiáº¿u codec | File VáºªN Ä‘Æ°á»£c liá»‡t kÃª (ngÆ°á»i dÃ¹ng tháº¥y áº£nh iPhone cá»§a mÃ¬nh vÃ  Ä‘Æ°á»£c báº£o cáº§n cÃ i gÃ¬). Khi hiá»ƒn thá»‹: lá»—i `MissingImageCodecException` (má»™t `NotSupportedException`) cÃ³ cÃ¢u hÆ°á»›ng dáº«n Ä‘Ã£ dá»‹ch (en/vi) "cÃ i ... tá»« Microsoft Store rá»“i khá»Ÿi Ä‘á»™ng láº¡i". Bá»‹ tá»« chá»‘i trÆ°á»›c má»i láº§n Ä‘á»c Ä‘Ä©a; preload khÃ´ng prefetch byte cá»§a file Ä‘Ã³, khÃ´ng ghi lá»—i tá»«ng file (router ghi log má»™t láº§n cho má»—i Ä‘á»‹nh dáº¡ng). CÃ¡c áº£nh khÃ¡c duyá»‡t bÃ¬nh thÆ°á»ng. |
+| Setting táº¯t | File khÃ´ng Ä‘Æ°á»£c liá»‡t kÃª; náº¿u váº«n tá»›i decoder (kÃ©o tháº£ cÅ©, Undo) thÃ¬ lá»—i Ä‘Ã£ dá»‹ch "WebP/HEIC Ä‘ang táº¯t". Undo khÃ´i phá»¥c file WebP/HEIC báº¥t ká»ƒ setting (trÃ¡nh trÃ´ng nhÆ° Undo há»ng). |
+| HÆ°á»›ng áº£nh / alpha / Ä‘á»™ng | HÆ°á»›ng EXIF: chuá»—i Ä‘á»c metadata sáºµn cÃ³ cá»§a WicDirect (`System.Photo.Orientation`). Alpha: WebP trong suá»‘t ra Pbgra32 nhÆ° PNG; cache Ä‘Ä©a JPEG tá»« chá»‘i áº£nh cÃ³ pixel trong suá»‘t (IMG-01/Q-R7), áº£nh Ä‘á»¥c Ä‘Æ°á»£c cache bÃ¬nh thÆ°á»ng. WebP Ä‘á»™ng: chá»‰ khung Ä‘áº§u. `ImageCacheKey` vÃ  Ä‘á»‹nh dáº¡ng `PreviewCacheFile` khÃ´ng Ä‘á»•i. |
 
-## Vì sao WIC, không libheif
+## VÃ¬ sao WIC, khÃ´ng libheif
 
-- **Pháp lý/bằng sáng chế:** HEIC dùng HEVC (H.265), có nhiều nhóm bằng sáng chế (MPEG LA/Access Advance/Velos). Tự phân phối
-  libde265 (LGPL) + libheif (LGPL) trong bản build Windows kéo theo rủi ro bản quyền sáng chế HEVC cho người phân phối và nghĩa vụ
-  LGPL (cho phép thay DLL, kèm notice). Codec của Microsoft được người dùng tự cài từ Store, giấy phép HEVC đi kèm gói đó.
-- **Kích thước/bảo trì:** không thêm DLL native, không pin SHA/fetch script, không cập nhật bảo mật cho parser HEIF của bên thứ ba.
-- **Nhất quán:** ADR 0001 đã chọn WIC làm backend mặc định; WebP/HEIC đi cùng pipeline (ICC→sRGB, xoay EXIF, pre-scale, premultiplied alpha).
+- **PhÃ¡p lÃ½/báº±ng sÃ¡ng cháº¿:** HEIC dÃ¹ng HEVC (H.265), cÃ³ nhiá»u nhÃ³m báº±ng sÃ¡ng cháº¿ (MPEG LA/Access Advance/Velos). Tá»± phÃ¢n phá»‘i
+  libde265 (LGPL) + libheif (LGPL) trong báº£n build Windows kÃ©o theo rá»§i ro báº£n quyá»n sÃ¡ng cháº¿ HEVC cho ngÆ°á»i phÃ¢n phá»‘i vÃ  nghÄ©a vá»¥
+  LGPL (cho phÃ©p thay DLL, kÃ¨m notice). Codec cá»§a Microsoft Ä‘Æ°á»£c ngÆ°á»i dÃ¹ng tá»± cÃ i tá»« Store, giáº¥y phÃ©p HEVC Ä‘i kÃ¨m gÃ³i Ä‘Ã³.
+- **KÃ­ch thÆ°á»›c/báº£o trÃ¬:** khÃ´ng thÃªm DLL native, khÃ´ng pin SHA/fetch script, khÃ´ng cáº­p nháº­t báº£o máº­t cho parser HEIF cá»§a bÃªn thá»© ba.
+- **Nháº¥t quÃ¡n:** ADR 0001 Ä‘Ã£ chá»n WIC lÃ m backend máº·c Ä‘á»‹nh; WebP/HEIC Ä‘i cÃ¹ng pipeline (ICCâ†’sRGB, xoay EXIF, pre-scale, premultiplied alpha).
 
-## Hạn chế (đã chấp nhận)
+## Háº¡n cháº¿ (Ä‘Ã£ cháº¥p nháº­n)
 
-- Phụ thuộc máy người dùng: HEIC cần **cả** "HEIF Image Extensions" **và** "HEVC Video Extensions" (gói HEVC có thể mất phí;
-  một số máy có bản "from Device Manufacturer" miễn phí). WebP có sẵn trên Windows 11; Windows 10 cần gói "WebP Image Extensions".
-- Máy dev (2026-10-09): WebP decoder **có**; HEIF decoder **có**; decoder HEVC **không** (MFTEnumEx thấy AV1/H.264 nên việc
-  dò gói Store hoạt động). Vì vậy giải mã HEIC thật và hướng xoay HEIC (irot/imir vs EXIF) **chưa kiểm được trên máy này**;
-  test `Heic_RealSample_*` (Category=Native) chạy khi có codec + biến `PHOTOREVIEW_HEIC_SAMPLE`. Cần kiểm tra bằng mắt với ảnh
-  iPhone dọc sau khi cài HEVC.
-- WebP động chỉ hiện khung đầu; không phát hoạt ảnh.
-- Thumbnail/benchmark: benchmark (`BenchmarkWindow`) không liệt kê WebP/HEIC; "Open with" (script đăng ký) không đăng ký đuôi mới.
+- Phá»¥ thuá»™c mÃ¡y ngÆ°á»i dÃ¹ng: HEIC cáº§n **cáº£** "HEIF Image Extensions" **vÃ ** "HEVC Video Extensions" (gÃ³i HEVC cÃ³ thá»ƒ máº¥t phÃ­;
+  má»™t sá»‘ mÃ¡y cÃ³ báº£n "from Device Manufacturer" miá»…n phÃ­). WebP cÃ³ sáºµn trÃªn Windows 11; Windows 10 cáº§n gÃ³i "WebP Image Extensions".
+- MÃ¡y dev (2026-10-09): WebP decoder **cÃ³**; HEIF decoder **cÃ³**; decoder HEVC **khÃ´ng** (MFTEnumEx tháº¥y AV1/H.264 nÃªn viá»‡c
+  dÃ² gÃ³i Store hoáº¡t Ä‘á»™ng). VÃ¬ váº­y giáº£i mÃ£ HEIC tháº­t vÃ  hÆ°á»›ng xoay HEIC (irot/imir vs EXIF) **chÆ°a kiá»ƒm Ä‘Æ°á»£c trÃªn mÃ¡y nÃ y**;
+  test `Heic_RealSample_*` (Category=Native) cháº¡y khi cÃ³ codec + biáº¿n `PHOTOREVIEW_HEIC_SAMPLE`. Cáº§n kiá»ƒm tra báº±ng máº¯t vá»›i áº£nh
+  iPhone dá»c sau khi cÃ i HEVC.
+- WebP Ä‘á»™ng chá»‰ hiá»‡n khung Ä‘áº§u; khÃ´ng phÃ¡t hoáº¡t áº£nh.
+- Thumbnail/benchmark: benchmark (`BenchmarkWindow`) khÃ´ng liá»‡t kÃª WebP/HEIC; "Open with" (script Ä‘Äƒng kÃ½) khÃ´ng Ä‘Äƒng kÃ½ Ä‘uÃ´i má»›i.
 
-## Để sau
+## Äá»ƒ sau
 
-JXL (Windows có "Microsoft JPEG XL Decoder" trên một số bản), AVIF (codec HEIF + AV1 Video Extension), PSD: mỗi định dạng cần
-quyết định riêng (danh sách đuôi, kế hoạch test, hành vi khi thiếu codec) theo cùng khuôn mẫu này.
+JXL (Windows cÃ³ "Microsoft JPEG XL Decoder" trÃªn má»™t sá»‘ báº£n), AVIF (codec HEIF + AV1 Video Extension), PSD: má»—i Ä‘á»‹nh dáº¡ng cáº§n
+quyáº¿t Ä‘á»‹nh riÃªng (danh sÃ¡ch Ä‘uÃ´i, káº¿ hoáº¡ch test, hÃ nh vi khi thiáº¿u codec) theo cÃ¹ng khuÃ´n máº«u nÃ y.

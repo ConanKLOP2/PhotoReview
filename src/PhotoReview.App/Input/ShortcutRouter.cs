@@ -29,6 +29,7 @@ public sealed class ShortcutRouter
     private Key? _copyToFolderKey;
     private Key? _clickZoomKey;
     private Key? _fitWidthKey;
+    private Key? _fitWidth2Key;
     private Key? _fitHeightKey;
     private Key? _toggleKeepZoomKey;
     private Key? _openFolderKey;
@@ -71,6 +72,7 @@ public sealed class ShortcutRouter
         _copyToFolderKey = ParseKey(settings.Shortcuts.CopyToFolder);
         _clickZoomKey = ParseKey(settings.Shortcuts.ClickZoom);
         _fitWidthKey = ParseKey(settings.Shortcuts.FitWidth);
+        _fitWidth2Key = ParseKey(settings.Shortcuts.FitWidth2);
         _fitHeightKey = ParseKey(settings.Shortcuts.FitHeight);
         _toggleKeepZoomKey = ParseKey(settings.Shortcuts.ToggleKeepZoom);
         _openFolderKey = ParseKey(settings.Shortcuts.OpenFolder);
@@ -240,6 +242,10 @@ public sealed class ShortcutRouter
         if (_fitWidthKey.HasValue && key == _fitWidthKey.Value)
         {
             return ReviewCommand.FitWidth;
+        }
+        if (_fitWidth2Key.HasValue && key == _fitWidth2Key.Value)
+        {
+            return ReviewCommand.FitWidth2;
         }
         if (_fitHeightKey.HasValue && key == _fitHeightKey.Value)
         {

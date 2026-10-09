@@ -243,6 +243,7 @@ public sealed class SettingsStoreFailureTests
         {
             nameof(AppSettings.LoadingMode), nameof(AppSettings.ImageSortMode), nameof(AppSettings.ScalingQuality),
             nameof(AppSettings.DecoderBackend), nameof(AppSettings.KeyboardZoomAnchor), nameof(AppSettings.KineticGlideSmoothing),
+            nameof(AppSettings.FitWidthAnchor2), nameof(AppSettings.MiddleClickAction),
         })
         {
             foreach (var literal in new[] { "\"garbage\"", "\"\"", "null", "42", "{}" })

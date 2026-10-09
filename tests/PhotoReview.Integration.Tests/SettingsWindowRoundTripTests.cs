@@ -48,6 +48,8 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.InitialViewMode)] = w => w.ViewModeCombo.SelectedIndex = 4, // Fit -> Percent100 (PR-B: index shifted by FitWidth/FitHeight/ClickZoomLevel)
         [nameof(AppSettings.FitWidthAnchor)] = w => w.FitWidthAnchorCombo.SelectedIndex = 1, // Centre -> TopThird
         [nameof(AppSettings.KeepZoomAcrossImages)] = w => w.KeepZoomAcrossImagesCheck.IsChecked = true, // false -> true
+        [nameof(AppSettings.FitWidthAnchor2)] = w => w.FitWidthAnchor2Combo.SelectedIndex = 1, // BottomThird -> TopThird
+        [nameof(AppSettings.MiddleClickAction)] = w => w.MiddleClickActionCombo.SelectedIndex = 7, // ActualSize -> NextImage
         [nameof(AppSettings.LoadingMode)] = w => w.LoadingModeCombo.SelectedIndex = 2, // Preview -> Original
         [nameof(AppSettings.ImageSortMode)] = w => w.SortModeCombo.SelectedIndex = 4, // Default -> SizeAscending (item 4 of the Tag-mapped order; see SortModeCombo_ListsSixModes...)
         [nameof(AppSettings.CompareHashEnabled)] = w => w.CompareHashCheck.IsChecked = false, // true -> false
@@ -120,6 +122,8 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.InitialViewMode)] = InitialViewMode.Percent100,
         [nameof(AppSettings.FitWidthAnchor)] = FitWidthAnchor.TopThird,
         [nameof(AppSettings.KeepZoomAcrossImages)] = true,
+        [nameof(AppSettings.FitWidthAnchor2)] = FitWidthAnchor.TopThird,
+        [nameof(AppSettings.MiddleClickAction)] = MiddleClickAction.NextImage,
         [nameof(AppSettings.LoadingMode)] = LoadingMode.Original,
         [nameof(AppSettings.ImageSortMode)] = ImageSortMode.SizeAscending,
         [nameof(AppSettings.CompareHashEnabled)] = false,

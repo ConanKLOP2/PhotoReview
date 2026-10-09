@@ -69,6 +69,34 @@ public sealed class SettingsWindowUserFeedbackBatchTests
         });
     }
 
+    [Fact(DisplayName = "FocusExternalEditorOnLoad opens the Files page and focuses the external editor path box")]
+    public async Task FocusExternalEditorOnLoad_SelectsFilesPageAndFocusesPathBox()
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings()) { FocusExternalEditorOnLoad = true, WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            Visibility filesPage = Visibility.Collapsed;
+            Visibility generalPage = Visibility.Visible;
+            object? focused = null;
+            try
+            {
+                window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () =>
+                {
+                    filesPage = window.FilesScrollViewer.Visibility;
+                    generalPage = window.GeneralScrollViewer.Visibility;
+                    focused = System.Windows.Input.FocusManager.GetFocusedElement(window);
+                    window.Close();
+                });
+                window.ShowDialog();
+                Assert.Equal(Visibility.Visible, filesPage);
+                Assert.Equal(Visibility.Collapsed, generalPage);
+                Assert.Same(window.ExternalEditorPathText, focused);
+            }
+            finally { if (window.IsLoaded) window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Theory(DisplayName = "Boundary keyboard zoom steps (min and max) are accepted and stored by Save")]
     [InlineData("5", 5)]
     [InlineData("100", 100)]
