@@ -204,10 +204,9 @@ public partial class App : System.Windows.Application, IDisposable
                 workerCountOverride: settingsStore.Current.PreloadWorkerCount,
                 log: sp.GetService<ILog>(),
                 prefetchSourceBytes: sourceBytesCache is not null
-                    ? (path, token) => WebpHeicRoutingDecoder.WillRefuse(path, () => settingsStore.Current.WebpHeicSupportEnabled, () => WicCodecAvailability.Current)
-                        ? Task.CompletedTask // Q-FMT-WEBP-HEIC: no codec = no decode, so reading the file would be wasted disk I/O
-                        : Task.Run(() => sourceBytesCache.TryPrefetch(path), token)
-                    : (Func<string, CancellationToken, Task>?)null,
+                    ? Composition.ServiceFactories.CreateSourcePrefetch(sourceBytesCache,
+                        () => settingsStore.Current.WebpHeicSupportEnabled, () => WicCodecAvailability.Current)
+                    : null,
                 // feat/preload-window-setting: captured once at composition (applies after restart, Q-AR6/Q-R19).
                 window: PreloadWindow.FromSettings(settingsStore.Current),
                 snapshotVersion: getSnapshotVersion);

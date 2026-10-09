@@ -48,4 +48,17 @@ internal static class ServiceFactories
     public static IImageDecoder CreateWebpHeicDecoder(ISourceReader sourceReader, ILog? log, ReviewMetrics? metrics)
         => new FallbackImageDecoder(new WicDirectDecoder(sourceReader), DecoderBackend.WicDirect,
             new WpfBitmapImageDecoder(sourceReader), log, metrics);
+
+    /// <summary>
+    /// The preload's source-bytes prefetch. Q-FMT-WEBP-HEIC: a WebP/HEIC file the router will refuse (switch off, or no Windows
+    /// codec) is not read at all -- no decode could use its bytes (AGENTS.md priority 1: no wasted disk reads).
+    /// </summary>
+    public static Func<string, CancellationToken, Task> CreateSourcePrefetch(SourceBytesCache cache, Func<bool> isWebpHeicEnabled,
+        Func<WicCodecSupport> codecs)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        return (path, token) => WebpHeicRoutingDecoder.WillRefuse(path, isWebpHeicEnabled, codecs)
+            ? Task.CompletedTask
+            : Task.Run(() => cache.TryPrefetch(path), token);
+    }
 }
