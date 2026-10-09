@@ -214,8 +214,7 @@ public sealed class FileActionController
 
         var source = compareSelectedPath ?? currentPath;
         if (string.IsNullOrEmpty(source)) return false;
-        // Backstop for every entry point: the refusal happens before the photo leaves the list, so it stays on screen.
-        if (operation == FileOperationType.Recycle && RefuseRecycleWithoutBin(source)) return false;
+        // (A Delete without a Recycle Bin was already refused by RecycleAsync / RunActionAsync, the only Recycle callers.)
         var selectedGroup = _catalog.Find(source)?.CaptureGroup;
         if (selectedGroup is not null && _fileSystem is null) return false;
 

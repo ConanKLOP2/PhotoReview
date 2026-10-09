@@ -740,6 +740,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         Assert.Equal(paths[3], vm.Catalog.Current?.Path);
         await Wait.UntilAsync(() => _sink.PresentedPaths.LastOrDefault() == paths[3], "next photo presented after the delete");
         var presentsBeforeUndo = _sink.PresentedPaths.Count;
+        var preloadEventsBeforeUndo = _preloadController.Events.Count;
 
         await vm.UndoAsync();
 
@@ -752,6 +753,8 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         Assert.Equal(queriesBefore, _explorerOrder.QueryCount);
         Assert.DoesNotContain(paths[2], _sink.PresentedPaths.Skip(presentsBeforeUndo));
         Assert.Equal(paths[3], vm.Session?.CurrentPath);
+        // Preload re-centred on the shifted index, so stepping back to the restored photo is warm.
+        Assert.Contains("preload:3", _preloadController.Events.Skip(preloadEventsBeforeUndo));
 
         // Stepping back reaches the restored photo.
         await vm.PreviousAsync();
