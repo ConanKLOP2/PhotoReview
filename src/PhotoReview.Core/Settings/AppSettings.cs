@@ -384,6 +384,14 @@ public class AppSettings
     /// </summary>
     public bool ShowRecycleMenuItem { get; set; }
 
+    /// <summary>
+    /// Right-click menu items the user turned OFF, by <see cref="ContextMenuItemId"/> name (see <see cref="ContextMenuItems"/>).
+    /// <c>null</c> (absent in configs written before this list existed) = derive it from the legacy flags
+    /// <see cref="ShowZoomMenuItems"/>/<see cref="ShowFolderMenuItems"/>/<see cref="ShowRecycleMenuItem"/>; <see cref="SettingsStore"/>
+    /// materialises that on load so the migration is explicit. An EMPTY list = show every item. The Settings item can never be listed.
+    /// </summary>
+    public List<string>? HiddenContextMenuItems { get; set; }
+
     // ---- Camera RAW support (feat/raw-support-integration). Absent in older configs = these defaults. ----
 
     /// <summary>
