@@ -117,19 +117,22 @@ public sealed class WindowLocalizationTests
                 // (Open/Next/Previous folder), a Separator, Q-R48's "Open in External Editor" (hidden unless
                 // configured, but still present in the item list), a Separator, Settings.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(12, menuItems.Count);
+                Assert.Equal(13, menuItems.Count);
                 var undo = menuItems[0];
                 var delete = menuItems[1];
                 var fit = menuItems[2];
                 var zoomToLevel = menuItems[3];
                 var zoomMenu = menuItems[4];
-                var openFolder = menuItems[5];
-                var nextFolder = menuItems[6];
-                var previousFolder = menuItems[7];
-                var openInExternalEditor = menuItems[8];
-                var copyFileName = menuItems[9];
-                var copyFullPath = menuItems[10];
-                var settings = menuItems[11];
+                var refresh = menuItems[5];
+                var openFolder = menuItems[6];
+                var nextFolder = menuItems[7];
+                var previousFolder = menuItems[8];
+                var openInExternalEditor = menuItems[9];
+                var copyFileName = menuItems[10];
+                var copyFullPath = menuItems[11];
+                var settings = menuItems[12];
+                Assert.Equal("Làm mới", refresh.Header);
+                Assert.Equal("Làm mới: vẽ lại khung đang xem ở chất lượng cao nhất, không dịch chuyển", AutomationProperties.GetName(refresh));
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
                 Assert.Equal("Đưa vào Thùng rác", delete.Header);

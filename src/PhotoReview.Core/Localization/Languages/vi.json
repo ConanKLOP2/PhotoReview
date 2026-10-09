@@ -921,6 +921,17 @@
   "settings.shortcut.fitWidth2.clearAutomationName": "Xóa phím tắt Vừa chiều rộng 2",
   "main.menu.zoom.fitWidth2": "Vừa chiều rộng 2",
   "main.menu.zoom.fitWidth2.automationName": "Vừa chiều rộng 2, có điểm neo dọc riêng",
+  "main.menu.refresh": "Làm mới",
+  "main.menu.refresh.automationName": "Làm mới: vẽ lại khung đang xem ở chất lượng cao nhất, không dịch chuyển",
+  "settings.shortcut.refresh": "Làm mới",
+  "settings.shortcut.refresh.clearAutomationName": "Xóa phím tắt Làm mới",
+  "settings.touchpadSwipe.label": "Vuốt hai ngón trên touchpad: kéo ảnh đang thu phóng, đổi ảnh khi Vừa khung (lên/xuống)",
+  "settings.touchpadSwipe.automationName": "Vuốt hai ngón trên touchpad kéo ảnh đang thu phóng và đổi ảnh khi Vừa khung",
+  "settings.touchpadSwipe.hint": "Chụm hai ngón vẫn thu phóng; con lăn chuột thường vẫn theo cài đặt con lăn ở trên. Vuốt ngang khi Vừa khung được bỏ qua. Một số chuột cuộn mượt trông giống touchpad: hãy tắt mục này nếu con lăn chuột không còn thu phóng.",
+  "settings.touchpadSwipeDistance.label": "Quãng vuốt touchpad mỗi ảnh",
+  "settings.touchpadSwipeDistance.automationName": "Quãng vuốt touchpad cho mỗi ảnh, tính bằng đơn vị con lăn",
+  "settings.touchpadSwipeDistance.hint": "Đơn vị con lăn (120 = một nấc con lăn chuột). Mặc định 200 xấp xỉ 1,5-2 cm trên touchpad chuẩn Precision thông thường; quãng thật phụ thuộc driver touchpad. Số lớn hơn = phải vuốt dài hơn cho mỗi ảnh. Ảnh đầu tiên đổi sau một nửa quãng này.",
+  "dialog.settingsInvalid.touchpadSwipeDistance": "Quãng vuốt touchpad mỗi ảnh phải là số từ {min} đến {max}.",
   "settings.contextMenu.hint": "Đánh dấu các mục muốn hiện trong menu chuột phải; bỏ dấu để ẩn. Phím tắt của mục bị ẩn vẫn hoạt động. Đường kẻ phân cách tự biến mất cùng nhóm rỗng. Mọi thay đổi được lưu cùng các cài đặt khác và đi theo Xuất / Nhập.",
   "settings.contextMenu.item.automationName": "Hiện \"{name}\" trong menu chuột phải",
   "settings.contextMenu.settingsLocked.tooltip": "Mục Cài đặt luôn nằm trong menu để bạn không bao giờ tự khóa mình khỏi cửa sổ này.",
@@ -950,5 +961,6 @@
   "settings.shell.status.elsewhere": "Đã thêm nhưng đang mở bản ứng dụng khác (ứng dụng đã được di chuyển?) hoặc mới có một nửa. Nhấn \"Cập nhật đường dẫn\" để dùng bản này.",
   "settings.shell.status.unavailable": "Không dùng được ở đây: ứng dụng không chạy từ tệp .exe của chính nó.",
   "settings.shell.status.error": "Không đọc hoặc thay đổi được mục menu Explorer: {message}",
-  "settings.shell.hint": "Thêm \"Browse with PhotoReview\" vào menu chuột phải của Explorer trên thư mục và trên chỗ trống bên trong thư mục. Chỉ cho tài khoản Windows của bạn (không cần quyền quản trị). Có hiệu lực ngay, không cần Lưu; khi gỡ chỉ xóa đúng hai mục đó."
+  "settings.shell.hint": "Thêm \"Browse with PhotoReview\" vào menu chuột phải của Explorer trên thư mục và trên chỗ trống bên trong thư mục. Chỉ cho tài khoản Windows của bạn (không cần quyền quản trị). Có hiệu lực ngay, không cần Lưu; khi gỡ chỉ xóa đúng hai mục đó.",
+  "settings.contextMenu.item.refresh": "Làm mới"
 }

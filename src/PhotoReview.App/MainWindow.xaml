@@ -50,6 +50,7 @@
                 <!-- PR-C: presets/Custom/toggle/"set current" are built in code (BuildZoomMenu) so their headers can be -->
                 <!-- re-translated on a live language switch, same pattern the old "Click zoom level" submenu used. -->
                 <MenuItem x:Name="ZoomMenu" Header="{loc:Tr main.menu.zoom}" AutomationProperties.Name="{loc:Tr main.menu.zoom.automationName}" SubmenuOpened="ZoomMenu_SubmenuOpened" />
+                <MenuItem x:Name="RefreshMenuItem" Header="{loc:Tr main.menu.refresh}" AutomationProperties.Name="{loc:Tr main.menu.refresh.automationName}" Click="Refresh_Click" />
                 <Separator x:Name="FolderGroupSeparator" />
                 <MenuItem x:Name="OpenFolderMenuItem" Header="{loc:Tr main.menu.openFolder}" AutomationProperties.Name="{loc:Tr main.menu.openFolder.automationName}" Click="OpenFolder_Click" />
                 <MenuItem x:Name="NextFolderMenuItem" Header="{loc:Tr main.menu.nextFolder}" AutomationProperties.Name="{loc:Tr main.menu.nextFolder.automationName}" Click="NextFolder_Click" />
@@ -68,7 +69,7 @@
                 <Image x:Name="MainImage"
                        Source="{Binding CurrentImage}"
                        Stretch="{Binding Viewer.Stretch, Converter={StaticResource StretchConverter}}"
-                       RenderOptions.BitmapScalingMode="{Binding Viewer.ScalingQuality, Converter={StaticResource ScalingConverter}}"
+                       RenderOptions.BitmapScalingMode="{Binding Viewer.EffectiveScalingQuality, Converter={StaticResource ScalingConverter}}"
                        MaxWidth="{Binding Viewer.MaxImageWidth}"
                        MaxHeight="{Binding Viewer.MaxImageHeight}"
                        Width="{Binding Viewer.ImageWidth}"

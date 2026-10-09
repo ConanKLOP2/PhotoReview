@@ -427,5 +427,34 @@ public class AppSettings
     /// the files and shows a localized "install ... from the Microsoft Store" error on them.
     /// </summary>
     public bool WebpHeicSupportEnabled { get; set; } = true;
+
+    // ---- Touchpad two-finger swipe (Q-TOUCHPAD-REFRESH, 2026-10-09). Absent in older configs = these defaults. ----
+
+    /// <summary>Smallest accepted <see cref="TouchpadSwipeDistancePerImage"/> (a quarter wheel notch).</summary>
+    public const int MinTouchpadSwipeDistancePerImage = 30;
+
+    /// <summary>Largest accepted <see cref="TouchpadSwipeDistancePerImage"/>.</summary>
+    public const int MaxTouchpadSwipeDistancePerImage = 2400;
+
+    /// <summary>
+    /// Default <see cref="TouchpadSwipeDistancePerImage"/>: 200 wheel units (1.67 notches). Estimated at about 1.5-2 cm of finger
+    /// travel on a typical Windows precision touchpad; the real ratio depends on the touchpad driver and is not measurable from
+    /// the wheel messages, so it is a setting.
+    /// </summary>
+    public const int DefaultTouchpadSwipeDistancePerImage = 200;
+
+    /// <summary>
+    /// A two-finger swipe on a touchpad (wheel messages without Ctrl, recognised by their non-notch deltas) pans a zoomed image,
+    /// and at Fit (or smaller) changes photo by swipe DISTANCE (<see cref="TouchpadSwipeDistancePerImage"/>), vertical swipes
+    /// only. A pinch (Ctrl+wheel) still zooms; an ordinary notched mouse wheel keeps <see cref="MouseWheelAction"/>. Default on.
+    /// </summary>
+    public bool TouchpadSwipeEnabled { get; set; } = true;
+
+    /// <summary>
+    /// How much vertical touchpad swipe changes photo by one, in wheel-delta units (120 = one mouse-wheel notch);
+    /// [<see cref="MinTouchpadSwipeDistancePerImage"/>, <see cref="MaxTouchpadSwipeDistancePerImage"/>], default
+    /// <see cref="DefaultTouchpadSwipeDistancePerImage"/>. The first photo of a swipe changes after half of it.
+    /// </summary>
+    public int TouchpadSwipeDistancePerImage { get; set; } = DefaultTouchpadSwipeDistancePerImage;
 }
 

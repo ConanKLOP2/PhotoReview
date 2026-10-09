@@ -143,6 +143,7 @@ public static class SettingsNormalizer
             shortcuts.FitWidth2 = shortcuts.FitWidth2?.Trim() ?? "";
             shortcuts.FitHeight = shortcuts.FitHeight?.Trim() ?? "";
             shortcuts.ToggleKeepZoom = shortcuts.ToggleKeepZoom?.Trim() ?? "";
+            shortcuts.Refresh = shortcuts.Refresh?.Trim() ?? "";
         }
 
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: Return/Enter, Prior/PageUp ... are one key
@@ -226,6 +227,14 @@ public static class SettingsNormalizer
         // feat/raw-support-integration
         if (!Enum.IsDefined(settings.RawFullDecode)) { settings.RawFullDecode = new AppSettings().RawFullDecode; fixedNames.Add(nameof(AppSettings.RawFullDecode)); }
         if (!Enum.IsDefined(settings.RawPairMode)) { settings.RawPairMode = new AppSettings().RawPairMode; fixedNames.Add(nameof(AppSettings.RawPairMode)); }
+
+        // Q-TOUCHPAD-REFRESH: touchpad swipe distance per photo
+        var swipeDistance = Math.Clamp(settings.TouchpadSwipeDistancePerImage, AppSettings.MinTouchpadSwipeDistancePerImage, AppSettings.MaxTouchpadSwipeDistancePerImage);
+        if (swipeDistance != settings.TouchpadSwipeDistancePerImage)
+        {
+            settings.TouchpadSwipeDistancePerImage = swipeDistance;
+            fixedNames.Add(nameof(AppSettings.TouchpadSwipeDistancePerImage));
+        }
 
         // Context menu customisation: keep only known, unlocked, distinct ids in menu order (a hand-edited or newer-version list).
         if (settings.HiddenContextMenuItems is { } hiddenMenuItems)

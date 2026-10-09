@@ -25,6 +25,8 @@ public enum ContextMenuItemId
     ZoomFitHeight,
     ZoomPresets,
     ZoomLevelOptions,
+    /// <summary>Refresh (re-render the current view at full quality); sits at the end of the zoom cluster so it follows that cluster's separator.</summary>
+    Refresh,
 }
 
 /// <summary>One entry of the item table: where it sits (parent, group), and whether it can be turned off / needs an open photo.</summary>
@@ -51,7 +53,7 @@ public sealed class ContextMenuLayout
 
 /// <summary>
 /// The single list of right-click menu items plus the pure visibility rule (items + hidden set + context -> what to show).
-/// Top-level groups, in menu order: 1 Undo/Recycle, 2 zoom cluster, 3 folders, 4 external editor, 5 copy, 6 Settings.
+/// Top-level groups, in menu order: 1 Undo/Recycle, 2 zoom cluster + Refresh, 3 folders, 4 external editor, 5 copy, 6 Settings.
 /// </summary>
 public static class ContextMenuItems
 {
@@ -63,6 +65,7 @@ public static class ContextMenuItems
         new(ContextMenuItemId.Fit, null, 2),
         new(ContextMenuItemId.ZoomToLevel, null, 2),
         new(ContextMenuItemId.ZoomSubmenu, null, 2),
+        new(ContextMenuItemId.Refresh, null, 2),
         new(ContextMenuItemId.OpenFolder, null, 3),
         new(ContextMenuItemId.NextFolder, null, 3),
         new(ContextMenuItemId.PreviousFolder, null, 3),

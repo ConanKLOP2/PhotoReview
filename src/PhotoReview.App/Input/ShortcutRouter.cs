@@ -35,6 +35,7 @@ public sealed class ShortcutRouter
     private Key? _openFolderKey;
     private Key? _customZoomKey;
     private Key? _toggleCaptureMemberKey;
+    private Key? _refreshKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -78,6 +79,7 @@ public sealed class ShortcutRouter
         _openFolderKey = ParseKey(settings.Shortcuts.OpenFolder);
         _customZoomKey = ParseKey(settings.Shortcuts.CustomZoom);
         _toggleCaptureMemberKey = ParseKey(settings.Shortcuts.ToggleCaptureMember);
+        _refreshKey = ParseKey(settings.Shortcuts.Refresh);
 
         _actionKeys.Clear();
         for (var i = 0; i < settings.Actions.Count; i++)
@@ -256,6 +258,12 @@ public sealed class ShortcutRouter
         if (_customZoomKey.HasValue && key == _customZoomKey.Value)
         {
             return ReviewCommand.CustomZoom;
+        }
+
+        // 12e. Refresh (re-render the current view at full quality), same group as the other zoom keys.
+        if (_refreshKey.HasValue && key == _refreshKey.Value)
+        {
+            return ReviewCommand.Refresh;
         }
 
         // 13. Next / Previous

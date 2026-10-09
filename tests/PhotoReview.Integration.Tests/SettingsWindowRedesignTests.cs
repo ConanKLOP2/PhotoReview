@@ -62,6 +62,8 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.ExternalEditorPath),
         // Second Fit width + middle-click action (Mouse & zoom page)
         nameof(AppSettings.FitWidthAnchor2), nameof(AppSettings.MiddleClickAction),
+        // Q-TOUCHPAD-REFRESH: TouchpadSwipeCheck/TouchpadSwipeDistanceBox in the Mouse & zoom card
+        nameof(AppSettings.TouchpadSwipeEnabled), nameof(AppSettings.TouchpadSwipeDistancePerImage),
         // Right-click menu tick boxes (SettingsWindowContextMenuTests)
         nameof(AppSettings.HiddenContextMenuItems),
     };

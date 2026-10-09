@@ -27,7 +27,7 @@ public sealed class ContextMenuLayoutTests
     {
         var layout = ContextMenuItems.Compute(Hide(), WithPhoto);
 
-        Assert.Equal("Undo,MoveToRecycleBin,|,Fit,ZoomToLevel,ZoomSubmenu,|,OpenFolder,NextFolder,PreviousFolder,|,ExternalEditor,|,CopyFileName,CopyFullPath,|,Settings",
+        Assert.Equal("Undo,MoveToRecycleBin,|,Fit,ZoomToLevel,ZoomSubmenu,Refresh,|,OpenFolder,NextFolder,PreviousFolder,|,ExternalEditor,|,CopyFileName,CopyFullPath,|,Settings",
             Render(layout));
     }
 
@@ -38,7 +38,7 @@ public sealed class ContextMenuLayoutTests
         Assert.Equal(ContextMenuItems.Items.Count, ContextMenuItems.Items.Select(i => i.Id).Distinct().Count());
         // These names are written to config.json: renaming one silently un-hides/hides an item for existing users.
         Assert.Equal(["Undo", "MoveToRecycleBin", "Fit", "ZoomToLevel", "ZoomSubmenu", "OpenFolder", "NextFolder", "PreviousFolder",
-            "ExternalEditor", "CopyFileName", "CopyFullPath", "Settings", "ZoomFitWidth", "ZoomFitWidth2", "ZoomFitHeight", "ZoomPresets", "ZoomLevelOptions"],
+            "ExternalEditor", "CopyFileName", "CopyFullPath", "Settings", "ZoomFitWidth", "ZoomFitWidth2", "ZoomFitHeight", "ZoomPresets", "ZoomLevelOptions", "Refresh"],
             Enum.GetNames<ContextMenuItemId>());
     }
 
@@ -62,7 +62,7 @@ public sealed class ContextMenuLayoutTests
     {
         var layout = ContextMenuItems.Compute(Hide(ContextMenuItemId.OpenFolder, ContextMenuItemId.NextFolder, ContextMenuItemId.PreviousFolder), WithPhoto);
 
-        Assert.Equal("Undo,MoveToRecycleBin,|,Fit,ZoomToLevel,ZoomSubmenu,|,ExternalEditor,|,CopyFileName,CopyFullPath,|,Settings", Render(layout));
+        Assert.Equal("Undo,MoveToRecycleBin,|,Fit,ZoomToLevel,ZoomSubmenu,Refresh,|,ExternalEditor,|,CopyFileName,CopyFullPath,|,Settings", Render(layout));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class ContextMenuLayoutTests
     {
         var layout = ContextMenuItems.Compute(Hide(ContextMenuItemId.Undo, ContextMenuItemId.MoveToRecycleBin), NoPhoto);
 
-        Assert.Equal("Fit,ZoomToLevel,ZoomSubmenu,|,OpenFolder,NextFolder,PreviousFolder,|,ExternalEditor,|,Settings", Render(layout));
+        Assert.Equal("Fit,ZoomToLevel,ZoomSubmenu,Refresh,|,OpenFolder,NextFolder,PreviousFolder,|,ExternalEditor,|,Settings", Render(layout));
     }
 
     [Fact]

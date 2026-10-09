@@ -75,12 +75,21 @@ public class ShortcutMappings
     public string FitWidth2 { get; set; } = "D4";
 
     /// <summary>
+    /// Q-TOUCHPAD-REFRESH: re-renders the current view at the best quality (full resolution for the shown size, HighQuality
+    /// scaling) without moving the zoom or scroll. Default <c>R</c>, not <c>F5</c>: F5 is the default key of the "Backup"
+    /// action (<see cref="ReviewAction.Defaults"/>). Empty = disabled; a config whose own binding already owns <c>R</c> gets this
+    /// one disabled by <c>SettingsNormalizer.DisableConflictingOptionalShortcuts</c>.
+    /// </summary>
+    public string Refresh { get; set; } = "R";
+
+    /// <summary>
     /// Shortcuts that may be empty (= feature disabled). The older shortcuts are mandatory: an empty value is invalid.
     /// A field, not a property: code that reflects over the shortcut PROPERTIES (validator) must not see it.
     /// </summary>
     public static readonly IReadOnlyList<string> OptionalNames =
         [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder), nameof(ClickZoom),
-         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom), nameof(OpenFolder), nameof(CustomZoom), nameof(ToggleCaptureMember), nameof(FitWidth2)];
+         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom), nameof(OpenFolder), nameof(CustomZoom), nameof(ToggleCaptureMember), nameof(FitWidth2),
+         nameof(Refresh)];
 
     public static bool IsOptional(string propertyName) => OptionalNames.Contains(propertyName, StringComparer.Ordinal);
 

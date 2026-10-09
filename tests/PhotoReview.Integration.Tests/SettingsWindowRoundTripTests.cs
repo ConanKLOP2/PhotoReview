@@ -115,6 +115,9 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ConfirmBeforeDelete)] = w => w.ConfirmBeforeDeleteCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ShowZoomIndicator)] = w => w.ShowZoomIndicatorCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ExternalEditorPath)] = w => w.ExternalEditorPathText.Text = @"C:\Tools\editor.exe", // "" -> a path
+        // Q-TOUCHPAD-REFRESH
+        [nameof(AppSettings.TouchpadSwipeEnabled)] = w => w.TouchpadSwipeCheck.IsChecked = false, // true -> false
+        [nameof(AppSettings.TouchpadSwipeDistancePerImage)] = w => w.TouchpadSwipeDistanceBox.Text = "360", // 200 -> 360
     };
 
     /// <summary>What <see cref="ControlMutations"/> above is expected to produce on <see cref="AppSettings"/>.</summary>
@@ -167,6 +170,8 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ConfirmBeforeDelete)] = true,
         [nameof(AppSettings.ShowZoomIndicator)] = true,
         [nameof(AppSettings.ExternalEditorPath)] = @"C:\Tools\editor.exe",
+        [nameof(AppSettings.TouchpadSwipeEnabled)] = false,
+        [nameof(AppSettings.TouchpadSwipeDistancePerImage)] = 360,
     };
 
     [Fact(DisplayName = "Tripwire: every UI-controlled property has a round-trip mutation and expected value above")]

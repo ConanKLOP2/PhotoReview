@@ -88,7 +88,7 @@ public partial class SettingsWindow : Window
         (nameof(ShortcutMappings.FitWidth), FitWidthText), (nameof(ShortcutMappings.FitHeight), FitHeightText),
         (nameof(ShortcutMappings.ToggleKeepZoom), ToggleKeepZoomText), (nameof(ShortcutMappings.OpenFolder), OpenFolderText),
         (nameof(ShortcutMappings.CustomZoom), CustomZoomText), (nameof(ShortcutMappings.ToggleCaptureMember), ToggleCaptureMemberText),
-        (nameof(ShortcutMappings.FitWidth2), FitWidth2Text),
+        (nameof(ShortcutMappings.FitWidth2), FitWidth2Text), (nameof(ShortcutMappings.Refresh), RefreshText),
     ];
 
     // ---- Left navigation: page list, remembers the last page for this process only (DR02) ----
@@ -481,6 +481,7 @@ public partial class SettingsWindow : Window
         ContextMenuItemId.ZoomFitHeight => Tr.SettingsContextMenuItemZoomFitHeight,
         ContextMenuItemId.ZoomPresets => Tr.SettingsContextMenuItemZoomPresets,
         ContextMenuItemId.ZoomLevelOptions => Tr.SettingsContextMenuItemZoomLevelOptions,
+        ContextMenuItemId.Refresh => Tr.SettingsContextMenuItemRefresh,
         _ => id.ToString(),
     };
 
@@ -496,6 +497,7 @@ public partial class SettingsWindow : Window
         FitWidthText.Text = Settings.Shortcuts.FitWidth; FitHeightText.Text = Settings.Shortcuts.FitHeight; ToggleKeepZoomText.Text = Settings.Shortcuts.ToggleKeepZoom;
         OpenFolderText.Text = Settings.Shortcuts.OpenFolder; CustomZoomText.Text = Settings.Shortcuts.CustomZoom;
         ToggleCaptureMemberText.Text = Settings.Shortcuts.ToggleCaptureMember; FitWidth2Text.Text = Settings.Shortcuts.FitWidth2;
+        RefreshText.Text = Settings.Shortcuts.Refresh;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         // PR-B: Percent400 was removed from the combo; SettingsNormalizer migrates a loaded value to Percent200 before
         // this window ever sees it, but a stray Percent400 (e.g. this window built directly on an unnormalized
@@ -566,6 +568,8 @@ public partial class SettingsWindow : Window
         KeyboardZoomAnchorCombo.SelectedIndex = Settings.KeyboardZoomAnchor == KeyboardZoomAnchor.ViewportCentre ? 1 : 0;
         ImageTransitionCombo.SelectedIndex = Settings.ImageTransition == ImageTransition.Fade ? 1 : 0;
         ImageTransitionMsBox.Text = Settings.ImageTransitionMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        TouchpadSwipeCheck.IsChecked = Settings.TouchpadSwipeEnabled;
+        TouchpadSwipeDistanceBox.Text = Settings.TouchpadSwipeDistancePerImage.ToString(System.Globalization.CultureInfo.InvariantCulture);
         UpdateImageTransitionMsEnabled();
         MoveCopyReuseLastFolderCheck.IsChecked = Settings.MoveCopyReuseLastFolder;
         ShowExifInfoCheck.IsChecked = Settings.ShowExifInfo;
@@ -684,6 +688,7 @@ public partial class SettingsWindow : Window
     private void ClearClickZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ClickZoomText);
     private void ClearFitWidth_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitWidthText);
     private void ClearFitWidth2_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitWidth2Text);
+    private void ClearRefresh_Click(object sender, RoutedEventArgs e) => ClearShortcut(RefreshText);
     private void ClearFitHeight_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitHeightText);
     private void ClearToggleKeepZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleKeepZoomText);
     private void ClearOpenFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(OpenFolderText);
@@ -747,7 +752,7 @@ public partial class SettingsWindow : Window
         ClickZoom = ClickZoomText.Text,
         FitWidth = FitWidthText.Text, FitHeight = FitHeightText.Text, ToggleKeepZoom = ToggleKeepZoomText.Text,
         OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text, ToggleCaptureMember = ToggleCaptureMemberText.Text,
-        FitWidth2 = FitWidth2Text.Text,
+        FitWidth2 = FitWidth2Text.Text, Refresh = RefreshText.Text,
     };
 
     /// <summary>
@@ -771,7 +776,7 @@ public partial class SettingsWindow : Window
         FitWidth = ShortcutKeyCanonical.Canonicalize(raw.FitWidth), FitHeight = ShortcutKeyCanonical.Canonicalize(raw.FitHeight),
         ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(raw.ToggleKeepZoom), OpenFolder = ShortcutKeyCanonical.Canonicalize(raw.OpenFolder),
         CustomZoom = ShortcutKeyCanonical.Canonicalize(raw.CustomZoom), ToggleCaptureMember = ShortcutKeyCanonical.Canonicalize(raw.ToggleCaptureMember),
-        FitWidth2 = ShortcutKeyCanonical.Canonicalize(raw.FitWidth2),
+        FitWidth2 = ShortcutKeyCanonical.Canonicalize(raw.FitWidth2), Refresh = ShortcutKeyCanonical.Canonicalize(raw.Refresh),
         MoveToFolder2 = existing.MoveToFolder2,
     };
 
@@ -882,6 +887,7 @@ public partial class SettingsWindow : Window
         Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems; Settings.ShowZoomMenuItems = new AppSettings().ShowZoomMenuItems; Settings.ShowRecycleMenuItem = new AppSettings().ShowRecycleMenuItem; Settings.HiddenContextMenuItems = null; // null = derive from the legacy defaults = the default hidden set
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ImageTransition = new AppSettings().ImageTransition; Settings.ImageTransitionMs = AppSettings.DefaultImageTransitionMs;
+        Settings.TouchpadSwipeEnabled = new AppSettings().TouchpadSwipeEnabled; Settings.TouchpadSwipeDistancePerImage = AppSettings.DefaultTouchpadSwipeDistancePerImage;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
         Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs; Settings.InfoOverlayAutoHide = new AppSettings().InfoOverlayAutoHide; Settings.InfoOverlayAutoHideDelayMs = AppSettings.DefaultInfoOverlayAutoHideDelayMs; Settings.ToolbarOpacityPercent = AppSettings.DefaultToolbarOpacityPercent;
         Settings.InfoOverlayFontSize = AppSettings.DefaultInfoOverlayFontSize;
@@ -1025,6 +1031,15 @@ public partial class SettingsWindow : Window
             return;
         }
         Settings.ImageTransitionMs = imageTransitionMs;
+        Settings.TouchpadSwipeEnabled = TouchpadSwipeCheck.IsChecked == true;
+        if (!int.TryParse(TouchpadSwipeDistanceBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var touchpadSwipeDistance)
+            || touchpadSwipeDistance < AppSettings.MinTouchpadSwipeDistancePerImage || touchpadSwipeDistance > AppSettings.MaxTouchpadSwipeDistancePerImage)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidTouchpadSwipeDistance(AppSettings.MinTouchpadSwipeDistancePerImage, AppSettings.MaxTouchpadSwipeDistancePerImage));
+            TouchpadSwipeDistanceBox.Focus();
+            return;
+        }
+        Settings.TouchpadSwipeDistancePerImage = touchpadSwipeDistance;
         // feat/preload-window-setting: same pattern as ClickZoomPercent above -- an unparsable or out-of-range
         // value keeps the dialog open and saves nothing (a hand-edited config.json is still clamped by
         // SettingsNormalizer, that path is unaffected).

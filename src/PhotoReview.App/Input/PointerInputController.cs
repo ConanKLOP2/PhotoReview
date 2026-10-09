@@ -39,6 +39,8 @@ internal sealed class PointerInputController
     private int _pressTimestamp;
     private int _lastSeenIndex = -1;
     private readonly WheelGestureInterpreter _wheelGestures = new();
+    private readonly TouchpadWheelClassifier _touchpadClassifier = new();
+    private readonly TouchpadSwipeNavigator _swipeNavigator = new();
     private readonly PanVelocityTracker _panVelocity = new();
     private KineticScroller _kinetic;
     private readonly EventHandler _kineticFrameHandler;
@@ -73,16 +75,52 @@ internal sealed class PointerInputController
         }
     }
 
-    /// <summary>ImageScroll PreviewMouseWheel (the caller has already set e.Handled).</summary>
-    public async Task OnWheelAsync(int delta, bool ctrl, Point position)
+    /// <summary>A vertical wheel message with timestamp 0 and no device hint (see <see cref="OnWheelAsync(WheelInput, Point)"/>).</summary>
+    public Task OnWheelAsync(int delta, bool ctrl, Point position) => OnWheelAsync(new WheelInput(delta, Horizontal: false, ctrl, Timestamp: 0), position);
+
+    /// <summary>
+    /// ImageScroll PreviewMouseWheel and the window's WM_MOUSEHWHEEL hook (the caller has already marked the message handled).
+    /// Q-TOUCHPAD-REFRESH: a touchpad two-finger swipe (<see cref="TouchpadWheelClassifier"/>) pans a zoomed image and, at Fit or
+    /// smaller, changes image by swipe distance (vertical only); a pinch (Ctrl) and a notched mouse wheel keep the
+    /// <see cref="WheelGestureInterpreter"/> behaviour (<see cref="AppSettings.MouseWheelAction"/>).
+    /// </summary>
+    public async Task OnWheelAsync(WheelInput input, Point position)
     {
         StopKinetic();
-        switch (_wheelGestures.Handle(delta, ctrl, _settings().MouseWheelAction))
+        var settings = _settings();
+        var isTouchpad = settings.TouchpadSwipeEnabled && !input.Ctrl
+            && _touchpadClassifier.IsTouchpad(input.Delta, input.Timestamp, input.Hint);
+        switch (TouchpadGestureRules.Route(input, settings.TouchpadSwipeEnabled, isTouchpad, CanPan()))
         {
-            case WheelOutcomeKind.Zoom:
-                await ZoomAtPointAsync(position, () => _viewer.WheelZoom(delta));
-                break;
-            // Same path as the Next/Previous keys, so preload pacing and the navigation token apply unchanged.
+            case TouchpadWheelAction.Ignore:
+                return;
+            case TouchpadWheelAction.Pan:
+                _wheelGestures.Reset();
+                _swipeNavigator.Reset();
+                PanByTouchpad(input);
+                return;
+            case TouchpadWheelAction.Navigate:
+                _wheelGestures.Reset();
+                var swipe = _swipeNavigator.Handle(input.Delta, input.Timestamp, settings.TouchpadSwipeDistancePerImage);
+                if (swipe != WheelOutcomeKind.None && AppLog.Enabled)
+                    AppLog.Info(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                        $"Touchpad swipe: {swipe} after delta={_swipeNavigator.GestureTotal} images={_swipeNavigator.GestureImages} distancePerImage={settings.TouchpadSwipeDistancePerImage} hint={input.Hint}"));
+                await NavigateAsync(swipe);
+                return;
+        }
+
+        _swipeNavigator.Reset();
+        var delta = input.Delta;
+        var outcome = _wheelGestures.Handle(delta, input.Ctrl, settings.MouseWheelAction);
+        if (outcome == WheelOutcomeKind.Zoom) await ZoomAtPointAsync(position, () => _viewer.WheelZoom(delta));
+        else await NavigateAsync(outcome);
+    }
+
+    // Same path as the Next/Previous keys, so preload pacing and the navigation token apply unchanged.
+    private async Task NavigateAsync(WheelOutcomeKind outcome)
+    {
+        switch (outcome)
+        {
             case WheelOutcomeKind.Next:
                 if (_commands.HasImages()) await _commands.NextAsync();
                 break;
@@ -90,6 +128,23 @@ internal sealed class PointerInputController
                 if (_commands.HasImages()) await _commands.PreviousAsync();
                 break;
         }
+    }
+
+    /// <summary>Q-TOUCHPAD-REFRESH: scrolls a zoomed image by a touchpad swipe message, clamped to the scrollable range.</summary>
+    private void PanByTouchpad(WheelInput input)
+    {
+        var (horizontal, vertical) = TouchpadGestureRules.PanOffsetDelta(input);
+        // CalculatePanOffsets takes a POINTER movement (offset - delta), so the offset change is passed negated.
+        var offsets = MainWindowHelpers.CalculatePanOffsets(
+            _surface.HorizontalOffset,
+            _surface.VerticalOffset,
+            -horizontal,
+            -vertical,
+            _surface.ExtentWidth,
+            _surface.ExtentHeight,
+            _surface.ViewportWidth,
+            _surface.ViewportHeight);
+        _surface.ScrollTo(offsets.Horizontal, offsets.Vertical);
     }
 
     /// <summary>

@@ -85,14 +85,46 @@ public sealed class ZoomDetailLoader
         _target = null;
         _original = null;
         _showingOriginal = false;
+        _refreshHold = false;
     }
 
     /// <summary>The viewer's zoom changed: <paramref name="zoom"/> is the original-relative zoom, or
     /// null for Fit.</summary>
     public void SetZoom(double? zoom)
     {
+        // A Refresh's "full resolution at Fit" lasts until the view actually changes zoom (a repeated Fit keeps it).
+        if (zoom != _zoom) _refreshHold = false;
         _zoom = zoom;
         Update();
+    }
+
+    // Q-TOUCHPAD-REFRESH: set by Refresh when the preview has fewer pixels than the screen shows (e.g. at Fit after the window
+    // grew past the decode box): the original is then decoded and kept on screen even at Fit.
+    private bool _refreshHold;
+
+    /// <summary>
+    /// Q-TOUCHPAD-REFRESH (Refresh command): makes sure the current image is shown with at least as many pixels as the screen
+    /// shows it at <paramref name="effectiveZoom"/> (original-relative; at Fit the Fit zoom). Retries a decode that failed earlier,
+    /// and when the preview is too small, decodes (or re-shows) the full-resolution original -- also at Fit, where the loader
+    /// otherwise keeps the preview. Changes no zoom or scroll position: the original replaces the preview at the same
+    /// original-relative size (ADR 0008; a RAW's few-pixel difference is re-anchored by the viewer as for a zoom).
+    /// </summary>
+    public ZoomDetailRefreshResult Refresh(double effectiveZoom)
+    {
+        var target = _target;
+        // No target: the shown bitmap is already full resolution (Original mode, small source, RAW without full decode) or no image.
+        if (target is null || !_clock.IsNavigationCurrent(target.Token)) return ZoomDetailRefreshResult.AlreadyFullResolution;
+        var retried = _failedToken == target.Token;
+        _failedToken = -1;
+        if (_showingOriginal) return ZoomDetailRefreshResult.AlreadyFullResolution;
+        if (!(effectiveZoom > 0) || effectiveZoom * target.OriginalWidth <= target.PreviewPixelWidth)
+            return ZoomDetailRefreshResult.PreviewSufficient;
+
+        _refreshHold = true;
+        var held = _original is not null;
+        Update();
+        if (held || _showingOriginal) return ZoomDetailRefreshResult.ShowedOriginal;
+        return retried ? ZoomDetailRefreshResult.RetryingOriginal : ZoomDetailRefreshResult.LoadingOriginal;
     }
 
     /// <summary>The navigation <paramref name="token"/> finished presenting <paramref name="preview"/> of
@@ -121,7 +153,7 @@ public sealed class ZoomDetailLoader
         var target = _target;
         if (target is null || !_clock.IsNavigationCurrent(target.Token)) return;
 
-        if (_zoom is not { } zoom)
+        if (_zoom is null && !_refreshHold)
         {
             if (_showingOriginal)
             {
@@ -142,8 +174,9 @@ public sealed class ZoomDetailLoader
             return;
         }
 
-        // The preview already has at least as many pixels as the screen shows: no decode needed.
-        if (zoom * target.OriginalWidth <= target.PreviewPixelWidth) return;
+        // The preview already has at least as many pixels as the screen shows: no decode needed. (A Refresh hold was set only
+        // after Refresh measured the opposite, so it skips this check.)
+        if (!_refreshHold && _zoom is { } zoom && zoom * target.OriginalWidth <= target.PreviewPixelWidth) return;
         if (_cts is not null) return; // already decoding this target
         if (_failedToken == target.Token) return;
 
@@ -255,4 +288,23 @@ public sealed class ZoomDetailLoader
     }
 
     private sealed record Target(long Token, string Path, ImageCacheKey Key, object Preview, int PreviewPixelWidth, int OriginalWidth, int OriginalHeight);
+}
+
+/// <summary>What <see cref="ZoomDetailLoader.Refresh"/> did about resolution.</summary>
+public enum ZoomDetailRefreshResult
+{
+    /// <summary>The shown bitmap is already the full-resolution image (or there is no image): nothing to load.</summary>
+    AlreadyFullResolution = 0,
+
+    /// <summary>The preview already has at least as many pixels as the screen shows: nothing to load.</summary>
+    PreviewSufficient = 1,
+
+    /// <summary>The held original was put on screen at once.</summary>
+    ShowedOriginal = 2,
+
+    /// <summary>A full-resolution decode started; it replaces the preview when done.</summary>
+    LoadingOriginal = 3,
+
+    /// <summary>Like <see cref="LoadingOriginal"/>, after an earlier decode of this image had failed.</summary>
+    RetryingOriginal = 4,
 }

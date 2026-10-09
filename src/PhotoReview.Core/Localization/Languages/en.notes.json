@@ -714,6 +714,17 @@
   "settings.shortcut.fitWidth2.clearAutomationName": "Screen-reader name of the x button that clears the Fit width 2 shortcut.",
   "main.menu.zoom.fitWidth2": "Context menu > Zoom item of the second Fit width command.",
   "main.menu.zoom.fitWidth2.automationName": "Screen-reader name of the second Fit width menu item.",
+  "main.menu.refresh": "Context menu item (right after the Zoom submenu): re-renders the current view at the best quality; same command as the Refresh shortcut (default R).",
+  "main.menu.refresh.automationName": "Screen-reader name of the Refresh context-menu item.",
+  "settings.shortcut.refresh": "Shortcuts page row label of the Refresh command, default key R.",
+  "settings.shortcut.refresh.clearAutomationName": "Screen-reader name of the x button that clears the Refresh shortcut.",
+  "settings.touchpadSwipe.label": "Settings > Mouse & zoom: check box for AppSettings.TouchpadSwipeEnabled (default on).",
+  "settings.touchpadSwipe.automationName": "AutomationProperties.Name of the touchpad swipe check box.",
+  "settings.touchpadSwipe.hint": "Help text under the touchpad swipe check box.",
+  "settings.touchpadSwipeDistance.label": "Settings > Mouse & zoom: label of the TouchpadSwipeDistancePerImage number box.",
+  "settings.touchpadSwipeDistance.automationName": "AutomationProperties.Name of the touchpad swipe distance box.",
+  "settings.touchpadSwipeDistance.hint": "Help text under the touchpad swipe distance box. Keep \"120\" and \"200\" as numbers.",
+  "dialog.settingsInvalid.touchpadSwipeDistance": "Validation message when the touchpad swipe distance is not a whole number in range. {min}/{max}: the bounds.",
   "settings.contextMenu.hint": "Settings > Mouse & zoom > Right-click menu group: explanation above the list of tick boxes.",
   "settings.contextMenu.item.automationName": "Screen-reader name of one tick box of the right-click menu list; {name} is the item's label.",
   "settings.contextMenu.settingsLocked.tooltip": "Tooltip on the disabled Settings tick box: explains why it cannot be switched off.",
@@ -743,5 +754,6 @@
   "settings.shell.status.elsewhere": "Status line: registered for another exe path or only partly registered; says which button to press.",
   "settings.shell.status.unavailable": "Status line: no exe path (the app runs through the dotnet host).",
   "settings.shell.status.error": "Status line: the registry read/write failed; {message} is the system's error text.",
-  "settings.shell.hint": "Help text under the Explorer integration buttons."
+  "settings.shell.hint": "Help text under the Explorer integration buttons.",
+  "settings.contextMenu.item.refresh": "Label of the Refresh tick box in the right-click menu list; same wording as the Refresh menu item."
 }

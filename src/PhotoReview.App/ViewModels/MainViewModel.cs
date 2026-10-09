@@ -161,6 +161,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var shownPath = _presenter.CurrentPresentedPath;
         var newImage = !string.Equals(shownPath, _lastNotifiedImagePath, StringComparison.OrdinalIgnoreCase);
         _lastNotifiedImagePath = shownPath;
+        if (newImage) _viewerState.ForceHighQualityScaling = false; // a Refresh applies to the image it was made on
         if (_presenter.IsSameSourceSwap) _viewerState.SwapSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
         else _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight, newImage: newImage);
         NotifyNavigationStateChanged();
@@ -680,6 +681,25 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     }
     public void ToggleFullscreen() => _viewerState.ToggleFullscreen();
     public void ExitFullscreen() => _viewerState.ExitFullscreen();
+
+    /// <summary>
+    /// Q-TOUCHPAD-REFRESH (Refresh, key R / context menu): re-renders the current view at the best quality without moving it --
+    /// HighQuality scaling for this image (even when the ScalingQuality setting is Linear) and, through
+    /// <see cref="ZoomDetailLoader.Refresh"/>, enough source pixels for the size the image is shown at now (Fit included). Zoom
+    /// and scroll offsets are not touched. Returns null when no image is shown.
+    /// </summary>
+    public ViewRefreshOutcome? RefreshView()
+    {
+        if (!HasImages) return null;
+        var scalingChanged = _viewerState.EffectiveScalingQuality != ScalingQuality.HighQuality;
+        _viewerState.ForceHighQualityScaling = true;
+        var effectiveZoom = _viewerState.IsFit ? _viewerState.FitZoom : _viewerState.Zoom;
+        var resolution = _presenter.ZoomDetail.Refresh(effectiveZoom);
+        if (AppLog.Enabled)
+            AppLog.Info(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"Refresh view: scalingChanged={scalingChanged} resolution={resolution} effectiveZoom={effectiveZoom:0.####} fit={_viewerState.IsFit}"));
+        return new ViewRefreshOutcome(scalingChanged, resolution);
+    }
 
     /// <summary>Test seam: launches the external editor; default starts the real process (Q-R48).</summary>
     internal Action<string, string> StartExternalEditor { get; set; } = static (exePath, filePath) =>
