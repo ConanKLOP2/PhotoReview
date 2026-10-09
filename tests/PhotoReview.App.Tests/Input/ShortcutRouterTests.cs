@@ -263,6 +263,28 @@ public sealed class ShortcutRouterTests
     }
 
     [Fact]
+    public void FitWidth2_DefaultKeyD4_ResolvesToItsOwnCommandOnlyWithAnImage()
+    {
+        Assert.Equal(ReviewCommandType.FitWidth2, _router.TryResolve(Key.D4, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
+        Assert.Null(_router.TryResolve(Key.D4, Key.None, ModifierKeys.None, false, hasImage: false));
+        // The first Fit width key is unaffected.
+        Assert.Equal(ReviewCommandType.FitWidth, _router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
+    }
+
+    [Fact]
+    public void FitWidth2_EmptyShortcut_IsDisabled_AndARemappedKeyFollows()
+    {
+        var settings = new AppSettings { Shortcuts = new ShortcutMappings { FitWidth2 = "" } };
+        var router = new ShortcutRouter(settings);
+        Assert.Null(router.TryResolve(Key.D4, Key.None, ModifierKeys.None, false, true));
+
+        settings.Shortcuts.FitWidth2 = "Q";
+        router.Rebuild(settings);
+        Assert.Equal(ReviewCommandType.FitWidth2, router.TryResolve(Key.Q, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Null(router.TryResolve(Key.D4, Key.None, ModifierKeys.None, false, true));
+    }
+
+    [Fact]
     public void FitHeight_ResolvesOnlyWithAnImage()
     {
         Assert.Equal(ReviewCommandType.FitHeight, _router.TryResolve(Key.H, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);

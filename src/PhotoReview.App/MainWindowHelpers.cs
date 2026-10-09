@@ -97,10 +97,25 @@ internal static class MainWindowHelpers
     /// the FitWidth shortcut when the mouse is not over the viewport), as an image-fraction point (see
     /// <see cref="ZoomImagePoint"/>). <see cref="PhotoReview.Core.Model.FitWidthAnchor.TopThird"/> keeps the point a
     /// third of the way down the image at the viewport centre (portraits usually have the face there);
+    /// <see cref="PhotoReview.Core.Model.FitWidthAnchor.BottomThird"/> keeps (0.5, 2/3) there (lower part of the image), and
     /// <see cref="PhotoReview.Core.Model.FitWidthAnchor.Centre"/> keeps the image's vertical centre there instead.
     /// </summary>
     internal static ZoomImagePoint CalculateFitWidthAnchorPoint(PhotoReview.Core.Model.FitWidthAnchor anchor) =>
-        anchor == PhotoReview.Core.Model.FitWidthAnchor.Centre ? new ZoomImagePoint(0.5, 0.5) : new ZoomImagePoint(0.5, 1.0 / 3.0);
+        anchor switch
+        {
+            PhotoReview.Core.Model.FitWidthAnchor.TopThird => new ZoomImagePoint(0.5, 1.0 / 3.0),
+            PhotoReview.Core.Model.FitWidthAnchor.BottomThird => new ZoomImagePoint(0.5, 2.0 / 3.0),
+            _ => new ZoomImagePoint(0.5, 0.5),
+        };
+
+    /// <summary>
+    /// Which configured anchor a Fit width command uses: <see cref="Input.ReviewCommandType.FitWidth2"/> follows
+    /// <see cref="PhotoReview.Core.Settings.AppSettings.FitWidthAnchor2"/>, every other command
+    /// <see cref="PhotoReview.Core.Settings.AppSettings.FitWidthAnchor"/> (the first Fit width and the initial view).
+    /// Not <see cref="PhotoReview.Core.Settings.AppSettings.KeyboardZoomAnchor"/>, which never affects Fit width.
+    /// </summary>
+    internal static PhotoReview.Core.Model.FitWidthAnchor FitWidthAnchorFor(PhotoReview.Core.Settings.AppSettings settings, Input.ReviewCommandType type) =>
+        type == Input.ReviewCommandType.FitWidth2 ? settings.FitWidthAnchor2 : settings.FitWidthAnchor;
 
     internal static ZoomViewportOffsets CalculatePanOffsets(
         double currentHorizontalOffset,

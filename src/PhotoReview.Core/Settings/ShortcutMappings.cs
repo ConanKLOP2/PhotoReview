@@ -66,12 +66,21 @@ public class ShortcutMappings
     public string ToggleCaptureMember { get; set; } = "";
 
     /// <summary>
+    /// A SECOND Fit width command with its own vertical anchor (<see cref="AppSettings.FitWidthAnchor2"/>, default bottom third).
+    /// <c>D4</c> (the "4" key): the router resolves keys without modifiers for zoom commands and a shortcut string is a bare
+    /// key name, so a Shift+W style key cannot be expressed; "4" sits next to <see cref="ZoomActualSize"/> (<c>D1</c>),
+    /// <see cref="ClickZoom"/> (<c>D2</c>) and <see cref="CustomZoom"/> (<c>D3</c>). Empty = disabled. Older configs that already
+    /// bind <c>D4</c> elsewhere get this one disabled by <c>SettingsNormalizer.DisableConflictingOptionalShortcuts</c>.
+    /// </summary>
+    public string FitWidth2 { get; set; } = "D4";
+
+    /// <summary>
     /// Shortcuts that may be empty (= feature disabled). The older shortcuts are mandatory: an empty value is invalid.
     /// A field, not a property: code that reflects over the shortcut PROPERTIES (validator) must not see it.
     /// </summary>
     public static readonly IReadOnlyList<string> OptionalNames =
         [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder), nameof(ClickZoom),
-         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom), nameof(OpenFolder), nameof(CustomZoom), nameof(ToggleCaptureMember)];
+         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom), nameof(OpenFolder), nameof(CustomZoom), nameof(ToggleCaptureMember), nameof(FitWidth2)];
 
     public static bool IsOptional(string propertyName) => OptionalNames.Contains(propertyName, StringComparer.Ordinal);
 

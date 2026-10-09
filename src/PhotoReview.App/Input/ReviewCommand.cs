@@ -32,7 +32,8 @@ public enum ReviewCommandType
     ToggleKeepZoom,
     OpenFolder,
     CustomZoom,
-    ToggleCaptureMember
+    ToggleCaptureMember,
+    FitWidth2
 }
 
 /// <summary>Rules about how a resolved command reacts to keyboard auto-repeat.</summary>
@@ -90,4 +91,5 @@ public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIn
     public static ReviewCommand OpenFolder => new(ReviewCommandType.OpenFolder);
     public static ReviewCommand CustomZoom => new(ReviewCommandType.CustomZoom);
     public static ReviewCommand ToggleCaptureMember => new(ReviewCommandType.ToggleCaptureMember);
+    public static ReviewCommand FitWidth2 => new(ReviewCommandType.FitWidth2);
 }
