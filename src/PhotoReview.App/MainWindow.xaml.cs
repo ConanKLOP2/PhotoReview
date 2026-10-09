@@ -860,9 +860,6 @@ public partial class MainWindow : Window
         PreviousFolderMenuItem.Visibility = folderGroupVisibility;
         NextFolderMenuItem.InputGestureText = _settings.Shortcuts.NextFolder;
         PreviousFolderMenuItem.InputGestureText = _settings.Shortcuts.PreviousFolder;
-        var externalEditorVisibility = _viewModel.CanOpenInExternalEditor ? Visibility.Visible : Visibility.Collapsed;
-        ExternalEditorGroupSeparator.Visibility = externalEditorVisibility;
-        OpenInExternalEditorMenuItem.Visibility = externalEditorVisibility;
     }
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]

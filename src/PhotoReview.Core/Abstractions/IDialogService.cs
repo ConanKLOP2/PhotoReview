@@ -35,11 +35,27 @@ public interface IDialogService
     /// <summary>Hiển thị cửa sổ cài đặt cấu hình (Settings). Trả về true nếu người dùng lưu thay đổi.</summary>
     bool ShowSettings();
 
+    /// <summary>
+    /// Same dialog, opened on the page and field for <paramref name="target"/>. The default ignores the target, so existing
+    /// implementations keep working; the WPF implementation selects the page and focuses the field.
+    /// </summary>
+    bool ShowSettings(SettingsTarget target) => ShowSettings();
+
     /// <summary>Hiển thị cửa sổ đo benchmark hiệu năng nạp ảnh.</summary>
     void ShowBenchmark(string? folder = null);
 
     /// <summary>Hiển thị danh sách tệp bị bỏ qua khi nạp thư mục (AR19).</summary>
     void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries);
+}
+
+/// <summary>Which part of the Settings dialog to open on.</summary>
+public enum SettingsTarget
+{
+    /// <summary>The last page shown (default behaviour).</summary>
+    Default,
+
+    /// <summary>The Files page with the External Editor path field focused.</summary>
+    ExternalEditor,
 }
 
 /// <summary>One line of the batch-review dialog: the file and its size in bytes when known (null = unknown or no longer there).</summary>

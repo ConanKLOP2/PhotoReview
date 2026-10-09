@@ -322,8 +322,23 @@ public partial class SettingsWindow : Window
         base.OnClosed(e);
     }
 
+    /// <summary>Set before showing: opens on the Files page and focuses the External Editor path field (menu item with no editor configured).</summary>
+    internal bool FocusExternalEditorOnLoad { get; set; }
+
     private void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        if (FocusExternalEditorOnLoad)
+        {
+            var rememberedPage = s_lastPageKey; // a one-off jump must not change the page the next plain Settings open shows
+            foreach (ListBoxItem item in NavList.Items)
+            {
+                if (Equals(item.Tag, "Files")) { NavList.SelectedItem = item; break; }
+            }
+            s_lastPageKey = rememberedPage;
+            ExternalEditorPathText.BringIntoView();
+            _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () => ExternalEditorPathText.Focus());
+            return;
+        }
         if (NavList.SelectedItem is ListBoxItem { Tag: string key } && _pages is not null && _pages.TryGetValue(key, out var page))
             page.Scroll.ScrollToHome();
         FocusManager.SetFocusedElement(this, null);

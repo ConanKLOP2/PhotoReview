@@ -687,14 +687,18 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         });
     };
 
-    /// <summary>Q-R48: the "Open in External Editor" context-menu item is shown only when an editor is configured and a photo is open.</summary>
+    /// <summary>Q-R48: true when an editor is configured and a photo is open. The menu item itself is always shown (discoverability); without an editor it opens Settings instead.</summary>
     public bool CanOpenInExternalEditor => !string.IsNullOrWhiteSpace(Settings.ExternalEditorPath) && HasImages;
 
     /// <summary>Q-R48: launches the configured external editor with the currently-viewed (or compare-selected) photo's path.</summary>
     public void OpenInExternalEditor()
     {
         var editorPath = Settings.ExternalEditorPath;
-        if (string.IsNullOrWhiteSpace(editorPath)) return;
+        if (string.IsNullOrWhiteSpace(editorPath))
+        {
+            ShowSettings(SettingsTarget.ExternalEditor); // not configured yet: take the user to the field that sets it
+            return;
+        }
         var path = _compare.SelectedPath ?? _presenter.CurrentPresentedPath ?? _catalog.Current?.Path;
         if (string.IsNullOrEmpty(path)) return;
         if (!_fileSystem.FileExists(path))
@@ -783,7 +787,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Hiển thị cửa sổ cài đặt cấu hình. Nếu cấu hình chế độ nạp thay đổi, hủy và nạp lại ảnh hiện tại.
     /// </summary>
-    public void ShowSettings()
+    public void ShowSettings() => ShowSettings(SettingsTarget.Default);
+
+    private void ShowSettings(SettingsTarget target)
     {
         if (_dialogService is null) return;
         var previousMode = _settingsStore.Current.LoadingMode;
@@ -792,7 +798,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var previousPairMode = _settingsStore.Current.RawPairMode;
         var previousRawFullDecode = _settingsStore.Current.RawFullDecode;
         var previousSortMode = _settingsStore.Current.ImageSortMode;
-        var changed = _dialogService.ShowSettings();
+        var changed = _dialogService.ShowSettings(target);
         if (!changed) return;
 
         UpdateFolderTitle();
