@@ -626,6 +626,25 @@ public sealed partial class PreloadSchedulerMutationTests : IDisposable
         Assert.DoesNotContain(log.Errors, e => e.StartsWith("Preload scheduler failed", StringComparison.Ordinal));
     }
 
+    [Fact(DisplayName = "Q-FMT-WEBP-HEIC: files whose Windows codec is missing are skipped without one Error line each")]
+    public async Task MissingCodec_SkipsThoseImagesQuietly_AndKeepsPreloadingTheOthers()
+    {
+        var entries = Entries(8);
+        var target = new Target
+        {
+            OnPreload = (path, _) => path == entries[2].Path || path == entries[3].Path
+                ? Task.FromException(new MissingImageCodecException("HEIC needs HEVC"))
+                : Task.CompletedTask,
+        };
+        var log = new RecordingLog();
+        var scheduler = Create(target, entries, workers: 1, new PreloadWindow(6, 0), log: log);
+
+        await scheduler.PreloadAroundAsync(0).WaitAsync(Guard);
+
+        foreach (var i in new[] { 4, 5, 6 }) Assert.Contains(entries[i].Path, target.Started);
+        Assert.Empty(log.Errors);
+    }
+
     // ---- items waiting for a worker slot --------------------------------------------------------------------------
 
     [Fact(DisplayName = "A queued item whose image became the current one while it waited for a slot is dropped, not decoded")]

@@ -298,6 +298,31 @@ public sealed class ViewerQuickFeaturesTests
         Assert.Equal(root.Combine("parent", "c"), result.Next);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FindSiblingImageFolders_WebpHeicOnlyFolder_CountsOnlyWhileTheSwitchIsOn(bool enabled)
+    {
+        // Q-FMT-WEBP-HEIC: a folder of iPhone photos is an image folder for PageUp/PageDown exactly when the folder load would list them.
+        using var root = new TempRoot("sibling-info-heic");
+        root.File(@"parent\a\1.jpg", 1);
+        var current = root.File(@"parent\b\1.png", 1);
+        root.File(@"parent\c\IMG_0001.HEIC", 1);
+        root.File(@"parent\d\2.jpg", 1);
+        var navigator = new SiblingFolderNavigator(
+            new PhotoReview.Core.Catalog.GenerationClock(),
+            new PhotoReview.Core.Catalog.ReviewCatalog(),
+            new PhotoReview.Core.IO.PhysicalFileSystem(),
+            new NullSink(),
+            () => null,
+            getRawEnabled: () => false,
+            getWebpHeicEnabled: () => enabled);
+
+        var result = navigator.FindSiblingImageFolders(Path.GetDirectoryName(current)!, CancellationToken.None);
+
+        Assert.Equal(root.Combine("parent", enabled ? "c" : "d"), result.Next);
+    }
+
     [Fact]
     public void FindSiblingImageFolders_CancelledToken_Throws()
     {

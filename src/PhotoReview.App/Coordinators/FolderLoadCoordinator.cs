@@ -127,6 +127,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             // (or the reverse).
             var rawEnabled = _settingsStore.Current.RawSupportEnabled;
             var rawPairMode = rawEnabled ? _settingsStore.Current.RawPairMode : RawPairMode.Separate;
+            var webpHeicEnabled = _settingsStore.Current.WebpHeicSupportEnabled; // Q-FMT-WEBP-HEIC, same snapshot rule
             var (scannedFiles, entries, sidecarPaths) = await Task.Run(() =>
             {
                 // The scan gets Length/LastWriteUtc from the same directory entry used to list the
@@ -139,12 +140,12 @@ public sealed class FolderLoadCoordinator : IDisposable
                         // RV-A07: the predicate runs once per directory entry, so a superseded/closed load stops the
                         // listing here instead of finishing a scan whose result is thrown away (single pass kept).
                         loadToken.ThrowIfCancellationRequested();
-                        return ImageFileTypes.IsSupported(path, rawEnabled) || (rawEnabled && string.Equals(Path.GetExtension(path), ".xmp", StringComparison.OrdinalIgnoreCase));
+                        return ImageFileTypes.IsSupported(path, rawEnabled, webpHeicEnabled) || (rawEnabled && string.Equals(Path.GetExtension(path), ".xmp", StringComparison.OrdinalIgnoreCase));
                     }, skipped.Add)
                     .ToList();
                 var sidecars = allScanned.Where(file => string.Equals(Path.GetExtension(file.Path), ".xmp", StringComparison.OrdinalIgnoreCase))
                     .Select(file => file.Path).ToArray();
-                var scanned = allScanned.Where(file => ImageFileTypes.IsSupported(file.Path, rawEnabled))
+                var scanned = allScanned.Where(file => ImageFileTypes.IsSupported(file.Path, rawEnabled, webpHeicEnabled))
                     .Select(f => f.Stat is null
                         ? new CatalogEntry(f.Path)
                         : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })

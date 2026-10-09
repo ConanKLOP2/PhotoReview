@@ -11,6 +11,7 @@ using PhotoReview.Core.Instance;
 using PhotoReview.Core.IO;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.LibRaw;
+using PhotoReview.Imaging.Decoding.Wic;
 
 namespace PhotoReview.App;
 
@@ -119,13 +120,18 @@ public partial class App : System.Windows.Application, IDisposable
             var sourceReader = sp.GetRequiredService<ISourceReader>();
             var settingsStore = sp.GetRequiredService<SettingsStore>();
             var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
+            var log = sp.GetService<ILog>();
+            var metrics = sp.GetService<ReviewMetrics>();
+            // Q-FMT-WEBP-HEIC: WebP/HEIC always decode through WIC (WicDirect + the usual WPF fallback), whatever backend is picked.
+            var webpHeicDecoder = Composition.ServiceFactories.CreateWebpHeicDecoder(sourceReader, log, metrics);
             return new ImageDecoderFactory(
                 Composition.DecoderProviders.Create(sourceReader,
                     () => settingsStore.Current.RawSupportEnabled || settingsStore.Current.DecoderBackend == PhotoReview.Core.Model.DecoderBackend.LibRaw),
-                sp.GetService<ILog>(),
-                sp.GetService<ReviewMetrics>(),
+                log,
+                metrics,
                 (_, standardDecoder) => new FormatRoutingDecoder(
-                    standardDecoder,
+                    new WebpHeicRoutingDecoder(standardDecoder, webpHeicDecoder,
+                        () => settingsStore.Current.WebpHeicSupportEnabled, () => WicCodecAvailability.Current, log),
                     Composition.ServiceFactories.CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache),
                     () => settingsStore.Current.RawSupportEnabled));
         });
@@ -198,7 +204,8 @@ public partial class App : System.Windows.Application, IDisposable
                 workerCountOverride: settingsStore.Current.PreloadWorkerCount,
                 log: sp.GetService<ILog>(),
                 prefetchSourceBytes: sourceBytesCache is not null
-                    ? (path, token) => Task.Run(() => sourceBytesCache.TryPrefetch(path), token)
+                    ? Composition.ServiceFactories.CreateSourcePrefetch(sourceBytesCache,
+                        () => settingsStore.Current.WebpHeicSupportEnabled, () => WicCodecAvailability.Current)
                     : null,
                 // feat/preload-window-setting: captured once at composition (applies after restart, Q-AR6/Q-R19).
                 window: PreloadWindow.FromSettings(settingsStore.Current),

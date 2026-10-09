@@ -30,3 +30,6 @@ Implementation of the DO items tracked on branch `claude/outstanding-issues-9593
 **Update 2026-09-28/10-01:** Q-R52's RAW half was superseded: the architecture decision it asked for was made in
 [`Q-RAW.md`](Q-RAW.md) and [ADR 0009](../../adr/0009-camera-raw-support.md), and camera RAW shipped in #239. The WebP/HEIC/JXL/PSD/AVIF
 half stays declined.
+
+**Update 2026-10-09:** WebP and HEIC/HEIF reversed on user request: [`Q-FMT-WEBP-HEIC.md`](Q-FMT-WEBP-HEIC.md) (Windows codecs
+only, nothing bundled). JXL/PSD/AVIF stay declined.

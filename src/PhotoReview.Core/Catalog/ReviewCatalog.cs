@@ -365,7 +365,10 @@ public sealed class ReviewCatalog
     private static bool IsRestorableImage(string path, bool rawEnabled)
     {
         var extension = System.IO.Path.GetExtension(path);
-        return ImageFileTypes.SupportedExtensions.Contains(extension) || (rawEnabled && ImageFileTypes.RawExtensions.Contains(extension));
+        // WebP/HEIC (Q-FMT-WEBP-HEIC) are restorable whatever their switch says: an undone action brings back a file that was
+        // listed; dropping it would look like a failed undo, while a switched-off format is refused with a clear message on display.
+        return ImageFileTypes.SupportedExtensions.Contains(extension) || ImageFileTypes.WebpHeicExtensions.Contains(extension)
+            || (rawEnabled && ImageFileTypes.RawExtensions.Contains(extension));
     }
 
     /// <summary>

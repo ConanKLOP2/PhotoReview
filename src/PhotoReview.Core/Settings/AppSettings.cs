@@ -412,5 +412,12 @@ public class AppSettings
     /// Default <see cref="RawPairMode.Separate"/>.
     /// </summary>
     public RawPairMode RawPairMode { get; set; } = RawPairMode.Separate;
+
+    /// <summary>
+    /// Lists WebP and HEIC/HEIF files (.webp, .heic, .heif) and decodes them through the Windows codecs (WIC), never a bundled
+    /// library (Q-FMT-WEBP-HEIC). Default true, including for older configs that omit it. A PC without the codec still lists
+    /// the files and shows a localized "install ... from the Microsoft Store" error on them.
+    /// </summary>
+    public bool WebpHeicSupportEnabled { get; set; } = true;
 }
 

@@ -21,7 +21,7 @@ public sealed record DragDropInputResult(
 
 public static class DragDropInputService
 {
-    public static DragDropInputResult Parse(IEnumerable<string>? paths, bool rawEnabled = false)
+    public static DragDropInputResult Parse(IEnumerable<string>? paths, bool rawEnabled = false, bool webpHeicEnabled = false)
     {
         var validPaths = (paths ?? []).Where(path => !string.IsNullOrWhiteSpace(path)).ToList();
         if (validPaths.Count == 0)
@@ -35,7 +35,7 @@ public static class DragDropInputService
                 ignored > 0 ? Tr.CoreDragDropOnlyFirstFolder : null);
         }
 
-        var images = validPaths.Where(path => File.Exists(path) && ImageFileTypes.IsSupported(path, rawEnabled)).ToList();
+        var images = validPaths.Where(path => File.Exists(path) && ImageFileTypes.IsSupported(path, rawEnabled, webpHeicEnabled)).ToList();
         if (images.Count == 0)
             return new(DragDropInputKind.Invalid, null, null, validPaths.Count, Tr.CoreDragDropNoSupportedImages);
 
