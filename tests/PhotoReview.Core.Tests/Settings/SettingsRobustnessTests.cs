@@ -352,6 +352,8 @@ public sealed class SettingsRobustnessTests : IDisposable
         {
             InitialViewMode = initialViewModes[r.Next(initialViewModes.Length)],
             FitWidthAnchor = Enum.GetValues<FitWidthAnchor>()[r.Next(Enum.GetValues<FitWidthAnchor>().Length)],
+            FitWidthAnchor2 = Enum.GetValues<FitWidthAnchor>()[r.Next(Enum.GetValues<FitWidthAnchor>().Length)],
+            MiddleClickAction = Enum.GetValues<MiddleClickAction>()[r.Next(Enum.GetValues<MiddleClickAction>().Length)],
             KeepZoomAcrossImages = r.Next(2) == 0,
             LoadingMode = Enum.GetValues<LoadingMode>()[r.Next(Enum.GetValues<LoadingMode>().Length)],
             LoggingEnabled = r.Next(2) == 0,
@@ -397,7 +399,7 @@ public sealed class SettingsRobustnessTests : IDisposable
                 // DisableConflictingOptionalShortcuts now resolves EVERY optional shortcut, so these must not stay at their
                 // "O"/"D3" defaults either.
                 OpenFolder = r.Next(3) == 0 ? "" : Key(), CustomZoom = r.Next(3) == 0 ? "" : Key(),
-                ToggleCaptureMember = r.Next(3) == 0 ? "" : Key(),
+                ToggleCaptureMember = r.Next(3) == 0 ? "" : Key(), FitWidth2 = r.Next(3) == 0 ? "" : Key(),
             },
             Actions = [],
         };

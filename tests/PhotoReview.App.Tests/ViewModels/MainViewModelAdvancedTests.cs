@@ -612,7 +612,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
     }
 
     [Fact]
-    public async Task OpenInExternalEditor_NoEditorConfigured_DoesNothing()
+    public async Task OpenInExternalEditor_NoEditorConfigured_OpensSettingsOnExternalEditorField()
     {
         var folder = Path.Combine(_tempDir, "editor_not_configured");
         Directory.CreateDirectory(folder);
@@ -628,6 +628,23 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
 
         Assert.False(launched);
         Assert.Empty(_dialogService.Errors);
+        Assert.Equal(SettingsTarget.ExternalEditor, Assert.Single(_dialogService.SettingsTargets));
+    }
+
+    [Fact]
+    public async Task OpenInExternalEditor_EditorConfigured_DoesNotOpenSettings()
+    {
+        var folder = Path.Combine(_tempDir, "editor_configured_no_settings");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "photo.png");
+        var (vm, _) = CreateViewModel();
+        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        await vm.OpenFolderAsync(folder);
+        vm.StartExternalEditor = (_, _) => { };
+
+        vm.OpenInExternalEditor();
+
+        Assert.Empty(_dialogService.SettingsTargets);
     }
 
     // --- Test Doubles ---
@@ -709,8 +726,11 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         }
         public void ShowRecovery() { }
         public void ShowDiagnostics() { }
-        public bool ShowSettings()
+        public List<SettingsTarget> SettingsTargets { get; } = [];
+        public bool ShowSettings() => ShowSettings(SettingsTarget.Default);
+        public bool ShowSettings(SettingsTarget target)
         {
+            SettingsTargets.Add(target);
             OnShowSettings?.Invoke();
             return SettingsResponse;
         }

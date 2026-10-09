@@ -137,3 +137,26 @@ internal static class PointerGestures
     public static Point ResolveKeyboardZoomAnchor(KeyboardZoomAnchor mode, Point? pointer, double viewportWidth, double viewportHeight) =>
         mode == KeyboardZoomAnchor.Pointer && pointer is { } point ? point : new Point(viewportWidth / 2, viewportHeight / 2);
 }
+
+/// <summary>
+/// Middle-button click: maps <see cref="MiddleClickAction"/> to the existing <see cref="ReviewCommand"/> that the keyboard
+/// shortcut of the same name runs, so the window executes it through the same switch (no second copy of the action logic).
+/// Pure; <c>None</c> and any undefined value map to no command.
+/// </summary>
+internal static class MiddleClickResolver
+{
+    public static ReviewCommand? Resolve(MiddleClickAction action) => action switch
+    {
+        MiddleClickAction.ClickZoom => ReviewCommand.ClickZoom,
+        MiddleClickAction.ActualSize => ReviewCommand.ZoomActualSize,
+        MiddleClickAction.Fit => ReviewCommand.ToggleFit,
+        MiddleClickAction.FitWidth => ReviewCommand.FitWidth,
+        MiddleClickAction.FitWidth2 => ReviewCommand.FitWidth2,
+        MiddleClickAction.PreviousImage => ReviewCommand.Previous,
+        MiddleClickAction.NextImage => ReviewCommand.Next,
+        MiddleClickAction.PreviousFolder => ReviewCommand.PreviousFolder,
+        MiddleClickAction.NextFolder => ReviewCommand.NextFolder,
+        MiddleClickAction.OpenFolder => ReviewCommand.OpenFolder,
+        _ => null,
+    };
+}

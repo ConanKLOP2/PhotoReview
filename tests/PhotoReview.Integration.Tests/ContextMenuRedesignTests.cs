@@ -97,11 +97,10 @@ public sealed class ContextMenuRedesignTests
             var settings = Assert.IsType<MenuItem>(items[13]);
             Assert.False(string.IsNullOrEmpty(settings.Header as string));
 
-            // Q-R48: with no external editor configured (the default) its item AND its leading separator are hidden,
-            // so the menu never shows two separators in a row.
+            // Q-R48: the External Editor item stays visible even with no editor configured (discoverability: clicking it opens Settings).
             OpenMenu(window);
-            Assert.Equal(Visibility.Collapsed, window.OpenInExternalEditorMenuItem.Visibility);
-            Assert.Equal(Visibility.Collapsed, window.ExternalEditorGroupSeparator.Visibility);
+            Assert.Equal(Visibility.Visible, window.OpenInExternalEditorMenuItem.Visibility);
+            Assert.Equal(Visibility.Visible, window.ExternalEditorGroupSeparator.Visibility);
 
             // Settings is always visible, whichever way Move to Recycle Bin, the zoom cluster and the folder group are toggled --
             // including the all-hidden case where only Undo and Settings remain (no dangling double separator).

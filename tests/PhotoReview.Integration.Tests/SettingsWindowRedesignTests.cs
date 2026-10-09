@@ -60,6 +60,8 @@ public sealed class SettingsWindowRedesignTests
         // Q-R41/Q-R44/Q-R45/Q-R48 user feedback batch
         nameof(AppSettings.KeyboardZoomStepPercent), nameof(AppSettings.ConfirmBeforeDelete), nameof(AppSettings.ShowZoomIndicator),
         nameof(AppSettings.ExternalEditorPath),
+        // Second Fit width + middle-click action (Mouse & zoom page)
+        nameof(AppSettings.FitWidthAnchor2), nameof(AppSettings.MiddleClickAction),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]
@@ -277,9 +279,9 @@ public sealed class SettingsWindowRedesignTests
                     window.KineticGlideSmoothingCombo.SelectedIndex = 0;
                     window.MoveCopyReuseLastFolderCheck.IsChecked = true;
                     window.LastImageText.Text = "End";
-                    // D2 is ClickZoom's default and D3 is CustomZoom's (Q-R43): a colliding key pops SettingsValidator's
+                    // D2 is ClickZoom's default, D3 is CustomZoom's (Q-R43) and D4 is FitWidth2's: a colliding key pops SettingsValidator's
                     // real, undismissable duplicate-key MessageBox and hangs the STA test host.
-                    window.ZoomActualSizeText.Text = "D4";
+                    window.ZoomActualSizeText.Text = "D8";
                     window.ToggleInfoOverlayText.Text = "J";
                     // PR-B: "K" is now ToggleKeepZoom's default shortcut; "N" keeps this test about MoveToFolder's
                     // own round trip instead of tripping SettingsValidator's duplicate check (which would pop a real,
@@ -312,7 +314,7 @@ public sealed class SettingsWindowRedesignTests
                 Assert.Equal(KineticGlideSmoothing.Off, window.Settings.KineticGlideSmoothing);
                 Assert.True(window.Settings.MoveCopyReuseLastFolder);
                 Assert.Equal("End", window.Settings.Shortcuts.LastImage);
-                Assert.Equal("D4", window.Settings.Shortcuts.ZoomActualSize);
+                Assert.Equal("D8", window.Settings.Shortcuts.ZoomActualSize);
                 Assert.Equal("J", window.Settings.Shortcuts.ToggleInfoOverlay);
                 Assert.Equal("N", window.Settings.Shortcuts.MoveToFolder);
                 Assert.Equal("L", window.Settings.Shortcuts.CopyToFolder);

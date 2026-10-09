@@ -542,6 +542,30 @@ public partial class MainWindow : Window
         if (_pointer.OnImagePress(e.ChangedButton, e.ClickCount, e.GetPosition(ImageScroll), e.Timestamp)) e.Handled = true;
     }
 
+    /// <summary>
+    /// Middle button over the image viewport (not its scroll bars): runs the command chosen by <see cref="AppSettings.MiddleClickAction"/> (nothing for
+    /// <c>None</c>). Acts on the press; a repeated press of a multi-click is ignored so the action never runs twice. The
+    /// left-button pan/click-zoom state machine is not involved.
+    /// </summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
+    private async void ImageScroll_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle || IsInsideScrollBar(e.OriginalSource)) return;
+        e.Handled = true;
+        if (e.ClickCount != 1 || !_viewModel.HasImages) return;
+        if (MiddleClickResolver.Resolve(_settings.MiddleClickAction) is { } command)
+            await ExecuteReviewCommandAsync(command);
+    }
+
+    private static bool IsInsideScrollBar(object? source)
+    {
+        for (var node = source as DependencyObject; node is not null; node = node is System.Windows.Media.Visual ? System.Windows.Media.VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+        {
+            if (node is System.Windows.Controls.Primitives.ScrollBar) return true;
+        }
+        return false;
+    }
+
     private void MainImage_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (_pointer.OnImageMove(e.LeftButton == MouseButtonState.Pressed, e.GetPosition(ImageScroll), e.Timestamp)) e.Handled = true;
@@ -619,7 +643,18 @@ public partial class MainWindow : Window
         e.Handled = true;
         if (e.IsRepeat && cmd.Value.Type.IgnoresAutoRepeat()) return; // R2-F-06: never repeat file actions
 
-        switch (cmd.Value.Type)
+        await ExecuteReviewCommandAsync(cmd.Value);
+    }
+
+
+    /// <summary>
+    /// Runs one resolved command. Shared by the keyboard path (<see cref="Window_KeyDown"/>) and the middle-click path
+    /// (<see cref="MainImage_PreviewMouseDown"/> through <see cref="MiddleClickResolver"/>), so a command behaves the same
+    /// whichever input started it.
+    /// </summary>
+    private async Task ExecuteReviewCommandAsync(ReviewCommand command)
+    {
+        switch (command.Type)
         {
             case ReviewCommandType.Fullscreen: _viewModel.ToggleFullscreen(); break;
             case ReviewCommandType.ExitFullscreen: _viewModel.ExitFullscreen(); break;
@@ -634,7 +669,7 @@ public partial class MainWindow : Window
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
             case ReviewCommandType.ToggleCaptureMember: await _viewModel.ToggleCaptureGroupMemberAsync(); break;
             case ReviewCommandType.RunAction:
-                var actionIndex = cmd.Value.ActionIndex;
+                var actionIndex = command.ActionIndex;
                 var profiles = _settings.Actions;
                 await RunGuardedAsync(actionIndex >= 0 && actionIndex < profiles.Count ? profiles[actionIndex].Name : string.Empty,
                     () => _viewModel.RunActionAsync(actionIndex));
@@ -646,10 +681,12 @@ public partial class MainWindow : Window
             case ReviewCommandType.ZoomOut: await _pointer.ZoomOutAsync(); break;
             case ReviewCommandType.Next: await _viewModel.NextAsync(); break;
             case ReviewCommandType.Previous: await _viewModel.PreviousAsync(); break;
-            case ReviewCommandType.MoveToFolder: await RunGuardedAsync(Tr.ActionMoveToFolderName, () => _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker)); break;
-            case ReviewCommandType.CopyToFolder: await RunGuardedAsync(Tr.ActionCopyToFolderName, () => _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker)); break;
+            case ReviewCommandType.MoveToFolder: await RunGuardedAsync(Tr.ActionMoveToFolderName, () => _viewModel.MoveToFolderAsync(command.ForcePicker)); break;
+            case ReviewCommandType.CopyToFolder: await RunGuardedAsync(Tr.ActionCopyToFolderName, () => _viewModel.CopyToFolderAsync(command.ForcePicker)); break;
             case ReviewCommandType.ClickZoom: await _pointer.ToggleClickZoomAsync(); break;
-            case ReviewCommandType.FitWidth: await _pointer.FitWidthAsync(); break;
+            case ReviewCommandType.FitWidth or ReviewCommandType.FitWidth2:
+                await _pointer.FitWidthAsync(MainWindowHelpers.FitWidthAnchorFor(_settings, command.Type));
+                break;
             case ReviewCommandType.FitHeight: await _pointer.FitHeightAsync(); break;
             case ReviewCommandType.ToggleKeepZoom: ToggleKeepZoomAcrossImages(); break;
             case ReviewCommandType.OpenFolder: await RunGuardedAsync(TrimEllipsis(Tr.MainMenuOpenFolder), () => _viewModel.PickAndOpenFolderAsync()); break;
@@ -730,6 +767,7 @@ public partial class MainWindow : Window
     private List<System.Windows.Controls.MenuItem>? _clickZoomPresetItems;
     private System.Windows.Controls.MenuItem? _clickZoomCustomItem;
     private System.Windows.Controls.MenuItem? _zoomFitWidthItem;
+    private System.Windows.Controls.MenuItem? _zoomFitWidth2Item;
     private System.Windows.Controls.MenuItem? _zoomFitHeightItem;
     private System.Windows.Controls.MenuItem? _alsoSetClickLevelItem;
     private System.Windows.Controls.MenuItem? _setCurrentZoomAsClickLevelItem;
@@ -740,6 +778,9 @@ public partial class MainWindow : Window
         _zoomFitWidthItem!.Header = Tr.MainMenuZoomFitWidth;
         AutomationProperties.SetName(_zoomFitWidthItem, Tr.MainMenuZoomFitWidthAutomationName);
         _zoomFitWidthItem.InputGestureText = _settings.Shortcuts.FitWidth;
+        _zoomFitWidth2Item!.Header = Tr.MainMenuZoomFitWidth2;
+        AutomationProperties.SetName(_zoomFitWidth2Item, Tr.MainMenuZoomFitWidth2AutomationName);
+        _zoomFitWidth2Item.InputGestureText = _settings.Shortcuts.FitWidth2;
         _zoomFitHeightItem!.Header = Tr.MainMenuZoomFitHeight;
         AutomationProperties.SetName(_zoomFitHeightItem, Tr.MainMenuZoomFitHeightAutomationName);
         _zoomFitHeightItem.InputGestureText = _settings.Shortcuts.FitHeight;
@@ -770,6 +811,11 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(fitWidth, Tr.MainMenuZoomFitWidthAutomationName);
         fitWidth.Click += ZoomFitWidth_Click;
         ZoomMenu.Items.Add(fitWidth);
+
+        var fitWidth2 = _zoomFitWidth2Item = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuZoomFitWidth2 };
+        AutomationProperties.SetName(fitWidth2, Tr.MainMenuZoomFitWidth2AutomationName);
+        fitWidth2.Click += ZoomFitWidth2_Click;
+        ZoomMenu.Items.Add(fitWidth2);
 
         var fitHeight = _zoomFitHeightItem = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuZoomFitHeight };
         AutomationProperties.SetName(fitHeight, Tr.MainMenuZoomFitHeightAutomationName);
@@ -813,7 +859,11 @@ public partial class MainWindow : Window
 
     /// <summary>"Zoom" submenu: Fit width, anchored at the mouse when it is over the viewport (same rule as the shortcut).</summary>
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
-    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.FitWidthAsync());
+    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.FitWidthAsync(MainWindowHelpers.FitWidthAnchorFor(_settings, ReviewCommandType.FitWidth)));
+
+    /// <summary>"Zoom" submenu: the second Fit width, with its own anchor (<see cref="AppSettings.FitWidthAnchor2"/>).</summary>
+    [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
+    private async void ZoomFitWidth2_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.FitWidthAsync(MainWindowHelpers.FitWidthAnchorFor(_settings, ReviewCommandType.FitWidth2)));
 
     /// <summary>"Zoom" submenu: Fit height (always centred).</summary>
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
@@ -860,9 +910,6 @@ public partial class MainWindow : Window
         PreviousFolderMenuItem.Visibility = folderGroupVisibility;
         NextFolderMenuItem.InputGestureText = _settings.Shortcuts.NextFolder;
         PreviousFolderMenuItem.InputGestureText = _settings.Shortcuts.PreviousFolder;
-        var externalEditorVisibility = _viewModel.CanOpenInExternalEditor ? Visibility.Visible : Visibility.Collapsed;
-        ExternalEditorGroupSeparator.Visibility = externalEditorVisibility;
-        OpenInExternalEditorMenuItem.Visibility = externalEditorVisibility;
     }
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
