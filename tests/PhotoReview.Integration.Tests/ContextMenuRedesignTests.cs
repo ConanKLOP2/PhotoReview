@@ -78,7 +78,7 @@ public sealed class ContextMenuRedesignTests
         await WithWindowAsync(null, window =>
         {
             var items = window.ImageContextMenu.Items;
-            Assert.Equal(14, items.Count);
+            Assert.Equal(17, items.Count);
 
             var undo = Assert.IsType<MenuItem>(items[0]);
             Assert.False(string.IsNullOrEmpty(undo.Header as string));
@@ -93,8 +93,11 @@ public sealed class ContextMenuRedesignTests
             Assert.Same(window.PreviousFolderMenuItem, items[9]);
             Assert.Same(window.ExternalEditorGroupSeparator, items[10]);
             Assert.Same(window.OpenInExternalEditorMenuItem, items[11]);
-            Assert.IsType<Separator>(items[12]);
-            var settings = Assert.IsType<MenuItem>(items[13]);
+            Assert.Same(window.CopyGroupSeparator, items[12]);
+            Assert.Same(window.CopyFileNameMenuItem, items[13]);
+            Assert.Same(window.CopyFullPathMenuItem, items[14]);
+            Assert.IsType<Separator>(items[15]);
+            var settings = Assert.IsType<MenuItem>(items[16]);
             Assert.False(string.IsNullOrEmpty(settings.Header as string));
 
             // Q-R48: with no external editor configured (the default) its item AND its leading separator are hidden,
@@ -102,6 +105,11 @@ public sealed class ContextMenuRedesignTests
             OpenMenu(window);
             Assert.Equal(Visibility.Collapsed, window.OpenInExternalEditorMenuItem.Visibility);
             Assert.Equal(Visibility.Collapsed, window.ExternalEditorGroupSeparator.Visibility);
+
+            // Copy File Name / Copy Full Pathname (+ their separator) need an open photo; none is open here.
+            Assert.Equal(Visibility.Collapsed, window.CopyFileNameMenuItem.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.CopyFullPathMenuItem.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.CopyGroupSeparator.Visibility);
 
             // Settings is always visible, whichever way Move to Recycle Bin, the zoom cluster and the folder group are toggled --
             // including the all-hidden case where only Undo and Settings remain (no dangling double separator).
@@ -299,6 +307,39 @@ public sealed class ContextMenuRedesignTests
             Click(toggle);
 
             Assert.False(window.Settings.SetZoomAlsoSetsClickLevel);
+            return Task.CompletedTask;
+        });
+    }
+
+    private sealed class RecordingClipboard : PhotoReview.App.Services.IClipboardService
+    {
+        public List<string> Texts { get; } = [];
+
+        public bool TrySetText(string text)
+        {
+            Texts.Add(text);
+            return true;
+        }
+    }
+
+    [Fact]
+    public async Task CopyItems_VisibleWithAPhotoOpen_AndClickCopiesNameThenFullPath()
+    {
+        using var folder = new TempRoot("context-menu-redesign");
+        var png = Path.Combine(folder.Path, "square.png");
+        WriteImage(png);
+        await WithWindowAsync(folder.Path, window =>
+        {
+            var clipboard = new RecordingClipboard();
+            window.ViewModel.Clipboard = clipboard;
+            OpenMenu(window);
+            Assert.Equal(Visibility.Visible, window.CopyGroupSeparator.Visibility);
+            Assert.Equal(Visibility.Visible, window.CopyFileNameMenuItem.Visibility);
+            Assert.Equal(Visibility.Visible, window.CopyFullPathMenuItem.Visibility);
+
+            Click(window.CopyFileNameMenuItem);
+            Click(window.CopyFullPathMenuItem);
+            Assert.Equal(["square.png", png], clipboard.Texts);
             return Task.CompletedTask;
         });
     }

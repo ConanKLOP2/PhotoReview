@@ -702,6 +702,8 @@ public partial class MainWindow : Window
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await RunGuardedAsync(TrimEllipsis(Tr.MainMenuOpenFolder), () => _viewModel.PickAndOpenFolderAsync());
     private void OpenInExternalEditor_Click(object sender, RoutedEventArgs e) => _viewModel.OpenInExternalEditor();
+    private void CopyFileName_Click(object sender, RoutedEventArgs e) => _viewModel.CopyFileName();
+    private void CopyFullPath_Click(object sender, RoutedEventArgs e) => _viewModel.CopyFullPathname();
     private void Settings_Click(object sender, RoutedEventArgs e) => _viewModel.ShowSettings();
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
     private async void FitImage_Click(object sender, RoutedEventArgs e) => await ApplyFitViewAsync();
@@ -863,6 +865,12 @@ public partial class MainWindow : Window
         var externalEditorVisibility = _viewModel.CanOpenInExternalEditor ? Visibility.Visible : Visibility.Collapsed;
         ExternalEditorGroupSeparator.Visibility = externalEditorVisibility;
         OpenInExternalEditorMenuItem.Visibility = externalEditorVisibility;
+
+        // Copy group: its own separator + items, shown only while a photo is open (hidden together so no dangling separator).
+        var copyVisibility = _viewModel.CanCopyCurrentFilePath ? Visibility.Visible : Visibility.Collapsed;
+        CopyGroupSeparator.Visibility = copyVisibility;
+        CopyFileNameMenuItem.Visibility = copyVisibility;
+        CopyFullPathMenuItem.Visibility = copyVisibility;
     }
 
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]

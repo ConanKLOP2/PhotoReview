@@ -879,5 +879,12 @@
   "status.lateBatchRecycled": "Duplicate cleanup finished after you left the folder: {done} file(s) moved to the Recycle Bin, {failed} failed. This cleanup cannot be undone with Ctrl+Z; open the Recycle Bin to restore files.",
   "core.recovery.conflict": "Files exist at both the source and the destination; retry refused so that nothing is overwritten. Resolve the duplicate by hand.",
   "core.recovery.destinationChanged": "The file at the destination is no longer the one that was moved; retry refused to protect your data.",
-  "core.fileAction.groupNeedsTwoPaths": "A grouped file action needs at least two files."
+  "core.fileAction.groupNeedsTwoPaths": "A grouped file action needs at least two files.",
+  "main.menu.copyFileName": "Copy File Name",
+  "main.menu.copyFileName.automationName": "Copy the current photo's file name to the clipboard",
+  "main.menu.copyFullPath": "Copy Full Pathname",
+  "main.menu.copyFullPath.automationName": "Copy the current photo's full path to the clipboard",
+  "status.copiedFileName": "Copied file name: {fileName}",
+  "status.copiedFullPath": "Copied full path: {path}",
+  "status.clipboardCopyFailed": "Could not copy to the clipboard (it is in use by another program). Try again."
 }

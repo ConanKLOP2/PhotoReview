@@ -671,5 +671,8 @@
   "status.lateBatchRecycled": "Status bar (RV-A10, RV-D5) when a batch duplicate cleanup (Recycle of the numbered copies) finished after the user had already opened another folder. {done} = files moved to the Recycle Bin, {failed} = files that failed. The batch is not registered for Undo, so the text must say Ctrl+Z does not undo it. Only shown when the new folder status line is idle.",
   "core.recovery.conflict": "RecoveryRetryResult.Message when a group retry finds the source and the destination both present (Conflict verdict) so retrying could overwrite or duplicate a file. Shown in the Recovery window.",
   "core.recovery.destinationChanged": "RecoveryRetryResult.Message when a group retry finds the source gone but the destination no longer matching the journaled size/time (DestinationChanged verdict). Shown in the Recovery window.",
-  "core.fileAction.groupNeedsTwoPaths": "FileActionService group action failure message (defensive guard; the UI only builds groups of two or more files)."
+  "core.fileAction.groupNeedsTwoPaths": "FileActionService group action failure message (defensive guard; the UI only builds groups of two or more files).",
+  "status.copiedFileName": "Status line after the context-menu item Copy File Name succeeds; {fileName} is the file name with extension.",
+  "status.copiedFullPath": "Status line after the context-menu item Copy Full Pathname succeeds; {path} is the full path.",
+  "status.clipboardCopyFailed": "Status line when the Windows clipboard stayed locked by another program for both copy menu items."
 }

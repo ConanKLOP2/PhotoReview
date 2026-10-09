@@ -871,5 +871,12 @@
   "status.lateBatchRecycled": "Dọn ảnh trùng đã xong sau khi bạn rời thư mục này: {done} tệp đã vào Thùng rác, {failed} tệp lỗi. Không thể hoàn tác đợt dọn này bằng Ctrl+Z; hãy mở Thùng rác để khôi phục tệp.",
   "core.recovery.conflict": "Tệp tồn tại ở cả nguồn lẫn đích; từ chối thử lại để không ghi đè. Hãy tự xử lý bản trùng.",
   "core.recovery.destinationChanged": "Tệp ở đích không còn là tệp đã được di chuyển; từ chối thử lại để bảo vệ dữ liệu.",
-  "core.fileAction.groupNeedsTwoPaths": "Thao tác theo nhóm cần ít nhất hai tệp."
+  "core.fileAction.groupNeedsTwoPaths": "Thao tác theo nhóm cần ít nhất hai tệp.",
+  "main.menu.copyFileName": "Sao chép tên tệp",
+  "main.menu.copyFileName.automationName": "Sao chép tên tệp của ảnh hiện tại vào bộ nhớ tạm",
+  "main.menu.copyFullPath": "Sao chép đường dẫn đầy đủ",
+  "main.menu.copyFullPath.automationName": "Sao chép đường dẫn đầy đủ của ảnh hiện tại vào bộ nhớ tạm",
+  "status.copiedFileName": "Đã sao chép tên tệp: {fileName}",
+  "status.copiedFullPath": "Đã sao chép đường dẫn: {path}",
+  "status.clipboardCopyFailed": "Không sao chép được vào bộ nhớ tạm (đang bị chương trình khác dùng). Hãy thử lại."
 }
