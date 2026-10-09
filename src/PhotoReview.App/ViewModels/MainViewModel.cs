@@ -111,7 +111,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             _naturalComparer, () => Settings, this,
             folderPicker: folderPicker, fileSystem: _fileSystem, rememberFolder: RememberMoveCopyFolder);
         _siblingNavigator = new SiblingFolderNavigator(
-            _clock, _catalog, _fileSystem, this, () => _currentSession, () => Settings.RawSupportEnabled);
+            _clock, _catalog, _fileSystem, this, () => _currentSession, () => Settings.RawSupportEnabled,
+            () => Settings.WebpHeicSupportEnabled);
         InfoOverlay = new InfoOverlayViewModel(() => Settings, _siblingNavigator.FindSiblingImageFolders,
             hasImage: () => HasImages, getZoomPercent: () => _viewerState.DisplayZoomPercent);
         InfoOverlay.PropertyChanged += (_, e) =>
@@ -439,7 +440,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         if (string.IsNullOrWhiteSpace(path)) return;
 
-        var input = DragDropInputService.Parse([path], Settings.RawSupportEnabled);
+        var input = DragDropInputService.Parse([path], Settings.RawSupportEnabled, Settings.WebpHeicSupportEnabled);
         if (!input.IsValid)
         {
             StatusText = input.Warning ?? Tr.StatusNoValidInput;
@@ -792,6 +793,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var previousPairMode = _settingsStore.Current.RawPairMode;
         var previousRawFullDecode = _settingsStore.Current.RawFullDecode;
         var previousSortMode = _settingsStore.Current.ImageSortMode;
+        var previousWebpHeic = _settingsStore.Current.WebpHeicSupportEnabled;
         var changed = _dialogService.ShowSettings();
         if (!changed) return;
 
@@ -811,7 +813,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var reloadFolder = (previousRawSupport != newRawSupport
                 || (newRawSupport && previousPairMode != _settingsStore.Current.RawPairMode)
                 // RV-D4 = A: the sort mode is read once per folder load, so a change re-sorts the open folder by reloading it.
-                || previousSortMode != _settingsStore.Current.ImageSortMode)
+                || previousSortMode != _settingsStore.Current.ImageSortMode
+                // Q-FMT-WEBP-HEIC: like RAW support, the switch decides which files the catalog lists.
+                || previousWebpHeic != _settingsStore.Current.WebpHeicSupportEnabled)
             && _currentSession?.Folder is { Length: > 0 };
         // The RAW full-decode setting is read when the zoom target is armed (ZoomDetailLoader.OnPreviewPresented), so the open
         // image must be re-presented (cheap: RAM-cached preview, no folder reload) for Never <-> OnZoom to apply to it.

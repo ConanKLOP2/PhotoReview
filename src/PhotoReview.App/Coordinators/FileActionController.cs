@@ -768,7 +768,7 @@ public sealed class FileActionController
         ArgumentNullException.ThrowIfNull(result);
         if (result.RestoredPaths is not { Count: > 0 } restored) return result.Source;
         if (!string.IsNullOrEmpty(result.Source) && restored.Contains(result.Source, StringComparer.OrdinalIgnoreCase)) return result.Source;
-        return restored.FirstOrDefault(path => ImageFileTypes.IsSupported(path, rawEnabled: true)) ?? result.Source;
+        return restored.FirstOrDefault(path => ImageFileTypes.IsSupported(path, rawEnabled: true, webpHeicEnabled: true)) ?? result.Source;
     }
 
     private static bool IsInFolder(string path, string? folder)

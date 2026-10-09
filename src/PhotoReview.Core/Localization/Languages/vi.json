@@ -871,5 +871,17 @@
   "status.lateBatchRecycled": "Dọn ảnh trùng đã xong sau khi bạn rời thư mục này: {done} tệp đã vào Thùng rác, {failed} tệp lỗi. Không thể hoàn tác đợt dọn này bằng Ctrl+Z; hãy mở Thùng rác để khôi phục tệp.",
   "core.recovery.conflict": "Tệp tồn tại ở cả nguồn lẫn đích; từ chối thử lại để không ghi đè. Hãy tự xử lý bản trùng.",
   "core.recovery.destinationChanged": "Tệp ở đích không còn là tệp đã được di chuyển; từ chối thử lại để bảo vệ dữ liệu.",
-  "core.fileAction.groupNeedsTwoPaths": "Thao tác theo nhóm cần ít nhất hai tệp."
+  "core.fileAction.groupNeedsTwoPaths": "Thao tác theo nhóm cần ít nhất hai tệp.",
+  "image.error.webpHeicDisabled": "Hỗ trợ WebP/HEIC đang tắt trong Cài đặt nên không thể hiển thị {fileName}.",
+  "image.error.webpCodecMissing": "{fileName} là ảnh WebP nhưng Windows trên máy này chưa có bộ giải mã WebP. Hãy cài \"WebP Image Extensions\" từ Microsoft Store rồi khởi động lại PhotoReview.",
+  "image.error.heifCodecMissing": "{fileName} là ảnh HEIC/HEIF (ví dụ ảnh chụp từ iPhone) nhưng Windows trên máy này chưa giải mã được. Hãy cài \"HEIF Image Extensions\" và \"HEVC Video Extensions\" từ Microsoft Store rồi khởi động lại PhotoReview.",
+  "settings.group.webpHeic": "WebP và HEIC/HEIF",
+  "settings.webpHeicSupportEnabled.label": "Bật ảnh WebP và HEIC/HEIF (.webp, .heic, .heif) qua bộ giải mã của Windows",
+  "settings.webpHeicSupportEnabled.automationName": "Bật ảnh WebP và HEIC/HEIF",
+  "settings.webpHeicSupportEnabled.hint": "Dùng bộ giải mã có sẵn của Windows; PhotoReview không đóng gói thư viện nào. Ảnh WebP động chỉ hiển thị khung hình đầu tiên.",
+  "settings.webpHeicSupportEnabled.status": "Trên máy này: WebP {webp}; HEIC/HEIF {heif}.",
+  "settings.webpHeicSupportEnabled.codecAvailable": "có sẵn",
+  "settings.webpHeicSupportEnabled.webpMissing": "chưa có (cài \"WebP Image Extensions\" từ Microsoft Store)",
+  "settings.webpHeicSupportEnabled.heifMissing": "chưa có (cài \"HEIF Image Extensions\" và \"HEVC Video Extensions\" từ Microsoft Store)",
+  "settings.webpHeicSupportEnabled.hevcMissing": "chưa đủ (đã có \"HEIF Image Extensions\"; cần cài thêm \"HEVC Video Extensions\" từ Microsoft Store)"
 }

@@ -671,5 +671,17 @@
   "status.lateBatchRecycled": "Status bar (RV-A10, RV-D5) when a batch duplicate cleanup (Recycle of the numbered copies) finished after the user had already opened another folder. {done} = files moved to the Recycle Bin, {failed} = files that failed. The batch is not registered for Undo, so the text must say Ctrl+Z does not undo it. Only shown when the new folder status line is idle.",
   "core.recovery.conflict": "RecoveryRetryResult.Message when a group retry finds the source and the destination both present (Conflict verdict) so retrying could overwrite or duplicate a file. Shown in the Recovery window.",
   "core.recovery.destinationChanged": "RecoveryRetryResult.Message when a group retry finds the source gone but the destination no longer matching the journaled size/time (DestinationChanged verdict). Shown in the Recovery window.",
-  "core.fileAction.groupNeedsTwoPaths": "FileActionService group action failure message (defensive guard; the UI only builds groups of two or more files)."
+  "core.fileAction.groupNeedsTwoPaths": "FileActionService group action failure message (defensive guard; the UI only builds groups of two or more files).",
+  "image.error.webpHeicDisabled": "Status-bar image error (Q-FMT-WEBP-HEIC) when a .webp/.heic/.heif file is shown while Settings > Enable WebP and HEIC/HEIF images is off. {fileName} = the file name.",
+  "image.error.webpCodecMissing": "Status-bar image error when this PC has no Windows WebP codec. Keep the Store product name \"WebP Image Extensions\" in English (it is how the Store lists it). {fileName} = the file name.",
+  "image.error.heifCodecMissing": "Status-bar image error when this PC lacks the Windows HEIF codec or the HEVC video decoder it needs. Keep the Store product names \"HEIF Image Extensions\" and \"HEVC Video Extensions\" in English. {fileName} = the file name.",
+  "settings.group.webpHeic": "Settings section header for the WebP/HEIC format group.",
+  "settings.webpHeicSupportEnabled.label": "Settings checkbox: lists and decodes .webp/.heic/.heif through the Windows codecs (default on).",
+  "settings.webpHeicSupportEnabled.automationName": "Screen-reader name of the WebP/HEIC checkbox.",
+  "settings.webpHeicSupportEnabled.hint": "Help text under the WebP/HEIC checkbox.",
+  "settings.webpHeicSupportEnabled.status": "Codec status line under the WebP/HEIC checkbox. {webp} and {heif} are one of the codecAvailable / ...Missing texts below.",
+  "settings.webpHeicSupportEnabled.codecAvailable": "Value for {webp}/{heif} in the status line: the codec is installed.",
+  "settings.webpHeicSupportEnabled.webpMissing": "Value for {webp} in the status line: no WebP codec. Keep the Store product name in English.",
+  "settings.webpHeicSupportEnabled.heifMissing": "Value for {heif} in the status line: no HEIF codec. Keep the Store product names in English.",
+  "settings.webpHeicSupportEnabled.hevcMissing": "Value for {heif} in the status line: the HEIF codec is installed but the HEVC video decoder is not. Keep the Store product names in English."
 }

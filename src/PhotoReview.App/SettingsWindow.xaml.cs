@@ -142,6 +142,21 @@ public partial class SettingsWindow : Window
         UpdateRamCacheValueText();
         UpdatePreloadWindowHint();
         UpdateZoomShortcutSummary();
+        UpdateWebpHeicCodecStatus();
+    }
+
+    /// <summary>Q-FMT-WEBP-HEIC: which Windows codecs this PC has (probed once per process; cheap after the first call).</summary>
+    private void UpdateWebpHeicCodecStatus() => WebpHeicCodecStatusText.Text = FormatWebpHeicCodecStatus(PhotoReview.Imaging.Decoding.Wic.WicCodecAvailability.Current);
+
+    /// <summary>The localized codec status line: WebP available/missing; HEIC available, missing, or missing only the HEVC decoder.</summary>
+    internal static string FormatWebpHeicCodecStatus(PhotoReview.Imaging.Decoding.Wic.WicCodecSupport codecs)
+    {
+        ArgumentNullException.ThrowIfNull(codecs);
+        var webp = codecs.WebP ? Tr.SettingsWebpHeicSupportEnabledCodecAvailable : Tr.SettingsWebpHeicSupportEnabledWebpMissing;
+        var heif = codecs.Heif ? Tr.SettingsWebpHeicSupportEnabledCodecAvailable
+            : codecs.HeifContainer ? Tr.SettingsWebpHeicSupportEnabledHevcMissing
+            : Tr.SettingsWebpHeicSupportEnabledHeifMissing;
+        return Tr.SettingsWebpHeicSupportEnabledStatus(webp, heif);
     }
 
     /// <summary>Ctrl+Tab / Ctrl+Shift+Tab cycles pages regardless of which control has focus.</summary>
@@ -368,6 +383,8 @@ public partial class SettingsWindow : Window
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         RawSupportEnabledCheck.IsChecked = Settings.RawSupportEnabled;
+        WebpHeicSupportEnabledCheck.IsChecked = Settings.WebpHeicSupportEnabled;
+        UpdateWebpHeicCodecStatus();
         RawFullDecodeCombo.SelectedIndex = Settings.RawFullDecode == RawFullDecode.OnZoom ? 1 : 0;
         RawPairModeCombo.SelectedIndex = Settings.RawPairMode switch
         {
@@ -723,6 +740,7 @@ public partial class SettingsWindow : Window
         Settings.InfoOverlayFontSize = AppSettings.DefaultInfoOverlayFontSize;
         Settings.TitleBarFields = TitleBarFields.Default;
         Settings.RawSupportEnabled = new AppSettings().RawSupportEnabled;
+        Settings.WebpHeicSupportEnabled = new AppSettings().WebpHeicSupportEnabled;
         Settings.RawFullDecode = new AppSettings().RawFullDecode;
         Settings.RawPairMode = new AppSettings().RawPairMode;
         LoadFields();
@@ -772,6 +790,7 @@ public partial class SettingsWindow : Window
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
         Settings.RawSupportEnabled = RawSupportEnabledCheck.IsChecked == true;
+        Settings.WebpHeicSupportEnabled = WebpHeicSupportEnabledCheck.IsChecked == true;
         Settings.RawFullDecode = RawFullDecodeCombo.SelectedIndex == 1 ? RawFullDecode.OnZoom : RawFullDecode.Never;
         Settings.RawPairMode = RawPairModeCombo.SelectedIndex switch
         {
