@@ -196,16 +196,20 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         Assert.DoesNotContain(_sink.Calls, c => IsCall(c, "Session"));
     }
 
-    [Fact(DisplayName = "APP-03: Recycle undo in the folder it was made in still updates the session path (unchanged behavior)")]
+    [Fact(DisplayName = "APP-03: Recycle undo in the folder it was made in updates the session path to the photo still on screen")]
     public async Task RecycleUndo_InSameFolder_UpdatesSessionPath()
     {
-        var (moved, _) = OpenAWithTwoFiles();
+        var (moved, other) = OpenAWithTwoFiles();
         await _controller.RecycleAsync(null, moved);
         _sink.Calls.Clear();
 
         await _controller.UndoLastAsync(_folderA);
 
-        Assert.Contains($"Session:{moved}", _sink.Calls);
+        // The restored photo is back in the list, but the review stays on the photo shown since the delete.
+        Assert.Equal([moved, other], _catalog.Paths);
+        Assert.Equal(other, _catalog.Current?.Path);
+        Assert.Contains($"Session:{other}", _sink.Calls);
+        Assert.DoesNotContain($"Session:{moved}", _sink.Calls);
     }
 
     [Fact(DisplayName = "APP-03: a permanent delete finishing after a folder switch says it cannot be undone, and Undo restores nothing")]

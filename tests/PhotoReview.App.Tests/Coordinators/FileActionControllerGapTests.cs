@@ -123,13 +123,17 @@ public sealed class FileActionControllerGapTests : IDisposable
 
     // RV-T22
     [Fact]
-    public void RestoresOutsideFolder_RecycleUndo_IsAlwaysOutsideEvenForAnEmptyOrNullCurrentFolder()
+    public void RestoresOutsideFolder_RecycleUndo_IsInsideOnlyForItsOwnFolder()
     {
         var result = new UndoResult(true, FileOperationType.Recycle, Path.Combine(_root, "a.jpg"), null, null);
 
-        Assert.True(FileActionController.RestoresOutsideFolder(result, _root));
+        Assert.False(FileActionController.RestoresOutsideFolder(result, _root));
+        Assert.True(FileActionController.RestoresOutsideFolder(result, Path.Combine(_root, "other")));
         Assert.True(FileActionController.RestoresOutsideFolder(result, null));
         Assert.True(FileActionController.RestoresOutsideFolder(result, string.Empty));
+        // A capture with a member restored in another folder still reopens that folder.
+        var split = result with { RestoredPaths = [Path.Combine(_root, "a.jpg"), Path.Combine(_root, "other", "a.cr2")] };
+        Assert.True(FileActionController.RestoresOutsideFolder(split, _root));
     }
 
     [Theory]
