@@ -78,7 +78,7 @@ public sealed class ContextMenuRedesignTests
         await WithWindowAsync(null, window =>
         {
             var items = window.ImageContextMenu.Items;
-            Assert.Equal(17, items.Count);
+            Assert.Equal(18, items.Count);
 
             var undo = Assert.IsType<MenuItem>(items[0]);
             Assert.False(string.IsNullOrEmpty(undo.Header as string));
@@ -87,17 +87,18 @@ public sealed class ContextMenuRedesignTests
             Assert.Same(window.FitMenuItem, items[3]);
             Assert.Same(window.ZoomToLevelMenuItem, items[4]);
             Assert.Same(window.ZoomMenu, items[5]);
-            Assert.Same(window.FolderGroupSeparator, items[6]);
-            Assert.Same(window.OpenFolderMenuItem, items[7]);
-            Assert.Same(window.NextFolderMenuItem, items[8]);
-            Assert.Same(window.PreviousFolderMenuItem, items[9]);
-            Assert.Same(window.ExternalEditorGroupSeparator, items[10]);
-            Assert.Same(window.OpenInExternalEditorMenuItem, items[11]);
-            Assert.Same(window.CopyGroupSeparator, items[12]);
-            Assert.Same(window.CopyFileNameMenuItem, items[13]);
-            Assert.Same(window.CopyFullPathMenuItem, items[14]);
-            Assert.IsType<Separator>(items[15]);
-            var settings = Assert.IsType<MenuItem>(items[16]);
+            Assert.Same(window.RefreshMenuItem, items[6]); // Q-TOUCHPAD-REFRESH: right after the Zoom submenu, always shown
+            Assert.Same(window.FolderGroupSeparator, items[7]);
+            Assert.Same(window.OpenFolderMenuItem, items[8]);
+            Assert.Same(window.NextFolderMenuItem, items[9]);
+            Assert.Same(window.PreviousFolderMenuItem, items[10]);
+            Assert.Same(window.ExternalEditorGroupSeparator, items[11]);
+            Assert.Same(window.OpenInExternalEditorMenuItem, items[12]);
+            Assert.Same(window.CopyGroupSeparator, items[13]);
+            Assert.Same(window.CopyFileNameMenuItem, items[14]);
+            Assert.Same(window.CopyFullPathMenuItem, items[15]);
+            Assert.IsType<Separator>(items[16]);
+            var settings = Assert.IsType<MenuItem>(items[17]);
             Assert.False(string.IsNullOrEmpty(settings.Header as string));
 
             // Q-R48: the External Editor item stays visible even with no editor configured (discoverability: clicking it opens Settings).
