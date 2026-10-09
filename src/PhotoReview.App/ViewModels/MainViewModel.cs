@@ -1,6 +1,7 @@
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoReview.App.Coordinators;
+using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
@@ -127,11 +128,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // feat(zoom): leaving Fit requests the current image's full-resolution decode; Fit reverts
         // to the preview.
         _viewerState.ZoomModeChanged += (_, _) => _presenter.SetViewerZoom(_viewerState.EffectiveZoom);
-        // Q-R45: the zoom HUD text/visibility follows the zoom level and Fit/stretch changes (DisplayZoomPercent's
-        // own dependencies already notify through ImageWidth/ImageHeight, see ViewerState).
+        // Q-R45: the zoom HUD text/visibility follows the zoom level and Fit/stretch changes. DisplayZoomPercent is
+        // notified by every input it reads, including the Fit viewport bound (MaxImageWidth/Height), which does not
+        // change ImageWidth/ImageHeight (NaN in Fit).
         _viewerState.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(ViewerState.ImageWidth) or nameof(ViewerState.ImageHeight)) InfoOverlay.Refresh();
+            if (e.PropertyName is nameof(ViewerState.DisplayZoomPercent)) InfoOverlay.Refresh();
         };
         _presenter.SetViewerZoom(_viewerState.EffectiveZoom);
     }
@@ -715,6 +717,35 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         {
             _dialogService?.ShowError(Tr.DialogExternalEditorFailedTitle, ex.Message);
         }
+    }
+
+    /// <summary>Test seam: clipboard writer for the "Copy File Name" / "Copy Full Pathname" context-menu items; default is the real WPF clipboard.</summary>
+    internal IClipboardService Clipboard { get; set; } = new WpfClipboardService();
+
+    /// <summary>The two "Copy ..." context-menu items are enabled only while a photo is open.</summary>
+    public bool CanCopyCurrentFilePath => HasImages && CurrentFilePath() is not null;
+
+    private string? CurrentFilePath()
+    {
+        var path = _compare.SelectedPath ?? _presenter.CurrentPresentedPath ?? _catalog.Current?.Path;
+        return string.IsNullOrEmpty(path) ? null : path;
+    }
+
+    /// <summary>Copies the current photo's file name (with extension) to the clipboard and reports the result on the status line.</summary>
+    public void CopyFileName()
+    {
+        var path = CurrentFilePath();
+        if (path is null) return;
+        var name = Path.GetFileName(path);
+        StatusText = Clipboard.TrySetText(name) ? Tr.StatusCopiedFileName(name) : Tr.StatusClipboardCopyFailed;
+    }
+
+    /// <summary>Copies the current photo's full path to the clipboard and reports the result on the status line.</summary>
+    public void CopyFullPathname()
+    {
+        var path = CurrentFilePath();
+        if (path is null) return;
+        StatusText = Clipboard.TrySetText(path) ? Tr.StatusCopiedFullPath(path) : Tr.StatusClipboardCopyFailed;
     }
 
     /// <summary>
