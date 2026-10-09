@@ -125,7 +125,8 @@ internal sealed class FileActionControllerMutationGapHarness : IDisposable
         }
 
         public void ShowMessage(string title, string message) { }
-        public void ShowError(string title, string message) { }
+        public List<(string Title, string Message)> Errors { get; } = [];
+        public void ShowError(string title, string message) => Errors.Add((title, message));
         public string? PickFolder(string? initialFolder = null) => null;
         public bool ShowBatchReview(IReadOnlyList<string> paths) => false;
         public void ShowRecovery() { }

@@ -629,7 +629,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var undoEpoch = _folderLoadEpoch;
         var result = await _fileActionController.UndoLastAsync(currentFolder);
 
-        // Recycle undo, or a Move made in a previous folder (R7-2): open the restored file's folder at that file.
+        // A Move/Recycle made in a previous folder (R7-2): open the restored file's folder at that file. An undo in the open
+        // folder was already put back in place by the controller, without a reload (the photo on screen stays).
         if (FileActionController.RestoresOutsideFolder(result, currentFolder))
         {
             // Open at a member that really came back: Source (first manifest member) may be a permanently deleted one.
