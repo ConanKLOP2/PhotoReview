@@ -67,7 +67,8 @@ if ([string]::IsNullOrWhiteSpace($LogPath)) {
     $resultsDir = Join-Path $root 'TestResults\hidden-desktop-runner'
     New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $LogPath = Join-Path $resultsDir "run-$stamp.log"
+    # DesktopName + PID keep concurrent runs (verify-all.ps1 -Parallel) from sharing one log within the same second.
+    $LogPath = Join-Path $resultsDir "run-$stamp-$DesktopName-$PID.log"
 }
 else {
     $logDir = Split-Path -Parent $LogPath
