@@ -292,15 +292,16 @@ if ($Parallel -and $null -eq $TestCommandInvoker) {
         Start-Job -ScriptBlock {
             param($TestArgs, $TestProject, $UseHidden, $HiddenRunner)
             if ($UseHidden) {
-                & $HiddenRunner @TestArgs -DesktopName "PhotoReviewTests-$TestProject"
+                & $HiddenRunner @TestArgs -DesktopName "PhotoReviewTests-$TestProject" | Out-Host
             }
             else {
-                & dotnet test @TestArgs
+                & dotnet test @TestArgs | Out-Host
             }
             [pscustomobject]@{ Project = $TestProject; ExitCode = $LASTEXITCODE }
         } -ArgumentList $testArgsForJob, $testProject, $Hidden.IsPresent, $hiddenRunner
     }
-    $results = @($jobs | Wait-Job | Receive-Job)
+    # Only the result objects count; stray pipeline output from a job must never be mistaken for a project.
+    $results = @($jobs | Wait-Job | Receive-Job | Where-Object { $_.PSObject.Properties['Project'] })
     $jobs | Remove-Job
     $failed = @($results | Where-Object { $_.ExitCode -ne 0 })
     foreach ($r in $results | Sort-Object Project) {
