@@ -42,7 +42,7 @@
     <Grid Background="{DynamicResource Dark.Canvas}" ClipToBounds="True">
         <Grid.ContextMenu>
             <ContextMenu x:Name="ImageContextMenu" Opened="ImageContextMenu_Opened">
-                <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
+                <MenuItem x:Name="UndoMenuItem" Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
                 <MenuItem x:Name="RecycleMenuItem" Header="{loc:Tr main.menu.recycle}" AutomationProperties.Name="{loc:Tr main.menu.recycle.automationName}" Click="Recycle_Click" />
                 <Separator x:Name="ZoomGroupSeparator" />
                 <MenuItem x:Name="FitMenuItem" Header="{loc:Tr main.menu.clickZoomLevel.fit}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.fit.automationName}" Click="ClickZoomFit_Click" />
@@ -59,8 +59,8 @@
                 <Separator x:Name="CopyGroupSeparator" />
                 <MenuItem x:Name="CopyFileNameMenuItem" Header="{loc:Tr main.menu.copyFileName}" AutomationProperties.Name="{loc:Tr main.menu.copyFileName.automationName}" Click="CopyFileName_Click" />
                 <MenuItem x:Name="CopyFullPathMenuItem" Header="{loc:Tr main.menu.copyFullPath}" AutomationProperties.Name="{loc:Tr main.menu.copyFullPath.automationName}" Click="CopyFullPath_Click" />
-                <Separator />
-                <MenuItem Header="{loc:Tr main.menu.settings}" AutomationProperties.Name="{loc:Tr main.menu.settings.automationName}" Click="Settings_Click" />
+                <Separator x:Name="SettingsGroupSeparator" />
+                <MenuItem x:Name="SettingsMenuItem" Header="{loc:Tr main.menu.settings}" AutomationProperties.Name="{loc:Tr main.menu.settings.automationName}" Click="Settings_Click" />
             </ContextMenu>
         </Grid.ContextMenu>
         <Border Background="{DynamicResource Dark.Canvas}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">

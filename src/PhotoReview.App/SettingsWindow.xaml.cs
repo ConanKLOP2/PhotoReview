@@ -1,10 +1,12 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Text.Json;
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.App.Localization;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Updates;
@@ -52,6 +54,7 @@ public partial class SettingsWindow : Window
         Settings = AppSettings.Clone(current);
 
         InitializePages();
+        RefreshShellStatus();
 
         // Single source of truth for the shortcut boxes: input capture, duplicate warning and the "must parse" checks in
         // Save_Click all derive from this list, so a box missing here cannot silently miss one of them.
@@ -364,6 +367,123 @@ public partial class SettingsWindow : Window
         });
     }
 
+    // ---- Explorer integration: "Browse with PhotoReview" on folders (HKCU, no administrator rights; applies immediately) ----
+
+    /// <summary>The registry seam (test seam: a fake replaces it).</summary>
+    internal IShellIntegration ShellIntegration { get; set; } = new PhotoReview.Platform.Windows.WindowsShellIntegration();
+
+    /// <summary>The executable the command should launch; null/dotnet host = unavailable (test seam).</summary>
+    internal string? ExecutablePath { get; set; } = Environment.ProcessPath;
+
+    /// <summary>Shows the current registration state and enables the buttons that make sense for it.</summary>
+    internal void RefreshShellStatus()
+    {
+        var exe = ExecutablePath;
+        if (!ShellMenuCommand.IsValidExecutablePath(exe) || string.Equals(Path.GetFileNameWithoutExtension(exe), "dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            ShellStatusText.Text = Tr.SettingsShellStatusUnavailable;
+            ShellAddButton.IsEnabled = false;
+            ShellRemoveButton.IsEnabled = false;
+            return;
+        }
+        ShellMenuState state;
+        try { state = ShellIntegration.GetState(exe!); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            ShellStatusText.Text = Tr.SettingsShellStatusError(ex.Message);
+            ShellAddButton.IsEnabled = true;
+            ShellRemoveButton.IsEnabled = false;
+            return;
+        }
+        ShellStatusText.Text = state switch
+        {
+            ShellMenuState.Registered => Tr.SettingsShellStatusRegistered,
+            ShellMenuState.RegisteredElsewhere => Tr.SettingsShellStatusElsewhere,
+            _ => Tr.SettingsShellStatusNotRegistered,
+        };
+        ShellAddButton.Content = state == ShellMenuState.RegisteredElsewhere ? Tr.SettingsShellUpdate : Tr.SettingsShellAdd;
+        ShellAddButton.IsEnabled = state != ShellMenuState.Registered;
+        ShellRemoveButton.IsEnabled = state != ShellMenuState.NotRegistered;
+    }
+
+    private void ShellAdd_Click(object sender, RoutedEventArgs e) => ChangeShellRegistration(register: true);
+
+    private void ShellRemove_Click(object sender, RoutedEventArgs e) => ChangeShellRegistration(register: false);
+
+    private void ChangeShellRegistration(bool register)
+    {
+        try
+        {
+            if (register) ShellIntegration.Register(ExecutablePath!);
+            else ShellIntegration.Unregister();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+        {
+            AppLog.Error("Explorer integration change failed", ex);
+            RefreshShellStatus();
+            ShellStatusText.Text = Tr.SettingsShellStatusError(ex.Message);
+            return;
+        }
+        RefreshShellStatus();
+    }
+
+    private readonly Dictionary<ContextMenuItemId, CheckBox> _contextMenuChecks = [];
+
+    /// <summary>The right-click menu tick boxes by item id (test seam).</summary>
+    internal IReadOnlyDictionary<ContextMenuItemId, CheckBox> ContextMenuChecks => _contextMenuChecks;
+
+    /// <summary>Right-click menu page: one tick box per item, built once from the single item list (<see cref="ContextMenuItems.Items"/>).</summary>
+    private void LoadContextMenuChecks()
+    {
+        if (_contextMenuChecks.Count == 0)
+        {
+            foreach (var item in ContextMenuItems.Items)
+            {
+                var label = ContextMenuItemLabel(item.Id);
+                var check = new CheckBox
+                {
+                    Content = label,
+                    Tag = item.Id,
+                    Margin = new Thickness(item.Parent is null ? 0 : 24, 2, 0, 2),
+                };
+                AutomationProperties.SetName(check, Tr.SettingsContextMenuItemAutomationName(label));
+                if (item.Locked)
+                {
+                    // Settings can never be hidden: the user could not get back to this window.
+                    check.IsEnabled = false;
+                    check.ToolTip = Tr.SettingsContextMenuSettingsLockedTooltip;
+                    ToolTipService.SetShowOnDisabled(check, true);
+                }
+                _contextMenuChecks[item.Id] = check;
+                ContextMenuItemsHost.Children.Add(check);
+            }
+        }
+        var hidden = ContextMenuItems.EffectiveHidden(Settings);
+        foreach (var (id, check) in _contextMenuChecks) check.IsChecked = ContextMenuItems.Info(id).Locked || !hidden.Contains(id);
+    }
+
+    private static string ContextMenuItemLabel(ContextMenuItemId id) => id switch
+    {
+        ContextMenuItemId.Undo => Tr.SettingsContextMenuItemUndo,
+        ContextMenuItemId.MoveToRecycleBin => Tr.SettingsContextMenuItemMoveToRecycleBin,
+        ContextMenuItemId.Fit => Tr.SettingsContextMenuItemFit,
+        ContextMenuItemId.ZoomToLevel => Tr.SettingsContextMenuItemZoomToLevel,
+        ContextMenuItemId.ZoomSubmenu => Tr.SettingsContextMenuItemZoomSubmenu,
+        ContextMenuItemId.OpenFolder => Tr.SettingsContextMenuItemOpenFolder,
+        ContextMenuItemId.NextFolder => Tr.SettingsContextMenuItemNextFolder,
+        ContextMenuItemId.PreviousFolder => Tr.SettingsContextMenuItemPreviousFolder,
+        ContextMenuItemId.ExternalEditor => Tr.SettingsContextMenuItemExternalEditor,
+        ContextMenuItemId.CopyFileName => Tr.SettingsContextMenuItemCopyFileName,
+        ContextMenuItemId.CopyFullPath => Tr.SettingsContextMenuItemCopyFullPath,
+        ContextMenuItemId.Settings => Tr.SettingsContextMenuItemSettings,
+        ContextMenuItemId.ZoomFitWidth => Tr.SettingsContextMenuItemZoomFitWidth,
+        ContextMenuItemId.ZoomFitWidth2 => Tr.SettingsContextMenuItemZoomFitWidth2,
+        ContextMenuItemId.ZoomFitHeight => Tr.SettingsContextMenuItemZoomFitHeight,
+        ContextMenuItemId.ZoomPresets => Tr.SettingsContextMenuItemZoomPresets,
+        ContextMenuItemId.ZoomLevelOptions => Tr.SettingsContextMenuItemZoomLevelOptions,
+        _ => id.ToString(),
+    };
+
     private void LoadFields()
     {
         NextText.Text = Settings.Shortcuts.Next; PreviousText.Text = Settings.Shortcuts.Previous;
@@ -439,10 +559,8 @@ public partial class SettingsWindow : Window
         KineticPanCheck.IsChecked = Settings.KineticPanEnabled;
         KineticGlideSmoothingCombo.SelectedIndex = Settings.KineticGlideSmoothing == KineticGlideSmoothing.Predict ? 1 : 0;
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
+        LoadContextMenuChecks();
         ClickZoomKeyTogglesFitCheck.IsChecked = Settings.ClickZoomKeyTogglesFit;
-        ShowFolderMenuItemsCheck.IsChecked = Settings.ShowFolderMenuItems;
-        ShowZoomMenuItemsCheck.IsChecked = Settings.ShowZoomMenuItems;
-        ShowRecycleMenuItemCheck.IsChecked = Settings.ShowRecycleMenuItem;
         ArrowPanStepBox.Text = Settings.ArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeyboardZoomStepPercentBox.Text = Settings.KeyboardZoomStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeyboardZoomAnchorCombo.SelectedIndex = Settings.KeyboardZoomAnchor == KeyboardZoomAnchor.ViewportCentre ? 1 : 0;
@@ -761,7 +879,7 @@ public partial class SettingsWindow : Window
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ClickZoomKeyTogglesFit = new AppSettings().ClickZoomKeyTogglesFit; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomStepPercent = AppSettings.DefaultKeyboardZoomStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
-        Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems; Settings.ShowZoomMenuItems = new AppSettings().ShowZoomMenuItems; Settings.ShowRecycleMenuItem = new AppSettings().ShowRecycleMenuItem;
+        Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems; Settings.ShowZoomMenuItems = new AppSettings().ShowZoomMenuItems; Settings.ShowRecycleMenuItem = new AppSettings().ShowRecycleMenuItem; Settings.HiddenContextMenuItems = null; // null = derive from the legacy defaults = the default hidden set
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ImageTransition = new AppSettings().ImageTransition; Settings.ImageTransitionMs = AppSettings.DefaultImageTransitionMs;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
@@ -844,10 +962,8 @@ public partial class SettingsWindow : Window
         Settings.KineticPanEnabled = KineticPanCheck.IsChecked == true;
         Settings.KineticGlideSmoothing = KineticGlideSmoothingCombo.SelectedIndex == 1 ? KineticGlideSmoothing.Predict : KineticGlideSmoothing.Off;
         Settings.ArrowKeyNavigatesAtZoomEdge = ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked == true;
+        ContextMenuItems.ApplyHidden(Settings, _contextMenuChecks.Where(pair => pair.Value.IsChecked != true).Select(pair => pair.Key));
         Settings.ClickZoomKeyTogglesFit = ClickZoomKeyTogglesFitCheck.IsChecked == true;
-        Settings.ShowFolderMenuItems = ShowFolderMenuItemsCheck.IsChecked == true;
-        Settings.ShowZoomMenuItems = ShowZoomMenuItemsCheck.IsChecked == true;
-        Settings.ShowRecycleMenuItem = ShowRecycleMenuItemCheck.IsChecked == true;
         Settings.KeyboardZoomAnchor = KeyboardZoomAnchorCombo.SelectedIndex == 1 ? KeyboardZoomAnchor.ViewportCentre : KeyboardZoomAnchor.Pointer;
         Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
         Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;

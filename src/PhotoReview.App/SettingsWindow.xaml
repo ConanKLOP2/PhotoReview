@@ -117,6 +117,16 @@
                             <TextBlock x:Name="UpdateStatusText" TextWrapping="Wrap" Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite"/>
                             <TextBlock Text="{loc:Tr update.hint}" Style="{StaticResource HelpText}" Margin="0,8,0,0"/>
                         </StackPanel></GroupBox>
+
+                        <!-- Explorer integration: "Browse with PhotoReview" on folders (per user, HKCU); applies immediately, not on Save. -->
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.shell.group}"><StackPanel>
+                            <TextBlock x:Name="ShellStatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="ShellAddButton" Content="{loc:Tr settings.shell.add}" AutomationProperties.Name="{loc:Tr settings.shell.add}" Click="ShellAdd_Click" Margin="0,0,8,0"/>
+                                <Button x:Name="ShellRemoveButton" Content="{loc:Tr settings.shell.remove}" AutomationProperties.Name="{loc:Tr settings.shell.remove}" Click="ShellRemove_Click"/>
+                            </StackPanel>
+                            <TextBlock Text="{loc:Tr settings.shell.hint}" Style="{StaticResource HelpText}" Margin="0,8,0,0"/>
+                        </StackPanel></GroupBox>
                     </StackPanel>
                 </ScrollViewer>
 
@@ -268,16 +278,11 @@
                         </Grid></GroupBox>
 
                         <!-- PR-C feat/context-menu-redesign -->
-                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.contextMenu}"><Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <CheckBox x:Name="ShowFolderMenuItemsCheck" Grid.Row="0" Grid.Column="1" Content="{loc:Tr settings.showFolderMenuItems.label}" AutomationProperties.Name="{loc:Tr settings.showFolderMenuItems.automationName}"/>
-                            <TextBlock Text="{loc:Tr settings.showFolderMenuItems.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
-                            <CheckBox x:Name="ShowZoomMenuItemsCheck" Grid.Row="2" Grid.Column="1" Content="{loc:Tr settings.showZoomMenuItems.label}" AutomationProperties.Name="{loc:Tr settings.showZoomMenuItems.automationName}"/>
-                            <TextBlock Text="{loc:Tr settings.showZoomMenuItems.hint}" Grid.Row="3" Grid.Column="1" Style="{StaticResource HelpText}"/>
-                            <CheckBox x:Name="ShowRecycleMenuItemCheck" Grid.Row="4" Grid.Column="1" Content="{loc:Tr settings.showRecycleMenuItem.label}" AutomationProperties.Name="{loc:Tr settings.showRecycleMenuItem.automationName}"/>
-                            <TextBlock Text="{loc:Tr settings.showRecycleMenuItem.hint}" Grid.Row="5" Grid.Column="1" Style="{StaticResource HelpText}"/>
-                        </Grid></GroupBox>
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.contextMenu}"><StackPanel>
+                            <TextBlock Text="{loc:Tr settings.contextMenu.hint}" Style="{StaticResource HelpText}" Margin="0,0,0,8"/>
+                            <!-- One check box per right-click menu item, built in code from ContextMenuItems.Items (stable ids). -->
+                            <StackPanel x:Name="ContextMenuItemsHost" KeyboardNavigation.TabNavigation="Local"/>
+                        </StackPanel></GroupBox>
                     </StackPanel>
                 </ScrollViewer>
 

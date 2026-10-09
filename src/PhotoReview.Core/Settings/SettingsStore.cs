@@ -414,5 +414,7 @@ public sealed class SettingsStore
         if (string.IsNullOrWhiteSpace(settings.UiLanguage)) settings.UiLanguage = LanguageLoader.AutoCode;
         settings.Actions ??= ReviewAction.Defaults();
         settings.Shortcuts ??= ShortcutMappings.Default();
+        // A config without the hidden-items list: carry the three legacy Show*MenuItems flags over into it (explicit migration).
+        settings.HiddenContextMenuItems ??= ContextMenuItems.ToStored(ContextMenuItems.LegacyHidden(settings));
     }
 }

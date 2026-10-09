@@ -286,8 +286,9 @@ public partial class App : System.Windows.Application, IDisposable
         _services = Composition.AppHost.BuildServices(StartupServiceOverrides);
         PhotoReviewPerf.StartupMark("servicesBuilt");
 
-        var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
-        var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
+        var args = LaunchArguments.Normalize(e.Args); // Explorer's "Browse with PhotoReview" passes a folder (see LaunchArguments)
+        var initial = args.FirstOrDefault(arg => File.Exists(arg));
+        var initialFolder = args.FirstOrDefault(arg => Directory.Exists(arg));
         var launchFolder = initial is not null ? Path.GetDirectoryName(Path.GetFullPath(initial)) : initialFolder; // R2-F-08: a relative file argument has an empty directory name
         // perf(startup): Explorer's view order is the slowest part of opening a photo (~1-2 s of
         // cross-process COM for a large folder). Start it now, in parallel with settings, window
@@ -349,7 +350,7 @@ public partial class App : System.Windows.Application, IDisposable
             // Q-R10: hand the request to the instance that already owns this folder (or, SingleWindow, the app) instead
             // of showing an error; with no path the owner just comes to the front. No answer within the timeout (stale
             // mutex) keeps the previous behaviour.
-            var existing = e.Args.Where(a => File.Exists(a) || Directory.Exists(a)).Select(Path.GetFullPath).ToList();
+            var existing = args.Where(a => File.Exists(a) || Directory.Exists(a)).Select(Path.GetFullPath).ToList();
             var forwarded = await SecondInstanceHandoff.TryForwardAsync(
                 _instanceScope.CreateClient(launchFolder), existing, SecondInstanceHandoff.DefaultTimeout, _services.GetRequiredService<ILog>());
             if (!forwarded)
