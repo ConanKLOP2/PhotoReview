@@ -370,6 +370,8 @@ public sealed class SettingsRobustnessTests : IDisposable
             SourceBytesCapacityBytes = 1 + r.NextInt64(long.MaxValue - 1),
             UiLanguage = new[] { "auto", "en", "vi", "pt-br" }[r.Next(4)],
             AllowPermanentDeleteWithoutRecycleBin = r.Next(2) == 0,
+            // Never null: Load migrates a missing list from the legacy flags, so null cannot round-trip (by design).
+            HiddenContextMenuItems = ContextMenuItems.ToStored(ContextMenuItems.Items.Where(i => !i.Locked && r.Next(3) == 0).Select(i => i.Id)),
             LastMoveToFolder = r.Next(3) == 0 ? null : Text(),
             LastCopyToFolder = r.Next(3) == 0 ? null : Text(),
             MoveCopyReuseLastFolder = r.Next(2) == 0,
