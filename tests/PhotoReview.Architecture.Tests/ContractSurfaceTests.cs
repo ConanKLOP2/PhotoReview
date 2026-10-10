@@ -30,6 +30,9 @@ public sealed class ContractSurfaceTests
 {
     internal const string ApprovedRelativePath = "tests/PhotoReview.Architecture.Tests/Approved/contracts.v1.txt";
 
+    /// <summary>Opt-in for <see cref="WriteApprovedSurface"/>: a filter that happens to match it must not rewrite the frozen file.</summary>
+    internal const string RegenerateEnvironmentVariable = "PHOTOREVIEW_REGENERATE_CONTRACTS";
+
     private const string Header =
         "PhotoReview - hợp đồng NO-WPF v1 (đóng băng ở WP-01). FILE SINH TỰ ĐỘNG - không sửa tay.\n" +
         "Sinh lại: dotnet test tests/PhotoReview.Architecture.Tests -c Release --filter \"FullyQualifiedName~ContractSurfaceTests.WriteApprovedSurface\"\n" +
@@ -103,6 +106,12 @@ public sealed class ContractSurfaceTests
     [Trait("Category", "Manual")]
     public void WriteApprovedSurface()
     {
+        // A broad filter such as FullyQualifiedName~ContractSurfaceTests also matches this test: without the opt-in it must
+        // NOT touch the frozen file (it would silently approve whatever the working tree declares) and it fails loudly.
+        Assert.True(
+            Environment.GetEnvironmentVariable(RegenerateEnvironmentVariable) == "1",
+            $"This manual test rewrites {ApprovedRelativePath}. Set {RegenerateEnvironmentVariable}=1 to regenerate it on purpose " +
+            "(lead only, in a PR that changes a contract).");
         Directory.CreateDirectory(Path.GetDirectoryName(ApprovedPath)!);
         File.WriteAllText(ApprovedPath, ActualSurface());
 
