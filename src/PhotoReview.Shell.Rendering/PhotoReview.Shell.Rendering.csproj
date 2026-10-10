@@ -7,7 +7,15 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <Platforms>AnyCPU;x64</Platforms>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- WP-15: struct D2D truyền bằng con trỏ (D2D1_RECT_F*, D2D1_COLOR_F*...) theo quy ước ABI của WP-13b. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoReview" />
+    <InternalsVisibleTo Include="PhotoReview.Shell.Tests" />
+    <InternalsVisibleTo Include="PhotoReview.Shell.Integration.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
