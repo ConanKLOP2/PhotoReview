@@ -25,16 +25,9 @@ public static class PixelOps
         var dst = transposed
             ? PixelBuffer.Allocate(src.Height, src.Width, src.Layout)
             : PixelBuffer.Allocate(src.Width, src.Height, src.Layout);
-        try
-        {
-            if (transposed) CopyTransposed(src, dst, exifOrientation);
-            else CopyRows(src, dst, exifOrientation);
-        }
-        catch
-        {
-            dst.Dispose();
-            throw;
-        }
+        // Sao chép không ném (kích thước đã khớp theo cấu trúc), nên không cần dọn dst trong catch.
+        if (transposed) CopyTransposed(src, dst, exifOrientation);
+        else CopyRows(src, dst, exifOrientation);
 
         src.Dispose();
         return dst;

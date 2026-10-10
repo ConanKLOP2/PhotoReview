@@ -49,4 +49,13 @@ Chưa nối vào app: không file nào ngoài test dùng kiểu mới (WP-03/04/
 - Đo nhanh (một lần, máy đang chạy ~9 agent, chỉ để định hướng; 6000x4000 Bgr32, median 7 lần, gồm cấp buffer đích):
   `PixelOps.ApplyOrientation` o=3/5/6/8 = 112/164/228/158 ms; `ExifOrientation.Apply` (WPF) = 302/267/242/308 ms. Gate thật là
   bench TurboJpeg của WP-05.
-- Mutation (Stryker 5.0, Basic, Release, filter chuẩn, `--mutate` 6 file của gói): xem PR (điền khi chạy xong).
+- Mutation (Stryker 5.0, Basic, Release, filter chuẩn, `--mutate` 7 file của gói, 23 phút): **71,1 %** thô (54 killed + 5 timeout,
+  5 survived, 19 no-coverage). Phân loại:
+  - 5 survived đều **tương đương**: `>`->`>=` ở `(ulong)byteCount > nuint.MaxValue` (x64 không bằng được) và `ByteCount > int.MaxValue`
+    (ByteCount chia hết cho 4, không bao giờ = int.MaxValue); `<`->`<=` ở hai vòng ô chuyển vị (lượt thừa có thân rỗng);
+    `y * stepY`->`y / stepY` (stepY = ±1).
+  - 1 no-coverage là `catch { dst.Dispose(); throw; }` không thể chạm (sao chép không ném) -> **đã bỏ** khối này.
+  - 18 no-coverage ở `IsFullyOpaque`/`RowAlphaOpaque`/`HasAlpha`: Stryker không gán được coverage cho `PixelOpsAlphaTests` dù 16 ca của
+    lớp này được tìm thấy và xanh. Kiểm tay 7 đột biến đại diện (đảo điều kiện layout, bỏ dòng cuối, `&`->`|` ở mặt nạ vector, bỏ pixel
+    cuối ở đuôi, đảo so sánh đuôi, `&&`->`||` ở HasAlpha, đảo kết quả dòng): **7/7 bị giết**.
+  - Bỏ tương đương: 59/59 đột biến có coverage bị giết (100 %); con số Stryker thô thấp hơn ngưỡng 85 % của thẻ chỉ vì lỗi gán coverage trên.
