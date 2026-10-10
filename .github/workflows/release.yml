@@ -179,7 +179,8 @@ jobs:
             foreach ($line in ($body -split "`n")) {
               if ($line -match '^\*\*Full Changelog\*\*') { $fullChangelogLine = $line.Trim(); continue }
               if ($line -notmatch '^\*\s+(.*)$') { continue }
-              $entry = $Matches[1]
+              # GitHub appends "by @author" to every entry; the repo has one author, so it is only noise.
+              $entry = ($Matches[1] -replace '\s+by\s+@\S+', '')
               if ($entry -match '^(feat|fix|perf|test|docs|ci)(\([^)]*\))?:\s*(.*)$' -and $buckets.Contains($Matches[1])) {
                 $buckets[$Matches[1]].Add("- $($Matches[3])")
               } else {
