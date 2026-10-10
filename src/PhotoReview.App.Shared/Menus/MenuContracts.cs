@@ -29,14 +29,4 @@ public sealed record MenuItemModel(
 public sealed record ContextMenuBuildContext(AppSettings Settings, bool HasImage, bool CanUndo, bool IsFit, double? EffectiveZoom,
     bool CanOpenInExternalEditor, bool CanCopyPath, bool IsCompareVisible);
 
-public static class ContextMenuModelBuilder
-{
-    /// <summary>
-    /// Dùng ContextMenuItems.Compute (Core) - cùng luật separator/ẩn hiện với MainWindow.ApplyContextMenuLayout + BuildZoomMenu.
-    /// WP-18 thực thi.
-    /// </summary>
-    public static IReadOnlyList<MenuItemModel> Build(ContextMenuBuildContext context) => throw new NotImplementedException();
-
-    /// <summary>Recovery, Diagnostics, Benchmark, ClearCache, RemoveNumbered, RemoveOriginal. WP-18 thực thi.</summary>
-    public static IReadOnlyList<MenuItemModel> BuildToolsMenu(bool hasImages) => throw new NotImplementedException();
-}
+// ContextMenuModelBuilder (C-12): thực thi ở Menus/ContextMenuModelBuilder.cs (WP-18).

@@ -740,7 +740,7 @@
   "settings.clickZoomKeyTogglesFit.hint": "Off (default): the click-zoom key always goes to the click zoom level and does nothing when the image is already there; use the Fit key to go back. On: pressing it at the click zoom level goes back to Fit (like a mouse click).",
   "settings.arrowPanStepPercent.label": "Arrow key step (zoomed image)",
   "settings.arrowPanStepPercent.automationName": "Arrow key step, percent of the view",
-  "settings.arrowPanStepPercent.hint": "How far one arrow press moves a zoomed image, in percent of the window (default 10).",
+  "settings.arrowPanStepPercent.hint": "How far one arrow press moves a zoomed image, in percent of the SHORTER side of the view; the same number of pixels horizontally and vertically (default 10).",
   "dialog.settingsInvalid.arrowPanStepPercent": "Arrow key step must be a number between {min} and {max}.",
   "settings.group.zoom": "Zoom",
   "settings.clickZoomPercent.hint": "The zoom level used by click-to-zoom, the zoom shortcut and the right-click Zoom menu. It applies even when click-to-zoom is off.",
