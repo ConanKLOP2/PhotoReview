@@ -79,7 +79,7 @@ public sealed class AppRound3GapTests
             var (scroll, image) = LaidOut();
             var surface = new WpfImageSurface(scroll, image, new ViewerState(), () => true, () => { }, mouse: new FakeMouse { Position = _ => new Point(x, y) });
 
-            Assert.Equal(inside ? new Point(x, y) : null, surface.PointerPosition);
+            Assert.Equal(inside ? new PhotoReview.App.Input.PointD(x, y) : null, surface.PointerPosition);
         });
     }
 
@@ -94,7 +94,7 @@ public sealed class AppRound3GapTests
             var surface = new WpfImageSurface(scroll, image, new ViewerState(), () => true, () => { }, mouse: new FakeMouse { Position = _ => current });
 
             current = new Point(scroll.ViewportWidth, scroll.ViewportHeight);
-            Assert.Equal(current, surface.PointerPosition);
+            Assert.Equal(new PhotoReview.App.Input.PointD(current.X, current.Y), surface.PointerPosition);
 
             current = new Point(scroll.ViewportWidth + 0.5, 1);
             Assert.Null(surface.PointerPosition);

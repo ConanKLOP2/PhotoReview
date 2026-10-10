@@ -1,5 +1,3 @@
-using System.Windows;
-using System.Windows.Input;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Model;
 
@@ -31,8 +29,8 @@ internal sealed class PointerInputController
 
     private bool _isPanning;
     private bool _panMoved;
-    private Point _panStartPoint;
-    private Point _panLastPoint;
+    private PointD _panStartPoint;
+    private PointD _panLastPoint;
     private bool _pressCanPan;        // the tracked press scrolls the image (zoomed and larger than the viewport)
     private bool _pressConsumed;      // the tracked press only stopped a glide: its release is never a click
     private bool _pressStoppedGlide;  // set by the window-level tunnel, read by the image's press handler
@@ -75,8 +73,8 @@ internal sealed class PointerInputController
         }
     }
 
-    /// <summary>A vertical wheel message with timestamp 0 and no device hint (see <see cref="OnWheelAsync(WheelInput, Point)"/>).</summary>
-    public Task OnWheelAsync(int delta, bool ctrl, Point position) => OnWheelAsync(new WheelInput(delta, Horizontal: false, ctrl, Timestamp: 0), position);
+    /// <summary>A vertical wheel message with timestamp 0 and no device hint (see <see cref="OnWheelAsync(WheelInput, PointD)"/>).</summary>
+    public Task OnWheelAsync(int delta, bool ctrl, PointD position) => OnWheelAsync(new WheelInput(delta, Horizontal: false, ctrl, Timestamp: 0), position);
 
     /// <summary>
     /// ImageScroll PreviewMouseWheel and the window's WM_MOUSEHWHEEL hook (the caller has already marked the message handled).
@@ -84,7 +82,7 @@ internal sealed class PointerInputController
     /// smaller, changes image by swipe distance (vertical only); a pinch (Ctrl) and a notched mouse wheel keep the
     /// <see cref="WheelGestureInterpreter"/> behaviour (<see cref="AppSettings.MouseWheelAction"/>).
     /// </summary>
-    public async Task OnWheelAsync(WheelInput input, Point position)
+    public async Task OnWheelAsync(WheelInput input, PointD position)
     {
         StopKinetic();
         var settings = _settings();
@@ -165,7 +163,7 @@ internal sealed class PointerInputController
     /// <see cref="ZoomOutAsync"/>), <see cref="ZoomActualSizeAsync"/> and <see cref="ToggleClickZoomAsync"/>.
     /// Mouse wheel and click-to-zoom always anchor at the cursor and do not go through this helper.
     /// </summary>
-    private Point ResolveKeyboardAnchor() =>
+    private PointD ResolveKeyboardAnchor() =>
         PointerGestures.ResolveKeyboardZoomAnchor(_settings().KeyboardZoomAnchor, _surface.PointerPosition, _surface.ViewportWidth, _surface.ViewportHeight);
 
     /// <summary>+/- keyboard zoom in: anchored like <see cref="ZoomActualSizeAsync"/> instead of leaving the raw scroll offsets in place.</summary>
@@ -190,7 +188,7 @@ internal sealed class PointerInputController
     /// Applies a zoom change and then scrolls so the image point that was under <paramref name="mouse"/>
     /// (ImageScroll coordinates) stays under it. Shared by the wheel and click-to-zoom.
     /// </summary>
-    private Task<bool> ZoomAtPointAsync(Point mouse, Action applyZoom) => ZoomToImagePointAsync(CaptureZoomAnchor(mouse), mouse, applyZoom);
+    private Task<bool> ZoomAtPointAsync(PointD mouse, Action applyZoom) => ZoomToImagePointAsync(CaptureZoomAnchor(mouse), mouse, applyZoom);
 
     /// <summary>
     /// General form of <see cref="ZoomAtPointAsync"/> (PR-B, Fit width/Fit height): applies <paramref name="applyZoom"/>
@@ -202,7 +200,7 @@ internal sealed class PointerInputController
     /// (<see cref="ViewportOperationVersion"/>) drops that second placement. Returns false when the pass was superseded (or the surface unloaded),
     /// so a caller that chains a follow-up pass (the Fit scrollbar correction) must not run it.
     /// </summary>
-    private async Task<bool> ZoomToImagePointAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, Action applyZoom)
+    private async Task<bool> ZoomToImagePointAsync(MainWindowHelpers.ZoomImagePoint anchor, PointD viewportPoint, Action applyZoom)
     {
         var version = _viewportVersion.Next();
         _zoomsAwaitingLayout++;
@@ -251,7 +249,7 @@ internal sealed class PointerInputController
         AnchorAfterSwapAsync(anchor, centre, _viewportVersion.Current).FireAndLog("Re-anchor after bitmap swap failed");
     }
 
-    private async Task AnchorAfterSwapAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, long version)
+    private async Task AnchorAfterSwapAsync(MainWindowHelpers.ZoomImagePoint anchor, PointD viewportPoint, long version)
     {
         await _surface.YieldToRenderAsync();
         if (version != _viewportVersion.Current || !_surface.IsLoaded) return;
@@ -259,7 +257,7 @@ internal sealed class PointerInputController
     }
 
     /// <summary>After the layout settled: scrolls so image-fraction point <paramref name="anchor"/> sits at <paramref name="viewportPoint"/>.</summary>
-    private void ScrollAnchorTo(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint)
+    private void ScrollAnchorTo(MainWindowHelpers.ZoomImagePoint anchor, PointD viewportPoint)
     {
         _surface.UpdateLayout();
 
@@ -281,7 +279,7 @@ internal sealed class PointerInputController
         _surface.ScrollTo(offsets.Horizontal, offsets.Vertical);
     }
 
-    private Point ViewportCentre => new(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+    private PointD ViewportCentre => new(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
 
     /// <summary>
     /// FitWidth shortcut (PR-B): fills the viewport width. The vertical anchor is the caller's choice
@@ -363,7 +361,7 @@ internal sealed class PointerInputController
     }
 
     /// <summary>The image point under <paramref name="mouse"/> as a fraction of the displayed image.</summary>
-    private MainWindowHelpers.ZoomImagePoint CaptureZoomAnchor(Point mouse)
+    private MainWindowHelpers.ZoomImagePoint CaptureZoomAnchor(PointD mouse)
     {
         var elementPoint = _surface.ToImageElement(mouse);
         // feat(zoom): the element is sized from original dims x zoom (no LayoutTransform), so the
@@ -389,14 +387,14 @@ internal sealed class PointerInputController
     }
 
     /// <summary>MainImage PreviewMouseLeftButtonDown; returns the value for e.Handled.</summary>
-    public bool OnImagePress(MouseButton changedButton, int clickCount, Point position, int timestamp)
+    public bool OnImagePress(PointerButton changedButton, int clickCount, PointD position, int timestamp)
     {
         var stoppedGlide = _pressStoppedGlide | StopKinetic();
         _pressStoppedGlide = false;
 
         // DF03: the second press of a double-click is always Fit (before the pan check since CanPan=false in
         // Fit). Its mouse-up finds no tracked press, so it never toggles click-to-zoom.
-        if (changedButton == MouseButton.Left && PointerGestures.IsFitDoubleClick(clickCount))
+        if (changedButton == PointerButton.Left && PointerGestures.IsFitDoubleClick(clickCount))
         {
             CancelPan();
             _commands.ApplyFitAsync().FireAndLog("Fit on double-click failed");
@@ -423,7 +421,7 @@ internal sealed class PointerInputController
     }
 
     /// <summary>MainImage PreviewMouseMove; returns the value for e.Handled.</summary>
-    public bool OnImageMove(bool leftButtonPressed, Point position, int timestamp)
+    public bool OnImageMove(bool leftButtonPressed, PointD position, int timestamp)
     {
         if (!_isPanning || !leftButtonPressed) return false;
 
@@ -460,7 +458,7 @@ internal sealed class PointerInputController
     }
 
     /// <summary>MainImage PreviewMouseLeftButtonUp; returns the value for e.Handled.</summary>
-    public bool OnImageRelease(Point position, int timestamp)
+    public bool OnImageRelease(PointD position, int timestamp)
     {
         if (!_isPanning)
         {
@@ -496,7 +494,7 @@ internal sealed class PointerInputController
     }
 
     /// <summary>Click-to-zoom: Fit or another zoom -> ClickZoomPercent at the cursor; at ClickZoomPercent -> Fit.</summary>
-    private Task ClickZoomAsync(Point mouse)
+    private Task ClickZoomAsync(PointD mouse)
     {
         var viewer = _viewer;
         var target = PointerGestures.ClickZoomFactor(_settings().ClickZoomPercent);
@@ -533,7 +531,7 @@ internal sealed class PointerInputController
         if (!_commands.HasImages()) return Task.CompletedTask;
         CancelPan();
         StopKinetic();
-        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+        var centre = new PointD(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
         var target = PointerGestures.ClickZoomFactor(percent);
         return ZoomAtPointAsync(centre, () => _viewer.SetZoom(target));
     }
@@ -595,14 +593,14 @@ internal sealed class PointerInputController
     /// The edge/consume decision still reads the CURRENT (already-scrolled) offset via <see cref="KeyboardPan.Step"/>;
     /// only the instant <c>ScrollTo</c> is skipped in kinetic mode.
     /// </remarks>
-    public bool TryPanByArrow(Key key, bool isRepeat)
+    public bool TryPanByArrow(KeyId key, bool isRepeat)
     {
         var (dx, dy) = key switch
         {
-            Key.Left => (-1, 0),
-            Key.Right => (1, 0),
-            Key.Up => (0, -1),
-            Key.Down => (0, 1),
+            KeyId.Left => (-1, 0),
+            KeyId.Right => (1, 0),
+            KeyId.Up => (0, -1),
+            KeyId.Down => (0, 1),
             _ => (0, 0),
         };
         if ((dx, dy) == (0, 0) || !_surface.IsLoaded || !_commands.HasImages()) return false;

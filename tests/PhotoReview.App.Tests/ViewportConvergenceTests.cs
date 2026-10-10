@@ -1,4 +1,3 @@
-using System.Windows;
 using PhotoReview.App.ViewModels;
 
 namespace PhotoReview.App.Tests;
@@ -11,7 +10,7 @@ public class ViewportConvergenceTests
         var snapshot = CreateSnapshot(
             viewport: (800, 600),
             extent: (800, 600),
-            scrollbarVis: (Visibility.Collapsed, Visibility.Collapsed));
+            scrollbarVis: (false, false));
 
         var result = ViewportConvergence.IsStableViewport(snapshot, snapshot);
 
@@ -45,10 +44,10 @@ public class ViewportConvergenceTests
     {
         var before = CreateSnapshot(
             viewport: (800, 600),
-            scrollbarVis: (Visibility.Collapsed, Visibility.Collapsed));
+            scrollbarVis: (false, false));
         var after = CreateSnapshot(
             viewport: (800, 600),
-            scrollbarVis: (Visibility.Visible, Visibility.Collapsed)); // Horizontal scrollbar appeared
+            scrollbarVis: (true, false)); // Horizontal scrollbar appeared
 
         var result = ViewportConvergence.IsStableViewport(before, after);
 
@@ -107,12 +106,12 @@ public class ViewportConvergenceTests
         var beforeZoom = CreateSnapshot(
             viewport: (784, 576), // Reduced by scrollbar width (16 DIP)
             extent: (2000, 2000),
-            scrollbarVis: (Visibility.Visible, Visibility.Visible));
+            scrollbarVis: (true, true));
 
         var afterConverge = CreateSnapshot(
             viewport: (800, 600), // Full viewport (no scrollbars)
             extent: (800, 600), // Image fits
-            scrollbarVis: (Visibility.Collapsed, Visibility.Collapsed));
+            scrollbarVis: (false, false));
 
         // Layout has not converged yet
         Assert.False(ViewportConvergence.IsStableViewport(beforeZoom, afterConverge));
@@ -123,14 +122,14 @@ public class ViewportConvergenceTests
         (double, double)? viewport = null,
         (double, double)? extent = null,
         (double, double)? offsets = null,
-        (Visibility, Visibility)? scrollbarVis = null,
+        (bool, bool)? scrollbarVis = null,
         (double, double)? maxImage = null,
         (double, double)? actualImage = null)
     {
         var (vpWidth, vpHeight) = viewport ?? (800, 600);
         var (extWidth, extHeight) = extent ?? (800, 600);
         var (hOff, vOff) = offsets ?? (0, 0);
-        var (hVis, vVis) = scrollbarVis ?? (Visibility.Collapsed, Visibility.Collapsed);
+        var (hVis, vVis) = scrollbarVis ?? (false, false);
         var (maxW, maxH) = maxImage ?? (800, 600);
         var (actW, actH) = actualImage ?? (800, 600);
 
@@ -147,7 +146,7 @@ public class ViewportConvergenceTests
             ViewportHeight: vpHeight,
             HorizontalOffset: hOff,
             VerticalOffset: vOff,
-            HorizontalScrollbarVisibility: hVis,
-            VerticalScrollbarVisibility: vVis);
+            HorizontalScrollBarVisible: hVis,
+            VerticalScrollBarVisible: vVis);
     }
 }

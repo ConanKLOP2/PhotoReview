@@ -1138,7 +1138,7 @@ public partial class SettingsWindow : Window
         // An active IME (Vietnamese) reports ImeProcessed; the real key is in ImeProcessedKey.
         if (key == Key.ImeProcessed) key = e.ImeProcessedKey;
         // Tab/Escape/modifiers and anything else that can never be a shortcut must not be swallowed (focus trap, Esc cancel).
-        if (ShortcutKeyName.IsReserved(key)) return;
+        if (ShortcutKeyName.IsReserved((PhotoReview.App.Input.KeyId)(int)key)) return;
         textBox.Text = ShortcutKeyCanonical.Canonicalize(key.ToString());
         textBox.SelectAll();
         e.Handled = true;
