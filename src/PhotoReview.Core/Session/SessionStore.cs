@@ -17,7 +17,6 @@ public sealed class SessionState
 
 public sealed class SessionStore
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
     private static readonly TimeSpan StaleTempAge = TimeSpan.FromDays(1);
     private readonly string _sessionsDir;
     private readonly IFileSystem _fileSystem;
@@ -106,7 +105,7 @@ public sealed class SessionStore
             if (_fileSystem.FileExists(path))
             {
                 var json = _fileSystem.ReadAllText(path);
-                var state = JsonSerializer.Deserialize<SessionState>(json);
+                var state = JsonSerializer.Deserialize(json, SessionJsonContext.Default.SessionState);
                 if (state is not null)
                 {
                     if (string.IsNullOrWhiteSpace(state.Folder))
@@ -138,7 +137,7 @@ public sealed class SessionStore
         {
             _fileSystem.CreateDirectory(_sessionsDir);
             var path = GetPath(state.Folder);
-            var json = JsonSerializer.Serialize(state, Options);
+            var json = JsonSerializer.Serialize(state, SessionJsonContext.Default.SessionState);
             _fileSystem.WriteAllTextAtomic(path, json, durable: false); // ADR 0007 section 2: atomic, no fsync
             _metrics?.RecordSessionWrite();
         }
