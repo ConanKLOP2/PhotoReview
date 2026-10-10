@@ -35,6 +35,55 @@ internal static class WindowPlacementService
         }
     }
 
+    /// <summary>
+    /// Startup (perf/startup-first-image): applies the saved placement while the window has an HWND but is NOT shown
+    /// yet (call from SourceInitialized). The normal bounds are set with SW_HIDE, so nothing becomes visible here, and
+    /// the saved state goes into <see cref="Window.WindowState"/>, so WPF's own Show() shows the window directly where
+    /// and how it was closed. Before, the window was first shown at its XAML size (1200x800) and only moved/maximized in
+    /// Loaded: a visible half-size window plus a second full layout pass on the startup critical path.
+    /// Same validation as <see cref="Restore"/> (missing/damaged file: nothing is applied), except that off-screen bounds
+    /// of a window saved Maximized still restore the Maximized state.
+    /// </summary>
+    /// <returns>True when a placement was applied.</returns>
+    public static bool RestoreBeforeShow(Window window, string placementPath)
+    {
+        try
+        {
+            if (!File.Exists(placementPath)) return false;
+            var placement = JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(placementPath), JsonOptions);
+            if (placement is null) return false;
+            var handle = new WindowInteropHelper(window).Handle;
+            if (handle == IntPtr.Zero) return false;
+
+            var state = PlanStateBeforeShow(placement.ShowCommand);
+            if (!IsVisible(placement.NormalPosition))
+            {
+                // The monitor it was closed on is gone (e.g. an undocked laptop): its bounds are unusable, but a window
+                // closed maximized still reopens maximized (on the monitor Windows picks for a new window) instead of
+                // as a 1200x800 window; a Normal one keeps the default size, as before.
+                if (state != WindowState.Maximized) return false;
+                window.WindowState = WindowState.Maximized;
+                return true;
+            }
+            placement.Length = Marshal.SizeOf<WindowPlacement>();
+            placement.ShowCommand = ShowHide;
+            if (!SetWindowPlacement(handle, placement)) return false;
+            window.WindowState = state;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Could not restore window placement before show", ex);
+            return false;
+        }
+    }
+
+    /// <summary>The WPF state a saved show command reopens in (same rule as <see cref="NormalizeShowCommand"/>).</summary>
+    internal static WindowState PlanStateBeforeShow(int savedShowCommand) =>
+        NormalizeShowCommand(savedShowCommand) == ShowMaximized ? WindowState.Maximized : WindowState.Normal;
+
+    private const int ShowHide = 0;
+
     /// <param name="placementPath">IAppPaths.WindowPlacementFile.</param>
     /// <param name="fullscreenRestoreState">
     /// R7-10: the state to reopen in when closing from fullscreen (fullscreen itself is a borderless Maximized), or null.

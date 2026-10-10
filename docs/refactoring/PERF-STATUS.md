@@ -38,3 +38,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-06 -- S0 noise floor of the device-tuning bench (F4 grew to 28.5 GB; run P95 too noisy at 3 repeats)](perf/2026-10-06-s0-noise-floor.md)
 - [2026-10-07 -- Device-tuning bench results S0-S9 plus completion round (S4/S5/S6): no winner, defaults kept](perf/2026-10-07-device-tuning-results.md)
 - [2026-10-07 -- TieredPGO=0 confirmation (48 runs): P50 -8.6 %, P95 +8 %, not adopted](perf/2026-10-07-tieredpgo-confirmation.md)
+- [2026-10-10 -- Mở ảnh từ Explorer: ảnh đầu, khung trắng lúc khởi động, so sánh v2.0.200-380 (không hồi quy ở v240)](perf/2026-10-10-startup-first-image.md)

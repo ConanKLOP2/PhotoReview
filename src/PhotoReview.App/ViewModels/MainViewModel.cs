@@ -171,6 +171,28 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public ImagePresenter Presenter => _presenter;
     public IPreloadController? PreloadController => _preloadController;
     public PreviewImageService? PreviewService => _previewService;
+
+    /// <summary>
+    /// perf/startup-first-image: starts the viewer decode of the file the app was launched with as soon as the window
+    /// has its final size (MainWindow.Loaded), instead of after Show() returns and the folder catalog is presented
+    /// (measured: the decode began ~300 ms later, while the UI thread was still inside Show()). The presenter later asks
+    /// for the same key and joins this in-flight decode (in-flight dedup), so the work is never done twice when the key
+    /// matches; when it does not (a different decode box), this is one extra background decode, never a wrong image.
+    /// Camera RAW files are skipped (their pairing decides which file is shown, and their decode is the costly one).
+    /// </summary>
+    /// <returns>The started decode, or null when nothing was started.</returns>
+    public Task? PrewarmInitialImage(string path)
+    {
+        if (_previewService is not { } previews || string.IsNullOrWhiteSpace(path)) return null;
+        if (!ImageFileTypes.IsSupported(path, rawEnabled: false, _settingsStore.Current.WebpHeicSupportEnabled)) return null;
+        var fullPath = Path.GetFullPath(path);
+        // The key needs a file stat: off the UI thread (Q-R29: a slow link must never stall it).
+        var decode = Task.Run(() => previews.GetViewerPreviewAsync(fullPath, previews.GetCurrentCacheKey(fullPath), CancellationToken.None));
+        // A failure (unreadable or damaged file) is reported by the presenter's own request; only observe it here.
+        _ = decode.ContinueWith(t => _ = t.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return decode;
+    }
     // _undoService is a required constructor parameter (no default) that is null-checked via
     // ArgumentNullException in the constructor, so it is never null once the object exists; the
     // field is annotated `UndoService?` only by convention shared with the other DI fields above,

@@ -102,7 +102,10 @@ public partial class MainWindow : Window
         }
         AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler(ReturnFocusAfterButtonClick), handledEventsToo: true);
         PhotoReviewPerf.StartupMark("xamlLoaded");
-        ContentRendered += (_, _) => PhotoReviewPerf.StartupMark("contentRendered");
+        ContentRendered += (_, _) => { PhotoReviewPerf.StartupMark("contentRendered"); _startupReveal.Reveal(); };
+        // perf/startup-first-image: before the HWND is shown, put it where it was closed and keep it cloaked until its
+        // first frame is rendered (no white surface, no 1200x800 window that then jumps to the saved placement).
+        SourceInitialized += (_, _) => PrepareFirstShow();
         viewport.Get = GetViewportSize;
         _viewport = viewport;
         DpiChanged += MainWindow_DpiChanged;
@@ -118,6 +121,7 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(initialPath)) return;
         PhotoReviewPerf.StartupMark("openPathBegin");
+        if (!IsLoaded && File.Exists(initialPath)) _prewarmPath = initialPath; // its decode starts when the window is shown (StartInitialDecode)
         _viewModel.OpenPathAsync(initialPath).FireAndLog("Open initial path failed");
     }
 
@@ -192,16 +196,64 @@ public partial class MainWindow : Window
     private const double FallbackViewportHeight = 1400;
     private const double PreviewQualityMultiplier = 1.15;
 
-    private void UpdateTargetDecodeBox()
+    private void UpdateTargetDecodeBox((double Width, double Height)? viewportSize = null)
     {
         if (_viewport is null) return;
-        var (w, h) = GetViewportSize();
+        var (w, h) = viewportSize ?? GetViewportSize();
         var dpi = _cachedDpiScale ??= System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
         // feat(zoom): the same device-pixel scale makes non-Fit zoom 100 % = 1 source px per device px.
         _viewModel.Viewer.DpiScale = dpi;
         _viewport.TargetDecodeBox = PhotoReview.Imaging.AdaptivePreviewPolicy.CalculateTargetDecodeBox(
             w > 1 ? w : FallbackViewportWidth, h > 1 ? h : FallbackViewportHeight, dpi, PreviewQualityMultiplier);
     }
+
+    private readonly StartupWindowReveal _startupReveal = new(onRevealed: () => PhotoReviewPerf.StartupMark("windowRevealed"));
+    private string? _prewarmPath;
+    private bool _shownNative;
+
+    /// <summary>Test seam: whether the startup cloak is still in effect.</summary>
+    internal bool IsStartupCloaked => _startupReveal.IsHidden;
+
+    private void PrepareFirstShow()
+    {
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        _startupReveal.Hide(handle);
+        if (!_placementRestored && PlacementFile is { } placementFile)
+        {
+            _placementRestored = true; // one attempt, as the Loaded path below: an invalid file is not retried there
+            if (WindowPlacementService.RestoreBeforeShow(this, placementFile)) PhotoReviewPerf.StartupMark("placementRestoredBeforeShow");
+        }
+    }
+
+    private const int WmWindowPosChanged = 0x0047;
+    private const uint SwpShowWindow = 0x0040;
+
+    /// <summary>WINDOWPOS.flags (offset: two handles + four ints) has SWP_SHOWWINDOW: the window is being shown now.</summary>
+    private static bool WindowPosShowsWindow(IntPtr windowPos) =>
+        windowPos != IntPtr.Zero && ((uint)System.Runtime.InteropServices.Marshal.ReadInt32(windowPos, (2 * IntPtr.Size) + (4 * sizeof(int))) & SwpShowWindow) != 0;
+
+    /// <summary>
+    /// perf/startup-first-image: the window is being shown in its final placement (restored before the show), so its
+    /// client rect is the viewport the first image is decoded for. The decode box is set from it right away (the same
+    /// value the first layout computes later) and the launch file's decode starts now, in parallel with the rest of
+    /// Show() and the folder scan; the presenter then joins it.
+    /// </summary>
+    private void StartInitialDecode(IntPtr hwnd)
+    {
+        if (_prewarmPath is not { } path) return;
+        _prewarmPath = null;
+        if (!GetClientRect(hwnd, out var client) || client.Right <= 0 || client.Bottom <= 0) return;
+        var dpi = _cachedDpiScale ??= System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+        UpdateTargetDecodeBox((client.Right / dpi, client.Bottom / dpi));
+        if (_viewModel.PrewarmInitialImage(path) is not null) PhotoReviewPerf.StartupMark("initialDecodeStarted");
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetClientRect(IntPtr hwnd, out NativeRect rect);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativeRect { public int Left, Top, Right, Bottom; }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
@@ -485,6 +537,7 @@ public partial class MainWindow : Window
     {
         Localizer.CurrentChanged -= OnLanguageChanged;
         _settingsStore.Changed -= _onSettingsChanged;
+        _startupReveal.Stop(); // a window closed before its first frame: neither its timer nor the render event may keep it alive
         try
         {
             _pointer.OnWindowClosed(); // stops a glide (unhooks the static render-frame event that would keep this window alive), ends a pan
@@ -519,6 +572,12 @@ public partial class MainWindow : Window
     /// </summary>
     private IntPtr WindowMessageHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == WmWindowPosChanged && !_shownNative && WindowPosShowsWindow(lParam))
+        {
+            _shownNative = true;
+            _startupReveal.NoteShown();
+            StartInitialDecode(hwnd);
+        }
         if (msg != WheelMessageSource.WmMouseHWheel || !IsLoaded || _viewModel.Compare.IsVisible) return IntPtr.Zero;
         var position = ImageScroll.PointFromScreen(WheelMessageSource.ScreenPoint(lParam));
         if (position.X < 0 || position.Y < 0 || position.X >= ImageScroll.ViewportWidth || position.Y >= ImageScroll.ViewportHeight) return IntPtr.Zero;
