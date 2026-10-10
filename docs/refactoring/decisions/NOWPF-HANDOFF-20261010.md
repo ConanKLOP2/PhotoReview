@@ -46,6 +46,7 @@ Mỗi gói đã merge có fragment `NOWPF-WPxx-*.md` cạnh file này. Người 
   và bỏ hằng `InputScriptCatalog.ArrowPanPending` (xem NOWPF-WP10-GOLDEN-RECORDER mục 5).
 - Hợp đồng v1.1 (C-07: dời IImageSurface, IFitSurface, ViewportSnapshot sang App.Shared): PR nhỏ của lead; đặt
   `PHOTOREVIEW_REGENERATE_CONTRACTS=1` rồi chạy `ContractSurfaceTests.WriteApprovedSurface`.
+- **WP-14 đã merge (#406) nhưng 3 đột biến SỐNG SÓT** (22/25 bị bắt; log thô trong scratchpad `mutesults.txt`): M7 `MessageLoop.Run` chạy việc Background kể cả khi còn message chờ; M23 `Win32UiSynchronizationContext.Post` dùng Background thay Normal; M24 `YieldAsync` dùng RunContinuationsAsynchronously (comment nói phải inline). Cần 3 test: Background nhường message đang chờ; SynchronizationContext.Post chạy trước việc Background xếp trước đó; continuation sau `await YieldAsync(p)` chạy trong cùng việc mức p.
 - Gói chưa mở: WP-06 (tách Imaging.Wpf, phụ thuộc WP-03/04/05), WP-09, WP-12, WP-17, WP-20 đến WP-37.
 
 ## 3. Quyết định chủ dự án còn mở
