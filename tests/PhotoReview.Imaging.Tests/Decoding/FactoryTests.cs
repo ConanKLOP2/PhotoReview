@@ -203,7 +203,7 @@ public sealed class FactoryTests : IDisposable
         var factory = new ImageDecoderFactory(new (DecoderBackend, Func<IImageDecoder>)[]
         {
             (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
-            (DecoderBackend.WicDirect, () => { wicBuilds++; return new WicDirectDecoder(); })
+            (DecoderBackend.WicDirect, () => { wicBuilds++; return new WicDirectDecoder(WpfBitmapSourceCodec.Instance); })
         });
 
         Assert.Same(factory.Create(DecoderBackend.WicDirect), factory.Create(DecoderBackend.WicDirect));
@@ -222,7 +222,7 @@ public sealed class FactoryTests : IDisposable
             new (DecoderBackend, Func<IImageDecoder>)[]
             {
                 (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
-                (DecoderBackend.WicDirect, () => { System.Threading.Interlocked.Increment(ref providerRuns); System.Threading.Thread.SpinWait(2_000_000); return new WicDirectDecoder(); })
+                (DecoderBackend.WicDirect, () => { System.Threading.Interlocked.Increment(ref providerRuns); System.Threading.Thread.SpinWait(2_000_000); return new WicDirectDecoder(WpfBitmapSourceCodec.Instance); })
             },
             decoderDecorator: (_, decoder) => { System.Threading.Interlocked.Increment(ref decoratorRuns); return decoder; });
 
@@ -253,7 +253,7 @@ public sealed class FactoryTests : IDisposable
         var factory = new ImageDecoderFactory(new (DecoderBackend, Func<IImageDecoder>)[]
         {
             (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
-            (DecoderBackend.WicDirect, () => new WicDirectDecoder())
+            (DecoderBackend.WicDirect, () => new WicDirectDecoder(WpfBitmapSourceCodec.Instance))
         });
 
         Assert.True(factory.IsRegistered(DecoderBackend.Wpf));

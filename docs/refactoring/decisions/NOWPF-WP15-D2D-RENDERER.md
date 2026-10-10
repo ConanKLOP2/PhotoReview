@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP15
-order: 412
+order: 432
 summary: |-
   WP-15 (đợt 1 NO-WPF, 2026-10-10): renderer Direct2D (`Shell.Rendering`: DeviceResources, D2DRenderSurface, D2DDrawContext, GpuImageCache, TiledGpuImage) cho C-09/C-10. 96 test Rendering xanh (WARP + GPU thật); 1:1 giống từng byte, PSNR 47-56 dB so với tham chiếu CPU, tile 30000x2000 không đường nối; đột biến 32 ca: 29 bị bắt, 3 sống sót là tương đương (stride cố định = rộng x 4, nội suy khi đã snap 1:1). RỦI RO: HQC thu nhỏ ảnh 24 MP mỗi khung 27-45 ms trên GPU (zoom < 100 % trên ảnh gốc ở WP-21). Lệch thẻ: không có `--demo`, tham chiếu CPU là area/bilinear (không WIC Fant), opacity nhân vào từng lệnh (không layer), AllowTearing = sync 0, tile kẹp 16384. Đề xuất v1.1: C-09 `static abstract` -> `IRenderSurfaceFactory`.
 ---

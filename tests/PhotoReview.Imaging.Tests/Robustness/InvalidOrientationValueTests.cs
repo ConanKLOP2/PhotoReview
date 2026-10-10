@@ -41,7 +41,7 @@ public sealed class InvalidOrientationValueTests
         var decoders = new (string Name, IImageDecoder Decoder)[]
         {
             ("Wpf", new WpfBitmapImageDecoder()),
-            ("WicDirect", new WicDirectDecoder()),
+            ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance)),
             ("TurboJpeg", new TurboJpegDecoder()),
             ("Turbo->Wpf", new FallbackImageDecoder(new TurboJpegDecoder(), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder())),
         };

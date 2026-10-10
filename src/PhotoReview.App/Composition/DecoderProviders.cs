@@ -41,7 +41,7 @@ internal static class DecoderProviders
         var providers = new List<(DecoderBackend, Func<IImageDecoder>)>
         {
             (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder(sourceReader)),
-            (DecoderBackend.WicDirect, () => new WicDirectDecoder(sourceReader))
+            (DecoderBackend.WicDirect, () => new WicDirectDecoder(WpfBitmapSourceCodec.Instance, sourceReader))
         };
 
         if (turboJpegProbe(out string? reason))
