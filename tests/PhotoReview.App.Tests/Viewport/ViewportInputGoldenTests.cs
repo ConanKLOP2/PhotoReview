@@ -10,6 +10,8 @@ namespace PhotoReview.App.Tests.Viewport;
 /// </summary>
 public sealed class ViewportInputGoldenTests
 {
+    private const string ArrowPanPendingPrefix = "ArrowPan-pending-rule-change|";
+
     [InputGoldenFact(InputGoldenFixture.InputScriptsFile)]
     public void EveryRecordedScript_ReplaysOnTheEngine_ToTheSameCheckpoints()
     {
@@ -18,6 +20,9 @@ public sealed class ViewportInputGoldenTests
         var failures = new List<string>();
         foreach (var script in scripts)
         {
+            // Ghi theo quy tắc pan phím CŨ (WP-10 mục 5; #407 đã đổi quy tắc): không phải chuẩn, WPF cũng loại khỏi lần phát lại chặn.
+            // Bỏ dòng này khi ghi lại golden (tools/diag/record-golden.ps1) và bỏ tiền tố.
+            if (script.Name.StartsWith(ArrowPanPendingPrefix, StringComparison.Ordinal)) continue;
             var actual = InputScriptRunner.Run(script).ToDictionary(c => c.AfterStep);
             foreach (var expected in script.Expected)
             {
@@ -91,7 +96,7 @@ public sealed class ViewportInputGoldenTests
         foreach (var bad in new[]
         {
             new GoldenInputStep("tap", 0, 0, 0, null, null, 0, null),
-            new GoldenInputStep("key", 0, 0, 0, "Delete", null, 0, null),
+            new GoldenInputStep("key", 0, 0, 0, "NoSuchKey", null, 0, null),
             new GoldenInputStep("command", 0, 0, 0, null, null, 0, "Rotate"),
         })
         {
