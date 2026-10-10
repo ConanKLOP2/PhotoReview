@@ -1,4 +1,4 @@
-using PhotoReview.Core.Model;
+﻿using PhotoReview.Core.Model;
 using PhotoReview.Imaging.LibRaw;
 using PhotoReview.Imaging.Pixels;
 using PhotoReview.Imaging.Tests.Raw;
@@ -89,6 +89,35 @@ public sealed class LibRawPixelBufferHandOffTests
         _ = new LibRawDecoder(stages.Add).HandOff(staging, false, 4, 4, () => false);
 
         Assert.Equal(["source-held", "bitmap-created"], stages);
+    }
+
+    [Fact]
+    public void BgraBuffer_Dispose_FreesTheNativeMemoryExactlyOnce()
+    {
+        var before = NativePixelMemory.LiveCount;
+        var staging = new RgbBgraResampler.BgraBuffer(16, 8);
+        Assert.Equal(before + 1, NativePixelMemory.LiveCount);
+
+        staging.Dispose();
+        staging.Dispose();
+
+        Assert.Equal(before, NativePixelMemory.LiveCount);
+    }
+
+    [Fact]
+    public void HandOff_ReportsSourceReleased_WhileTheStagingBufferIsStillOwned()
+    {
+        using var staging = Resampled(6, 6, 6, 6, 3);
+        IntPtr pointerAtStage = IntPtr.Zero;
+        var decoder = new LibRawDecoder(PixelBufferImageCodec.Instance, stage =>
+        {
+            if (stage == "source-released") pointerAtStage = staging.Pointer;
+        });
+
+        var image = decoder.HandOff(staging, false, 6, 6, () => true);
+
+        Assert.NotEqual(IntPtr.Zero, pointerAtStage);
+        ((PixelBuffer)image.PlatformImage).Dispose();
     }
 
     [Fact]

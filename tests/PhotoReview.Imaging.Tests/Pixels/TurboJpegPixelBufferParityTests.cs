@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Pixels;
@@ -248,5 +248,81 @@ public sealed class TurboJpegPixelBufferLifetimeTests : IDisposable
                 Assert.Equal(before, NativePixelMemory.LiveCount);
             }
         }
+    }
+
+    [Fact(DisplayName = "A codec that fails frees the buffer it was given and the error propagates")]
+    public void CodecThrows_BufferIsFreed()
+    {
+        var path = Path.Combine(_dir, "codec-throws.jpg");
+        FixtureGenerator.GenerateJpegWithOrientation(path, 64, 48, 6);
+        var decoder = new TurboJpeg.TurboJpegDecoder(new ThrowingCodec());
+
+        var before = NativePixelMemory.LiveCount;
+        var ex = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: true)));
+
+        Assert.Equal("codec failed", ex.Message);
+        Assert.Equal(before, NativePixelMemory.LiveCount);
+    }
+
+    [Fact(DisplayName = "Embedded ICC: falls back before any pixel buffer is allocated")]
+    public void IccProfile_FallsBackWithoutAllocating()
+    {
+        var path = Path.Combine(_dir, "icc.jpg");
+        FixtureGenerator.GenerateJpegWithIcc(path, 64, 48);
+        var decoder = new TurboJpeg.TurboJpegDecoder(PixelBufferImageCodec.Instance);
+
+        var before = NativePixelMemory.LiveCount;
+        Assert.Throws<NotSupportedException>(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: true)));
+
+        Assert.Equal(before, NativePixelMemory.LiveCount);
+    }
+
+    [Fact(DisplayName = "Output that does not fit memory is refused (long arithmetic, no OverflowException) before a buffer exists")]
+    public void HugeClaimedSize_IsAdmissionRefusal_NotOverflow_AndAllocatesNothing()
+    {
+        var path = Path.Combine(_dir, "bomb.jpg");
+        FixtureGenerator.GenerateGradientJpeg(path, 64, 48);
+        var bytes = File.ReadAllBytes(path);
+        var sof = FindSof0(bytes);
+        Assert.True(sof > 0, "baseline SOF0 marker expected");
+        // SOF0: marker(2) length(2) precision(1) height(2) width(2); 8192 x 4096 x 4 = 128 MiB = the guard threshold.
+        bytes[sof + 5] = 0x10; bytes[sof + 6] = 0x00;
+        bytes[sof + 7] = 0x20; bytes[sof + 8] = 0x00;
+        var decoder = new TurboJpeg.TurboJpegDecoder(PixelBufferImageCodec.Instance) { MemoryInfo = () => (64L * 1024 * 1024, 0) };
+
+        var before = NativePixelMemory.LiveCount;
+        var ex = Assert.ThrowsAny<Exception>(() => decoder.Decode(new DecodeRequest("bomb.jpg", TargetWidth: 0, ApplyOrientation: true, Bytes: bytes)));
+
+        Assert.IsType<DecoderMemoryAdmissionException>(ex);
+        Assert.Equal(before, NativePixelMemory.LiveCount);
+    }
+
+    private static int FindSof0(byte[] jpeg)
+    {
+        for (var i = 2; i < jpeg.Length - 9; i++)
+            if (jpeg[i] == 0xFF && jpeg[i + 1] == 0xC0) return i;
+        return -1;
+    }
+
+    [Fact(DisplayName = "Downscaled is true when the box limits the height of a narrow image")]
+    public void Downscaled_WhenTheBoxLimitsTheHeight()
+    {
+        var path = Path.Combine(_dir, "tall.jpg");
+        FixtureGenerator.GenerateGradientJpeg(path, 10, 1000);
+        var decoder = new TurboJpeg.TurboJpegDecoder(PixelBufferImageCodec.Instance);
+
+        var image = decoder.Decode(new DecodeRequest(path, new DecodeBox(10, 999)));
+
+        var buffer = (PixelBuffer)image.PlatformImage;
+        Assert.True(image.Downscaled);
+        Assert.Equal(999, buffer.Height);
+        buffer.Dispose();
+    }
+
+    private sealed class ThrowingCodec : IPlatformImageCodec
+    {
+        public string Name => "throwing";
+        public object FromPixels(PixelBuffer pixels) => throw new InvalidOperationException("codec failed");
+        public PixelLease ToPixels(object platformImage) => throw new NotSupportedException();
     }
 }

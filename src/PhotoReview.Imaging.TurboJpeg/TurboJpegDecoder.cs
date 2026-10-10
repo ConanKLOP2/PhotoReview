@@ -349,7 +349,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
         if (TryReadDimensions(headerBytes, out int width, out int height, out _)) return new ImageInfo(width, height, orientation);
 
-        // The header area was cut by the read cap or the file is damaged: extend the read using exponential growth
+        // The header area was cut by HeaderReadCap (8 MB) or the file is damaged: extend the read (up to ExtendedHeaderCap, 64 MB) using exponential growth
         // instead of re-reading the whole file, reusing the headerBytes buffer already acquired.
         byte[] fullBytes = ExtendHeaderArea(path, headerBytes);
         if (fullBytes.Length > headerBytes.Length &&
@@ -414,7 +414,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         // Continue doubling past HeaderReadCap, bounded by ExtendedHeaderCap, until we either:
         // - reach the end of the file
         // - the header marker walk says we have the full header
-        // A header area that still is not finished at the cap is treated as damaged (ReadInfo then fails with InvalidDataException).
+        // A header area that still is not finished at ExtendedHeaderCap (64 MB, not the 8 MB HeaderReadCap) is treated as damaged (ReadInfo then fails with InvalidDataException).
         return GrowHeaderArea(fs, length, initialBuffer, ExtendedHeaderCap);
     }
 
