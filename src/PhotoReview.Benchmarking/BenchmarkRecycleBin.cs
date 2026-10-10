@@ -27,6 +27,14 @@ public static class BenchmarkRecycleBin
     {
         public void SendToRecycleBin(string path) => File.Delete(path);
 
+        // Declared explicitly (audit B-03: a production IRecycleBin must not inherit the "default for fakes" members). Behaviour is
+        // unchanged: this deleter only ever sees the benchmark's own temp copies, so "recycle" = delete and every path qualifies.
+        public bool CanRecycle(string path) => true;
+
+        public bool FitsInRecycleBin(string path, long fileSize) => true;
+
+        public void DeletePermanently(string path) => throw new NotSupportedException();
+
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => false;
     }
 }

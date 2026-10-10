@@ -49,6 +49,22 @@ Mỗi gói đã merge có fragment `NOWPF-WPxx-*.md` cạnh file này. Người 
 - **WP-14 đã merge (#406) nhưng 3 đột biến SỐNG SÓT** (22/25 bị bắt; log thô trong scratchpad `mutesults.txt`): M7 `MessageLoop.Run` chạy việc Background kể cả khi còn message chờ; M23 `Win32UiSynchronizationContext.Post` dùng Background thay Normal; M24 `YieldAsync` dùng RunContinuationsAsynchronously (comment nói phải inline). Cần 3 test: Background nhường message đang chờ; SynchronizationContext.Post chạy trước việc Background xếp trước đó; continuation sau `await YieldAsync(p)` chạy trong cùng việc mức p.
 - Gói chưa mở: WP-06 (tách Imaging.Wpf, phụ thuộc WP-03/04/05), WP-09, WP-12, WP-17, WP-20 đến WP-37.
 
+## 2b. Tiến độ sau bàn giao (cùng ngày, theo thứ tự)
+Lỗ hổng test đã có PR riêng, mỗi PR đã kiểm XANH trên master và ĐỎ khi hoàn tác đúng lỗi (đột biến):
+- #417 B-02 (group Recycle không opt-in phải bị từ chối), #418 C-01 (ghim 70 khoá config.json), #419 B-03 (IRecycleBin production phải tự
+  khai báo CanRecycle/FitsInRecycleBin/DeletePermanently; còn sửa `BenchmarkRecycleBin.TempCopyDeleter`), #420 D-01 (2 test zoom-detail
+  chạy trong CI), #421 C-03 (mặc định hiệu năng bằng literal).
+- Chưa làm trong số "Top": C-04 (Save sau Load config bản mới mất trường lạ), C-05 (optional trùng mandatory), D-02/D-03 (hook
+  IDialogService, StaTestHost fail khi AppLog có Error), B-04..B-08, A-01..A-07 (CODEOWNERS, job Native/Slow, baseline số test), sửa runner #411.
+- #413 (WP-05) đã được đồng bộ master bằng `tools/sync-pr-branch.sh`.
+- **#411 (WP-16) runner đã nói đúng từ vựng WP-10** (commit 158fae4f): `command` (ToggleFit, ZoomActualSize, FitWidth/2, FitHeight, ZoomIn/Out,
+  ClickZoom, SetClickZoomLevel, ZoomToLevelMenu, SetDpi, LoadImage, SwapSourceSize) và `key` qua ShortcutRouter. Cả 90 kịch bản chạy; còn
+  **512 checkpoint lệch golden** — việc điều tra tiếp theo. Chênh đầu tiên: `wheel-zoom-in-to-step-limit` zoom engine 0,68/1,18/1,68 vs golden
+  0,28/0,38/0,48 (engine bước 0,5, golden 0,1 mỗi nấc wheel: nghi `ViewerState.ZoomStep`/bước wheel của runner khác MainWindow, vì cả hai
+  dùng KeyboardZoomStepPercent); `wheel-navigate-mode-ctrl-wheel-zooms`: engine vẫn ở Fit (IsFit True) trong khi golden zoom 0,28 (nghi
+  MouseWheelAction=Navigate + Ctrl không áp qua SettingsOverridesJson, hoặc WheelInput thiếu tham số Touchpad). Chạy lại:
+  `dotnet test tests/PhotoReview.App.Tests --filter FullyQualifiedName~ViewportInputGoldenTests` (không sửa golden).
+
 ## 3. Quyết định chủ dự án còn mở
 - NE-3 thanh cuộn (a: tự vẽ), NE-4 menu (a: native + dark qua uxtheme), NE-6 single-instance prefix riêng, NE-7 đóng băng UI
   trên bản WPF từ đợt 3, NE-9 chất lượng scale: chốt TRƯỚC đợt 3.
