@@ -1,4 +1,5 @@
 using PhotoReview.App.Coordinators;
+using PhotoReview.App.Windowing;
 
 namespace PhotoReview.App.Tests.Coordinators;
 

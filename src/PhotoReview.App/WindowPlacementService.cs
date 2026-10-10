@@ -1,27 +1,30 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
+using PhotoReview.App.Windowing;
 
 namespace PhotoReview.App;
 
 /// <summary>
 /// Persists the Win32 window placement so monitor, restored bounds and maximized
 /// state survive application restarts without DIP/pixel conversion errors.
+/// WPF adapter (NO-WPF WP-08, C-14): the file format, prefetch, visibility rule and show-command rules live in
+/// <see cref="JsonWindowPlacementStore"/> / <see cref="WindowPlacementRules"/> (App.Shared, no WPF); this class only
+/// talks to the WPF <see cref="Window"/> and keeps the Get/SetWindowPlacement marshaling.
 /// </summary>
 internal static class WindowPlacementService
 {
-    private const int ShowNormal = 1;
-    private const int ShowMaximized = 3;
+    private const int ShowHide = 0;
+
+    private static readonly JsonWindowPlacementStore Store = new();
 
     /// <param name="placementPath">IAppPaths.WindowPlacementFile (R7-11: never a hard-coded %LOCALAPPDATA% path).</param>
     public static void Restore(Window window, string placementPath)
     {
         try
         {
-            if (!File.Exists(placementPath)) return;
-            var placement = JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(placementPath), JsonOptions);
+            var placement = Read(placementPath);
             if (placement is null || !IsVisible(placement.NormalPosition)) return;
 
             placement.Length = Marshal.SizeOf<WindowPlacement>();
@@ -49,8 +52,9 @@ internal static class WindowPlacementService
     {
         try
         {
-            var placement = TakePrefetched(placementPath) ?? Read(placementPath);
-            if (placement is null) return false;
+            var data = Store.TakePrefetched(placementPath) ?? JsonWindowPlacementStore.ReadRaw(placementPath);
+            if (data is null) return false;
+            var placement = FromData(data);
             var handle = new WindowInteropHelper(window).Handle;
             if (handle == IntPtr.Zero) return false;
 
@@ -79,69 +83,18 @@ internal static class WindowPlacementService
 
     /// <summary>The saved placement, or null when the file is missing or empty (a damaged file throws).</summary>
     internal static WindowPlacement? Read(string placementPath) =>
-        File.Exists(placementPath) ? JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(placementPath), JsonOptions) : null;
-
-    private static readonly object PrefetchGate = new();
-    private static (string Path, PrefetchResult Outcome)? _prefetch;
-
-    /// <summary>The prefetch task writes its outcome here, so the UI thread can read a finished result without touching the Task.</summary>
-    private sealed class PrefetchResult
-    {
-        private WindowPlacement? _value;
-        private volatile bool _succeeded;
-
-        public void Complete(WindowPlacement? value)
-        {
-            _value = value;
-            _succeeded = true; // volatile write publishes _value
-        }
-
-        public bool TryGet(out WindowPlacement? value)
-        {
-            value = _succeeded ? _value : null;
-            return _succeeded;
-        }
-    }
+        JsonWindowPlacementStore.ReadRaw(placementPath) is { } data ? FromData(data) : null;
 
     /// <summary>
     /// P-1 startup: reads the placement file on the thread pool now (the first JSON read costs ~25 ms of reflection
     /// metadata, measured on the UI thread inside Show()). <see cref="RestoreBeforeShow"/> takes the result once; the
     /// launch decode uses it to predict the viewport (<see cref="Services.InitialViewportPredictor"/>).
     /// </summary>
-    internal static Task<WindowPlacement?> Prefetch(string placementPath)
-    {
-        var result = new PrefetchResult();
-        var load = Task.Run(() =>
-        {
-            WindowPlacement? value;
-            try { value = Read(placementPath); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException) { return null; } // RestoreBeforeShow reads (and logs) it again
-            result.Complete(value);
-            return value;
-        });
-        lock (PrefetchGate) _prefetch = (placementPath, result);
-        return load;
-    }
-
-    /// <summary>The prefetched placement of <paramref name="placementPath"/> (once), or null: read the file instead.</summary>
-    private static WindowPlacement? TakePrefetched(string placementPath)
-    {
-        PrefetchResult result;
-        lock (PrefetchGate)
-        {
-            if (_prefetch is not { } p || !string.Equals(p.Path, placementPath, StringComparison.OrdinalIgnoreCase)) return null;
-            _prefetch = null;
-            result = p.Outcome;
-        }
-        // A file read (bounded): normally finished long before the window gets its HWND. Not finished or failed: read again.
-        return result.TryGet(out var value) ? value : null;
-    }
+    internal static Task<WindowPlacementData?> Prefetch(string placementPath) => Store.Prefetch(placementPath);
 
     /// <summary>The WPF state a saved show command reopens in (same rule as <see cref="NormalizeShowCommand"/>).</summary>
     internal static WindowState PlanStateBeforeShow(int savedShowCommand) =>
-        NormalizeShowCommand(savedShowCommand) == ShowMaximized ? WindowState.Maximized : WindowState.Normal;
-
-    private const int ShowHide = 0;
+        ToWpf(WindowPlacementRules.PlanStateBeforeShow(savedShowCommand));
 
     /// <param name="placementPath">IAppPaths.WindowPlacementFile.</param>
     /// <param name="fullscreenRestoreState">
@@ -165,8 +118,7 @@ internal static class WindowPlacementService
             placement.ShowCommand = ResolveShowCommand(placement.ShowCommand, fullscreenRestoreState);
             if (fullscreenRestoreState is not null && fullscreenNormalBounds is { } b)
                 placement.NormalPosition = new Rectangle { Left = b.Left, Top = b.Top, Right = b.Right, Bottom = b.Bottom };
-            Directory.CreateDirectory(Path.GetDirectoryName(placementPath)!);
-            WriteAtomically(placementPath, JsonSerializer.Serialize(placement, JsonOptions));
+            Store.Save(placementPath, ToData(placement));
         }
         catch (Exception ex)
         {
@@ -178,82 +130,49 @@ internal static class WindowPlacementService
     /// Writes via a uniquely named temp file so several windows saving the same placement file (per-folder mode)
     /// never collide on a shared "*.tmp" name (IOException / one window overwriting another's half-written file).
     /// </summary>
-    internal static void WriteAtomically(string path, string content, Action<string, string>? writeText = null)
-    {
-        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        // RV-A15: the write is inside the try too, so a partial temp file left by a failed write (disk full) is deleted.
-        try
-        {
-            (writeText ?? File.WriteAllText)(temp, content);
-            File.Move(temp, path, true);
-        }
-        catch { try { File.Delete(temp); } catch { /* best-effort; the original exception is rethrown */ } throw; }
-    }
+    internal static void WriteAtomically(string path, string content, Action<string, string>? writeText = null) =>
+        JsonWindowPlacementStore.WriteAtomically(path, content, writeText);
 
-    /// <summary>
-    /// R2-F-26: only "normal" and "maximized" are meaningful restore states. Minimized, hidden (SW_HIDE) or any other
-    /// value from a damaged file would otherwise open the window hidden or minimized.
-    /// </summary>
-    internal static int NormalizeShowCommand(int showCommand) => showCommand == ShowMaximized ? ShowMaximized : ShowNormal;
+    /// <summary>R2-F-26: only "normal" and "maximized" are meaningful restore states (see <see cref="WindowPlacementRules"/>).</summary>
+    internal static int NormalizeShowCommand(int showCommand) => WindowPlacementRules.NormalizeShowCommand(showCommand);
 
-    /// <summary>
-    /// R7-10: closing in fullscreen reads back as Maximized; save the state the window had before fullscreen instead.
-    /// </summary>
-    internal static int ResolveShowCommand(int showCommand, WindowState? fullscreenRestoreState) => fullscreenRestoreState switch
-    {
-        WindowState.Maximized => ShowMaximized,
-        WindowState.Normal or WindowState.Minimized => ShowNormal,
-        _ => NormalizeShowCommand(showCommand),
-    };
+    /// <summary>R7-10: closing in fullscreen reads back as Maximized; save the state the window had before fullscreen instead.</summary>
+    internal static int ResolveShowCommand(int showCommand, WindowState? fullscreenRestoreState) =>
+        WindowPlacementRules.ResolveShowCommand(showCommand, fullscreenRestoreState is { } s ? FromWpf(s) : null);
 
-    internal static bool IsVisible(Rectangle bounds)
-    {
-        if (bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top) return false;
-        var nativeBounds = System.Drawing.Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
-        return GetMonitorWorkAreas().Any(workArea =>
-        {
-            var intersection = System.Drawing.Rectangle.Intersect(nativeBounds, workArea);
-            return intersection.Width >= 80 && intersection.Height >= 80;
-        });
-    }
+    internal static bool IsVisible(Rectangle bounds) =>
+        WindowPlacementVisibility.IsVisible(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom, GetMonitorWorkAreas());
 
     /// <summary>Work area (excluding the taskbar) of every attached monitor, in physical pixels.</summary>
-    private static List<System.Drawing.Rectangle> GetMonitorWorkAreas()
+    private static List<System.Drawing.Rectangle> GetMonitorWorkAreas() =>
+        [.. Win32MonitorLayout.Instance.WorkAreas().Select(w => System.Drawing.Rectangle.FromLTRB(w.Left, w.Top, w.Right, w.Bottom))];
+
+    internal static WindowState ToWpf(WindowShowState state) => state switch
     {
-        var areas = new List<System.Drawing.Rectangle>();
-        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (monitor, _, _, _) =>
-        {
-            var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
-            if (GetMonitorInfo(monitor, ref info))
-                areas.Add(System.Drawing.Rectangle.FromLTRB(info.Work.Left, info.Work.Top, info.Work.Right, info.Work.Bottom));
-            return true;
-        }, IntPtr.Zero);
-        return areas;
-    }
+        WindowShowState.Maximized => WindowState.Maximized,
+        WindowShowState.Minimized => WindowState.Minimized,
+        _ => WindowState.Normal,
+    };
 
-    private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr rect, IntPtr data);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MonitorInfo
+    internal static WindowShowState FromWpf(WindowState state) => state switch
     {
-        public int Size;
-        public Rectangle Monitor;
-        public Rectangle Work;
-        public int Flags;
-    }
+        WindowState.Maximized => WindowShowState.Maximized,
+        WindowState.Minimized => WindowShowState.Minimized,
+        _ => WindowShowState.Normal,
+    };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static WindowPlacementData ToData(WindowPlacement p) => new(
+        p.Length, p.Flags, p.ShowCommand, p.MinPosition.X, p.MinPosition.Y, p.MaxPosition.X, p.MaxPosition.Y,
+        p.NormalPosition.Left, p.NormalPosition.Top, p.NormalPosition.Right, p.NormalPosition.Bottom);
+
+    internal static WindowPlacement FromData(WindowPlacementData d) => new()
     {
-        IncludeFields = true,
-        WriteIndented = true
+        Length = d.Length,
+        Flags = d.Flags,
+        ShowCommand = d.ShowCommand,
+        MinPosition = new Point { X = d.MinX, Y = d.MinY },
+        MaxPosition = new Point { X = d.MaxX, Y = d.MaxY },
+        NormalPosition = new Rectangle { Left = d.NormalLeft, Top = d.NormalTop, Right = d.NormalRight, Bottom = d.NormalBottom },
     };
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -264,12 +183,13 @@ internal static class WindowPlacementService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetWindowPlacement(IntPtr window, [In] WindowPlacement placement);
 
+    /// <summary>Win32 WINDOWPLACEMENT marshaling shape (also the legacy file schema; tests deserialize it directly).</summary>
     [StructLayout(LayoutKind.Sequential)]
     internal sealed class WindowPlacement
     {
         public int Length;
         public int Flags;
-        public int ShowCommand = ShowMaximized;
+        public int ShowCommand = 3; // SW_SHOWMAXIMIZED
         public Point MinPosition;
         public Point MaxPosition;
         public Rectangle NormalPosition;

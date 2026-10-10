@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using PhotoReview.App.Coordinators;
+using PhotoReview.App.Windowing;
 using PhotoReview.Integration.Tests.Infrastructure;
 using Xunit;
 
