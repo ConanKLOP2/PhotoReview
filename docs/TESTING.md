@@ -38,6 +38,10 @@ Seven xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`,
 
 [Stryker.NET](MUTATION-TESTING.md) measures how well the tests pin behaviour (manual, not part of CI): how to run it safely and the 2026-10-03 baseline.
 
+## Golden files (NO-WPF equivalence reference)
+
+`tests/Fixtures/golden/*.v1.json` are recorded from the real WPF `MainWindow` (`tools/diag/record-golden.ps1`, hidden desktop, deterministic output) and are the reference the Win32 shell must reproduce. `Integration.Tests/Golden/GoldenWpfConformanceTests` (`Category=UI`) replays them on WPF every run, so a WPF behaviour change turns it red until the diff is reviewed and the golden re-recorded on purpose; never hand-edit them. Detail: [NOWPF-WP10-GOLDEN-RECORDER](refactoring/decisions/NOWPF-WP10-GOLDEN-RECORDER.md).
+
 ## Timing tests
 
 Never assert a wall-clock budget in a gated test: a full parallel run on a shared runner makes it flake (`GroupEntries` 10k paths: 4-7 ms alone, 27-65 ms inside the full `Core.Tests` run). Guard hot paths with a deterministic proxy instead (`GC.GetAllocatedBytesForCurrentThread()` bound, operation counts) and keep stopwatch numbers in a `Category=Manual` report test (example: `CaptureGroupBuilderTests`).
