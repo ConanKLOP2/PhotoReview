@@ -2,7 +2,7 @@
 id: NO-WPF-EXEC-PLAN
 order: 201
 summary: |-
-  Kế hoạch thực thi bỏ WPF cho cửa sổ xem ảnh bằng nhiều agent song song (2026-10-10, chưa đổi mã): bản Win32 + Direct2D là project mới chạy song song với bản WPF tới khi tương đương hành vi, dùng chung Core/Imaging/ViewModels và dữ liệu người dùng; 18 hợp đồng C# đóng băng trước khi giao việc; 37 gói việc (WP-01..WP-37, vài gói chia a/b) chia 7 đợt, đợt 0-4 chạy được bằng toolchain hiện có (bản lai R2R), chỉ đợt 5 cần MSVC + Windows SDK; còn chờ chủ dự án chốt NE-1..NE-9.
+  Kế hoạch thực thi bỏ WPF cho cửa sổ xem ảnh bằng nhiều agent song song (2026-10-10, chưa đổi mã): bản Win32 + Direct2D là project mới chạy song song với bản WPF tới khi tương đương hành vi, dùng chung Core/Imaging/ViewModels và dữ liệu người dùng; 18 hợp đồng C# đóng băng trước khi giao việc; 37 gói việc (WP-01..WP-37, vài gói chia a/b) chia 7 đợt, đợt 0-4 chạy được bằng toolchain hiện có (bản lai R2R), chỉ đợt 5 cần MSVC + Windows SDK; đã chốt NE-1 (a), NE-2 (a), NE-5 (a), NE-8 (b) (NOWPF-WP01-SCAFFOLD), NE-3/4/6/7/9 tạm (a), chốt trước đợt 3.
 ---
 
 # NO-WPF-EXEC-PLAN - kế hoạch thực thi bỏ WPF bằng nhiều agent song song (2026-10-10)
@@ -131,7 +131,7 @@ Shell.Win32 -> App.Shared -> Core, Imaging*, Platform.Windows, Benchmarking
 Shell.Win32 -> Shell.WpfBridge (chỉ qua Lazy + [MethodImpl(NoInlining)], C-13b) -> App.WpfWindows -> App.Shared
 App (WPF)   -> App.Shared, App.WpfWindows, Imaging.Wpf
 Imaging.Wpf -> Imaging (không ngược lại)
-Shell.Rendering -> Imaging (chỉ PixelBuffer), Core (Abstractions)
+Shell.Rendering -> Imaging (chỉ PixelBuffer), Core (Abstractions), App.Shared (chỉ PointD/RectD/SizeD của C-06; WP-01, xem NOWPF-WP01-SCAFFOLD)
 ```
 
 ### 3.3 Thay đổi Architecture.Tests (WP-01 tạo khung, các gói bật dần)
@@ -139,11 +139,11 @@ Shell.Rendering -> Imaging (chỉ PixelBuffer), Core (Abstractions)
 | Luật | Nội dung | Gói bật |
 |---|---|---|
 | L-IMG (sửa Rule 2/9/10 + K-1) | `PhotoReview.Imaging`, `.Raw`, `.LibRaw`, `.TurboJpeg`, `PhotoReview.Benchmarking` không phụ thuộc `PresentationCore`, `PresentationFramework`, `WindowsBase`, `System.Xaml`, `PhotoReview.Imaging.Wpf`. `ImagingPublicSurfaceTests` mở rộng sang mọi namespace của Imaging (cả `Decoding`). | WP-06 |
-| L-SHARED | `PhotoReview.App.Shared` không phụ thuộc WPF, `PhotoReview.App`, `PhotoReview.Shell.*`. Thay Rule 6 (K-2) bằng luật theo assembly. | WP-09 |
+| L-SHARED | `PhotoReview.App.Shared` không phụ thuộc WPF, `PhotoReview.App`, `PhotoReview.Shell.*` (kiểm theo assembly tham chiếu). Thay Rule 6 (K-2) bằng luật theo assembly. | WP-01 (luật), WP-09 (bỏ Rule 6) |
 | L-SHELL | `Shell.Interop/Rendering/Win32` không phụ thuộc WPF/WinForms/`PhotoReview.App`/`App.WpfWindows`; `Shell.Win32` chỉ được tham chiếu `Shell.WpfBridge` ở đúng một file (`Dialogs/WpfBridgeLoader.cs`). | WP-01 (khung), WP-19b |
-| L-AFFINITY | `AppThreadAffinityTests` quét thêm `src/PhotoReview.App.Shared`, `src/PhotoReview.Shell.Win32`. | WP-09, WP-14 |
+| L-AFFINITY | `AppThreadAffinityTests` quét thêm `src/PhotoReview.App.Shared`, `src/PhotoReview.Shell.Win32`, `src/PhotoReview.Shell.WpfBridge`. | WP-01 |
 | L-CONTRACT (mới) | `ContractSurfaceTests`: chữ ký public/internal của các kiểu hợp đồng (mục 5) khớp file duyệt `tests/PhotoReview.Architecture.Tests/Approved/contracts.v1.txt`; đổi hợp đồng = đổi file duyệt trong PR của lead. | WP-01 |
-| L-AOT | `Shell.*`, `App.Shared` có `IsAotCompatible=true`; không `[ComImport]`, không `DllImport` (chỉ `LibraryImport`), không `dynamic`. | WP-01 |
+| L-AOT | `Shell.*` (trừ `Shell.WpfBridge`, UseWPF), `App.Shared` có `IsAotCompatible=true`; không `[ComImport]`, không `DllImport` (chỉ `LibraryImport`), không `dynamic`. | WP-01 |
 | L-COMP (sửa AppCompositionTests/DialogBoundaryTests) | `MessageBox`/`Window` chỉ trong `App`/`App.WpfWindows`; Shell không `MessageBoxW` ngoài `Win32DialogService`. | WP-19a/b |
 | L-PINV | `Shell.Win32`/`Rendering` không khai báo P/Invoke ngoài `Shell.Interop`. | WP-13 |
 
@@ -203,6 +203,10 @@ Quy tắc: WP-01 tạo **đúng** các khai báo dưới đây (thân phương t
 nếu ghi rõ), cộng file duyệt `contracts.v1.txt`. Gói "sở hữu" viết phần thực thi; gói "tiêu thụ" chỉ gọi. Thêm thành viên mới
 vào hợp đồng = PR nhỏ của lead (cập nhật file duyệt), không làm trong gói tính năng. Đơn vị: **DIP** cho toạ độ layout (giống WPF),
 **px** cho pixel thiết bị; mọi `double` toạ độ là DIP trừ khi tên có `Pixel`.
+
+**Trạng thái (WP-01):** v1 đã tạo và khoá ở `Approved/contracts.v1.txt` cho C-01..C-06, C-08..C-18. Chưa khoá (v1.1, gói sở hữu đề xuất
+qua lead): C-07 (seam có sẵn, WP-07 sửa tại chỗ), phần thuần của `ExifOrientation` (WP-03), `IClipboardService` (dời ở WP-09). Chi tiết
+và các lệch khác: [NOWPF-WP01-SCAFFOLD](NOWPF-WP01-SCAFFOLD.md).
 
 | ID | Hợp đồng | Namespace / project | Sở hữu (thực thi) | Tiêu thụ |
 |---|---|---|---|---|
@@ -951,3 +955,6 @@ P1-STARTUP-IN-WPF (A/B/C/D). Kế hoạch này giả định NW-1 = (a) đã là
 6. Số liệu giờ-agent là ước theo kích thước file (mục 4, kiểm kê) và kinh nghiệm các PR trước; chưa có số đo năng suất agent trên Direct2D.
 7. Hành vi WPF lồng trong message loop Win32 với cửa sổ modeless (Benchmark) chưa thử; WP-19b phải làm spike nhỏ trước (4 giờ đầu của gói).
 8. `GetCurrentInputMessageSource` trong WndProc thuần Win32 trả cùng kết quả như trong hook WPF - hợp lý nhưng chưa kiểm.
+9. (Đo ở WP-01) Tới khi WP-06 bỏ `UseWPF` khỏi Imaging*, `PhotoReview.runtimeconfig.json` của shell vẫn khai báo framework
+   `Microsoft.WindowsDesktop.App` (FrameworkReference WPF truyền qua project reference); không nạp assembly WPF nhưng host vẫn phân giải
+   framework đó - số khởi động của shell trước WP-06 không phải số cuối.

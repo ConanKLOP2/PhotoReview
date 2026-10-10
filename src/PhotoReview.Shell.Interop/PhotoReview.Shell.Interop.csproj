@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NO-WPF-EXEC-PLAN mục 3 (WP-01): khai báo interop của shell Win32, KHÔNG logic. Chỉ LibraryImport /
+       [GeneratedComInterface] (L-AOT); P/Invoke của Shell.Win32/Rendering chỉ được khai báo ở đây (L-PINV, bật ở WP-13).
+       WP-01 chỉ có đúng các hàm user32/kernel32 mà cửa sổ khởi động tối thiểu (tham số smoke) cần; WP-13a/b thêm phần còn lại. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>AnyCPU;x64</Platforms>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- LibraryImport (source-generated P/Invoke) và con trỏ hàm UnmanagedCallersOnly cần unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoReview" />
+    <InternalsVisibleTo Include="PhotoReview.Shell.Rendering" />
+    <InternalsVisibleTo Include="PhotoReview.Shell.Tests" />
+    <InternalsVisibleTo Include="PhotoReview.Shell.Integration.Tests" />
+  </ItemGroup>
+
+</Project>

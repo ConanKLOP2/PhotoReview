@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NO-WPF-EXEC-PLAN mục 3 (WP-01): renderer Direct2D của shell (C-09, C-10, C-11 phần text). WP-01 chỉ có hợp đồng;
+       WP-15/WP-17 thực thi. Tham chiếu App.Shared chỉ để dùng PointD/RectD/SizeD (C-06) trong chữ ký hợp đồng -
+       xem NOWPF-WP01-SCAFFOLD (lệch mục 3.2: kế hoạch ghi Rendering -> Imaging, Core). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>AnyCPU;x64</Platforms>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+    <ProjectReference Include="..\PhotoReview.App.Shared\PhotoReview.App.Shared.csproj" />
+    <ProjectReference Include="..\PhotoReview.Shell.Interop\PhotoReview.Shell.Interop.csproj" />
+  </ItemGroup>
+
+</Project>

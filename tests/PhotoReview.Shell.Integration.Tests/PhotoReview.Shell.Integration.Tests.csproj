@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NO-WPF-EXEC-PLAN mục 3.1 (WP-01): test HWND thật của shell Win32 (Category=UI, chạy trên desktop ẩn qua
+       tools/run-tests-hidden.ps1). KHÔNG UseWPF; không SendInput/SetForegroundWindow (N-8). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>AnyCPU;x64</Platforms>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj" />
+    <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

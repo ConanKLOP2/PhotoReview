@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NO-WPF-EXEC-PLAN mục 3 (WP-01): cửa sổ xem ảnh Win32 + Direct2D, exe PhotoReview.exe (NE-2 = a; bản WPF giữ
+       PhotoReview.App.exe). WP-01: chỉ khung - hợp đồng C-11 (overlay), C-12 (host menu), C-15, C-16 (startup) và một
+       cửa sổ trống; PhotoReview.exe với tham số smoke tạo + hiện cửa sổ rồi thoát mã 0. Không WPF (L-SHELL). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>AnyCPU;x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <AssemblyName>PhotoReview</AssemblyName>
+    <RootNamespace>PhotoReview.Shell.Win32</RootNamespace>
+    <!-- PerMonitorV2 + comctl32 v6 (TaskDialogIndirect ở WP-19a). -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\PhotoReview.App.Shared\PhotoReview.App.Shared.csproj" />
+    <ProjectReference Include="..\PhotoReview.Shell.Interop\PhotoReview.Shell.Interop.csproj" />
+    <ProjectReference Include="..\PhotoReview.Shell.Rendering\PhotoReview.Shell.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoReview.Shell.Tests" />
+    <InternalsVisibleTo Include="PhotoReview.Shell.Integration.Tests" />
+  </ItemGroup>
+
+</Project>

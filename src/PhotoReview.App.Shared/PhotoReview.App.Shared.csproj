@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NO-WPF-EXEC-PLAN mục 3 (WP-01): lớp dùng chung giữa app WPF và shell Win32 - KHÔNG WPF (luật L-SHARED).
+       WP-01 chỉ chứa file hợp đồng (C-05, C-06, C-08, C-12, C-13, C-14, C-16) + hai kiểu thuần dời sớm từ App
+       (ViewerStretchMode, IPresentationSink) mà hợp đồng cần; WP-09 dời phần còn lại (namespace giữ nguyên). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>AnyCPU;x64</Platforms>
+    <RootNamespace>PhotoReview.App</RootNamespace>
+    <!-- N-11 / L-AOT: mã mới AOT-ready ngay từ đầu (analyzer trim/AOT chạy không cần MSVC). -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+    <ProjectReference Include="..\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+</Project>

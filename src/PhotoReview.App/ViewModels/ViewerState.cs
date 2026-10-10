@@ -3,14 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace PhotoReview.App.ViewModels;
 
-/// <summary>
-/// Chế độ hiển thị co giãn ảnh độc lập với WPF (tuân thủ quy tắc K-2).
-/// </summary>
-public enum ViewerStretchMode
-{
-    None = 0,
-    Uniform = 1
-}
+// ViewerStretchMode dời sang PhotoReview.App.Shared (WP-01, NO-WPF-EXEC-PLAN C-08 cần nó); namespace giữ nguyên.
 
 /// <summary>
 /// Quản lý trạng thái xem ảnh (mức zoom, chế độ co giãn, kích thước giới hạn viewport, toàn màn hình).

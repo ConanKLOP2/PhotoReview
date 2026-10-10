@@ -45,6 +45,9 @@ sonnet/haiku và tự giữ vai trò điều phối + review.
   `using System.Windows` vào Shell -> đỏ); smoke `PhotoReview.exe --smoke` exit 0 (`Category=UI`).
 - **Hoàn thành khi:** build Release 0 cảnh báo; toàn bộ test cũ xanh; 2 project test mới chạy trong CI; file duyệt sinh từ reflection, không viết tay.
 - **Rủi ro:** thấp. **Model:** opus (đặt nền cho mọi gói). **Giờ:** 8-12.
+- **Đã làm (2026-10-10):** xem [NOWPF-WP01-SCAFFOLD](NOWPF-WP01-SCAFFOLD.md) - thêm so với thẻ: App tham chiếu App.Shared và dời sớm
+  `ViewerStretchMode`, `IPresentationSink`; Shell.Rendering tham chiếu App.Shared; L-SHARED + L-AFFINITY bật luôn; C-07/`ExifOrientation`/
+  `IClipboardService` chưa khoá (v1.1).
 
 ## Đợt 1 - seam trong mã dùng chung (app WPF giữ nguyên hành vi)
 
