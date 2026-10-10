@@ -1,7 +1,5 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Input;
 using PhotoReview.App.Input;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Model;
@@ -40,7 +38,7 @@ public sealed partial class PointerInputControllerTests
     [Fact]
     public async Task Wheel_ZoomMode_ZoomsAndScrollsToKeepThePointUnderTheCursor()
     {
-        await _controller.OnWheelAsync(120, ctrl: false, new Point(400, 300));
+        await _controller.OnWheelAsync(120, ctrl: false, new PointD(400, 300));
 
         Assert.False(_viewer.IsFit);
         Assert.Equal(1, _surface.YieldCount);
@@ -53,14 +51,14 @@ public sealed partial class PointerInputControllerTests
     {
         _settings.MouseWheelAction = MouseWheelAction.Navigate;
 
-        await _controller.OnWheelAsync(-120, ctrl: false, new Point(10, 10));
+        await _controller.OnWheelAsync(-120, ctrl: false, new PointD(10, 10));
         Assert.Equal(1, _next);
         Assert.True(_viewer.IsFit);
 
-        await _controller.OnWheelAsync(120, ctrl: false, new Point(10, 10));
+        await _controller.OnWheelAsync(120, ctrl: false, new PointD(10, 10));
         Assert.Equal(1, _previous);
 
-        await _controller.OnWheelAsync(-120, ctrl: true, new Point(10, 10));
+        await _controller.OnWheelAsync(-120, ctrl: true, new PointD(10, 10));
         Assert.Equal(1, _next);
         Assert.False(_viewer.IsFit);
     }
@@ -71,7 +69,7 @@ public sealed partial class PointerInputControllerTests
         _settings.MouseWheelAction = MouseWheelAction.Navigate;
         _hasImages = false;
 
-        await _controller.OnWheelAsync(-120, ctrl: false, new Point(10, 10));
+        await _controller.OnWheelAsync(-120, ctrl: false, new PointD(10, 10));
 
         Assert.Equal(0, _next);
     }
@@ -82,7 +80,7 @@ public sealed partial class PointerInputControllerTests
         StartGlide();
         _settings.MouseWheelAction = MouseWheelAction.Navigate;
 
-        await _controller.OnWheelAsync(30, ctrl: false, new Point(10, 10)); // a partial notch: no outcome at all
+        await _controller.OnWheelAsync(30, ctrl: false, new PointD(10, 10)); // a partial notch: no outcome at all
 
         Assert.Equal(1, _surface.Unhooks);
         Assert.Null(_surface.RenderHandler);
@@ -92,7 +90,7 @@ public sealed partial class PointerInputControllerTests
     public async Task ZoomAtPoint_SupersededByALaterOperation_DoesNotScrollAfterIt()
     {
         _surface.HoldYields = true;
-        var first = _controller.OnWheelAsync(120, ctrl: false, new Point(400, 300));
+        var first = _controller.OnWheelAsync(120, ctrl: false, new PointD(400, 300));
         Assert.Single(_surface.Scrolls); // placed together with the zoom, before the render pass
         _version.Next(); // e.g. Fit started while the zoom waited for the render pass
         _surface.ViewportWidth = 700; // even a changed layout must not make the superseded zoom scroll again
@@ -193,7 +191,7 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentHeight = 1200;
         _viewer.SetSourceSize(2000, 4000);
         _viewer.DpiScale = 1.0;
-        _surface.PointerPosition = new Point(100, 500); // the mouse is over the viewport, far from the centre
+        _surface.PointerPosition = new PointD(100, 500); // the mouse is over the viewport, far from the centre
 
         _settings.KeyboardZoomAnchor = KeyboardZoomAnchor.ViewportCentre;
         await _controller.FitWidthAsync(FitWidthAnchor.Centre);
@@ -349,15 +347,15 @@ public sealed partial class PointerInputControllerTests
     {
         ZoomInSoTheImageCanPan();
 
-        Assert.True(_controller.OnImagePress(MouseButton.Left, 1, new Point(100, 100), timestamp: 1000));
+        Assert.True(_controller.OnImagePress(PointerButton.Left, 1, new PointD(100, 100), timestamp: 1000));
         Assert.Equal(1, _surface.Captures);
         Assert.True(_surface.PanCursor);
 
-        Assert.True(_controller.OnImageMove(true, new Point(120, 110), timestamp: 1010));
+        Assert.True(_controller.OnImageMove(true, new PointD(120, 110), timestamp: 1010));
         Assert.Equal((480.0, 390.0), _surface.Scrolls[^1]); // offsets 500/400 minus the pointer delta
 
         var zoom = _viewer.Zoom;
-        Assert.True(_controller.OnImageRelease(new Point(120, 110), timestamp: 1500)); // rested: no glide
+        Assert.True(_controller.OnImageRelease(new PointD(120, 110), timestamp: 1500)); // rested: no glide
         Assert.Equal(zoom, _viewer.Zoom);
         Assert.Equal(0, _fits);
         Assert.Equal(1, _surface.CaptureReleases);
@@ -369,10 +367,10 @@ public sealed partial class PointerInputControllerTests
     public void Move_BelowTheDragThreshold_IsNotHandled_AndTheReleaseIsAClick()
     {
         ZoomInSoTheImageCanPan();
-        _controller.OnImagePress(MouseButton.Left, 1, new Point(100, 100), timestamp: 0);
+        _controller.OnImagePress(PointerButton.Left, 1, new PointD(100, 100), timestamp: 0);
 
-        Assert.False(_controller.OnImageMove(true, new Point(101, 101), timestamp: 5));
-        Assert.True(_controller.OnImageRelease(new Point(101, 101), timestamp: 10));
+        Assert.False(_controller.OnImageMove(true, new PointD(101, 101), timestamp: 5));
+        Assert.True(_controller.OnImageRelease(new PointD(101, 101), timestamp: 10));
 
         Assert.Equal(1, _fits); // a click at the click zoom (200 %) goes back to Fit
         Assert.Equal(0, _surface.YieldCount);
@@ -382,10 +380,10 @@ public sealed partial class PointerInputControllerTests
     public void Move_WithoutATrackedPress_OrWithTheButtonUp_DoesNothing()
     {
         ZoomInSoTheImageCanPan();
-        Assert.False(_controller.OnImageMove(true, new Point(200, 200), timestamp: 0));
+        Assert.False(_controller.OnImageMove(true, new PointD(200, 200), timestamp: 0));
 
-        _controller.OnImagePress(MouseButton.Left, 1, new Point(100, 100), timestamp: 0);
-        Assert.False(_controller.OnImageMove(false, new Point(200, 200), timestamp: 5));
+        _controller.OnImagePress(PointerButton.Left, 1, new PointD(100, 100), timestamp: 0);
+        Assert.False(_controller.OnImageMove(false, new PointD(200, 200), timestamp: 5));
         Assert.Empty(_surface.Scrolls);
     }
 
@@ -393,11 +391,11 @@ public sealed partial class PointerInputControllerTests
     public void LostCapture_EndsThePan()
     {
         ZoomInSoTheImageCanPan();
-        _controller.OnImagePress(MouseButton.Left, 1, new Point(100, 100), timestamp: 0);
+        _controller.OnImagePress(PointerButton.Left, 1, new PointD(100, 100), timestamp: 0);
 
         _controller.OnLostCapture();
 
-        Assert.False(_controller.OnImageMove(true, new Point(200, 200), timestamp: 5));
+        Assert.False(_controller.OnImageMove(true, new PointD(200, 200), timestamp: 5));
         Assert.False(_surface.PanCursor);
     }
 
@@ -406,10 +404,10 @@ public sealed partial class PointerInputControllerTests
     [Fact]
     public void Click_InFit_WithClickToZoom_ZoomsToTheClickZoomAtTheCursor()
     {
-        Assert.True(_controller.OnImagePress(MouseButton.Left, 1, new Point(50, 50), timestamp: 0));
+        Assert.True(_controller.OnImagePress(PointerButton.Left, 1, new PointD(50, 50), timestamp: 0));
         Assert.False(_surface.PanCursor); // Fit: nothing to pan, the press is tracked only as a click
 
-        Assert.True(_controller.OnImageRelease(new Point(50, 50), timestamp: 10));
+        Assert.True(_controller.OnImageRelease(new PointD(50, 50), timestamp: 10));
 
         Assert.False(_viewer.IsFit);
         Assert.Equal(2.0, _viewer.Zoom, 6);
@@ -421,8 +419,8 @@ public sealed partial class PointerInputControllerTests
     {
         _settings.ClickToZoomEnabled = false;
 
-        Assert.False(_controller.OnImagePress(MouseButton.Left, 1, new Point(50, 50), timestamp: 0));
-        Assert.False(_controller.OnImageRelease(new Point(50, 50), timestamp: 10));
+        Assert.False(_controller.OnImagePress(PointerButton.Left, 1, new PointD(50, 50), timestamp: 0));
+        Assert.False(_controller.OnImageRelease(new PointD(50, 50), timestamp: 10));
 
         Assert.True(_viewer.IsFit);
         Assert.Equal(0, _surface.Captures);
@@ -434,11 +432,11 @@ public sealed partial class PointerInputControllerTests
     {
         ZoomInSoTheImageCanPan();
 
-        Assert.True(_controller.OnImagePress(MouseButton.Left, 2, new Point(50, 50), timestamp: 0));
+        Assert.True(_controller.OnImagePress(PointerButton.Left, 2, new PointD(50, 50), timestamp: 0));
         Assert.Equal(1, _fits);
         Assert.Equal(0, _surface.Captures);
 
-        Assert.False(_controller.OnImageRelease(new Point(50, 50), timestamp: 10));
+        Assert.False(_controller.OnImageRelease(new PointD(50, 50), timestamp: 10));
         Assert.Equal(1, _fits);
     }
 
@@ -586,11 +584,11 @@ public sealed partial class PointerInputControllerTests
     [Fact]
     public async Task ZoomInAsync_PointerOverTheViewport_ZoomsAtThePointer_NotTheCentre()
     {
-        _surface.PointerPosition = new Point(100, 50);
+        _surface.PointerPosition = new PointD(100, 50);
 
         await _controller.ZoomInAsync();
 
-        Assert.Equal(new Point(100, 50), _surface.ToImageElementCalls[^1]);
+        Assert.Equal(new PointD(100, 50), _surface.ToImageElementCalls[^1]);
     }
 
     [Fact]
@@ -600,48 +598,48 @@ public sealed partial class PointerInputControllerTests
 
         await _controller.ZoomInAsync();
 
-        Assert.Equal(new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2), _surface.ToImageElementCalls[^1]);
+        Assert.Equal(new PointD(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2), _surface.ToImageElementCalls[^1]);
     }
 
     [Fact]
     public async Task ZoomInAsync_ViewportCentreSetting_IgnoresThePointer_EvenWhenItIsOverTheViewport()
     {
         _settings.KeyboardZoomAnchor = KeyboardZoomAnchor.ViewportCentre;
-        _surface.PointerPosition = new Point(100, 50);
+        _surface.PointerPosition = new PointD(100, 50);
 
         await _controller.ZoomInAsync();
 
-        Assert.Equal(new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2), _surface.ToImageElementCalls[^1]);
+        Assert.Equal(new PointD(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2), _surface.ToImageElementCalls[^1]);
     }
 
     [Fact]
     public async Task ZoomOutAsync_PointerOverTheViewport_ZoomsAtThePointer_NotTheCentre()
     {
-        _surface.PointerPosition = new Point(650, 500);
+        _surface.PointerPosition = new PointD(650, 500);
 
         await _controller.ZoomOutAsync();
 
-        Assert.Equal(new Point(650, 500), _surface.ToImageElementCalls[^1]);
+        Assert.Equal(new PointD(650, 500), _surface.ToImageElementCalls[^1]);
     }
 
     [Fact]
     public async Task ZoomActualSizeAsync_PointerOverTheViewport_ZoomsAtThePointer_NotTheCentre()
     {
-        _surface.PointerPosition = new Point(120, 80);
+        _surface.PointerPosition = new PointD(120, 80);
 
         await _controller.ZoomActualSizeAsync();
 
-        Assert.Equal(new Point(120, 80), _surface.ToImageElementCalls[^1]);
+        Assert.Equal(new PointD(120, 80), _surface.ToImageElementCalls[^1]);
     }
 
     [Fact]
     public async Task ToggleClickZoomAsync_PointerOverTheViewport_ZoomsAtThePointer_NotTheCentre()
     {
-        _surface.PointerPosition = new Point(120, 80);
+        _surface.PointerPosition = new PointD(120, 80);
 
         await _controller.ToggleClickZoomAsync();
 
-        Assert.Equal(new Point(120, 80), _surface.ToImageElementCalls[^1]);
+        Assert.Equal(new PointD(120, 80), _surface.ToImageElementCalls[^1]);
     }
 
     // ---- R4: RAW zoom swap resizes the element by a few pixels; the view stays anchored (ADR 0008 amendment) ----
@@ -698,7 +696,7 @@ public sealed partial class PointerInputControllerTests
         SetLayout(6720, 4480, 3000, 2000);
         _surface.HoldYields = true;
 
-        var zoom = _controller.OnWheelAsync(120, ctrl: false, new Point(400, 300));
+        var zoom = _controller.OnWheelAsync(120, ctrl: false, new PointD(400, 300));
         _viewer.SwapSourceSize(6744, 4502); // the decoded original lands between the zoom and its scroll placement
         _surface.ReleaseYields();
         await zoom;
@@ -762,8 +760,8 @@ public sealed partial class PointerInputControllerTests
 
         _controller.OnWindowPreviewMouseDown();
         Assert.Null(_surface.RenderHandler);
-        _controller.OnImagePress(MouseButton.Left, 1, new Point(300, 300), timestamp: 5000);
-        _controller.OnImageRelease(new Point(300, 300), timestamp: 5010);
+        _controller.OnImagePress(PointerButton.Left, 1, new PointD(300, 300), timestamp: 5000);
+        _controller.OnImageRelease(new PointD(300, 300), timestamp: 5010);
 
         Assert.Equal(0, _fits);
         Assert.Equal(2.0, _viewer.Zoom, 6);
@@ -795,8 +793,8 @@ public sealed partial class PointerInputControllerTests
         // Press B: a later, unrelated press+release on the image with no glide running any more. WPF tunnels
         // OnWindowPreviewMouseDown for THIS press too, immediately before OnImagePress, for the same physical click.
         _controller.OnWindowPreviewMouseDown();
-        Assert.True(_controller.OnImagePress(MouseButton.Left, 1, new Point(300, 300), timestamp: 6000));
-        Assert.True(_controller.OnImageRelease(new Point(300, 300), timestamp: 6010)); // no drag: a click
+        Assert.True(_controller.OnImagePress(PointerButton.Left, 1, new PointD(300, 300), timestamp: 6000));
+        Assert.True(_controller.OnImageRelease(new PointD(300, 300), timestamp: 6010)); // no drag: a click
 
         Assert.Equal(1, _fits); // click-to-zoom fired (already at ClickZoomPercent -> back to Fit), not swallowed
     }
@@ -904,7 +902,7 @@ public sealed partial class PointerInputControllerTests
     {
         _settings.KineticGlideSmoothing = KineticGlideSmoothing.Predict;
         ZoomInSoTheImageCanPan();
-        _controller.OnImagePress(MouseButton.Left, 1, new Point(400, 300), timestamp: 1000);
+        _controller.OnImagePress(PointerButton.Left, 1, new PointD(400, 300), timestamp: 1000);
         Assert.True(_surface.DisplayTimingReads > 0, "The press did not start the monitor clock.");
         _controller.CancelPan();
 
@@ -936,9 +934,9 @@ public sealed partial class PointerInputControllerTests
     /// <summary>A fast horizontal drag (2 DIP/ms) released while still moving.</summary>
     private void Drag()
     {
-        _controller.OnImagePress(MouseButton.Left, 1, new Point(400, 300), timestamp: 1000);
-        for (var t = 10; t <= 60; t += 10) _controller.OnImageMove(true, new Point(400 - 2 * t, 300), timestamp: 1000 + t);
-        Assert.True(_controller.OnImageRelease(new Point(270, 300), timestamp: 1065));
+        _controller.OnImagePress(PointerButton.Left, 1, new PointD(400, 300), timestamp: 1000);
+        for (var t = 10; t <= 60; t += 10) _controller.OnImageMove(true, new PointD(400 - 2 * t, 300), timestamp: 1000 + t);
+        Assert.True(_controller.OnImageRelease(new PointD(270, 300), timestamp: 1065));
     }
 
     private sealed class FrameArgs(TimeSpan time) : EventArgs
@@ -957,13 +955,13 @@ public sealed partial class PointerInputControllerTests
         _surface.HorizontalOffset = 100;
         _surface.VerticalOffset = 100;
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         Assert.Equal((160, 100), _surface.Scrolls[^1]); // 10 % of the 600-high short side, both axes
-        Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Down, isRepeat: false));
         Assert.Equal((160, 160), _surface.Scrolls[^1]);
-        Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: true));
+        Assert.True(_controller.TryPanByArrow(KeyId.Left, isRepeat: true));
         Assert.Equal((100, 160), _surface.Scrolls[^1]);
-        Assert.True(_controller.TryPanByArrow(Key.Up, isRepeat: true));
+        Assert.True(_controller.TryPanByArrow(KeyId.Up, isRepeat: true));
         Assert.Equal((100, 100), _surface.Scrolls[^1]);
         Assert.Equal(0, _next + _previous);
     }
@@ -978,9 +976,9 @@ public sealed partial class PointerInputControllerTests
         _surface.HorizontalOffset = 100;
         _surface.VerticalOffset = 100;
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         Assert.Equal((250, 100), _surface.Scrolls[^1]); // 25 % of the 600 short side
-        Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Down, isRepeat: false));
         Assert.Equal((250, 250), _surface.Scrolls[^1]); // the same 150 DIP vertically
     }
 
@@ -991,15 +989,15 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentWidth = 2000;
         _surface.HorizontalOffset = 1170; // max 1200
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         Assert.Equal((1200, 0), _surface.Scrolls[^1]);
     }
 
     [Fact]
     public void Arrow_AtFit_IsNotUsed_SoLeftRightStillNavigate()
     {
-        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
-        Assert.False(_controller.TryPanByArrow(Key.Down, isRepeat: true));
+        Assert.False(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.Down, isRepeat: true));
         Assert.Empty(_surface.Scrolls);
     }
 
@@ -1011,11 +1009,11 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentWidth = 2000;
         _surface.HorizontalOffset = 1200;
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: true));
-        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: true));
+        Assert.False(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         Assert.Empty(_surface.Scrolls);
         // The other direction still pans.
-        Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Left, isRepeat: false));
         Assert.Equal((1140, 0), _surface.Scrolls[^1]);
     }
 
@@ -1025,10 +1023,10 @@ public sealed partial class PointerInputControllerTests
         _settings.ArrowKeyNavigatesAtZoomEdge = true;
         _surface.ExtentWidth = 2000; // wide image: vertical fits
 
-        Assert.False(_controller.TryPanByArrow(Key.Up, isRepeat: false));
-        Assert.False(_controller.TryPanByArrow(Key.A, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.Up, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.A, isRepeat: false));
         _hasImages = false;
-        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         Assert.Empty(_surface.Scrolls);
     }
 
@@ -1036,9 +1034,9 @@ public sealed partial class PointerInputControllerTests
     public void Arrow_Default_OtherKeysAndNoImageAreIgnored()
     {
         _surface.ExtentWidth = 2000;
-        Assert.False(_controller.TryPanByArrow(Key.A, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.A, isRepeat: false));
         _hasImages = false;
-        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         Assert.Empty(_surface.Scrolls);
     }
 
@@ -1051,13 +1049,13 @@ public sealed partial class PointerInputControllerTests
         _surface.HorizontalOffset = 1200;
         _surface.VerticalOffset = 900;
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: true));
-        Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: true));
+        Assert.True(_controller.TryPanByArrow(KeyId.Down, isRepeat: false));
         _surface.HorizontalOffset = 0;
         _surface.VerticalOffset = 0;
-        Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: false));
-        Assert.True(_controller.TryPanByArrow(Key.Up, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Left, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Up, isRepeat: false));
         Assert.Empty(_surface.Scrolls);
         Assert.Equal(0, _next + _previous);
     }
@@ -1068,8 +1066,8 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentHeight = 1500; // tall image zoomed only vertically
         _surface.VerticalOffset = 100;
 
-        Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: false));
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Left, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         Assert.Empty(_surface.Scrolls);
         Assert.Equal(0, _next + _previous);
     }
@@ -1077,9 +1075,9 @@ public sealed partial class PointerInputControllerTests
     [Fact]
     public void Arrow_Default_AtFit_FallsThrough()
     {
-        Assert.False(_controller.TryPanByArrow(Key.Left, isRepeat: false));
-        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
-        Assert.False(_controller.TryPanByArrow(Key.Up, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.Left, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(KeyId.Up, isRepeat: false));
         Assert.Empty(_surface.Scrolls);
     }
 
@@ -1093,7 +1091,7 @@ public sealed partial class PointerInputControllerTests
         _surface.HorizontalOffset = 100;
         _surface.VerticalOffset = 100;
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
 
         Assert.Equal(1, _surface.Hooks);
         Assert.NotNull(_surface.RenderHandler);
@@ -1110,7 +1108,7 @@ public sealed partial class PointerInputControllerTests
         _surface.VerticalOffset = 100;
         var before = _surface.HorizontalOffset;
 
-        _controller.TryPanByArrow(Key.Right, isRepeat: false);
+        _controller.TryPanByArrow(KeyId.Right, isRepeat: false);
         var handler = _surface.RenderHandler!;
         for (var t = 0; t < 20_000 && _surface.RenderHandler is not null; t += 16)
             handler(null, new FrameArgs(TimeSpan.FromMilliseconds(t)));
@@ -1127,11 +1125,11 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentHeight = 1500;
         _surface.HorizontalOffset = 100;
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         Assert.Equal(1, _surface.Hooks);
         var handlerAfterFirst = _surface.RenderHandler;
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: true));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: true));
 
         Assert.Equal(1, _surface.Hooks); // still hooked once, not re-hooked
         Assert.Same(handlerAfterFirst, _surface.RenderHandler);
@@ -1144,7 +1142,7 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentHeight = 1500;
         _surface.HorizontalOffset = 1200; // already at the max
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
 
         Assert.Equal(0, _surface.Hooks);
         Assert.Null(_surface.RenderHandler);
@@ -1167,9 +1165,9 @@ public sealed partial class PointerInputControllerTests
         _surface.VerticalOffset = 1000;
         var expected = Math.Min(viewportW, viewportH) * 0.17;
 
-        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Right, isRepeat: false));
         var horizontalStep = _surface.Scrolls[^1].H - 1000;
-        Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(KeyId.Down, isRepeat: false));
         var verticalStep = _surface.Scrolls[^1].V - 1000;
 
         Assert.Equal(expected, horizontalStep, tolerance: 1e-9);
@@ -1185,10 +1183,10 @@ public sealed partial class PointerInputControllerTests
         _surface.HorizontalOffset = 1000;
         _surface.VerticalOffset = 1000;
 
-        _controller.TryPanByArrow(Key.Right, isRepeat: false);
+        _controller.TryPanByArrow(KeyId.Right, isRepeat: false);
         DriveGlideToRest();
         var horizontalTravel = _surface.HorizontalOffset - 1000;
-        _controller.TryPanByArrow(Key.Down, isRepeat: false);
+        _controller.TryPanByArrow(KeyId.Down, isRepeat: false);
         DriveGlideToRest();
         var verticalTravel = _surface.VerticalOffset - 1000;
 
@@ -1262,12 +1260,12 @@ public sealed partial class PointerInputControllerTests
         /// <summary>Real layout: the image element's origin moves opposite to the scroll offset (default: fixed at 0,0).</summary>
         public bool OriginFollowsScroll { get; set; }
 
-        public Point ImageOrigin => OriginFollowsScroll ? new(-HorizontalOffset, -VerticalOffset) : new(0, 0);
+        public PointD ImageOrigin => OriginFollowsScroll ? new(-HorizontalOffset, -VerticalOffset) : new(0, 0);
 
         /// <summary>Every mouse/anchor point <see cref="PointerInputController"/> zoomed at (test seam for the keyboard-zoom-anchor tests).</summary>
-        public List<Point> ToImageElementCalls { get; } = [];
+        public List<PointD> ToImageElementCalls { get; } = [];
 
-        public Point ToImageElement(Point surfacePoint)
+        public PointD ToImageElement(PointD surfacePoint)
         {
             ToImageElementCalls.Add(surfacePoint);
             return new(surfacePoint.X + HorizontalOffset, surfacePoint.Y + VerticalOffset);
@@ -1320,6 +1318,6 @@ public sealed partial class PointerInputControllerTests
             set => _displayTiming = value;
         }
 
-        public Point? PointerPosition { get; set; }
+        public PointD? PointerPosition { get; set; }
     }
 }

@@ -1,7 +1,7 @@
 namespace PhotoReview.App.Input;
 
 // C-06 (NO-WPF-EXEC-PLAN mục 5, đóng băng ở WP-01): kiểu nhập liệu không-WPF. Toạ độ là DIP trừ khi tên có "Pixel".
-// Phần thực thi (Contains, ánh xạ phím) thuộc WP-07.
+// Phần thực thi (Contains, ánh xạ phím) do WP-07 viết.
 
 /// <summary>Điểm (DIP) thay <c>System.Windows.Point</c> ở ranh giới Input.</summary>
 public readonly record struct PointD(double X, double Y);
@@ -16,8 +16,11 @@ public readonly record struct RectD(double X, double Y, double Width, double Hei
 
     public double Bottom => Y + Height;
 
-    /// <summary>WP-07 thực thi (ngữ nghĩa như <c>System.Windows.Rect.Contains</c>).</summary>
-    public bool Contains(PointD p) => throw new NotImplementedException();
+    /// <summary>
+    /// Ngữ nghĩa như <c>System.Windows.Rect.Contains(Point)</c>: biên trái/trên và phải/dưới đều thuộc hình (đóng); hình có
+    /// <see cref="Width"/> hoặc <see cref="Height"/> âm là rỗng và không chứa điểm nào (suy ra từ chính phép so sánh: không cần nhánh riêng).
+    /// </summary>
+    public bool Contains(PointD p) => p.X >= X && p.X - Width <= X && p.Y >= Y && p.Y - Height <= Y;
 }
 
 /// <summary>Giá trị = <c>System.Windows.Input.MouseButton</c>.</summary>
