@@ -95,8 +95,25 @@ SourceBytesCache/RawDecoder*Cache trong worktree audit — nguyên nhân chưa r
 - Đã khoá tốt: Save không ghi đè khi Load hỏng hoặc bị khoá, HiddenContextMenuItems từ cờ cũ, MiddleClickAction, sắp xếp tự nhiên và tie-break.
 - Còn nợ: 20 đột biến phía Imaging (I1-I15: orientation WicDirect/TurboJpeg, bỏ kiểm alpha, đổi header PreviewCacheFile, đổi identity hash đĩa,
   ExifSummaryCodec, prune order) sau khi xác định vì sao baseline Imaging có test đỏ.
-**D (UI/tích hợp)**: chưa có báo cáo khi bàn giao; nếu thiếu thì CHẠY LẠI (ưu tiên cao): Win32DialogGuard có thể nuốt hộp thoại lỗi,
-golden tự sinh (recorder và verifier cùng mã), STA/hidden-desktop trên runner CI.
+**D (UI/tích hợp; chỉ 1/20 đột biến đã chạy, script `auditD-mut.ps1` M01-M20 chạy lại được)**:
+- **D-01 HIGH**: 2 test gating `MainWindowZoomDetailTests` (zoom-to-100 % đổi preview sang bản gốc; Refresh khi đang zoom) có trait `UI`+`Slow`
+  nhưng KHÔNG `Integration` nên không bao giờ chạy trong CI. Thêm `Integration` và test kiến trúc "Slow kèm UI phải kèm Integration".
+- **D-02 HIGH (chưa đột biến M19/M20)**: không test UI nào xác nhận hộp thoại lỗi/xác nhận XUẤT HIỆN; `WpfDialogHost` (Stryker-disabled) luôn trả Yes;
+  composition không truyền dialog service thì `?.ShowError` im lặng. Cần hook IDialogService ghi lại trong TestAppHost.
+- **D-03 HIGH**: lỗi ở task nền fire-and-forget (`FireAndLog`) chỉ `AppLog.Error`, không test nào đỏ; StaTestHost.Pump nên fail khi AppLog có Error.
+- D-05: đột biến M01 (bỏ khôi phục tại chỗ khi undo Recycle, #386) CHẾT ở App.Tests nhưng SỐNG ở 245 test UI: chưa có test cửa sổ thật cho undo-xoá.
+- D-06/D-08: `[GoldenFact]` thiếu file golden thì Skip (xanh với 0 so sánh), reader khoan dung, kịch bản `Expected` rỗng xanh giả: golden thiếu = FAIL,
+  schema chặt, Expected.Count > 0. D-07: scanner TEST-02/OS/TAUTOLOGY không thấy attribute dẫn xuất `*Fact`/`*Theory`.
+- D-09: replay golden dựng lại controller bằng tay (drift khỏi MainWindow thật); pan phím chưa gating; D-10: test Native Shell ngoài CI (struct size viết tay,
+  cùng tác giả). D-04/D-11..D-16 mức thấp-vừa (guard hộp thoại không ai đọc trong vài Rig, `_ = NextAsync()` không quan sát, `run-tests-hidden.ps1` bỏ qua
+  giá trị trả về `GetExitCodeProcess`, Soak flake dưới tải).
+- Baseline máy tải: `SoakLeakTests.Navigation_Soak_Plateaus` timeout 100 s và `APP-P01` flaky; không phải lỗi logic.
+
+## 4b. Nguyên nhân chính xác #411 đỏ
+`InputScriptRunner.Apply` (App.Tests/Viewport) ném `NotSupportedException` ở bước `command` với `Command = ToggleFit`: runner chỉ biết Fit, FitWidth,
+FitWidth2, FitHeight, ZoomIn, ZoomOut, ActualSize, ClickZoom, ClickZoomLevel; bộ ghi WP-10 xuất tên `ReviewCommandType` (vd `ToggleFit`) cộng
+`SetClickZoomLevel`, `ZoomToLevelMenu`, `SetDpi`, `LoadImage`, `SwapSourceSize` (xem `InputScriptRecorder.CommandAsync` trên master). Sửa: ánh xạ
+đủ từ vựng đó trong runner (không sửa golden), rồi xem golden còn lệch ở đâu.
 **E (quét tĩnh)**: 42 test Native/Slow/Manual về dữ liệu ngoài CI; 54 test tự thoát sớm (22 RAW corpus, 7 WebP); 150 khối catch rỗng;
 vài `Assert.InRange` gần như không ràng buộc (`PhotoReviewPerfEventTests:131`, `KineticPanTests:353`); số test Core/Imaging lệch ~360
 so với đếm attribute (chưa giải thích).
