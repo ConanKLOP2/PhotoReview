@@ -9,6 +9,8 @@
     <RootNamespace>PhotoReview.App</RootNamespace>
     <!-- N-11 / L-AOT: mã mới AOT-ready ngay từ đầu (analyzer trim/AOT chạy không cần MSVC). -->
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- LibraryImport (P/Invoke source-gen, L-AOT) và con trỏ hàm UnmanagedCallersOnly cần unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
