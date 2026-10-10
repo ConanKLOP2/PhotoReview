@@ -8,6 +8,21 @@ $ErrorActionPreference = 'Stop'
 $T0BudgetBytes = 18 * 1024
 $T1FileBudgetBytes = 24 * 1024
 
+# Docs that legitimately outgrow the default 24 KB T1 budget (a single reference page read in full on demand). Add a file
+# here only when it is a necessary, hard-to-split reference; everything else stays at the default and should be trimmed
+# or split instead. Keys are repo-relative paths with forward slashes.
+$T1FileBudgetOverrides = @{
+    'docs/architecture.md'               = 32 * 1024  # settings/mechanism reference: one row per setting
+    'docs/refactoring/OPEN-DECISIONS.md' = 32 * 1024  # generated table, one row per decided item (grows with every decision)
+}
+
+function Get-T1Budget {
+    param([string]$Path)
+    $p = $Path -replace '\\', '/'
+    if ($T1FileBudgetOverrides.ContainsKey($p)) { return [long]$T1FileBudgetOverrides[$p] }
+    return [long]$T1FileBudgetBytes
+}
+
 function Get-DocTier {
     param([string]$Path)
     $p = $Path -replace '\\', '/'
@@ -57,7 +72,7 @@ foreach ($tier in 'T0', 'T1', 'T2', 'Other') {
     Write-Host "File | Bytes | Lines | Tokens"
     Write-Host "---- | ---- | ---- | ----"
     $group | Sort-Object -Property Bytes -Descending | ForEach-Object {
-        $flag = if ($tier -eq 'T1' -and $_.Bytes -gt $T1FileBudgetBytes) { ' [OVER]' } else { '' }
+        $flag = if ($tier -eq 'T1' -and $_.Bytes -gt (Get-T1Budget $_.Path)) { ' [OVER]' } else { '' }
         Write-Host "$($_.Path) | $($_.Bytes) ($(Format-KB $_.Bytes) KB) | $($_.Lines) | $($_.Tokens)$flag"
     }
     Write-Host ""
@@ -65,7 +80,7 @@ foreach ($tier in 'T0', 'T1', 'T2', 'Other') {
 
 $t0 = ($docs | Where-Object { $_.Tier -eq 'T0' } | Measure-Object -Property Bytes -Sum).Sum
 if ($null -eq $t0) { $t0 = 0 }
-$t1Over = @($docs | Where-Object { $_.Tier -eq 'T1' -and $_.Bytes -gt $T1FileBudgetBytes })
+$t1Over = @($docs | Where-Object { $_.Tier -eq 'T1' -and $_.Bytes -gt (Get-T1Budget $_.Path) })
 $largestT1 = ($docs | Where-Object { $_.Tier -eq 'T1' } | Measure-Object -Property Bytes -Maximum).Maximum
 if ($null -eq $largestT1) { $largestT1 = 0 }
 $total = ($docs | Measure-Object -Property Bytes -Sum).Sum
@@ -82,7 +97,7 @@ if ($Check) {
         if (-not ($docs | Where-Object { $_.Path -eq $t0File })) { $errors += "T0 file not found (not tracked or missing on disk): $t0File" }
     }
     if ($t0 -gt $T0BudgetBytes) { $errors += "T0 exceeds $(Format-KB $T0BudgetBytes) KB ($(Format-KB $t0) KB)" }
-    foreach ($doc in $t1Over) { $errors += "T1 file over $(Format-KB $T1FileBudgetBytes) KB: $($doc.Path) ($(Format-KB $doc.Bytes) KB)" }
+    foreach ($doc in $t1Over) { $errors += "T1 file over $(Format-KB (Get-T1Budget $doc.Path)) KB: $($doc.Path) ($(Format-KB $doc.Bytes) KB)" }
     if ($errors.Count -gt 0) {
         Write-Host "[FAIL] $($errors -join '; ')" -ForegroundColor Red
         exit 1
