@@ -656,6 +656,11 @@ public sealed class FileActionService
                     await Task.Run(() => _recycleBin.DeletePermanently(source), cancellationToken).ConfigureAwait(false);
                 else
                     await Task.Run(() => _recycleBin.SendToRecycleBin(source), cancellationToken).ConfigureAwait(false);
+
+                // B-06 (same post-check as the group Recycle): a shell that reports success while the source is still there must
+                // not be committed as a recycled file; fail with the same coded error so Recovery shows it.
+                if (_fileSystem.FileExists(source))
+                    throw new JournalCodedException(JournalErrors.SourceStillExistsAfterRecovery);
                 tx.MarkMutationCompleted();
 
                 _ = tx.Commit(out var journalError);

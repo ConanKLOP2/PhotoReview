@@ -31,11 +31,14 @@ public sealed class FileActionServiceTests
     {
         public List<string> RecycledPaths { get; } = [];
         public Func<string, Exception?>? RecycleHook { get; set; }
+        /// <summary>Like the real shell, a successful send removes the file (B-06 post-check).</summary>
+        public Action<string>? RemoveFile { get; set; }
 
         public void SendToRecycleBin(string path)
         {
             if (RecycleHook?.Invoke(path) is { } ex) throw ex;
             RecycledPaths.Add(path);
+            RemoveFile?.Invoke(path);
         }
 
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => true;
@@ -50,6 +53,7 @@ public sealed class FileActionServiceTests
     public FileActionServiceTests()
     {
         _journal = new OperationJournal(new FakeAppPaths(@"C:\data\operations.jsonl"), _fs, _clock);
+        _recycleBin.RemoveFile = path => _fs.Delete(path);
         _service = new FileActionService(_journal, _fs, _clock, _recycleBin);
     }
 
