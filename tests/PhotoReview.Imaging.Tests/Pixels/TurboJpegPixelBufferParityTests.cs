@@ -122,6 +122,21 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         buffer.Dispose();
     }
 
+    [Fact(DisplayName = "Fine scale finishes the odd row left by the DCT scale: same size as WPF when only the height is above the target")]
+    public void FineScale_OnlyHeightAboveTarget_SameSizeAsWpf()
+    {
+        var path = Path.Combine(_dir, "odd.jpg");
+        FixtureGenerator.GenerateGradientJpeg(path, 3000, 2001);
+        var request = new DecodeRequest(path, TargetWidth: 1500, ApplyOrientation: true);
+
+        var expected = Assert.IsType<WpfDecodedImage>(Legacy.Decode(request));
+        var actual = Assert.IsType<DecodedImage>(Pixels.Decode(request));
+
+        var buffer = Assert.IsType<PixelBuffer>(actual.PlatformImage);
+        Assert.Equal((expected.PixelWidth, expected.PixelHeight), (buffer.Width, buffer.Height));
+        buffer.Dispose();
+    }
+
     [Fact(DisplayName = "In-memory bytes and the SourceOrientation override take the same pixel path")]
     public void MemoryBufferWithOverride_MatchesLegacy()
     {
