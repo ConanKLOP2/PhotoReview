@@ -118,4 +118,5 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 (OpenClipboard/SetClipboardData, thử lại 5 x 20 ms) và sửa lỗi bố cục WP-13a: TASKDIALOGCONFIG/TASKDIALOG_BUTTON phải Pack = 1 (160/12 byte).
 16 test mới + 2 test chữ ký đã sửa; mutation 10/10 bị bắt. Hợp đồng v1 không đổi; còn chờ nối COM IFileOpenDialog (WP-13b) và
 `IClipboardService` dời sang App.Shared (WP-09). [Detail](decisions/NOWPF-WP19A-DIALOGS.md) |
+| NOWPF-WP05 | WP-05 (đợt 1b, 2026-10-10): TurboJpegDecoder(codec) và LibRawDecoder(codec) giải mã thẳng vào PixelBuffer (C-01) rồi IPlatformImageCodec.FromPixels (C-02); ctor không tham số giữ nguyên đường WPF (BitmapSource). Không-fine-scale: so từng byte với WPF trên 8 orientation x 10 kích thước; fine-scale dùng bộ lọc diện tích số nguyên, lệch WIC Fant vài mức (MAE <= 3,6). Chưa chạy mutation, bench P50 và test corpus RAW (không có corpus) - xem PR. [Detail](decisions/NOWPF-WP05-NATIVE-PIXELBUFFER.md) |
 <!-- END GENERATED DECIDED TABLE -->
