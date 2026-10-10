@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using System.Windows;
 using PhotoReview.App.Input;
 using PhotoReview.Core.Model;
 
@@ -17,7 +16,7 @@ public sealed partial class PointerInputControllerTests
     private Task TouchpadAsync(int delta, bool horizontal = false, bool ctrl = false)
     {
         _touchpadTime += 8;
-        return _controller.OnWheelAsync(new WheelInput(delta, horizontal, ctrl, _touchpadTime), new Point(400, 300));
+        return _controller.OnWheelAsync(new WheelInput(delta, horizontal, ctrl, _touchpadTime), new PointD(400, 300));
     }
 
     [Fact]
@@ -106,7 +105,7 @@ public sealed partial class PointerInputControllerTests
     {
         _settings.MouseWheelAction = MouseWheelAction.Zoom;
 
-        await _controller.OnWheelAsync(new WheelInput(-120, false, false, 5000), new Point(400, 300));
+        await _controller.OnWheelAsync(new WheelInput(-120, false, false, 5000), new PointD(400, 300));
 
         Assert.False(_viewer.IsFit);
         Assert.Equal(0, _next + _previous);
@@ -115,7 +114,7 @@ public sealed partial class PointerInputControllerTests
     [Fact]
     public async Task MouseWheel_TiltSideways_IsIgnored()
     {
-        await _controller.OnWheelAsync(new WheelInput(120, Horizontal: true, false, 5000), new Point(400, 300));
+        await _controller.OnWheelAsync(new WheelInput(120, Horizontal: true, false, 5000), new PointD(400, 300));
 
         Assert.True(_viewer.IsFit);
         Assert.Equal(0, _next + _previous);
@@ -150,7 +149,7 @@ public sealed partial class PointerInputControllerTests
     {
         _settings.TouchpadSwipeDistancePerImage = 200;
 
-        await _controller.OnWheelAsync(new WheelInput(-120, false, false, 5000, WheelDeviceHint.Touchpad), new Point(400, 300));
+        await _controller.OnWheelAsync(new WheelInput(-120, false, false, 5000, WheelDeviceHint.Touchpad), new PointD(400, 300));
 
         Assert.Equal(1, _next); // -120 >= the first step (100), and no zoom
         Assert.True(_viewer.IsFit);

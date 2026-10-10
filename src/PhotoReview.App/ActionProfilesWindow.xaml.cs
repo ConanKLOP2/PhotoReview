@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using PhotoReview.App.Input;
 using System.Text.Json;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
@@ -152,7 +153,7 @@ public partial class ActionProfilesWindow : Window
     internal static bool HasInvalidActions(IReadOnlyList<ReviewAction> actions)
     {
         if (actions.Count == 0) return true;
-        var seen = new HashSet<Key>();
+        var seen = new HashSet<KeyId>();
         foreach (var action in actions)
         {
             if (string.IsNullOrWhiteSpace(action.Name) || !Enum.IsDefined(action.Operation)) return true;
@@ -165,12 +166,12 @@ public partial class ActionProfilesWindow : Window
     /// <summary>The first F6..F12 key no action uses yet (by parsed key); "F6" when all are taken so Apply reports it.</summary>
     internal static string NextFreeShortcut(IEnumerable<ReviewAction> actions)
     {
-        var used = new HashSet<Key>();
+        var used = new HashSet<KeyId>();
         foreach (var action in actions)
             if (ShortcutKeyName.TryParse(action.Shortcut, out var key)) used.Add(key);
-        for (var k = Key.F6; k <= Key.F12; k++)
+        for (var k = KeyId.F6; k <= KeyId.F12; k++)
             if (!used.Contains(k)) return k.ToString();
-        return nameof(Key.F6);
+        return nameof(KeyId.F6);
     }
 
     /// <summary>

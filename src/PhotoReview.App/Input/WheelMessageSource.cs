@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Windows;
 
 namespace PhotoReview.App.Input;
 
@@ -46,9 +45,9 @@ internal static class WheelMessageSource
     public static int Delta(IntPtr wParam) => unchecked((short)((wParam.ToInt64() >> 16) & 0xFFFF));
 
     /// <summary>The cursor position (physical screen pixels) packed into a wheel message's lParam.</summary>
-    public static Point ScreenPoint(IntPtr lParam)
+    public static PointD ScreenPoint(IntPtr lParam)
     {
         var value = lParam.ToInt64();
-        return new Point(unchecked((short)(value & 0xFFFF)), unchecked((short)((value >> 16) & 0xFFFF)));
+        return new PointD(unchecked((short)(value & 0xFFFF)), unchecked((short)((value >> 16) & 0xFFFF)));
     }
 }
