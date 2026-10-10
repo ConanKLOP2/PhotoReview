@@ -57,6 +57,13 @@ Lỗ hổng test đã có PR riêng, mỗi PR đã kiểm XANH trên master và 
 - Chưa làm trong số "Top": C-04 (Save sau Load config bản mới mất trường lạ), C-05 (optional trùng mandatory), D-02/D-03 (hook
   IDialogService, StaTestHost fail khi AppLog có Error), B-04..B-08, A-01..A-07 (CODEOWNERS, job Native/Slow, baseline số test), sửa runner #411.
 - #413 (WP-05) đã được đồng bộ master bằng `tools/sync-pr-branch.sh`.
+- **#411 (WP-16) runner đã nói đúng từ vựng WP-10** (commit 158fae4f): `command` (ToggleFit, ZoomActualSize, FitWidth/2, FitHeight, ZoomIn/Out,
+  ClickZoom, SetClickZoomLevel, ZoomToLevelMenu, SetDpi, LoadImage, SwapSourceSize) và `key` qua ShortcutRouter. Cả 90 kịch bản chạy; còn
+  **512 checkpoint lệch golden** — việc điều tra tiếp theo. Chênh đầu tiên: `wheel-zoom-in-to-step-limit` zoom engine 0,68/1,18/1,68 vs golden
+  0,28/0,38/0,48 (engine bước 0,5, golden 0,1 mỗi nấc wheel: nghi `ViewerState.ZoomStep`/bước wheel của runner khác MainWindow, vì cả hai
+  dùng KeyboardZoomStepPercent); `wheel-navigate-mode-ctrl-wheel-zooms`: engine vẫn ở Fit (IsFit True) trong khi golden zoom 0,28 (nghi
+  MouseWheelAction=Navigate + Ctrl không áp qua SettingsOverridesJson, hoặc WheelInput thiếu tham số Touchpad). Chạy lại:
+  `dotnet test tests/PhotoReview.App.Tests --filter FullyQualifiedName~ViewportInputGoldenTests` (không sửa golden).
 
 ## 3. Quyết định chủ dự án còn mở
 - NE-3 thanh cuộn (a: tự vẽ), NE-4 menu (a: native + dark qua uxtheme), NE-6 single-instance prefix riêng, NE-7 đóng băng UI
