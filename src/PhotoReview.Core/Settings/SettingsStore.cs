@@ -13,6 +13,8 @@ public sealed class SettingsStore
     private readonly Action<string, Exception>? _onStartupError;
     private readonly SettingsValidator _settingsValidator;
     private AppSettings _current;
+    private bool _newerFileOnDisk; // the last Load saw a config.json stamped by a NEWER build: the next write backs it up first
+    internal const int MaxNewerBackups = 3;
     private bool _keepCorruptFile; // the corrupt config.json could not be backed up: never overwrite the only copy this session
 
     public AppSettings Current => _current;
@@ -84,6 +86,7 @@ public sealed class SettingsStore
         var filePath = path ?? _appPaths.ConfigFile;
         LastLoadRepairs = [];
         _keepCorruptFile = false;
+        _newerFileOnDisk = false;
         AppSettings? ready = null;
         var backedUp = false; // the salvage path already kept the original: no second backup for the same file
         try
@@ -116,6 +119,7 @@ public sealed class SettingsStore
                 // The startup dialog lists LastLoadRepairs (resets + "Shortcuts.<name>" entries): the user must not silently lose a shortcut.
                 LastLoadRepairs = parsed.Repairs;
                 _current = loaded;
+                _newerFileOnDisk = path is null && loaded.ConfigVersion > AppSettings.CurrentConfigVersion;
                 // Write the repaired settings back once so the start-up dialog does not repeat on every launch (the repairs
                 // are recomputed from the file on each Load). Only the default file is rewritten; Changed is raised once below, after the
                 // try (R23: a throwing handler must be neither mistaken for a failed write nor invoked twice).
@@ -235,12 +239,96 @@ public sealed class SettingsStore
             _fileSystem.CreateDirectory(dir);
         }
 
+        if (_newerFileOnDisk)
+        {
+            BackupNewerConfig(filePath);
+            _newerFileOnDisk = false; // the file is rewritten as the current version below
+        }
+
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: always saved canonical
         settings.ConfigVersion = AppSettings.CurrentConfigVersion;
         var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
         _fileSystem.WriteAllTextAtomic(filePath, json, durable: true);
 
         _current = settings;
+    }
+
+    /// <summary>
+    /// Keeps the verbatim bytes of a config.json written by a newer build as <c>config.json.newer-yyyyMMddHHmmss</c> (unique name,
+    /// newest <see cref="MaxNewerBackups"/> kept) before it is overwritten with the current version. A failure here never blocks the
+    /// Save: it is logged as a warning and swallowed.
+    /// </summary>
+    private void BackupNewerConfig(string filePath)
+    {
+        try
+        {
+            if (!_fileSystem.FileExists(filePath)) return;
+            var backup = NewerBackupPath(filePath);
+            _fileSystem.Copy(filePath, backup);
+            _log.Info("config.json from a newer build backed up before being overwritten: " + backup);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Warn("Could not back up the newer-build config.json before overwriting it: " + ex.Message);
+            return; // keep every existing backup: nothing new was added
+        }
+        try
+        {
+            var dir = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrEmpty(dir)) return;
+            var prefix = Path.GetFileName(filePath) + ".newer-";
+            var stale = _fileSystem.EnumerateFiles(dir, Path.GetFileName(filePath) + ".newer-*")
+                .Where(f => Path.GetFileName(f).StartsWith(prefix, StringComparison.Ordinal))
+                .OrderByDescending(f => NewerBackupSortKey(Path.GetFileName(f)[prefix.Length..]).Stamp, StringComparer.Ordinal)
+                .ThenByDescending(f => NewerBackupSortKey(Path.GetFileName(f)[prefix.Length..]).Counter)
+                .Skip(MaxNewerBackups)
+                .ToList();
+            foreach (var old in stale)
+            {
+                try { _fileSystem.Delete(old); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _log.Warn("Could not delete an old newer-build config backup: " + ex.Message);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Warn("Could not prune old newer-build config backups: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <c>config.json.newer-&lt;stamp&gt;</c>, or <c>...-N</c> with N above every counter already used in the same second, so the
+    /// newest backup always sorts last even after older ones were pruned (a plain "first free suffix" would reuse a freed name).
+    /// </summary>
+    private string NewerBackupPath(string filePath)
+    {
+        var dir = Path.GetDirectoryName(filePath);
+        var name = Path.GetFileName(filePath);
+        var stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        var stem = filePath + ".newer-" + stamp;
+        if (string.IsNullOrEmpty(dir)) return stem;
+        var prefix = name + ".newer-";
+        var max = 0;
+        foreach (var existing in _fileSystem.EnumerateFiles(dir, prefix + stamp + "*"))
+        {
+            var file = Path.GetFileName(existing);
+            if (!file.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            var key = NewerBackupSortKey(file[prefix.Length..]);
+            if (key.Stamp == stamp && key.Counter > max) max = key.Counter;
+        }
+        return max == 0 ? stem : stem + "-" + (max + 1).ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>"yyyyMMddHHmmss" or "yyyyMMddHHmmss-N" (N from <see cref="UniqueBackupPath"/>) to a sortable (stamp, N).</summary>
+    private static (string Stamp, int Counter) NewerBackupSortKey(string suffix)
+    {
+        var dash = suffix.IndexOf('-');
+        if (dash < 0) return (suffix, 1);
+        return int.TryParse(suffix[(dash + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var n)
+            ? (suffix[..dash], n)
+            : (suffix, 0);
     }
 
     /// <summary>
