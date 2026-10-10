@@ -23,12 +23,26 @@ public sealed class StartupFirstShowTests
 
     // ---- StartupWindowReveal ----
 
-    private static List<(IntPtr Handle, bool Cloaked)> WithRecordedCloak(bool accept, Action<List<(IntPtr, bool)>> body)
+    /// <summary>A gate whose render-tick subscription is captured instead of hooked to CompositionTarget.Rendering.</summary>
+    private sealed class FakeTicks
+    {
+        public EventHandler? Handler;
+        public int Subscribed, Unsubscribed, Revealed;
+
+        public StartupWindowReveal CreateGate() => new(
+            h => { Handler += h; Subscribed++; },
+            h => { Handler -= h; Unsubscribed++; },
+            () => Revealed++);
+
+        public void Tick() => Handler?.Invoke(null, EventArgs.Empty);
+    }
+
+    private static List<(IntPtr Handle, bool Cloaked)> WithRecordedCloak(bool accept, Action body)
     {
         var calls = new List<(IntPtr, bool)>();
         var previous = StartupWindowReveal.SetCloaked;
         StartupWindowReveal.SetCloaked = (handle, cloaked) => { calls.Add((handle, cloaked)); return accept; };
-        try { body(calls); }
+        try { StaUi.Run(body); }
         finally { StartupWindowReveal.SetCloaked = previous; }
         return calls;
     }
@@ -36,9 +50,10 @@ public sealed class StartupFirstShowTests
     [Fact]
     public void Reveal_AfterHide_UncloaksTheSameWindowExactlyOnce()
     {
-        var calls = WithRecordedCloak(accept: true, _ =>
+        var ticks = new FakeTicks();
+        var calls = WithRecordedCloak(accept: true, () =>
         {
-            var gate = new StartupWindowReveal();
+            var gate = ticks.CreateGate();
             gate.Hide(new IntPtr(42));
             Assert.True(gate.IsHidden);
             gate.Reveal();
@@ -47,14 +62,59 @@ public sealed class StartupFirstShowTests
         });
 
         Assert.Equal([(new IntPtr(42), true), (new IntPtr(42), false)], calls);
+        Assert.Equal(1, ticks.Revealed);
+        Assert.Null(ticks.Handler); // the static render event no longer holds the window
+    }
+
+    [Fact]
+    public void RenderTicks_RevealOnTheSecondTickAfterTheWindowWasShown()
+    {
+        var ticks = new FakeTicks();
+        var calls = WithRecordedCloak(accept: true, () =>
+        {
+            var gate = ticks.CreateGate();
+            gate.Hide(new IntPtr(5));
+            Assert.Equal(1, ticks.Subscribed);
+            ticks.Tick();
+            ticks.Tick();
+            ticks.Tick(); // ticks before the window is shown render nothing of it
+            Assert.True(gate.IsHidden);
+
+            gate.NoteShown();
+            ticks.Tick();
+            Assert.True(gate.IsHidden); // the first frame is being rendered
+            ticks.Tick();
+            Assert.False(gate.IsHidden);
+        });
+
+        Assert.Equal([(new IntPtr(5), true), (new IntPtr(5), false)], calls);
+        Assert.Null(ticks.Handler);
+    }
+
+    [Fact]
+    public void Stop_DropsTheRenderSubscription_AndAClosedWindowIsNotRevealedByLaterTicks()
+    {
+        var ticks = new FakeTicks();
+        var calls = WithRecordedCloak(accept: true, () =>
+        {
+            var gate = ticks.CreateGate();
+            gate.Hide(new IntPtr(3));
+            gate.NoteShown();
+            gate.Stop();
+            Assert.Null(ticks.Handler);
+            Assert.True(gate.IsHidden);
+        });
+
+        Assert.Equal([(new IntPtr(3), true)], calls);
     }
 
     [Fact]
     public void Hide_IsAppliedOnlyOnce_AndNeverAfterReveal()
     {
-        var calls = WithRecordedCloak(accept: true, _ =>
+        var ticks = new FakeTicks();
+        var calls = WithRecordedCloak(accept: true, () =>
         {
-            var gate = new StartupWindowReveal();
+            var gate = ticks.CreateGate();
             gate.Hide(new IntPtr(7));
             gate.Hide(new IntPtr(7));
             gate.Reveal();
@@ -63,33 +123,39 @@ public sealed class StartupFirstShowTests
         });
 
         Assert.Equal([(new IntPtr(7), true), (new IntPtr(7), false)], calls);
+        Assert.Equal(1, ticks.Subscribed);
     }
 
     [Fact]
-    public void Hide_RefusedByDwm_LeavesTheWindowVisibleAndRevealDoesNothing()
+    public void Hide_RefusedByDwm_LeavesTheWindowVisible_WithoutTimerOrRenderSubscription()
     {
-        var calls = WithRecordedCloak(accept: false, _ =>
+        var ticks = new FakeTicks();
+        var calls = WithRecordedCloak(accept: false, () =>
         {
-            var gate = new StartupWindowReveal();
+            var gate = ticks.CreateGate();
             gate.Hide(new IntPtr(9));
             Assert.False(gate.IsHidden);
             gate.Reveal();
         });
 
         Assert.Equal([(new IntPtr(9), true)], calls);
+        Assert.Equal(0, ticks.Subscribed);
+        Assert.Equal(0, ticks.Revealed);
     }
 
     [Fact]
     public void Hide_WithoutAHandle_IsIgnored()
     {
-        var calls = WithRecordedCloak(accept: true, _ =>
+        var ticks = new FakeTicks();
+        var calls = WithRecordedCloak(accept: true, () =>
         {
-            var gate = new StartupWindowReveal();
+            var gate = ticks.CreateGate();
             gate.Hide(IntPtr.Zero);
             Assert.False(gate.IsHidden);
         });
 
         Assert.Empty(calls);
+        Assert.Equal(0, ticks.Subscribed);
     }
 
     // ---- WindowPlacementService.RestoreBeforeShow ----

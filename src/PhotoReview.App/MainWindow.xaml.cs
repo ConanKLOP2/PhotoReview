@@ -102,7 +102,7 @@ public partial class MainWindow : Window
         }
         AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler(ReturnFocusAfterButtonClick), handledEventsToo: true);
         PhotoReviewPerf.StartupMark("xamlLoaded");
-        ContentRendered += (_, _) => { PhotoReviewPerf.StartupMark("contentRendered"); RevealAfterStartup(); };
+        ContentRendered += (_, _) => { PhotoReviewPerf.StartupMark("contentRendered"); _startupReveal.Reveal(); };
         // perf/startup-first-image: before the HWND is shown, put it where it was closed and keep it cloaked until its
         // first frame is rendered (no white surface, no 1200x800 window that then jumps to the saved placement).
         SourceInitialized += (_, _) => PrepareFirstShow();
@@ -207,9 +207,9 @@ public partial class MainWindow : Window
             w > 1 ? w : FallbackViewportWidth, h > 1 ? h : FallbackViewportHeight, dpi, PreviewQualityMultiplier);
     }
 
-    private readonly StartupWindowReveal _startupReveal = new();
+    private readonly StartupWindowReveal _startupReveal = new(onRevealed: () => PhotoReviewPerf.StartupMark("windowRevealed"));
     private string? _prewarmPath;
-    private DispatcherTimer? _revealTimer;
+    private bool _shownNative;
 
     /// <summary>Test seam: whether the startup cloak is still in effect.</summary>
     internal bool IsStartupCloaked => _startupReveal.IsHidden;
@@ -218,42 +218,11 @@ public partial class MainWindow : Window
     {
         var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
         _startupReveal.Hide(handle);
-        if (_startupReveal.IsHidden)
-        {
-            _revealTimer = new DispatcherTimer { Interval = StartupWindowReveal.SafetyTimeout };
-            _revealTimer.Tick += (_, _) => RevealAfterStartup();
-            _revealTimer.Start();
-            CompositionTarget.Rendering += OnStartupRenderingTick;
-        }
         if (!_placementRestored && PlacementFile is { } placementFile)
         {
             _placementRestored = true; // one attempt, as the Loaded path below: an invalid file is not retried there
             if (WindowPlacementService.RestoreBeforeShow(this, placementFile)) PhotoReviewPerf.StartupMark("placementRestoredBeforeShow");
         }
-    }
-
-    /// <summary>
-    /// The window is revealed on the second render tick after it was shown: the first tick's frame (the dark canvas,
-    /// or the image if it is already there) has then been rendered. ContentRendered is only the fallback: WPF posts it
-    /// at Input priority, so at startup it waits behind the folder load and the first image (measured ~180 ms later).
-    /// </summary>
-    private void OnStartupRenderingTick(object? sender, EventArgs e)
-    {
-        if (!_shownNative) return;
-        if (++_renderTicksSinceShown >= 2) RevealAfterStartup();
-    }
-
-    private bool _shownNative;
-    private int _renderTicksSinceShown;
-
-    private void RevealAfterStartup()
-    {
-        CompositionTarget.Rendering -= OnStartupRenderingTick; // static event: it would keep the window alive
-        _revealTimer?.Stop();
-        _revealTimer = null;
-        if (!_startupReveal.IsHidden) return;
-        _startupReveal.Reveal();
-        PhotoReviewPerf.StartupMark("windowRevealed");
     }
 
     private const int WmWindowPosChanged = 0x0047;
@@ -271,7 +240,8 @@ public partial class MainWindow : Window
     /// </summary>
     private void StartInitialDecode(IntPtr hwnd)
     {
-        if (Interlocked.Exchange(ref _prewarmPath, null) is not { } path) return;
+        if (_prewarmPath is not { } path) return;
+        _prewarmPath = null;
         if (!GetClientRect(hwnd, out var client) || client.Right <= 0 || client.Bottom <= 0) return;
         var dpi = _cachedDpiScale ??= System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
         UpdateTargetDecodeBox((client.Right / dpi, client.Bottom / dpi));
@@ -567,9 +537,7 @@ public partial class MainWindow : Window
     {
         Localizer.CurrentChanged -= OnLanguageChanged;
         _settingsStore.Changed -= _onSettingsChanged;
-        CompositionTarget.Rendering -= OnStartupRenderingTick; // a window closed before its first frame: neither the
-        _revealTimer?.Stop();                                  // static render event nor the timer may keep it alive
-        _revealTimer = null;
+        _startupReveal.Stop(); // a window closed before its first frame: neither its timer nor the render event may keep it alive
         try
         {
             _pointer.OnWindowClosed(); // stops a glide (unhooks the static render-frame event that would keep this window alive), ends a pan
@@ -607,6 +575,7 @@ public partial class MainWindow : Window
         if (msg == WmWindowPosChanged && !_shownNative && WindowPosShowsWindow(lParam))
         {
             _shownNative = true;
+            _startupReveal.NoteShown();
             StartInitialDecode(hwnd);
         }
         if (msg != WheelMessageSource.WmMouseHWheel || !IsLoaded || _viewModel.Compare.IsVisible) return IntPtr.Zero;
