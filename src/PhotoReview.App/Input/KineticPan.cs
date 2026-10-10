@@ -208,12 +208,21 @@ internal enum KeyboardPanResult
     AtEdge,
 }
 
-/// <summary>Arrow-key panning of a zoomed image: one press moves the view by a fraction of the viewport (<c>ArrowPanStepPercent</c>; <see cref="StepFraction"/> is the default).</summary>
+/// <summary>Arrow-key panning of a zoomed image: one press moves the view by a fraction of the viewport's SHORTER side, the same pixels on both axes (<see cref="StepPixels"/>, <c>ArrowPanStepPercent</c>; <see cref="StepFraction"/> is the default).</summary>
 internal static class KeyboardPan
 {
     public const double StepFraction = 0.1;
     // Sub-pixel slack: layout can leave an extent a fraction of a DIP above the viewport at Fit.
     private const double Epsilon = 0.5;
+
+    /// <summary>
+    /// ARROW-PAN-EQUAL-STEP: the distance one arrow press moves the view, in DIP, the SAME on both axes:
+    /// <paramref name="stepFraction"/> of the viewport's SHORTER side. (Before, it was the viewport size along the
+    /// pressed axis, so on a landscape window a horizontal press always moved further than a vertical one.)
+    /// A pure rule so other engines can copy it verbatim.
+    /// </summary>
+    public static double StepPixels(double viewportWidth, double viewportHeight, double stepFraction) =>
+        Math.Min(viewportWidth, viewportHeight) * stepFraction;
 
     public static (KeyboardPanResult Result, double Horizontal, double Vertical) Step(
         int dx, int dy, double horizontal, double vertical, ScrollBounds bounds, double stepFraction = StepFraction)
@@ -221,7 +230,7 @@ internal static class KeyboardPan
         var max = dx != 0 ? bounds.MaxHorizontal : bounds.MaxVertical;
         if (max <= Epsilon) return (KeyboardPanResult.NotScrollable, horizontal, vertical);
         var current = dx != 0 ? horizontal : vertical;
-        var step = (dx != 0 ? bounds.ViewportWidth : bounds.ViewportHeight) * stepFraction * (dx + dy);
+        var step = StepPixels(bounds.ViewportWidth, bounds.ViewportHeight, stepFraction) * (dx + dy);
         var target = Math.Clamp(current + step, 0, max);
         if (Math.Abs(target - current) < Epsilon) return (KeyboardPanResult.AtEdge, horizontal, vertical);
         return dx != 0
