@@ -114,6 +114,16 @@ Prewarm: khi cửa sổ hiện (`SWP_SHOWWINDOW`) hộp decode được tính t�
 `Lookup = inflight` ở 100 % lần chạy (cùng key, không decode hai lần).
 Bỏ cloak bằng `ContentRendered` (bản trước của nhánh) trễ ~180 ms vì WPF post nó ở mức Input, sau folder load + ảnh đầu -> đổi sang tick render.
 
+## Test và mutation check
+
+`App.Tests/Services/StartupFirstShowTests` (gate cloak/tick/timer với tick giả, `RestoreBeforeShow` trên HWND thật chưa hiện) và
+`Integration.Tests/StartupFirstShowIntegrationTests` (MainWindow thật: maximized + cloak lúc `SWP_SHOWWINDOW`, lộ ra bằng tick render khi dispatcher bận,
+fallback ContentRendered khi không có tick, decode file khởi chạy đang chạy khi Show() trả về với đúng key, bỏ qua file không hỗ trợ/RAW).
+19 mutant đều bị giết: show cmd thật thay SW_HIDE, bỏ gán WindowState, bỏ nhánh monitor đã rút, quy tắc trạng thái, không uncloak, lộ ở tick 1,
+đếm tick trước khi hiện, không huỷ đăng ký render, bỏ qua DWM từ chối, không hẹn giờ, không cloak, placement sau khi hiện, không NoteShown,
+không prewarm, không lọc định dạng, không fallback ContentRendered, hộp decode không lấy từ client rect (2 mutant đầu tiên viết sai được viết lại).
+`WindowsDwmCloak` (P/Invoke mỏng) không có test riêng: trên desktop ẩn của test runner DWM có thể từ chối; seam `StartupWindowReveal.SetCloaked` thay nó trong test.
+
 ## Rủi ro / giới hạn
 
 - Màn hình tắt suốt phiên đo; tuyệt đối của (c) có thể khác khi bật màn hình. Khung trắng/đen chỉ người dùng xác nhận được bằng mắt.
