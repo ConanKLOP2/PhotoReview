@@ -258,7 +258,7 @@ public sealed class OperationJournal
             }
             var text = new StringBuilder();
             foreach (var entry in entries)
-                text.Append(JsonSerializer.Serialize(entry)).Append(Environment.NewLine);
+                text.Append(JsonSerializer.Serialize(entry, JournalJsonContext.Default.JournalEntry)).Append(Environment.NewLine);
             var durable = _durability() == JournalDurability.PowerLossSafe;
             using var stream = OpenAppendWithRetry(durable);
             // A crash (of any process sharing this journal) can leave a partial last line; appending straight after it
