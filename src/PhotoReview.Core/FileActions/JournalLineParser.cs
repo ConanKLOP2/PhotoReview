@@ -25,11 +25,6 @@ internal static class JournalLineParser
     [ThreadStatic] private static int t_type;
     [ThreadStatic] private static int t_state;
 
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        Converters = { new RecordingConverter<FileOperationType>(isType: true), new RecordingConverter<JournalState>(isType: false) },
-    };
-
     public static JournalEntry? TryParse(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
@@ -37,7 +32,7 @@ internal static class JournalLineParser
         t_state = 0;
         try
         {
-            return Accept(JsonSerializer.Deserialize<JournalEntry>(line, Options));
+            return Accept(JsonSerializer.Deserialize(line, JournalLineJsonContext.Default.JournalEntry));
         }
         catch (JsonException)
         {
@@ -52,7 +47,7 @@ internal static class JournalLineParser
         t_state = 0;
         try
         {
-            return Accept(JsonSerializer.Deserialize<JournalEntry>(utf8Line, Options));
+            return Accept(JsonSerializer.Deserialize(utf8Line, JournalLineJsonContext.Default.JournalEntry));
         }
         catch (JsonException)
         {
@@ -92,22 +87,40 @@ internal static class JournalLineParser
         _ => false,
     };
 
-    private sealed class RecordingConverter<T>(bool isType) : JsonConverter<T> where T : struct, Enum
+    /// <summary>Records whether the Type token was recognized (WP-11: a concrete, parameterless converter so the source-generated
+    /// <see cref="JournalLineJsonContext"/> can list it).</summary>
+    internal sealed class TypeRecordingConverter : JsonConverter<FileOperationType>
     {
-        private readonly LenientEnumConverter<T> _inner = new();
+        private readonly LenientEnumConverter<FileOperationType> _inner = new();
 
         // A null token must reach Read (recorded as not recognized), exactly like JsonValueKind.Null failed the old check.
         public override bool HandleNull => true;
 
-        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override FileOperationType Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var known = IsKnown<T>(ref reader, isType ? "Delete" : null) ? 1 : 2;
-            if (isType) t_type = known;
-            else t_state = known;
+            t_type = IsKnown<FileOperationType>(ref reader, "Delete") ? 1 : 2;
             return _inner.Read(ref reader, typeToConvert, options);
         }
 
-        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
+        public override void Write(Utf8JsonWriter writer, FileOperationType value, JsonSerializerOptions options) =>
+            _inner.Write(writer, value, options);
+    }
+
+    /// <summary>Records whether the State token was recognized (see <see cref="TypeRecordingConverter"/>).</summary>
+    internal sealed class StateRecordingConverter : JsonConverter<JournalState>
+    {
+        private readonly LenientEnumConverter<JournalState> _inner = new();
+
+        // A null token must reach Read (recorded as not recognized), exactly like JsonValueKind.Null failed the old check.
+        public override bool HandleNull => true;
+
+        public override JournalState Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            t_state = IsKnown<JournalState>(ref reader, null) ? 1 : 2;
+            return _inner.Read(ref reader, typeToConvert, options);
+        }
+
+        public override void Write(Utf8JsonWriter writer, JournalState value, JsonSerializerOptions options) =>
             _inner.Write(writer, value, options);
     }
 }
