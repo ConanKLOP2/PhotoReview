@@ -148,9 +148,9 @@ public sealed class WicCacheImageIoTests
     [Fact(DisplayName = "WP-04: only E_OUTOFMEMORY is classified as out-of-memory (a resource failure, never 'corrupt entry')")]
     public void IsOutOfMemory_OnlyForEOutOfMemory()
     {
-        Assert.True(WicCacheImageReader.IsOutOfMemory(new COMException("oom", unchecked((int)0x8007000E))));
-        Assert.False(WicCacheImageReader.IsOutOfMemory(new COMException("bad image", unchecked((int)0x88982F60))));
-        Assert.False(DiskCacheStore.IsCacheEntryFailure(new OutOfMemoryException()));
+        Assert.True(WicCacheImageReader.IsOutOfMemory(new FakeCom(unchecked((int)0x8007000E))));
+        Assert.False(WicCacheImageReader.IsOutOfMemory(new FakeCom(unchecked((int)0x88982F60))));
+        Assert.False(DiskCacheStore.IsCacheEntryFailure(new InsufficientMemoryException()));
     }
 
     [Fact(DisplayName = "WP-04: encoding a disposed buffer or a null stream fails fast without leaving a half-written file")]
@@ -163,4 +163,6 @@ public sealed class WicCacheImageIoTests
         using var live = LegacyWpfPreviewCache.PatternPixels(8, 8, PixelLayout.Bgr32);
         Assert.Throws<ArgumentNullException>(() => WicImageEncoder.EncodePng(live, null!));
     }
+
+    private sealed class FakeCom(int hresult) : COMException("fake", hresult);
 }

@@ -94,8 +94,8 @@ internal static class WicCacheImageReader
             catch (COMException ex) when (IsOutOfMemory(ex))
             {
                 // Hết bộ nhớ không phải "entry hỏng": COMException là lỗi entry theo IsCacheEntryFailure (xoá entry, giải mã lại từ
-                // nguồn), còn OutOfMemoryException thì lan lên và entry nguyên vẹn được giữ.
-                throw new OutOfMemoryException("Not enough memory to decode the cache entry.", ex);
+                // nguồn), còn InsufficientMemoryException (con của OutOfMemoryException) thì lan lên và entry nguyên vẹn được giữ.
+                throw new InsufficientMemoryException("Not enough memory to decode the cache entry.", ex);
             }
             finally
             {
