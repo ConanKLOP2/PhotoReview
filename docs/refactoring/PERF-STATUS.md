@@ -40,3 +40,5 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-07 -- TieredPGO=0 confirmation (48 runs): P50 -8.6 %, P95 +8 %, not adopted](perf/2026-10-07-tieredpgo-confirmation.md)
 - [2026-10-10 -- Mở ảnh từ Explorer: ảnh đầu, khung trắng lúc khởi động, so sánh v2.0.200-380 (không hồi quy ở v240)](perf/2026-10-10-startup-first-image.md)
 - [2026-10-10 -- P-1 "WPF nhanh": ảnh đầu từ Explorer R2R 1127 -> 782 ms, build 1321 -> 915 ms (chưa đạt NW-5 <= 600 ms); thí nghiệm self-contained + composite R2R -140..-160 ms](perf/2026-10-10-p1-startup-in-wpf.md)
+- [2026-10-10 -- WP-03 WIC decode ra PixelBuffer: 24 MP -> 1920 px, new so với master -1.8 % gộp / +2.9 % lượt yên (trong ngưỡng 5 %)](perf/2026-10-10-wp03-wic-decode.md)
+- [2026-10-10 -- WP-05 TurboJpeg ra PixelBuffer (fine-scale vs WIC Fant)](perf/2026-10-10-wp05-native-pixelbuffer.md)

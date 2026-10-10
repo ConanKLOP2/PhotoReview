@@ -74,6 +74,10 @@ Lỗ hổng test đã có PR riêng, mỗi PR đã kiểm XANH trên master và 
 - Khởi động: NW-5 (<= 600 ms R2R) chưa đạt (782 ms). Bước kế: (a) self-contained + R2R composite (-140 ms, 174 MB),
   (b) hoãn UI thấy được tới sau ảnh đầu (-100 ms). P-STARTUP-FIRST-IMAGE: liên kết .jpg đang trỏ bản build; bản publish R2R nhanh hơn
   150-250 ms. Chế độ chạy nền (giữ tiến trình, khay): người dùng chọn nhầm rồi huỷ, chưa làm, hỏi lại.
+- ĐÃ CHỐT 2026-10-10 (người dùng chọn b): fine-scale của WP-05 dùng **WIC Fant (IWICBitmapScaler)**, không dùng PixelAreaResampler
+  tự viết (chậm hơn WIC 30-90 %, vượt ngưỡng 5 %). WP-06 nối codec theo hướng này; đo lại benchmark lúc máy yên.
+- ĐÃ LÀM 2026-10-10: liên kết .jpg trỏ bản publish R2R `C:\MyProjects\PhotoReview\publish-r2r` (15 MB, phụ thuộc framework,
+  git-ignored cục bộ); phải publish lại sau mỗi lần merge mã. Phương án 174 MB (self-contained + composite) chưa chọn.
 - Native AOT (đợt 5): cần MSVC x64 và Windows 11 SDK (4-5 GB); ổ C: gần đầy (14 GB trống), dọn `work/diag/tune-runs`.
 - Sửa Fit width/Fit height lệch 5 DIP (nửa độ dày thanh cuộn) trong PointerInputController: PR riêng trên app WPF.
 

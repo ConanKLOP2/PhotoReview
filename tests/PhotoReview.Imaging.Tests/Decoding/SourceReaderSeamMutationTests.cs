@@ -97,7 +97,7 @@ public sealed class SourceReaderSeamMutationTests : IDisposable
     {
         var reader = new RecordingReader();
 
-        var decoded = new WicDirectDecoder(reader).Decode(new DecodeRequest(_plain, 0, Priority: SourceReadPriority.Preload));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance, reader).Decode(new DecodeRequest(_plain, 0, Priority: SourceReadPriority.Preload));
 
         Assert.Equal(64, decoded.PixelWidth);
         var call = Assert.Single(reader.Calls);
@@ -109,7 +109,7 @@ public sealed class SourceReaderSeamMutationTests : IDisposable
     {
         var reader = new RecordingReader();
 
-        var info = new WicDirectDecoder(reader).ReadInfo(_plain);
+        var info = new WicDirectDecoder(WpfBitmapSourceCodec.Instance, reader).ReadInfo(_plain);
 
         Assert.Equal((64, 48), (info.Width, info.Height));
         var call = Assert.Single(reader.Calls);

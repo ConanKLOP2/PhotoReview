@@ -123,8 +123,8 @@ public sealed class ErrorHandlingReviewDecodingTests : IDisposable
     {
         var path = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_root.Path, "ok.jpg"), 64, 48);
 
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, TargetWidth: 0));
-        var info = new WicDirectDecoder().ReadInfo(path);
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, TargetWidth: 0));
+        var info = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path);
 
         Assert.Equal(64, decoded.PixelWidth);
         Assert.Equal(64, info.Width);

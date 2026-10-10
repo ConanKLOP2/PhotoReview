@@ -32,7 +32,7 @@ public sealed class DecoderExifTests : IDisposable
     private static IImageDecoder Create(string backend) => backend switch
     {
         "Wpf" => new WpfBitmapImageDecoder(),
-        "WicDirect" => new WicDirectDecoder(),
+        "WicDirect" => new WicDirectDecoder(WpfBitmapSourceCodec.Instance),
         _ => new TurboJpegDecoder(),
     };
 
@@ -107,7 +107,7 @@ public sealed class DecoderExifTests : IDisposable
     {
         var bytes = ExifTestData.EncodeJpegWithExif();
         // Primary reports a different backend than registered, so FallbackImageDecoder re-wraps the image.
-        var decoder = new FallbackImageDecoder(new WpfBitmapImageDecoder(), PhotoReview.Core.Model.DecoderBackend.WicDirect, new WicDirectDecoder());
+        var decoder = new FallbackImageDecoder(new WpfBitmapImageDecoder(), PhotoReview.Core.Model.DecoderBackend.WicDirect, new WicDirectDecoder(WpfBitmapSourceCodec.Instance));
 
         var decoded = decoder.Decode(new DecodeRequest("x.jpg", new DecodeBox(16, 16), bytes: bytes));
 
@@ -123,7 +123,7 @@ public sealed class DecoderExifTests : IDisposable
 
         var parsed = ExifParser.TryParseJpeg(bytes);
         var wpf = new WpfBitmapImageDecoder().Decode(new DecodeRequest("x.jpg", new DecodeBox(16, 16), bytes: bytes)).Exif;
-        var wic = new WicDirectDecoder().Decode(new DecodeRequest("x.jpg", new DecodeBox(16, 16), bytes: bytes)).Exif;
+        var wic = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("x.jpg", new DecodeBox(16, 16), bytes: bytes)).Exif;
 
         ExifTestData.AssertFullCamera(parsed);
         Assert.Equal(parsed, wpf);
@@ -137,7 +137,7 @@ public sealed class DecoderExifTests : IDisposable
         PhotoReview.Imaging.Tests.Fixtures.FixtureGenerator.GeneratePng(path, 40, 30);
 
         Assert.Null(new WpfBitmapImageDecoder().Decode(new DecodeRequest(path, new DecodeBox(20, 20))).Exif);
-        Assert.Null(new WicDirectDecoder().Decode(new DecodeRequest(path, new DecodeBox(20, 20))).Exif);
+        Assert.Null(new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, new DecodeBox(20, 20))).Exif);
     }
 
     /// <summary>
@@ -165,7 +165,7 @@ public sealed class DecoderExifTests : IDisposable
         queries.Stop();
         ExifTestData.AssertFullCamera(last);
 
-        var decoder = new WicDirectDecoder();
+        var decoder = new WicDirectDecoder(WpfBitmapSourceCodec.Instance);
         var request = new DecodeRequest("x.jpg", new DecodeBox(960, 640), bytes: bytes);
         decoder.Decode(request); // warm-up
         var decode = Stopwatch.StartNew();

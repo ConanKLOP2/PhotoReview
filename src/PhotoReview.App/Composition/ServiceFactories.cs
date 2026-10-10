@@ -2,6 +2,7 @@ using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.LibRaw;
 using PhotoReview.Imaging.Raw;
@@ -24,10 +25,15 @@ internal static class ServiceFactories
         => new(journal, fileSystem, clock, recycleBin,
             () => settingsStore.Current.AllowPermanentDeleteWithoutRecycleBin, fileActionGate);
 
+    /// <param name="codec">
+    /// WP-05: null (the WPF app today) keeps LibRaw's last-resort decoder on the WPF <c>BitmapSource</c> path; the Win32 shell passes
+    /// its codec so that decoder writes straight into a <c>PixelBuffer</c>.
+    /// </param>
     public static RawDecoder CreateRawDecoder(IImageDecoder standardDecoder, ISourceReader sourceReader,
-        SourceBytesCache? sourceBytesCache)
+        SourceBytesCache? sourceBytesCache, IPlatformImageCodec? codec = null)
         => CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache,
-            LibRawAvailability.Probe, () => new LibRawPreviewFallback(), () => new LibRawDecoder());
+            LibRawAvailability.Probe, () => new LibRawPreviewFallback(),
+            () => codec is null ? new LibRawDecoder() : new LibRawDecoder(codec));
 
     internal static RawDecoder CreateRawDecoder(IImageDecoder standardDecoder, ISourceReader sourceReader,
         SourceBytesCache? sourceBytesCache, DecoderProviders.LibRawProbe libRawProbe,
@@ -46,7 +52,7 @@ internal static class ServiceFactories
     /// through the shared <paramref name="sourceReader"/>.
     /// </summary>
     public static IImageDecoder CreateWebpHeicDecoder(ISourceReader sourceReader, ILog? log, ReviewMetrics? metrics)
-        => new FallbackImageDecoder(new WicDirectDecoder(sourceReader), DecoderBackend.WicDirect,
+        => new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance, sourceReader), DecoderBackend.WicDirect,
             new WpfBitmapImageDecoder(sourceReader), log, metrics);
 
     /// <summary>

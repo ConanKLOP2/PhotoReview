@@ -267,7 +267,7 @@ public sealed class RawDecoderTests
             File.WriteAllBytes(taggedPath, taggedJpeg);
             File.WriteAllBytes(rawPath, SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: untaggedPreview));
 
-            var wic = new WicDirectDecoder();
+            var wic = new WicDirectDecoder(WpfBitmapSourceCodec.Instance);
             var expected = wic.Decode(new DecodeRequest(taggedPath, DecodeBox.Unbounded));
             var actual = new RawDecoder(wic).Decode(new DecodeRequest(rawPath, DecodeBox.Unbounded));
             var comparison = ImageCompare.Compare(expected, actual);
