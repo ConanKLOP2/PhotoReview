@@ -1,10 +1,11 @@
 using System.Runtime.InteropServices;
+using PhotoReview.App.Windowing;
 
 namespace PhotoReview.App.Services;
 
 /// <summary>
 /// P-1 startup: predicts, before the main window exists, the client area it will be shown with (the saved placement,
-/// restored before the show by <see cref="WindowPlacementService.RestoreBeforeShow"/>), so the launch file's decode can
+/// restored before the show by the window placement adapter, <c>WindowPlacementService.RestoreBeforeShow</c>), so the launch file's decode can
 /// start right after config.json is read instead of when the window is shown (~450 ms later). The prediction only picks
 /// the decode box: when it is wrong the presenter's own request (keyed by the real viewport) decodes again, as before.
 /// </summary>
@@ -39,13 +40,13 @@ internal static class InitialViewportPredictor
     /// <paramref name="placement"/> (null: first start, the XAML default size on the primary monitor).
     /// </summary>
     /// <returns>The predicted box, or null when no prediction is possible.</returns>
-    public static DecodeBox? PredictDecodeBox(WindowPlacementService.WindowPlacement? placement, double defaultWidthDip, double defaultHeightDip, double qualityMultiplier)
+    public static DecodeBox? PredictDecodeBox(WindowPlacementData? placement, double defaultWidthDip, double defaultHeightDip, double qualityMultiplier)
     {
         try
         {
-            var maximized = placement is not null && WindowPlacementService.PlanStateBeforeShow(placement.ShowCommand) == System.Windows.WindowState.Maximized;
-            var normal = placement is null ? (PixelRect?)null : ToPixelRect(placement.NormalPosition);
-            var onScreen = normal is { } n && WindowPlacementService.IsVisible(placement!.NormalPosition);
+            var maximized = placement is not null && WindowPlacementRules.PlanStateBeforeShow(placement.ShowCommand) == WindowShowState.Maximized;
+            var normal = placement is null ? (PixelRect?)null : new PixelRect(placement.NormalLeft, placement.NormalTop, placement.NormalRight, placement.NormalBottom);
+            var onScreen = normal is { } n && WindowPlacementVisibility.IsVisible(n.Left, n.Top, n.Right, n.Bottom, VisibleAreas());
             // Same rule as RestoreBeforeShow: an off-screen Normal placement is ignored (default size), an off-screen
             // Maximized one still maximizes, on the monitor Windows picks for a new window (the primary one).
             var monitor = onScreen
@@ -78,7 +79,9 @@ internal static class InitialViewportPredictor
         return awareness == DpiAwarenessUnaware ? 96u : GetDpiForSystem();
     }
 
-    private static PixelRect ToPixelRect(WindowPlacementService.Rectangle r) => new(r.Left, r.Top, r.Right, r.Bottom);
+    private static List<System.Drawing.Rectangle> VisibleAreas() =>
+        [.. Win32MonitorLayout.Instance.WorkAreas().Select(w => System.Drawing.Rectangle.FromLTRB(w.Left, w.Top, w.Right, w.Bottom))];
+
     private static PixelRect ToPixelRect(Rect r) => new(r.Left, r.Top, r.Right, r.Bottom);
     private static Rect ToRect(PixelRect r) => new() { Left = r.Left, Top = r.Top, Right = r.Right, Bottom = r.Bottom };
 
