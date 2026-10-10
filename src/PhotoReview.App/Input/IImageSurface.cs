@@ -1,4 +1,3 @@
-using System.Windows;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.App.Input;
@@ -33,10 +32,10 @@ internal interface IImageSurface
     Task YieldToRenderAsync();
 
     /// <summary>The image element's top-left corner in ImageScroll coordinates.</summary>
-    Point ImageOrigin { get; }
+    PointD ImageOrigin { get; }
 
     /// <summary>Translates an ImageScroll point into image-element coordinates.</summary>
-    Point ToImageElement(Point surfacePoint);
+    PointD ToImageElement(PointD surfacePoint);
 
     double ImageActualWidth { get; }
     double ImageActualHeight { get; }
@@ -73,5 +72,5 @@ internal interface IImageSurface
     /// viewport (or its position is not available, e.g. the window is not active). Used to anchor a keyboard/menu
     /// zoom at the cursor (<see cref="PhotoReview.Core.Model.KeyboardZoomAnchor.Pointer"/>).
     /// </summary>
-    Point? PointerPosition { get; }
+    PointD? PointerPosition { get; }
 }

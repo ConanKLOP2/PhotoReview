@@ -1,5 +1,6 @@
 using System.Windows.Threading;
 using PhotoReview.App.Services;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.TestSupport.Windows;
 
 namespace PhotoReview.App.Tests.Services;
@@ -103,6 +104,123 @@ public sealed class DispatcherUiSchedulerTests
 
         Assert.Throws<ArgumentNullException>(() => scheduler.Post(null!));
         Assert.Throws<ArgumentNullException>(() => { _ = scheduler.InvokeAsync(null!); });
+    }
+
+    // ---- C-04: IUiDispatcher (priorities map by name onto DispatcherPriority) ----
+
+    [Theory]
+    [InlineData(UiPriority.Send, DispatcherPriority.Send)]
+    [InlineData(UiPriority.Normal, DispatcherPriority.Normal)]
+    [InlineData(UiPriority.Render, DispatcherPriority.Render)]
+    [InlineData(UiPriority.Background, DispatcherPriority.Background)]
+    [InlineData((UiPriority)99, DispatcherPriority.Normal)]
+    public void ToDispatcherPriority_MapsByName(UiPriority priority, DispatcherPriority expected)
+    {
+        Assert.Equal(expected, DispatcherUiScheduler.ToDispatcherPriority(priority));
+    }
+
+    [Fact]
+    public async Task CheckAccess_IsTrueOnTheDispatcherThreadAndFalseElsewhere()
+    {
+        using var ui = new DispatcherThread();
+        var scheduler = new DispatcherUiScheduler(ui.Dispatcher);
+
+        var onUi = await ui.Dispatcher.InvokeAsync(scheduler.CheckAccess).Task.WaitAsync(Bound);
+
+        Assert.IsAssignableFrom<IUiDispatcher>(scheduler); // C-04: shared code depends on the interface only
+        Assert.True(onUi);
+        Assert.False(scheduler.CheckAccess());
+    }
+
+    [Fact]
+    public async Task Post_WithPriority_RunsInPriorityOrderNotInPostOrder()
+    {
+        using var ui = new DispatcherThread();
+        var scheduler = new DispatcherUiScheduler(ui.Dispatcher);
+        var order = new List<string>();
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Queued from inside the dispatcher thread so every item is pending before any of them can run.
+        await scheduler.InvokeAsync(() =>
+        {
+            scheduler.Post(() => { order.Add("background"); done.SetResult(); }, UiPriority.Background);
+            scheduler.Post(() => order.Add("render"), UiPriority.Render);
+            scheduler.Post(() => order.Add("normal"), UiPriority.Normal);
+            scheduler.Post(() => order.Add("send"), UiPriority.Send);
+        }).WaitAsync(Bound);
+        await done.Task.WaitAsync(Bound);
+
+        Assert.Equal(["send", "normal", "render", "background"], order);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_WithPriority_RunsInPriorityOrderAndCompletesItsTask()
+    {
+        using var ui = new DispatcherThread();
+        var scheduler = new DispatcherUiScheduler(ui.Dispatcher);
+        var order = new List<string>();
+        Task? background = null, normal = null;
+
+        await scheduler.InvokeAsync(() =>
+        {
+            background = scheduler.InvokeAsync(() => order.Add("background"), UiPriority.Background);
+            normal = scheduler.InvokeAsync(() => order.Add("normal"), UiPriority.Normal);
+        }).WaitAsync(Bound);
+        await Task.WhenAll(background!, normal!).WaitAsync(Bound);
+
+        Assert.Equal(["normal", "background"], order);
+    }
+
+    [Fact]
+    public async Task YieldAsync_WithPriority_ResumesAtThatPriority()
+    {
+        using var ui = new DispatcherThread();
+        var scheduler = new DispatcherUiScheduler(ui.Dispatcher);
+        var order = new List<string>();
+
+        await ui.Dispatcher.InvokeAsync(async () =>
+        {
+            var bg = scheduler.InvokeAsync(() => order.Add("background"), UiPriority.Background);
+            var normal = scheduler.InvokeAsync(() => order.Add("normal"), UiPriority.Normal);
+            await scheduler.YieldAsync(UiPriority.Render); // above Background, below Normal
+            order.Add("resumed");
+            await Task.WhenAll(bg, normal);
+        }).Task.Unwrap().WaitAsync(Bound);
+
+        Assert.Equal(["normal", "resumed", "background"], order);
+    }
+
+    [Fact]
+    public async Task UnprioritisedCalls_UseNormalForPostAndInvoke_AndBackgroundForYield()
+    {
+        using var ui = new DispatcherThread();
+        var scheduler = new DispatcherUiScheduler(ui.Dispatcher);
+        var order = new List<string>();
+        Task? invoked = null;
+
+        await ui.Dispatcher.InvokeAsync(async () =>
+        {
+            var bg = scheduler.InvokeAsync(() => order.Add("background"), UiPriority.Background);
+            var render = scheduler.InvokeAsync(() => order.Add("render"), UiPriority.Render);
+            scheduler.Post(() => order.Add("post"));          // IUiScheduler.Post = Normal: before render and background
+            invoked = scheduler.InvokeAsync(() => order.Add("invoke")); // IUiScheduler.InvokeAsync = Normal
+            await scheduler.YieldAsync();                      // IUiScheduler.YieldAsync = Background: after render
+            order.Add("resumed");
+            await Task.WhenAll(bg, render, invoked);
+        }).Task.Unwrap().WaitAsync(Bound);
+
+        Assert.Equal(["post", "invoke", "render", "background", "resumed"], order);
+    }
+
+    [Fact]
+    public async Task YieldAsync_WithPriority_AlreadyCancelledToken_Throws()
+    {
+        using var ui = new DispatcherThread();
+        var scheduler = new DispatcherUiScheduler(ui.Dispatcher);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await scheduler.YieldAsync(UiPriority.Render, cts.Token));
     }
 
     private sealed class DispatcherThread : IDisposable

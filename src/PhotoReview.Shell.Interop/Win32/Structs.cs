@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace PhotoReview.Shell.Interop;
 
@@ -97,7 +97,8 @@ internal struct InputMessageSource
 }
 
 /// <summary>TASKDIALOG_BUTTON.</summary>
-[StructLayout(LayoutKind.Sequential)]
+// commctrl.h bao TASKDIALOG_BUTTON/TASKDIALOGCONFIG trong pshpack1.h: Pack = 1 (sửa lỗi bố cục của WP-13a, phát hiện ở WP-19a: E_INVALIDARG).
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal unsafe struct TaskDialogButton
 {
     public int Id;
@@ -105,7 +106,7 @@ internal unsafe struct TaskDialogButton
 }
 
 /// <summary>TASKDIALOGCONFIG. Các trường chuỗi là PCWSTR (con trỏ do bên gọi giữ sống); union icon là nint.</summary>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal unsafe struct TaskDialogConfig
 {
     public uint Size;
@@ -133,3 +134,4 @@ internal unsafe struct TaskDialogConfig
     public nint CallbackData;
     public uint Width;
 }
+

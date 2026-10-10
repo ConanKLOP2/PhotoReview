@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using PhotoReview.App.Input;
 using PhotoReview.App.Services;
 
 namespace PhotoReview.App.Tests.Services;
@@ -6,11 +7,11 @@ namespace PhotoReview.App.Tests.Services;
 public class ShortcutKeyNameTests
 {
     [Theory(DisplayName = "Real command keys parse, case-insensitively and trimmed")]
-    [InlineData("Right", Key.Right)]
-    [InlineData(" delete ", Key.Delete)]
-    [InlineData("F11", Key.F11)]
-    [InlineData("Space", Key.Space)]
-    public void TryParse_ValidKey_Parses(string name, Key expected)
+    [InlineData("Right", KeyId.Right)]
+    [InlineData(" delete ", KeyId.Delete)]
+    [InlineData("F11", KeyId.F11)]
+    [InlineData("Space", KeyId.Space)]
+    public void TryParse_ValidKey_Parses(string name, KeyId expected)
     {
         Assert.True(ShortcutKeyName.TryParse(name, out var key));
         Assert.Equal(expected, key);

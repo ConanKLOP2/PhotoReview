@@ -121,8 +121,8 @@ public sealed class FitViewControllerTests
         ViewportHeight: 600,
         HorizontalOffset: 0,
         VerticalOffset: 0,
-        HorizontalScrollbarVisibility: Visibility.Collapsed,
-        VerticalScrollbarVisibility: Visibility.Collapsed);
+        HorizontalScrollBarVisible: false,
+        VerticalScrollBarVisible: false);
 
     private sealed class FakeFitSurface : IFitSurface
     {
