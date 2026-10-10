@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using PhotoReview.App.Input;
 using PhotoReview.App;
+using PhotoReview.App.Services;
 using PhotoReview.TestSupport.Golden;
 
 namespace PhotoReview.Integration.Tests.Golden;
@@ -65,19 +66,20 @@ internal static class InputScriptRecorder
 
     private static async Task ExecuteAsync(GoldenWpfView view, GoldenInputStep step)
     {
-        var point = new Point(step.X, step.Y);
+        var wpfPoint = new Point(step.X, step.Y);
+        var point = wpfPoint.ToPointD();
         switch (step.Kind)
         {
             case "wheel":
             case "hwheel":
-                view.Mouse.Position = point;
+                view.Mouse.Position = wpfPoint;
                 await view.Pointer.OnWheelAsync(
                     new WheelInput(step.Delta, step.Kind == "hwheel", HasModifier(step.Modifiers, "Control"), step.TimestampMs,
                         step.Key == "Touchpad" ? WheelDeviceHint.Touchpad : WheelDeviceHint.Unknown),
                     point);
                 break;
             case "press":
-                view.Mouse.Position = point;
+                view.Mouse.Position = wpfPoint;
                 view.Pointer.OnWindowPreviewMouseDown(); // Window.PreviewMouseDown tunnels first, for every button
                 if (step.Key == "Middle")
                 {
@@ -87,16 +89,16 @@ internal static class InputScriptRecorder
                 }
                 else
                 {
-                    view.Pointer.OnImagePress(MouseButton.Left, Math.Max(1, step.Delta), point, step.TimestampMs);
+                    view.Pointer.OnImagePress(PointerButton.Left, Math.Max(1, step.Delta), point, step.TimestampMs);
                     view.LeftButtonDown = true;
                 }
                 break;
             case "move":
-                view.Mouse.Position = point;
+                view.Mouse.Position = wpfPoint;
                 view.Pointer.OnImageMove(view.LeftButtonDown, point, step.TimestampMs);
                 break;
             case "release":
-                view.Mouse.Position = point;
+                view.Mouse.Position = wpfPoint;
                 view.Pointer.OnImageRelease(point, step.TimestampMs);
                 view.LeftButtonDown = false;
                 break;
@@ -125,10 +127,10 @@ internal static class InputScriptRecorder
         var key = Enum.Parse<Key>(step.Key ?? throw new InvalidOperationException("key step without Key"));
         var modifiers = ModifiersOf(step.Modifiers);
         var repeat = HasModifier(step.Modifiers, "Repeat");
-        var arrowConsumed = modifiers == ModifierKeys.None && view.Pointer.TryPanByArrow(key, repeat);
+        var arrowConsumed = modifiers == ModifierKeys.None && view.Pointer.TryPanByArrow(key.ToKeyId(), repeat);
         if (arrowConsumed) return;
         view.Pointer.StopKinetic();
-        var command = view.Router.TryResolve(key, Key.None, modifiers, isFullscreen: false, hasImage: true,
+        var command = view.Router.TryResolve(key.ToKeyId(), KeyId.None, modifiers.ToKeyModifiers(), isFullscreen: false, hasImage: true,
             hasComparePair: false, isCompareVisible: false, hasCapturePair: false);
         if (command is null) return;
         if (repeat && command.Value.Type.IgnoresAutoRepeat()) return;

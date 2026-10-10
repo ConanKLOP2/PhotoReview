@@ -238,8 +238,8 @@ internal sealed class ScriptedSurface(WpfImageSurface inner, Action relayout, Sc
     public void UpdateLayout() => relayout();
 
     public Task YieldToRenderAsync() => inner.YieldToRenderAsync();
-    public Point ImageOrigin => inner.ImageOrigin;
-    public Point ToImageElement(Point surfacePoint) => inner.ToImageElement(surfacePoint);
+    public PointD ImageOrigin => inner.ImageOrigin;
+    public PointD ToImageElement(PointD surfacePoint) => inner.ToImageElement(surfacePoint);
     public double ImageActualWidth => inner.ImageActualWidth;
     public double ImageActualHeight => inner.ImageActualHeight;
     public (double Width, double Height)? SourceSize => inner.SourceSize;
@@ -254,12 +254,12 @@ internal sealed class ScriptedSurface(WpfImageSurface inner, Action relayout, Sc
     public TimeSpan? RenderingTime(EventArgs e) => e is ScriptedFrameArgs frame ? frame.RenderingTime : null;
     public long Timestamp => Ticks;
     public DisplayTiming? DisplayTiming => null;
-    public Point? PointerPosition
+    public PointD? PointerPosition
     {
         get
         {
             var position = mouse.Position;
-            return position.X >= 0 && position.Y >= 0 && position.X <= ViewportWidth && position.Y <= ViewportHeight ? position : null;
+            return position.X >= 0 && position.Y >= 0 && position.X <= ViewportWidth && position.Y <= ViewportHeight ? new PointD(position.X, position.Y) : null;
         }
     }
 
