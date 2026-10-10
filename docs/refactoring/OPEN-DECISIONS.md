@@ -106,4 +106,9 @@ added without frontmatter or without re-running the generator.
 | NOWPF-WP13A | WP-13a (đợt 1 của NO-WPF-EXEC-PLAN, 2026-10-10): khai báo interop Win32 (user32/kernel32/gdi32/dwmapi/shcore/comctl32/ole32/shell32) trong
 `src/PhotoReview.Shell.Interop/Win32/*` bằng LibraryImport, struct blittable và hằng; `InteropSignatureTests` (14 ca) kiểm kích thước/offset
 struct và gọi thử 4 hàm an toàn; mutation M1 (đổi kiểu một trường struct) và M2 (sai EntryPoint) đều bị bắt. Hợp đồng v1 không đổi. [Detail](decisions/NOWPF-WP13A-INTEROP.md) |
+| NOWPF-WP19A | WP-19a (đợt 2 của NO-WPF-EXEC-PLAN, 2026-10-10): `Shell.Win32/Dialogs/*` - `Win32DialogService : IDialogService` (xác nhận/thông báo/lỗi bằng
+TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ phụ uỷ qua `ISecondaryWindowPort` nạp lười), `Win32ClipboardService`
+(OpenClipboard/SetClipboardData, thử lại 5 x 20 ms) và sửa lỗi bố cục WP-13a: TASKDIALOGCONFIG/TASKDIALOG_BUTTON phải Pack = 1 (160/12 byte).
+16 test mới + 2 test chữ ký đã sửa; mutation 10/10 bị bắt. Hợp đồng v1 không đổi; còn chờ nối COM IFileOpenDialog (WP-13b) và
+`IClipboardService` dời sang App.Shared (WP-09). [Detail](decisions/NOWPF-WP19A-DIALOGS.md) |
 <!-- END GENERATED DECIDED TABLE -->
