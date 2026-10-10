@@ -1,0 +1,300 @@
+using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Windows;
+using System.Windows.Input;
+using PhotoReview.App.Coordinators;
+using PhotoReview.App.Input;
+using PhotoReview.App.ViewModels;
+using PhotoReview.TestSupport.Golden;
+
+namespace PhotoReview.App.Tests.Viewport;
+
+/// <summary>
+/// WP-16 / G-INPUT: chạy một <see cref="GoldenInputScript"/> (C-17) qua <see cref="PointerInputController"/> và
+/// <see cref="FitViewController"/> THẬT trên engine thuần (<see cref="EngineImageSurface"/>), đồng hồ và dấu thời gian cố định,
+/// rồi trả checkpoint cùng dạng golden. Bản Win32 (WP-22) dùng cùng runner với <c>ViewportController</c> khi C-07 sang App.Shared.
+/// <para>Từ vựng bước (phải khớp bộ ghi WP-10 khi nó merge - lead đối chiếu; bước lạ làm test đỏ, không bị bỏ qua):
+/// <c>wheel</c>/<c>hwheel</c> (Delta, X, Y, Modifiers chứa Control = Ctrl, TimestampMs); <c>press</c> (nút trái, Delta = số click,
+/// mặc định 1) / <c>move</c> / <c>release</c> (X, Y, TimestampMs); <c>key</c> (Key = Left/Right/Up/Down, Delta != 0 = auto-repeat);
+/// <c>command</c> (Fit, FitWidth, FitWidth2, FitHeight, ZoomIn, ZoomOut, ActualSize, ClickZoom, ClickZoomLevel với Delta = %);
+/// <c>frame</c> (TimestampMs = RenderingTime); <c>resize</c> (X = rộng, Y = cao, DIP). Checkpoint <c>AfterStep</c> = chỉ số bước
+/// (0-based) mà sau đó trạng thái được đọc; -1 = ngay sau khi ảnh hiện với InitialViewMode.</para>
+/// </summary>
+internal static class InputScriptRunner
+{
+    public static List<GoldenCheckpoint> Run(GoldenInputScript script)
+    {
+        // Bộ ghi WP-10 (InputScriptRecorder.RunAsync): ảnh đầu hiện với cài đặt MẶC ĐỊNH, Fit, RỒI MỚI áp SettingsOverridesJson.
+        var settings = new AppSettings();
+        var viewer = new ViewerState { DpiScale = script.Setup.DpiScale, ZoomStep = settings.KeyboardZoomStepPercent / 100.0 };
+        viewer.SetSourceSize(script.Setup.ImagePixelWidth, script.Setup.ImagePixelHeight, newImage: true);
+        var version = new ViewportOperationVersion();
+        var surface = new EngineImageSurface(viewer, script.Setup.ClientWidth, script.Setup.ClientHeight,
+            (script.Setup.ImagePixelWidth, script.Setup.ImagePixelHeight));
+        FitViewController? fit = null;
+        var pointer = new PointerInputController(surface, viewer, () => settings, version,
+            new PointerCommands(() => true, () => Task.CompletedTask, () => Task.CompletedTask, viewer.ZoomToActualSize, () => fit!.ApplyFitAsync()));
+        fit = new FitViewController(surface, viewer, version, pointer.CancelPan);
+        viewer.ZoomModeChanged += (_, _) => pointer.StopKinetic(); // MainWindow.WireViewModelEvents
+
+        leftDown = false;
+        var checkpoints = new List<GoldenCheckpoint>();
+        var wanted = script.Expected.Select(c => c.AfterStep).ToHashSet();
+        Drive(surface, pointer.ApplyInitialViewAsync(settings.InitialViewMode, settings.ClickZoomPercent));
+        Drive(surface, fit.ApplyFitAsync());
+        ApplySettings(script.Setup.SettingsOverridesJson, settings, viewer);
+        if (wanted.Contains(-1)) checkpoints.Add(Checkpoint(-1, viewer, surface));
+        for (var i = 0; i < script.Steps.Count; i++)
+        {
+            Apply(script.Steps[i], i, settings, surface, viewer, pointer, fit);
+            surface.Pump();
+            if (wanted.Contains(i)) checkpoints.Add(Checkpoint(i, viewer, surface));
+        }
+        return checkpoints;
+    }
+
+    [ThreadStatic] private static bool leftDown;
+
+    private static bool HasModifier(string? modifiers, string name) =>
+        modifiers is not null && modifiers.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Contains(name, StringComparer.Ordinal);
+
+    private static readonly JsonSerializerOptions SettingsOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    /// <summary>GoldenWpfView.ApplySettings: mặc định cho mọi script, rồi từng khoá override (không phân biệt hoa thường) và ZoomStep xuống viewer.</summary>
+    private static void ApplySettings(string? overridesJson, AppSettings settings, ViewerState viewer)
+    {
+        var defaults = new AppSettings();
+        foreach (var property in typeof(AppSettings).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+        {
+            if (property.CanRead && property.CanWrite && property.GetIndexParameters().Length == 0
+                && (property.PropertyType.IsValueType || property.PropertyType == typeof(string) || property.PropertyType == typeof(List<string>)))
+                property.SetValue(settings, property.GetValue(defaults));
+        }
+        if (!string.IsNullOrWhiteSpace(overridesJson))
+        {
+            using var document = JsonDocument.Parse(overridesJson);
+            foreach (var entry in document.RootElement.EnumerateObject())
+            {
+                var property = typeof(AppSettings).GetProperty(entry.Name,
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase)
+                    ?? throw new InvalidOperationException($"Unknown AppSettings property in golden setup: {entry.Name}");
+                property.SetValue(settings, JsonSerializer.Deserialize(entry.Value.GetRawText(), property.PropertyType, SettingsOptions));
+            }
+        }
+        viewer.ZoomStep = settings.KeyboardZoomStepPercent / 100.0;
+        viewer.ScalingQuality = settings.ScalingQuality;
+    }
+
+    private static void Apply(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, ViewerState viewer,
+        PointerInputController pointer, FitViewController fit)
+    {
+        var point = new PointD(step.X, step.Y);
+        var ctrl = HasModifier(step.Modifiers, "Control");
+        if (step.Kind is "wheel" or "hwheel" or "press" or "move" or "release") surface.ScriptedMouse = point;
+        switch (step.Kind)
+        {
+            case "wheel":
+            case "hwheel":
+                Drive(surface, pointer.OnWheelAsync(new WheelInput(step.Delta, step.Kind == "hwheel", ctrl, step.TimestampMs,
+                    step.Key == "Touchpad" ? WheelDeviceHint.Touchpad : WheelDeviceHint.Unknown), point));
+                break;
+            case "press":
+                pointer.OnWindowPreviewMouseDown(); // Window.PreviewMouseDown tunnels first, for every button
+                if (step.Key == "Middle")
+                {
+                    // ImageScroll_PreviewMouseDown: acts on the first press of a multi-click only.
+                    if (step.Delta <= 1 && MiddleClickResolver.Resolve(settings.MiddleClickAction) is { } middle)
+                        Drive(surface, CommandTask(step with { Command = middle.Type.ToString() }, index, settings, surface, viewer, pointer, fit));
+                }
+                else
+                {
+                    pointer.OnImagePress(PointerButton.Left, Math.Max(1, step.Delta), point, step.TimestampMs);
+                    leftDown = true;
+                }
+                break;
+            case "move":
+                pointer.OnImageMove(leftDown, point, step.TimestampMs);
+                break;
+            case "release":
+                pointer.OnImageRelease(point, step.TimestampMs);
+                leftDown = false;
+                break;
+            case "key":
+                Drive(surface, KeyTask(step, index, settings, surface, viewer, pointer, fit));
+                break;
+            case "command":
+                Drive(surface, CommandTask(step, index, settings, surface, viewer, pointer, fit));
+                break;
+            case "frame":
+                surface.Timestamp = (long)(step.TimestampMs * (System.Diagnostics.Stopwatch.Frequency / 1000.0));
+                surface.Frame(TimeSpan.FromMilliseconds(step.TimestampMs));
+                break;
+            case "resize":
+                surface.Resize(step.X, step.Y);
+                break;
+            default:
+                throw Unsupported(index, step);
+        }
+    }
+
+    /// <summary>
+    /// Từ vựng lệnh của bộ ghi WP-10 (InputScriptRecorder.CommandAsync/ExecuteCommandAsync): tên ReviewCommandType
+    /// (ToggleFit, ZoomActualSize, FitWidth, FitWidth2, FitHeight, ZoomIn, ZoomOut, ClickZoom) và các lệnh dựng cảnh
+    /// (SetClickZoomLevel X = %, ZoomToLevelMenu, SetDpi X = hệ số, LoadImage X/Y = px, SwapSourceSize X/Y = px).
+    /// Tên cũ của runner (Fit, ActualSize, ClickZoomLevel) giữ làm bí danh. Bước lạ vẫn ném NotSupportedException.
+    /// </summary>
+    private static Task CommandTask(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, ViewerState viewer,
+        PointerInputController pointer, FitViewController fit) => step.Command switch
+    {
+        "ToggleFit" or "Fit" => fit.ApplyFitAsync(),
+        "FitWidth" => pointer.FitWidthAsync(settings.FitWidthAnchor),
+        "FitWidth2" => pointer.FitWidthAsync(settings.FitWidthAnchor2),
+        "FitHeight" => pointer.FitHeightAsync(),
+        "ZoomIn" => pointer.ZoomInAsync(),
+        "ZoomOut" => pointer.ZoomOutAsync(),
+        "ZoomActualSize" or "ActualSize" => pointer.ZoomActualSizeAsync(),
+        "ClickZoom" => pointer.ToggleClickZoomAsync(),
+        "SetClickZoomLevel" => pointer.SetClickZoomLevelAsync((int)step.X),
+        "ClickZoomLevel" => pointer.SetClickZoomLevelAsync(step.Delta),
+        "Next" or "Previous" => Task.CompletedTask, // the recorder only counts navigation; nothing changes in the viewport
+        "ZoomToLevelMenu" => pointer.SetClickZoomLevelAsync(settings.ClickZoomPercent),
+        "SetDpi" => SetDpi(surface, viewer, step.X),
+        "LoadImage" => LoadImage(surface, viewer, pointer, settings, (int)step.X, (int)step.Y),
+        "SwapSourceSize" => SwapSourceSize(surface, viewer, (int)step.X, (int)step.Y),
+        _ => throw Unsupported(index, step),
+    };
+
+    private static Task SetDpi(EngineImageSurface surface, ViewerState viewer, double dpiScale)
+    {
+        viewer.DpiScale = dpiScale;
+        surface.UpdateFitSize(); // MainWindow.UpdateFitSize -> UpdateViewport (+ decode box): DpiScale feeds the Fit factor
+        return Task.CompletedTask;
+    }
+
+    private static Task LoadImage(EngineImageSurface surface, ViewerState viewer, PointerInputController pointer, AppSettings settings,
+        int width, int height)
+    {
+        pointer.OnCurrentIndexChanged(0);
+        surface.SetBitmap(width, height);
+        viewer.SetSourceSize(width, height, newImage: true);
+        surface.UpdateLayout();
+        if (viewer.IsFit) surface.UpdateFitSize();
+        surface.UpdateLayout();
+        return pointer.ApplyInitialViewAsync(settings.InitialViewMode, settings.ClickZoomPercent);
+    }
+
+    private static Task SwapSourceSize(EngineImageSurface surface, ViewerState viewer, int width, int height)
+    {
+        surface.SetBitmap(width, height);
+        viewer.SwapSourceSize(width, height);
+        surface.UpdateLayout();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// MainWindow.Window_KeyDown, the part that reaches the viewport (same as the WP-10 recorder's KeyAsync): arrow pan first (no
+    /// modifier), otherwise the shortcut router resolves the key to a ReviewCommand that is run by name. "Repeat" in
+    /// <see cref="GoldenInputStep.Modifiers"/> marks key auto-repeat.
+    /// </summary>
+    private static Task KeyTask(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, ViewerState viewer,
+        PointerInputController pointer, FitViewController fit)
+    {
+        if (step.Key is not { } name || !Enum.TryParse<KeyId>(name, out var key)) throw Unsupported(index, step);
+        bool Has(string flag) => HasModifier(step.Modifiers, flag);
+        var modifiers = KeyModifiers.None;
+        if (Has("Control")) modifiers |= KeyModifiers.Control;
+        if (Has("Shift")) modifiers |= KeyModifiers.Shift;
+        if (Has("Alt")) modifiers |= KeyModifiers.Alt;
+        var repeat = Has("Repeat");
+
+        if (modifiers == KeyModifiers.None && pointer.TryPanByArrow(key, repeat)) return Task.CompletedTask;
+        pointer.StopKinetic();
+        var command = new ShortcutRouter(settings).TryResolve(key, KeyId.None, modifiers, isFullscreen: false, hasImage: true,
+            hasComparePair: false, isCompareVisible: false, hasCapturePair: false);
+        if (command is null) return Task.CompletedTask;
+        if (repeat && command.Value.Type.IgnoresAutoRepeat()) return Task.CompletedTask;
+        var asCommand = step with { Kind = "command", Command = command.Value.Type.ToString() };
+        // Commands that change nothing in the viewport (Next, Previous, Fullscreen...) are no-ops here, exactly as in the recorder.
+        return command.Value.Type is ReviewCommandType.ToggleFit or ReviewCommandType.ZoomIn or ReviewCommandType.ZoomOut
+            or ReviewCommandType.ZoomActualSize or ReviewCommandType.ClickZoom or ReviewCommandType.FitWidth
+            or ReviewCommandType.FitWidth2 or ReviewCommandType.FitHeight
+            ? CommandTask(asCommand, index, settings, surface, viewer, pointer, fit)
+            : Task.CompletedTask;
+    }
+
+    private static void Drive(EngineImageSurface surface, Task operation) => surface.Run(operation).GetAwaiter().GetResult();
+
+    private static NotSupportedException Unsupported(int index, GoldenInputStep step) =>
+        new($"G-INPUT bước {index} chưa được runner hỗ trợ: {step} - đồng bộ từ vựng với bộ ghi WP-10");
+
+    private static GoldenCheckpoint Checkpoint(int afterStep, ViewerState viewer, EngineImageSurface surface) => new(
+        afterStep, viewer.Zoom, viewer.IsFit, surface.HorizontalOffset, surface.VerticalOffset,
+        surface.ExtentWidth, surface.ExtentHeight, surface.ViewportWidth, surface.ViewportHeight, viewer.DisplayZoomPercent);
+
+    /// <summary>So một checkpoint: zoom 0,001; độ dài 0,5 DIP; IsFit và DisplayZoomPercent tuyệt đối (NO-WPF-EXEC-PLAN 7.3).</summary>
+    public static IEnumerable<string> Diff(GoldenCheckpoint expected, GoldenCheckpoint actual)
+    {
+        if (!(Math.Abs(expected.Zoom - actual.Zoom) <= 0.001)) yield return $"Zoom {expected.Zoom} != {actual.Zoom}";
+        if (expected.IsFit != actual.IsFit) yield return $"IsFit {expected.IsFit} != {actual.IsFit}";
+        if (expected.DisplayZoomPercent != actual.DisplayZoomPercent) yield return $"DisplayZoomPercent {expected.DisplayZoomPercent} != {actual.DisplayZoomPercent}";
+        foreach (var (field, e, a) in new[]
+        {
+            ("HorizontalOffset", expected.HorizontalOffset, actual.HorizontalOffset), ("VerticalOffset", expected.VerticalOffset, actual.VerticalOffset),
+            ("ExtentWidth", expected.ExtentWidth, actual.ExtentWidth), ("ExtentHeight", expected.ExtentHeight, actual.ExtentHeight),
+            ("ViewportWidth", expected.ViewportWidth, actual.ViewportWidth), ("ViewportHeight", expected.ViewportHeight, actual.ViewportHeight),
+        })
+        {
+            if (!(Math.Abs(e - a) <= 0.5)) yield return $"{field} {e} != {a}";
+        }
+    }
+}
+
+/// <summary>Bản App.Tests của Shell.Tests GoldenFixture (xem đó; tạm tới khi WP-10 có GoldenFile).</summary>
+internal static class InputGoldenFixture
+{
+    public const string InputScriptsFile = "input-scripts.v1.json";
+
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals | JsonNumberHandling.AllowReadingFromString,
+    };
+
+    public static string? Find(string fileName)
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "tests", "Fixtures", "golden", fileName);
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    public static IReadOnlyList<T> ReadCases<T>(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var array = document.RootElement.ValueKind == JsonValueKind.Array
+            ? document.RootElement
+            : document.RootElement.EnumerateObject().Select(p => p.Value).FirstOrDefault(v => v.ValueKind == JsonValueKind.Array);
+        if (array.ValueKind != JsonValueKind.Array) throw new InvalidDataException("golden không có mảng ca nào");
+        return array.EnumerateArray().Select(e => e.Deserialize<T>(Options) ?? throw new InvalidDataException("ca golden rỗng")).ToList();
+    }
+}
+
+/// <summary>[Fact] tự Skip khi file golden chưa có (WP-10 chưa merge), tự chạy khi có.</summary>
+[AttributeUsage(AttributeTargets.Method)]
+internal sealed class InputGoldenFactAttribute : FactAttribute
+{
+    public InputGoldenFactAttribute(string fileName)
+    {
+        FileName = fileName;
+        if (InputGoldenFixture.Find(fileName) is null) Skip = $"Chờ WP-10: chưa có tests/Fixtures/golden/{fileName}";
+    }
+
+    public string FileName { get; }
+}
