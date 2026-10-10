@@ -84,6 +84,8 @@ public class KeyIdMappingTests
 
     [Theory(DisplayName = "TryParse rejects numbers, lists, unknown names, wrong case and blanks")]
     [InlineData("999")]
+    [InlineData("1")]
+    [InlineData("172")]
     [InlineData("-1")]
     [InlineData("+44")]
     [InlineData("A,B")]

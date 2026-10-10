@@ -191,6 +191,28 @@ public sealed class DispatcherUiSchedulerTests
     }
 
     [Fact]
+    public async Task UnprioritisedCalls_UseNormalForPostAndInvoke_AndBackgroundForYield()
+    {
+        using var ui = new DispatcherThread();
+        var scheduler = new DispatcherUiScheduler(ui.Dispatcher);
+        var order = new List<string>();
+        Task? invoked = null;
+
+        await ui.Dispatcher.InvokeAsync(async () =>
+        {
+            var bg = scheduler.InvokeAsync(() => order.Add("background"), UiPriority.Background);
+            var render = scheduler.InvokeAsync(() => order.Add("render"), UiPriority.Render);
+            scheduler.Post(() => order.Add("post"));          // IUiScheduler.Post = Normal: before render and background
+            invoked = scheduler.InvokeAsync(() => order.Add("invoke")); // IUiScheduler.InvokeAsync = Normal
+            await scheduler.YieldAsync();                      // IUiScheduler.YieldAsync = Background: after render
+            order.Add("resumed");
+            await Task.WhenAll(bg, render, invoked);
+        }).Task.Unwrap().WaitAsync(Bound);
+
+        Assert.Equal(["post", "invoke", "render", "background", "resumed"], order);
+    }
+
+    [Fact]
     public async Task YieldAsync_WithPriority_AlreadyCancelledToken_Throws()
     {
         using var ui = new DispatcherThread();

@@ -18,10 +18,9 @@ public readonly record struct RectD(double X, double Y, double Width, double Hei
 
     /// <summary>
     /// Ngữ nghĩa như <c>System.Windows.Rect.Contains(Point)</c>: biên trái/trên và phải/dưới đều thuộc hình (đóng); hình có
-    /// <see cref="Width"/> hoặc <see cref="Height"/> âm là rỗng và không chứa điểm nào.
+    /// <see cref="Width"/> hoặc <see cref="Height"/> âm là rỗng và không chứa điểm nào (suy ra từ chính phép so sánh: không cần nhánh riêng).
     /// </summary>
-    public bool Contains(PointD p) =>
-        Width >= 0 && Height >= 0 && p.X >= X && p.X - Width <= X && p.Y >= Y && p.Y - Height <= Y;
+    public bool Contains(PointD p) => p.X >= X && p.X - Width <= X && p.Y >= Y && p.Y - Height <= Y;
 }
 
 /// <summary>Giá trị = <c>System.Windows.Input.MouseButton</c>.</summary>
