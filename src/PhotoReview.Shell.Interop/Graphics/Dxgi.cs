@@ -3,9 +3,9 @@ using System.Runtime.InteropServices.Marshalling;
 
 namespace PhotoReview.Shell.Interop.Graphics;
 
-// WP-13b: DXGI. Sá»‘ trong comment "[n]" lÃ  SLOT vtable (IUnknown = 0..2) theo header dxgi.h / dxgi1_2.h / dxgi1_3.h.
-// Má»i method lÃ  [PreserveSig]: HRESULT tráº£ nguyÃªn (ComInterop.Check) - khÃ´ng Ä‘á»ƒ generator nÃ©m cho hÃ m void/struct.
-// ReservedNN = chá»— giá»¯ slot, KHÃ”NG Ä‘Æ°á»£c gá»i vÃ  KHÃ”NG Ä‘Æ°á»£c xoÃ¡/Ä‘á»•i thá»© tá»±.
+// WP-13b: DXGI. Số trong comment "[n]" là SLOT vtable (IUnknown = 0..2) theo header dxgi.h / dxgi1_2.h / dxgi1_3.h.
+// Mọi method là [PreserveSig]: HRESULT trả nguyên (ComInterop.Check) - không để generator ném cho hàm void/struct.
+// ReservedNN = chỗ giữ slot, KHÔNG được gọi và KHÔNG được xoá/đổi thứ tự.
 
 internal enum DxgiFormat : uint
 {
@@ -56,7 +56,7 @@ internal struct DxgiSampleDesc
     public uint Quality;
 }
 
-/// <summary>DXGI_SWAP_CHAIN_DESC1 (48 byte trÃªn x64? khÃ´ng: 10 uint + SampleDesc = 48).</summary>
+/// <summary>DXGI_SWAP_CHAIN_DESC1 (48 byte trên x64? không: 10 uint + SampleDesc = 48).</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct DxgiSwapChainDesc1
 {
@@ -187,7 +187,7 @@ internal unsafe partial interface IDxgiFactory2 : IDxgiFactory1
 {
     [PreserveSig] int Reserved14IsWindowedStereoEnabled();                                                   // [14]
 
-    /// <summary>[15] <paramref name="device"/> lÃ  D3D11 device (IUnknown).</summary>
+    /// <summary>[15] <paramref name="device"/> là D3D11 device (IUnknown).</summary>
     [PreserveSig]
     int CreateSwapChainForHwnd(ID3D11Device device, nint hwnd, DxgiSwapChainDesc1* desc, nint fullscreenDesc,
         nint restrictToOutput, out nint swapChain);
@@ -201,7 +201,7 @@ internal unsafe partial interface IDxgiFactory2 : IDxgiFactory1
     [PreserveSig] int Reserved22RegisterOcclusionStatusEvent(nint evt, out uint cookie);                     // [22]
     [PreserveSig] void Reserved23UnregisterOcclusionStatus(uint cookie);                                     // [23]
 
-    /// <summary>[24] Swap chain khÃ´ng cáº§n HWND (DirectComposition) - dÃ¹ng cho smoke test offscreen.</summary>
+    /// <summary>[24] Swap chain không cần HWND (DirectComposition) - dùng cho smoke test offscreen.</summary>
     [PreserveSig]
     int CreateSwapChainForComposition(ID3D11Device device, DxgiSwapChainDesc1* desc, nint restrictToOutput,
         out nint swapChain);
@@ -249,7 +249,7 @@ internal unsafe partial interface IDxgiSwapChain2 : IDxgiSwapChain1
     [PreserveSig] int SetMaximumFrameLatency(uint maxLatency);                                               // [31]
     [PreserveSig] int GetMaximumFrameLatency(out uint maxLatency);                                           // [32]
 
-    /// <summary>[33] Tráº£ HANDLE (khÃ´ng pháº£i HRESULT) - chá»‰ há»£p lá»‡ khi táº¡o vá»›i cá» FRAME_LATENCY_WAITABLE_OBJECT; khÃ´ng Ä‘Ã³ng handle nÃ y.</summary>
+    /// <summary>[33] Trả HANDLE (không phải HRESULT) - chỉ hợp lệ khi tạo với cờ FRAME_LATENCY_WAITABLE_OBJECT; không đóng handle này.</summary>
     [PreserveSig] nint GetFrameLatencyWaitableObject();
 
     [PreserveSig] int Reserved34SetMatrixTransform(nint matrix);                                             // [34]
