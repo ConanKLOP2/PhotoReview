@@ -110,4 +110,5 @@ Benchmarking, PerfAnalysis để nguyên vì ngoài vùng của WP-11. [Detail](
 | NOWPF-WP13A | WP-13a (đợt 1 của NO-WPF-EXEC-PLAN, 2026-10-10): khai báo interop Win32 (user32/kernel32/gdi32/dwmapi/shcore/comctl32/ole32/shell32) trong
 `src/PhotoReview.Shell.Interop/Win32/*` bằng LibraryImport, struct blittable và hằng; `InteropSignatureTests` (14 ca) kiểm kích thước/offset
 struct và gọi thử 4 hàm an toàn; mutation M1 (đổi kiểu một trường struct) và M2 (sai EntryPoint) đều bị bắt. Hợp đồng v1 không đổi. [Detail](decisions/NOWPF-WP13A-INTEROP.md) |
+| ARROW-PAN-EQUAL-STEP | One arrow press now moves a zoomed image the SAME number of pixels horizontally and vertically: ArrowPanStepPercent % of the viewport's SHORTER side (was: the viewport size along the pressed axis). Reverses an earlier "not doing this" decision; applies to the instant and the kinetic arrow pan; no new setting. [Detail](decisions/ARROW-PAN-EQUAL-STEP.md) |
 <!-- END GENERATED DECIDED TABLE -->

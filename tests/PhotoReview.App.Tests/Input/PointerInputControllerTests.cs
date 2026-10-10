@@ -949,7 +949,7 @@ public sealed partial class PointerInputControllerTests
     // ---- arrow-key panning of a zoomed image ----
 
     [Fact]
-    public void Arrow_ZoomedImage_PansTenPercentOfTheViewport_WithoutNavigating()
+    public void Arrow_ZoomedImage_PansTenPercentOfTheShortSide_WithoutNavigating()
     {
         _settings.KineticPanEnabled = false; // this test asserts the instant step, not the kinetic glide
         _surface.ExtentWidth = 2000;
@@ -958,9 +958,9 @@ public sealed partial class PointerInputControllerTests
         _surface.VerticalOffset = 100;
 
         Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
-        Assert.Equal((180, 100), _surface.Scrolls[^1]);
+        Assert.Equal((160, 100), _surface.Scrolls[^1]); // 10 % of the 600-high short side, both axes
         Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
-        Assert.Equal((180, 160), _surface.Scrolls[^1]);
+        Assert.Equal((160, 160), _surface.Scrolls[^1]);
         Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: true));
         Assert.Equal((100, 160), _surface.Scrolls[^1]);
         Assert.True(_controller.TryPanByArrow(Key.Up, isRepeat: true));
@@ -979,9 +979,9 @@ public sealed partial class PointerInputControllerTests
         _surface.VerticalOffset = 100;
 
         Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
-        Assert.Equal((300, 100), _surface.Scrolls[^1]); // 25 % of the 800-wide viewport
+        Assert.Equal((250, 100), _surface.Scrolls[^1]); // 25 % of the 600 short side
         Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
-        Assert.Equal((300, 250), _surface.Scrolls[^1]); // 25 % of the 600-high viewport
+        Assert.Equal((250, 250), _surface.Scrolls[^1]); // the same 150 DIP vertically
     }
 
     [Fact]
@@ -1016,7 +1016,7 @@ public sealed partial class PointerInputControllerTests
         Assert.Empty(_surface.Scrolls);
         // The other direction still pans.
         Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: false));
-        Assert.Equal((1120, 0), _surface.Scrolls[^1]);
+        Assert.Equal((1140, 0), _surface.Scrolls[^1]);
     }
 
     [Fact]
@@ -1116,8 +1116,8 @@ public sealed partial class PointerInputControllerTests
             handler(null, new FrameArgs(TimeSpan.FromMilliseconds(t)));
 
         Assert.Null(_surface.RenderHandler); // the glide stopped on its own
-        // The step at ArrowPanStepPercent=10 % of an 800-wide viewport is 80 DIP (matches the instant-mode test).
-        Assert.Equal(before + 80, _surface.HorizontalOffset, tolerance: 1.0);
+        // The step at ArrowPanStepPercent=10 % of the 600 short side is 60 DIP (matches the instant-mode test).
+        Assert.Equal(before + 60, _surface.HorizontalOffset, tolerance: 1.0);
     }
 
     [Fact]
@@ -1147,6 +1147,61 @@ public sealed partial class PointerInputControllerTests
         Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
 
         Assert.Equal(0, _surface.Hooks);
+        Assert.Null(_surface.RenderHandler);
+    }
+
+    // ---- arrow-key step: equal pixels on both axes (ARROW-PAN-EQUAL-STEP) ----
+
+    [Theory]
+    [InlineData(800.0, 600.0)] // landscape viewport
+    [InlineData(600.0, 800.0)] // portrait viewport
+    public void Arrow_Instant_HorizontalAndVerticalStepsAreTheSamePixels_ShortSideTimesPercent(double viewportW, double viewportH)
+    {
+        _settings.KineticPanEnabled = false;
+        _settings.ArrowPanStepPercent = 17;
+        _surface.ViewportWidth = viewportW;
+        _surface.ViewportHeight = viewportH;
+        _surface.ExtentWidth = 5000;
+        _surface.ExtentHeight = 5000;
+        _surface.HorizontalOffset = 1000;
+        _surface.VerticalOffset = 1000;
+        var expected = Math.Min(viewportW, viewportH) * 0.17;
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        var horizontalStep = _surface.Scrolls[^1].H - 1000;
+        Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
+        var verticalStep = _surface.Scrolls[^1].V - 1000;
+
+        Assert.Equal(expected, horizontalStep, tolerance: 1e-9);
+        Assert.Equal(expected, verticalStep, tolerance: 1e-9);
+    }
+
+    [Fact]
+    public void Arrow_Kinetic_HorizontalAndVerticalGlidesTravelTheSamePixels()
+    {
+        _settings.ArrowPanStepPercent = 17;
+        _surface.ExtentWidth = 5000;
+        _surface.ExtentHeight = 5000;
+        _surface.HorizontalOffset = 1000;
+        _surface.VerticalOffset = 1000;
+
+        _controller.TryPanByArrow(Key.Right, isRepeat: false);
+        DriveGlideToRest();
+        var horizontalTravel = _surface.HorizontalOffset - 1000;
+        _controller.TryPanByArrow(Key.Down, isRepeat: false);
+        DriveGlideToRest();
+        var verticalTravel = _surface.VerticalOffset - 1000;
+
+        var expected = 600 * 0.17; // short side of the 800x600 viewport
+        Assert.Equal(expected, horizontalTravel, tolerance: 1.0);
+        Assert.Equal(expected, verticalTravel, tolerance: 1.0);
+    }
+
+    private void DriveGlideToRest()
+    {
+        var handler = _surface.RenderHandler!;
+        for (var t = 0; t < 20_000 && _surface.RenderHandler is not null; t += 16)
+            handler(null, new FrameArgs(TimeSpan.FromMilliseconds(t)));
         Assert.Null(_surface.RenderHandler);
     }
 

@@ -292,7 +292,7 @@ public class AppSettings
     /// </summary>
     public bool ClickZoomKeyTogglesFit { get; set; }
 
-    /// <summary>How far one arrow press moves a zoomed image, in percent of the viewport; [<see cref="MinArrowPanStepPercent"/>, <see cref="MaxArrowPanStepPercent"/>], default <see cref="DefaultArrowPanStepPercent"/>.</summary>
+    /// <summary>How far one arrow press moves a zoomed image, in percent of the viewport's SHORTER side (same pixels on both axes); [<see cref="MinArrowPanStepPercent"/>, <see cref="MaxArrowPanStepPercent"/>], default <see cref="DefaultArrowPanStepPercent"/>.</summary>
     public int ArrowPanStepPercent { get; set; } = DefaultArrowPanStepPercent;
 
     // ---- Fit width / Fit height, keep zoom across images (PR-B feat/fit-width-height-keep-zoom). Absent in older configs = these defaults; no migration step. ----
