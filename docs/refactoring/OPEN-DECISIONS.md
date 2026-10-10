@@ -123,4 +123,5 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 (OpenClipboard/SetClipboardData, thử lại 5 x 20 ms) và sửa lỗi bố cục WP-13a: TASKDIALOGCONFIG/TASKDIALOG_BUTTON phải Pack = 1 (160/12 byte).
 16 test mới + 2 test chữ ký đã sửa; mutation 10/10 bị bắt. Hợp đồng v1 không đổi; còn chờ nối COM IFileOpenDialog (WP-13b) và
 `IClipboardService` dời sang App.Shared (WP-09). [Detail](decisions/NOWPF-WP19A-DIALOGS.md) |
+| ARROW-PAN-EQUAL-STEP | One arrow press now moves a zoomed image the SAME number of pixels horizontally and vertically: ArrowPanStepPercent % of the viewport's SHORTER side (was: the viewport size along the pressed axis). Reverses an earlier "not doing this" decision; applies to the instant and the kinetic arrow pan; no new setting. [Detail](decisions/ARROW-PAN-EQUAL-STEP.md) |
 <!-- END GENERATED DECIDED TABLE -->

@@ -411,6 +411,43 @@ public sealed class KineticPanTests
 
     // ---- KeyboardPan.Step ----
 
+    [Theory]
+    [InlineData(1920.0, 1080.0, 0.17, 183.6)]
+    [InlineData(1080.0, 1920.0, 0.17, 183.6)]
+    [InlineData(800.0, 800.0, 0.5, 400.0)]
+    [InlineData(800.0, 600.0, 1.0, 600.0)]
+    public void StepPixels_IsTheShortSideTimesFraction(double w, double h, double fraction, double expected)
+    {
+        Assert.Equal(expected, KeyboardPan.StepPixels(w, h, fraction), tolerance: 1e-9);
+    }
+
+    [Theory]
+    [InlineData(1920.0, 1080.0)]
+    [InlineData(1080.0, 1920.0)]
+    public void Step_BothAxes_MoveTheSamePixels(double w, double h)
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 9000, ExtentHeight: 9000, ViewportWidth: w, ViewportHeight: h);
+
+        var right = KeyboardPan.Step(1, 0, 3000, 3000, bounds, stepFraction: 0.17);
+        var down = KeyboardPan.Step(0, 1, 3000, 3000, bounds, stepFraction: 0.17);
+
+        Assert.Equal(right.Horizontal - 3000, down.Vertical - 3000, tolerance: 1e-9);
+        Assert.Equal(Math.Min(w, h) * 0.17, right.Horizontal - 3000, tolerance: 1e-9);
+    }
+
+    [Fact]
+    public void ImpulseVelocity_OfEqualSteps_IsEqual_SoKineticGlidesTravelTheSame()
+    {
+        var bounds = new ScrollBounds(9000, 9000, 1920, 1080);
+        var right = KeyboardPan.Step(1, 0, 3000, 3000, bounds, 0.17);
+        var down = KeyboardPan.Step(0, 1, 3000, 3000, bounds, 0.17);
+
+        var (vx, _) = KeyboardPan.ImpulseVelocity(right.Horizontal - 3000, 0);
+        var (_, vy) = KeyboardPan.ImpulseVelocity(0, down.Vertical - 3000);
+
+        Assert.Equal(vx, vy, tolerance: 1e-12);
+    }
+
     [Fact]
     public void Step_Horizontal_Positive_UsesDefaultStepFraction()
     {
@@ -420,8 +457,8 @@ public sealed class KineticPanTests
 
         var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds);
 
-        // step = ViewportWidth * StepFraction * (dx + dy) = 800 * 0.1 * 1 = 80
-        var expected = horizontal + 80;
+        // step = min(800, 600) * StepFraction * (dx + dy) = 600 * 0.1 * 1 = 60 (short side, same on both axes)
+        var expected = horizontal + 60;
         Assert.Equal(KeyboardPanResult.Panned, result);
         Assert.Equal(expected, h);
         Assert.Equal(vertical, v);
@@ -436,15 +473,15 @@ public sealed class KineticPanTests
 
         var (result, h, v) = KeyboardPan.Step(dx: -1, dy: 0, horizontal, vertical, bounds);
 
-        // step = ViewportWidth * StepFraction * (dx + dy) = 800 * 0.1 * (-1) = -80
-        var expected = horizontal - 80;
+        // step = min(800, 600) * StepFraction * (dx + dy) = 600 * 0.1 * (-1) = -60
+        var expected = horizontal - 60;
         Assert.Equal(KeyboardPanResult.Panned, result);
         Assert.Equal(expected, h);
         Assert.Equal(vertical, v);
     }
 
     [Fact]
-    public void Step_Vertical_Positive_UsesViewportHeight()
+    public void Step_Vertical_Positive_UsesTheSameShortSideStep()
     {
         var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
         var horizontal = 400.0;
@@ -452,7 +489,7 @@ public sealed class KineticPanTests
 
         var (result, h, v) = KeyboardPan.Step(dx: 0, dy: 1, horizontal, vertical, bounds);
 
-        // step = ViewportHeight * StepFraction * (dx + dy) = 600 * 0.1 * 1 = 60
+        // step = min(800, 600) * StepFraction * (dx + dy) = 600 * 0.1 * 1 = 60
         var expected = vertical + 60;
         Assert.Equal(KeyboardPanResult.Panned, result);
         Assert.Equal(horizontal, h);
@@ -484,15 +521,15 @@ public sealed class KineticPanTests
 
         var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds, stepFraction: 0.01);
 
-        // step = ViewportWidth * 0.01 * 1 = 800 * 0.01 = 8
-        var expected = horizontal + 8;
+        // step = min(800, 600) * 0.01 * 1 = 6
+        var expected = horizontal + 6;
         Assert.Equal(KeyboardPanResult.Panned, result);
         Assert.Equal(expected, h);
         Assert.Equal(vertical, v);
     }
 
     [Fact]
-    public void Step_CustomStepFraction_1_0_MovesEntireViewport()
+    public void Step_CustomStepFraction_1_0_MovesTheShortSide()
     {
         var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
         var horizontal = 400.0;
@@ -500,8 +537,8 @@ public sealed class KineticPanTests
 
         var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds, stepFraction: 1.0);
 
-        // step = ViewportWidth * 1.0 * 1 = 800 * 1 = 800
-        var expected = horizontal + 800;
+        // step = min(800, 600) * 1.0 * 1 = 600
+        var expected = horizontal + 600;
         Assert.Equal(KeyboardPanResult.Panned, result);
         Assert.Equal(expected, h);
         Assert.Equal(vertical, v);
