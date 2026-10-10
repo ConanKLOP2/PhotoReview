@@ -1,4 +1,3 @@
-using System.Windows.Input;
 
 namespace PhotoReview.App.Input;
 
@@ -8,34 +7,34 @@ namespace PhotoReview.App.Input;
 /// </summary>
 public sealed class ShortcutRouter
 {
-    private Key? _fullscreenKey;
-    private Key? _nextFolderKey;
-    private Key? _prevFolderKey;
-    private Key? _firstImageKey;
-    private Key? _lastImageKey;
-    private Key? _toggleInfoOverlayKey;
-    private Key? _zoomActualSizeKey;
-    private Key? _undoKey;
-    private Key? _compareKey;
-    private readonly List<(Key Key, int Index)> _actionKeys = [];
-    private Key? _recycleKey;
-    private Key? _skipKey;
-    private Key? _toggleFitKey;
-    private Key? _zoomInKey;
-    private Key? _zoomOutKey;
-    private Key? _nextKey;
-    private Key? _prevKey;
-    private Key? _moveToFolderKey;
-    private Key? _copyToFolderKey;
-    private Key? _clickZoomKey;
-    private Key? _fitWidthKey;
-    private Key? _fitWidth2Key;
-    private Key? _fitHeightKey;
-    private Key? _toggleKeepZoomKey;
-    private Key? _openFolderKey;
-    private Key? _customZoomKey;
-    private Key? _toggleCaptureMemberKey;
-    private Key? _refreshKey;
+    private KeyId? _fullscreenKey;
+    private KeyId? _nextFolderKey;
+    private KeyId? _prevFolderKey;
+    private KeyId? _firstImageKey;
+    private KeyId? _lastImageKey;
+    private KeyId? _toggleInfoOverlayKey;
+    private KeyId? _zoomActualSizeKey;
+    private KeyId? _undoKey;
+    private KeyId? _compareKey;
+    private readonly List<(KeyId Key, int Index)> _actionKeys = [];
+    private KeyId? _recycleKey;
+    private KeyId? _skipKey;
+    private KeyId? _toggleFitKey;
+    private KeyId? _zoomInKey;
+    private KeyId? _zoomOutKey;
+    private KeyId? _nextKey;
+    private KeyId? _prevKey;
+    private KeyId? _moveToFolderKey;
+    private KeyId? _copyToFolderKey;
+    private KeyId? _clickZoomKey;
+    private KeyId? _fitWidthKey;
+    private KeyId? _fitWidth2Key;
+    private KeyId? _fitHeightKey;
+    private KeyId? _toggleKeepZoomKey;
+    private KeyId? _openFolderKey;
+    private KeyId? _customZoomKey;
+    private KeyId? _toggleCaptureMemberKey;
+    private KeyId? _refreshKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -96,29 +95,29 @@ public sealed class ShortcutRouter
     /// Thử định tuyến phím bấm thành lệnh ReviewCommand theo đúng thứ tự ưu tiên trong MainWindow.
     /// </summary>
     public ReviewCommand? TryResolve(
-        Key key,
-        Key systemKey,
-        ModifierKeys modifiers,
+        KeyId key,
+        KeyId systemKey,
+        KeyModifiers modifiers,
         bool isFullscreen,
         bool hasImage,
         bool hasComparePair = true,
         bool isCompareVisible = false,
         bool hasCapturePair = false)
     {
-        var pressedKey = key == Key.System ? systemKey : key;
+        var pressedKey = key == KeyId.System ? systemKey : key;
 
-        // 1. Fullscreen: sử dụng pressedKey (tính cả Key.System)
+        // 1. Fullscreen: sử dụng pressedKey (tính cả KeyId.System)
         if (_fullscreenKey.HasValue && pressedKey == _fullscreenKey.Value)
         {
             return ReviewCommand.Fullscreen;
         }
 
         // 2. Escape: thoát Fullscreen nếu đang bật, nếu không thì đóng cửa sổ
-        if (key == Key.Escape && isFullscreen)
+        if (key == KeyId.Escape && isFullscreen)
         {
             return ReviewCommand.ExitFullscreen;
         }
-        if (key == Key.Escape)
+        if (key == KeyId.Escape)
         {
             return ReviewCommand.Close;
         }
@@ -146,7 +145,7 @@ public sealed class ShortcutRouter
         }
 
         // 5. Undo Move: yêu cầu phím khớp và giữ Ctrl
-        if (_undoKey.HasValue && key == _undoKey.Value && (modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        if (_undoKey.HasValue && key == _undoKey.Value && (modifiers & KeyModifiers.Control) == KeyModifiers.Control)
         {
             return ReviewCommand.Undo;
         }
@@ -164,7 +163,7 @@ public sealed class ShortcutRouter
         }
 
         // 5d. Q-R42: Open folder (Ctrl+<key>) -- không cần ảnh, giống Undo yêu cầu giữ Ctrl.
-        if (_openFolderKey.HasValue && key == _openFolderKey.Value && (modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        if (_openFolderKey.HasValue && key == _openFolderKey.Value && (modifiers & KeyModifiers.Control) == KeyModifiers.Control)
         {
             return ReviewCommand.OpenFolder;
         }
@@ -192,7 +191,7 @@ public sealed class ShortcutRouter
 
         // 8. Custom Actions. RV-A03/RV-D3: file-changing commands (user Actions, Recycle) fire only with NO
         // modifier, so Ctrl+Delete / Ctrl+Enter / Shift+Delete never move or delete by accident.
-        var noModifier = modifiers == ModifierKeys.None;
+        var noModifier = modifiers == KeyModifiers.None;
         foreach (var (actionKey, index) in _actionKeys)
         {
             if (noModifier && key == actionKey)
@@ -277,9 +276,9 @@ public sealed class ShortcutRouter
         }
 
         // 14. Move to… / Copy to… (Shift forces the folder picker; Ctrl combinations are not these commands)
-        if ((modifiers & ModifierKeys.Control) == 0)
+        if ((modifiers & KeyModifiers.Control) == 0)
         {
-            var forcePicker = (modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+            var forcePicker = (modifiers & KeyModifiers.Shift) == KeyModifiers.Shift;
             if (_moveToFolderKey.HasValue && key == _moveToFolderKey.Value)
             {
                 return ReviewCommand.MoveToFolder(forcePicker);
@@ -293,7 +292,7 @@ public sealed class ShortcutRouter
         return null;
     }
 
-    private static Key? ParseKey(string? str)
+    private static KeyId? ParseKey(string? str)
     {
         if (string.IsNullOrWhiteSpace(str)) return null;
         return Services.ShortcutKeyName.TryParse(str, out var key) ? key : null;

@@ -1,6 +1,4 @@
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Input;
 using PhotoReview.App.Input;
 
 namespace PhotoReview.App.Tests.Input;
@@ -38,7 +36,7 @@ public sealed partial class PointerInputControllerTests
     public async Task SourceSizeSwap_AfterACompletedZoomGesture_StillReanchors()
     {
         ZoomedWithSource();
-        await _controller.OnWheelAsync(120, ctrl: false, new Point(400, 300));
+        await _controller.OnWheelAsync(120, ctrl: false, new PointD(400, 300));
         var scrollsAfterZoom = _surface.Scrolls.Count;
         var yieldsAfterZoom = _surface.YieldCount;
 
@@ -53,7 +51,7 @@ public sealed partial class PointerInputControllerTests
     {
         ZoomedWithSource();
         _surface.HoldYields = true;
-        var zoom = _controller.OnWheelAsync(120, ctrl: false, new Point(400, 300));
+        var zoom = _controller.OnWheelAsync(120, ctrl: false, new PointD(400, 300));
 
         _viewer.SwapSourceSize(_viewer.SourcePixelWidth + 2, _viewer.SourcePixelHeight + 1);
         _surface.ReleaseYields();
@@ -128,7 +126,7 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentWidth = extentWidth;
         _surface.ExtentHeight = extentHeight;
 
-        var taken = _controller.OnImagePress(MouseButton.Left, 1, new Point(400, 300), timestamp: 1000);
+        var taken = _controller.OnImagePress(PointerButton.Left, 1, new PointD(400, 300), timestamp: 1000);
 
         Assert.Equal(expectedTaken, taken);
         Assert.Equal(expectedTaken, _surface.PanCursor);
@@ -142,7 +140,7 @@ public sealed partial class PointerInputControllerTests
         _surface.ExtentWidth = 4000;
         _surface.ExtentHeight = 3000;
 
-        var taken = _controller.OnImagePress(MouseButton.Left, 1, new Point(400, 300), timestamp: 1000);
+        var taken = _controller.OnImagePress(PointerButton.Left, 1, new PointD(400, 300), timestamp: 1000);
 
         Assert.False(taken);
         Assert.False(_surface.PanCursor);
@@ -180,7 +178,7 @@ public sealed partial class PointerInputControllerTests
 
         await _controller.SetClickZoomLevelAsync(200);
 
-        Assert.Equal(new Point(500, 200), Assert.Single(_surface.ToImageElementCalls));
+        Assert.Equal(new PointD(500, 200), Assert.Single(_surface.ToImageElementCalls));
     }
 
     private static double GlideDistanceOfOneDownArrow(double startOffset)
@@ -190,7 +188,7 @@ public sealed partial class PointerInputControllerTests
         test._surface.ExtentWidth = 800;
         test._surface.ExtentHeight = 4000;
         test._surface.VerticalOffset = startOffset;
-        Assert.True(test._controller.TryPanByArrow(Key.Down, isRepeat: false));
+        Assert.True(test._controller.TryPanByArrow(KeyId.Down, isRepeat: false));
         var handler = Assert.IsType<EventHandler>(test._surface.RenderHandler);
         for (var t = 0; t < 400 && test._surface.RenderHandler is not null; t += 16)
             handler(null, new FrameArgs(TimeSpan.FromMilliseconds(t)));

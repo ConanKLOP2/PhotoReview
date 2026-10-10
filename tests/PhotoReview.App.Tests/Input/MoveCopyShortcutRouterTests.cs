@@ -1,4 +1,3 @@
-using System.Windows.Input;
 using PhotoReview.App.Input;
 
 namespace PhotoReview.App.Tests.Input;
@@ -7,13 +6,13 @@ namespace PhotoReview.App.Tests.Input;
 [Trait("Category", "HotPath")]
 public sealed class MoveCopyShortcutRouterTests
 {
-    private static ReviewCommand? Resolve(ShortcutRouter router, Key key, ModifierKeys modifiers = ModifierKeys.None, bool hasImage = true) =>
-        router.TryResolve(key, Key.None, modifiers, isFullscreen: false, hasImage: hasImage);
+    private static ReviewCommand? Resolve(ShortcutRouter router, KeyId key, KeyModifiers modifiers = KeyModifiers.None, bool hasImage = true) =>
+        router.TryResolve(key, KeyId.None, modifiers, isFullscreen: false, hasImage: hasImage);
 
     [Theory]
-    [InlineData(Key.M, ReviewCommandType.MoveToFolder)]
-    [InlineData(Key.Y, ReviewCommandType.CopyToFolder)]
-    public void DefaultKeys_ResolveWithoutForcingThePicker(Key key, ReviewCommandType expected)
+    [InlineData(KeyId.M, ReviewCommandType.MoveToFolder)]
+    [InlineData(KeyId.Y, ReviewCommandType.CopyToFolder)]
+    public void DefaultKeys_ResolveWithoutForcingThePicker(KeyId key, ReviewCommandType expected)
     {
         var cmd = Resolve(new ShortcutRouter(new AppSettings()), key);
 
@@ -23,11 +22,11 @@ public sealed class MoveCopyShortcutRouterTests
     }
 
     [Theory]
-    [InlineData(Key.M, ReviewCommandType.MoveToFolder)]
-    [InlineData(Key.Y, ReviewCommandType.CopyToFolder)]
-    public void ShiftKey_ForcesThePicker(Key key, ReviewCommandType expected)
+    [InlineData(KeyId.M, ReviewCommandType.MoveToFolder)]
+    [InlineData(KeyId.Y, ReviewCommandType.CopyToFolder)]
+    public void ShiftKey_ForcesThePicker(KeyId key, ReviewCommandType expected)
     {
-        var cmd = Resolve(new ShortcutRouter(new AppSettings()), key, ModifierKeys.Shift);
+        var cmd = Resolve(new ShortcutRouter(new AppSettings()), key, KeyModifiers.Shift);
 
         Assert.NotNull(cmd);
         Assert.Equal(expected, cmd.Value.Type);
@@ -35,15 +34,15 @@ public sealed class MoveCopyShortcutRouterTests
     }
 
     [Theory]
-    [InlineData(Key.M)]
-    [InlineData(Key.Y)]
-    public void CtrlKey_IsNotMoveOrCopy(Key key) =>
-        Assert.Null(Resolve(new ShortcutRouter(new AppSettings()), key, ModifierKeys.Control));
+    [InlineData(KeyId.M)]
+    [InlineData(KeyId.Y)]
+    public void CtrlKey_IsNotMoveOrCopy(KeyId key) =>
+        Assert.Null(Resolve(new ShortcutRouter(new AppSettings()), key, KeyModifiers.Control));
 
     [Theory]
-    [InlineData(Key.M)]
-    [InlineData(Key.Y)]
-    public void WithoutImage_Nothing(Key key) =>
+    [InlineData(KeyId.M)]
+    [InlineData(KeyId.Y)]
+    public void WithoutImage_Nothing(KeyId key) =>
         Assert.Null(Resolve(new ShortcutRouter(new AppSettings()), key, hasImage: false));
 
     [Theory]
@@ -56,10 +55,10 @@ public sealed class MoveCopyShortcutRouterTests
         settings.Shortcuts.CopyToFolder = value;
         var router = new ShortcutRouter(settings);
 
-        Assert.Null(Resolve(router, Key.M));
-        Assert.Null(Resolve(router, Key.Y));
-        // "Empty" must not become Key.None or any other key.
-        Assert.Null(Resolve(router, Key.None));
+        Assert.Null(Resolve(router, KeyId.M));
+        Assert.Null(Resolve(router, KeyId.Y));
+        // "Empty" must not become KeyId.None or any other key.
+        Assert.Null(Resolve(router, KeyId.None));
     }
 
     [Fact]
@@ -70,14 +69,14 @@ public sealed class MoveCopyShortcutRouterTests
         settings.Shortcuts.CopyToFolder = "F8";
         var router = new ShortcutRouter(settings);
 
-        Assert.Equal(ReviewCommandType.MoveToFolder, Resolve(router, Key.F7)?.Type);
-        Assert.Equal(ReviewCommandType.CopyToFolder, Resolve(router, Key.F8)?.Type);
-        Assert.Null(Resolve(router, Key.M));
+        Assert.Equal(ReviewCommandType.MoveToFolder, Resolve(router, KeyId.F7)?.Type);
+        Assert.Equal(ReviewCommandType.CopyToFolder, Resolve(router, KeyId.F8)?.Type);
+        Assert.Null(Resolve(router, KeyId.M));
 
         settings.Shortcuts.MoveToFolder = "";
         router.Rebuild(settings);
-        Assert.Null(Resolve(router, Key.F7));
-        Assert.Equal(ReviewCommandType.CopyToFolder, Resolve(router, Key.F8)?.Type);
+        Assert.Null(Resolve(router, KeyId.F7));
+        Assert.Equal(ReviewCommandType.CopyToFolder, Resolve(router, KeyId.F8)?.Type);
     }
 
     [Fact]
@@ -85,9 +84,9 @@ public sealed class MoveCopyShortcutRouterTests
     {
         var router = new ShortcutRouter(new AppSettings());
 
-        Assert.Equal(ReviewCommandType.Next, Resolve(router, Key.Right)?.Type);
-        Assert.Equal(ReviewCommandType.RunAction, Resolve(router, Key.Enter)?.Type);
-        Assert.Equal(ReviewCommandType.Recycle, Resolve(router, Key.Delete)?.Type);
-        Assert.Equal(ReviewCommandType.Undo, Resolve(router, Key.Z, ModifierKeys.Control)?.Type);
+        Assert.Equal(ReviewCommandType.Next, Resolve(router, KeyId.Right)?.Type);
+        Assert.Equal(ReviewCommandType.RunAction, Resolve(router, KeyId.Enter)?.Type);
+        Assert.Equal(ReviewCommandType.Recycle, Resolve(router, KeyId.Delete)?.Type);
+        Assert.Equal(ReviewCommandType.Undo, Resolve(router, KeyId.Z, KeyModifiers.Control)?.Type);
     }
 }

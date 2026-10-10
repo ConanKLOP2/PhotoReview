@@ -1,4 +1,3 @@
-using System.Windows;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.App.Input;
@@ -134,8 +133,8 @@ internal static class PointerGestures
     /// over the viewport (mouse wheel and click-to-zoom already do this unconditionally); otherwise -- and always
     /// for <see cref="KeyboardZoomAnchor.ViewportCentre"/> -- the viewport centre.
     /// </summary>
-    public static Point ResolveKeyboardZoomAnchor(KeyboardZoomAnchor mode, Point? pointer, double viewportWidth, double viewportHeight) =>
-        mode == KeyboardZoomAnchor.Pointer && pointer is { } point ? point : new Point(viewportWidth / 2, viewportHeight / 2);
+    public static PointD ResolveKeyboardZoomAnchor(KeyboardZoomAnchor mode, PointD? pointer, double viewportWidth, double viewportHeight) =>
+        mode == KeyboardZoomAnchor.Pointer && pointer is { } point ? point : new PointD(viewportWidth / 2, viewportHeight / 2);
 }
 
 /// <summary>
