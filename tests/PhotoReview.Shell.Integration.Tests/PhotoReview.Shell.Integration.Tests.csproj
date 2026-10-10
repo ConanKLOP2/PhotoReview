@@ -6,6 +6,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <Platforms>AnyCPU;x64</Platforms>
     <IsPackable>false</IsPackable>
+    <!-- WP-14: test cửa sổ gửi WM_* có con trỏ struct (WM_DPICHANGED, WM_GETMINMAXINFO) bằng khai báo interop của shell. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +23,11 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WP-14: UI thread thật (dispatcher + vòng lặp) dùng chung với Shell.Tests. -->
+    <Compile Include="..\PhotoReview.Shell.Tests\Hosting\UiThread.cs" Link="Hosting\UiThread.cs" />
   </ItemGroup>
 
 </Project>
