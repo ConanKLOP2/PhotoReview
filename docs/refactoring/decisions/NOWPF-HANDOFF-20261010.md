@@ -1,0 +1,108 @@
+---
+id: NOWPF-HANDOFF-20261010
+order: 402
+summary: |-
+  Bàn giao 2026-10-10: trạng thái đợt NO-WPF (đợt 1 gần xong), việc dở theo PR, kiểm toán test CI (A cổng CI, B an toàn dữ liệu: 3 lỗ hổng test thật), việc kế tiếp theo thứ tự ưu tiên, bẫy vận hành.
+---
+
+# Bàn giao 2026-10-10 (đọc file này đầu tiên khi tiếp tục)
+
+Kế hoạch gốc: [NO-WPF-EXEC-PLAN](NO-WPF-EXEC-PLAN.md) và thẻ gói [NO-WPF-EXEC-PLAN-WP](NO-WPF-EXEC-PLAN-WP.md).
+Mỗi gói đã merge có fragment `NOWPF-WPxx-*.md` cạnh file này. Người dùng nói chuyện bằng tiếng Việt.
+
+## 1. Đã vào master
+- Phản hồi người dùng 2026-10-09 (#383-#391): External Editor luôn hiện, Copy tên/đường dẫn, menu gọn, Fit width thứ hai (phím 4)
+  và chuột giữa gán được, mở file đúng vị trí, undo Delete tại chỗ, từ chối Delete khi ổ không có Thùng rác, nhãn zoom,
+  Click-zoom không toggle, hết khung zoom lệch cuộn, WebP/HEIC qua WIC (cần HEVC extension), menu chuột phải tuỳ biến,
+  menu Explorer cho thư mục, vuốt touchpad, Refresh (phím R). Không làm: mục 18 (Open Folder quét thư mục con), mục 20 (rename).
+- Khởi động: P-1 (#396, -31 %), cloak và placement (#394), budget docs 32 KB cho architecture.md và OPEN-DECISIONS.md (#393).
+- NO-WPF: WP-01 khung và hợp đồng v1 (#399), WP-13a (#400), WP-11 (#401), WP-13b (#402), WP-02 (#408), WP-07 (#410),
+  WP-19a (#404), WP-08 (#403), WP-14 (#406), WP-18 (#409), WP-10 golden (#405), bước pan phím bằng nhau (#407).
+
+## 2. Đang mở hoặc dở (xem `gh pr list`)
+- **#411 WP-16 engine viewport**: golden của WP-10 đã có trên master; test
+  `ViewportInputGoldenTests.EveryRecordedScript_ReplaysOnTheEngine` (App.Tests) ĐANG ĐỎ với golden thật. Đó là tín hiệu thật:
+  engine lệch golden HOẶC từ vựng bước G-INPUT lệch bộ ghi WP-10 (AfterStep 0-based, `frame` = TimestampMs, tên lệnh `command`).
+  Xem chi tiết đỏ, KHÔNG sửa golden cho xanh. Chưa bật auto-merge. Test G-VIEW (Shell.Tests) 103 xanh.
+- **#412 WP-04 cache đĩa bằng WIC** (WIP): mã và fixture tương thích hai chiều (`tests/Fixtures/PreviewCache`) có, 17 + 4 test xanh.
+  Chưa: Architecture/App tests, đo hiệu năng 24 MP, mutation, decision fragment. Cần quyết: codec WPF đang là mặc định khi không truyền
+  codec (WP-06 phải chuyển sang tiêm bắt buộc); ba thay đổi hành vi nhỏ ghi trong mô tả PR (EXIF hỏng vẫn dùng cache, Rgba64 đục được cache,
+  PNG alpha qua Pbgra32).
+- **#413 WP-05 TurboJpeg/LibRaw ra PixelBuffer** (WIP): parity byte-exact ở full size và DCT factor; fine-scale MAE 0,26-3,6
+  (không byte-exact với WIC Fant, chọn giữ hoặc dùng IWICBitmapScaler). Chưa: mutation, bench P50, parity LibRaw native
+  (máy không có RAW corpus), docs-budget.
+- **#414 WP-03 WIC decode ra PixelBuffer** (WIP): mã và test xong, parity byte-exact 30 ảnh x 8 orientation x {full, DecodeBox}, WebP 32 ca,
+  thumbnail 40 ca; Imaging.Tests xanh, Architecture 86 xanh. Chưa: decision fragment (`NOWPF-WP03-*`), mutation, bench decode 24 MP
+  (rủi ro perf: `GC.AddMemoryPressure` cho buffer tạm). Đề xuất v1.1: khoá `ExifOrientation.IsTransposed`/`Normalize`. Có thể còn sót thư mục
+  `.claude/worktrees/wp03-base` (xoá tay).
+- **WP-15 (renderer Direct2D)**: agent được yêu cầu chốt và mở PR "TRẠNG THÁI BÀN GIAO"; đọc mô tả PR nếu có (`gh pr list`).
+- Golden pan phím (5 kịch bản `ArrowPan-pending-rule-change|`): #407 đã merge, cần ghi lại bằng `tools/diag/record-golden.ps1`
+  và bỏ hằng `InputScriptCatalog.ArrowPanPending` (xem NOWPF-WP10-GOLDEN-RECORDER mục 5).
+- Hợp đồng v1.1 (C-07: dời IImageSurface, IFitSurface, ViewportSnapshot sang App.Shared): PR nhỏ của lead; đặt
+  `PHOTOREVIEW_REGENERATE_CONTRACTS=1` rồi chạy `ContractSurfaceTests.WriteApprovedSurface`.
+- Gói chưa mở: WP-06 (tách Imaging.Wpf, phụ thuộc WP-03/04/05), WP-09, WP-12, WP-17, WP-20 đến WP-37.
+
+## 3. Quyết định chủ dự án còn mở
+- NE-3 thanh cuộn (a: tự vẽ), NE-4 menu (a: native + dark qua uxtheme), NE-6 single-instance prefix riêng, NE-7 đóng băng UI
+  trên bản WPF từ đợt 3, NE-9 chất lượng scale: chốt TRƯỚC đợt 3.
+- Khởi động: NW-5 (<= 600 ms R2R) chưa đạt (782 ms). Bước kế: (a) self-contained + R2R composite (-140 ms, 174 MB),
+  (b) hoãn UI thấy được tới sau ảnh đầu (-100 ms). P-STARTUP-FIRST-IMAGE: liên kết .jpg đang trỏ bản build; bản publish R2R nhanh hơn
+  150-250 ms. Chế độ chạy nền (giữ tiến trình, khay): người dùng chọn nhầm rồi huỷ, chưa làm, hỏi lại.
+- Native AOT (đợt 5): cần MSVC x64 và Windows 11 SDK (4-5 GB); ổ C: gần đầy (14 GB trống), dọn `work/diag/tune-runs`.
+- Sửa Fit width/Fit height lệch 5 DIP (nửa độ dày thanh cuộn) trong PointerInputController: PR riêng trên app WPF.
+
+## 4. Kiểm toán test CI (người dùng: "nếu test sai hậu quả rất nghiêm trọng")
+**A, cổng CI** (đã xác minh bằng `gh api` và `--list-tests`): CI chỉ chạy HotPath, UI, Integration. Native, Slow, Manual KHÔNG bao giờ
+chạy trong CI: Thùng rác thật (`NativeRecycleBinTests`), junction/SEC-01, nén journal đồng thời, RAW thật. Branch protection:
+required `build-test-publish` và `repo-checks`, KHÔNG bắt buộc review, `strict:false`, admin bypass, không CODEOWNERS; workflow RAW
+corpus chưa từng chạy. Top 5 sửa trước: (1) CODEOWNERS + review bắt buộc cho `.github/**`, Architecture.Tests, allowlist, verify-all,
+test.runsettings, bật enforce_admins, bước diff allowlist với master; (2) job Native/Slow trên runner GitHub (VM dùng một lần, an toàn
+cho Recycle Bin), hằng đêm và bắt buộc trước release; (3) baseline số test theo project từ trx, fail khi 0 hoặc giảm hoặc Skipped > 0;
+(4) lên lịch raw-corpus.yml (thêm Core.Tests), đổi `return` sớm thành skip nhìn thấy được; (5) vá luật: regex CORE-FS bỏ lọt
+`new FileInfo(p).Delete()`, bỏ opt-out Integration của TEST-OS, lượt test Debug cho ReviewCatalog thread guard, `strict:true` hoặc merge queue.
+
+**B, an toàn dữ liệu** (12/37 đột biến đã chạy; script `auditB-mutate2.ps1` trong scratchpad của phiên, chạy lại được):
+- **B-02 HIGH (đột biến M07 SỐNG SÓT)**: `FileActionService.ExecuteGroupAsync` dòng ~144 `if (permanent && !request.AllowPermanentDelete)`:
+  xoá kiểm tra này thì group Recycle trên ổ không có Thùng rác xoá VĨNH VIỄN mà không test nào đỏ (0/1026). Test cần thêm: fake bin
+  `CanRecycle=false`, `ExecuteGroupAsync(Recycle, AllowPermanentDelete=false)` phải ném `CoreRecycleUnsupportedDrive`, không gọi
+  DeletePermanently, mọi member còn nguyên, journal không có dòng.
+- **B-03**: `IRecycleBin` có mặc định `CanRecycle => true` / `FitsInRecycleBin => true` (IRecycleBin.cs:15,34); shell no-WPF quên override
+  sẽ coi mọi ổ có Thùng rác. Thêm test kiến trúc ép override hoặc bỏ mặc định.
+- **B-01**: Move khác volume + journal Fast: ADR 0007 chỉ cam kết process-crash, không power-loss; quyết định sản phẩm
+  (copy + flush đích rồi mới xoá nguồn).
+- B-04 preflight group chỉ 1 test cho "đích đã tồn tại"; B-05 RecoveryRetry group không kiểm lại định danh trước xoá; B-06 Recycle đơn không
+  hậu kiểm "nguồn đã biến mất", fake bin trong FileActionServiceTests không xoá file mà vẫn xanh; B-07 `WindowsRecycleBin` chưa từng
+  mutation-test (chốt chặn cuối); B-08 M04 (fsync) và M12 (rollback Copy) mỗi cái chỉ 1 test; B-09 test Native file-action ngoài CI.
+- Chưa chạy: M05, M06 (Recycle đơn bỏ CanRecycle/opt-in) và M13-M37 (Undo, Recovery, WindowsRecycleBin, FileActionController).
+**C (settings/catalog/cache; ~50 đột biến Core chạy thật, phần Imaging CHƯA đột biến vì baseline Imaging có ~30 test đỏ sẵn ở
+SourceBytesCache/RawDecoder*Cache trong worktree audit — nguyên nhân chưa rõ, nghi môi trường chung)**:
+- **C-01 HIGH, đột biến SỐNG SÓT**: đổi tên khoá JSON của `ClickZoomKeyTogglesFit` thì 0 test đỏ; mọi round-trip dùng cùng context nên tự khớp.
+  Một "refactor sạch" làm MẤT CẤU HÌNH người dùng lặng lẽ khi nâng cấp. Cần: golden config.json v3 đầy đủ khoá (sinh từ bản đã phát hành,
+  đóng băng) + test khoá danh sách tên khoá + byte-lock `Serialize(new AppSettings())` (C-02).
+- C-03 SỐNG SÓT: đổi mặc định `MemoryReserveBytes`, `PreviewDiskCacheCapacityBytes`, `PreloadMemoryLoadLimit`, `UseSourceBytesCache`,
+  `DefaultKeyboardZoomStepPercent` không test đỏ (test so với chính hằng số): thêm assert literal. C-04 SỐNG SÓT: Save sau khi Load file
+  ConfigVersion > 3 làm mất trường lạ (chưa có test Save). C-05 SỐNG SÓT: phím optional trùng phím mandatory (Fullscreen, NextFolder) không bị tắt.
+- C-06/C-07/C-08: PreviewCacheFile v5-reject, round-trip kích thước gốc, alpha-reject, DiskCacheStore, PreviewImageService đều Slow ngoài CI;
+  JPEG CMYK/progressive/gray chỉ có ở Native; nhiều test HotPath RAF/DNG/ORF `return` sớm khi thiếu corpus (xanh giả).
+- C-11/C-12/C-13/C-14 (chưa đột biến, chỉ đọc mã): không có fixture .pv4 v6/v7 sinh từ bản phát hành; không ghim identity hash cache đĩa
+  (va chạm khoá phục vụ ảnh sai); ExifSummaryCodec đối xứng nên đổi bit không bị bắt; persist alpha chỉ ở Slow.
+- Đã khoá tốt: Save không ghi đè khi Load hỏng hoặc bị khoá, HiddenContextMenuItems từ cờ cũ, MiddleClickAction, sắp xếp tự nhiên và tie-break.
+- Còn nợ: 20 đột biến phía Imaging (I1-I15: orientation WicDirect/TurboJpeg, bỏ kiểm alpha, đổi header PreviewCacheFile, đổi identity hash đĩa,
+  ExifSummaryCodec, prune order) sau khi xác định vì sao baseline Imaging có test đỏ.
+**D (UI/tích hợp)**: chưa có báo cáo khi bàn giao; nếu thiếu thì CHẠY LẠI (ưu tiên cao): Win32DialogGuard có thể nuốt hộp thoại lỗi,
+golden tự sinh (recorder và verifier cùng mã), STA/hidden-desktop trên runner CI.
+**E (quét tĩnh)**: 42 test Native/Slow/Manual về dữ liệu ngoài CI; 54 test tự thoát sớm (22 RAW corpus, 7 WebP); 150 khối catch rỗng;
+vài `Assert.InRange` gần như không ràng buộc (`PhotoReviewPerfEventTests:131`, `KineticPanTests:353`); số test Core/Imaging lệch ~360
+so với đếm attribute (chưa giải thích).
+
+## 5. Bẫy vận hành đã gặp
+- Xung đột NGỮ NGHĨA giữa PR: hai PR đúng riêng lẻ vẫn vỡ biên dịch khi gộp (IImageSurface sang PointD/KeyId). `strict:false` nên CI
+  không bắt trước khi merge: build nhánh SAU khi sync master, trước khi để auto-merge.
+- Bảng OPEN-DECISIONS.md xung đột ở mọi PR: dùng `tools/sync-pr-branch.sh <worktree>` (lấy bản master, sinh lại, kiểm `order` trùng,
+  giữ cả hai phía khoá i18n cuối file).
+- Scratchpad dùng chung giữa agent: file tạm phải có tiền tố tên gói (đã va chạm mutate.py, mutation-results.txt).
+- Agent ghi nhầm file vào checkout chính (file rỗng `Win32UiDispatcher.cs`, `NO-WPF-EXEC-PLAN.md`, file `max` trong #407): kiểm
+  `git status` của checkout chính định kỳ. `AppSettingsPocoTests.cs` untracked có từ trước phiên, để nguyên.
+- Windows: xoá worktree dài cần tiền tố long-path; thư mục tạm có thể bị khoá (Permission denied), git đã gỡ đăng ký.
+- Tránh heredoc shell cho file chứa backtick; dùng công cụ ghi file.
+- Build Release ở checkout chính sau mỗi `git merge --ff-only origin/master` (AGENTS.local.md).
