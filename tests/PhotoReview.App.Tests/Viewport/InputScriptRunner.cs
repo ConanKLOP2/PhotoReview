@@ -55,7 +55,7 @@ internal static class InputScriptRunner
     private static void Apply(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, PointerInputController pointer,
         FitViewController fit)
     {
-        var point = new Point(step.X, step.Y);
+        var point = new PointD(step.X, step.Y);
         var ctrl = step.Modifiers?.Contains("Control", StringComparison.OrdinalIgnoreCase) == true;
         switch (step.Kind)
         {
@@ -65,7 +65,7 @@ internal static class InputScriptRunner
                 break;
             case "press":
                 pointer.OnWindowPreviewMouseDown();
-                pointer.OnImagePress(MouseButton.Left, step.Delta > 0 ? step.Delta : 1, point, step.TimestampMs);
+                pointer.OnImagePress(PointerButton.Left, step.Delta > 0 ? step.Delta : 1, point, step.TimestampMs);
                 break;
             case "move":
                 pointer.OnImageMove(true, point, step.TimestampMs);
@@ -74,7 +74,7 @@ internal static class InputScriptRunner
                 pointer.OnImageRelease(point, step.TimestampMs);
                 break;
             case "key":
-                var key = step.Key is { } name && Enum.TryParse<Key>(name, out var parsed) && parsed is Key.Left or Key.Right or Key.Up or Key.Down
+                var key = step.Key is { } name && Enum.TryParse<KeyId>(name, out var parsed) && parsed is KeyId.Left or KeyId.Right or KeyId.Up or KeyId.Down
                     ? parsed
                     : throw Unsupported(index, step);
                 pointer.TryPanByArrow(key, isRepeat: step.Delta != 0);

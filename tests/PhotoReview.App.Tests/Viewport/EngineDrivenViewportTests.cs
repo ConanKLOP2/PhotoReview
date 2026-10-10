@@ -119,7 +119,7 @@ public sealed class EngineDrivenViewportTests
     public async Task WheelZoom_FromFit_KeepsTheImagePointUnderTheCursor()
     {
         Open(6000, 4000);
-        var cursor = new Point(400, 300);
+        var cursor = new PointD(400, 300);
         var before = _surface.ImageFractionAt(cursor);
 
         await _surface.Run(_pointer.OnWheelAsync(120, ctrl: false, cursor));
@@ -136,7 +136,7 @@ public sealed class EngineDrivenViewportTests
     public async Task WheelZoom_TwiceAtDifferentPoints_KeepsEachPoint_AndStaysInRange()
     {
         Open(4000, 6000, dpi: 1.25);
-        foreach (var cursor in new[] { new Point(900, 200), new Point(100, 650), new Point(1270, 715) })
+        foreach (var cursor in new[] { new PointD(900, 200), new PointD(100, 650), new PointD(1270, 715) })
         {
             var before = _surface.ImageFractionAt(cursor);
             await _surface.Run(_pointer.OnWheelAsync(120, ctrl: false, cursor));
@@ -153,7 +153,7 @@ public sealed class EngineDrivenViewportTests
     public async Task WheelZoom_AtTheTopLeftCorner_BesideTheCentredImage_ClampsTheOffsetsAtZero()
     {
         Open(6000, 4000);
-        await _surface.Run(_pointer.OnWheelAsync(120, ctrl: false, new Point(0, 0))); // x = 0 nằm trong lề trái 100 DIP của ảnh Fit
+        await _surface.Run(_pointer.OnWheelAsync(120, ctrl: false, new PointD(0, 0))); // x = 0 nằm trong lề trái 100 DIP của ảnh Fit
         _surface.Pump();
         Assert.Equal((0.0, 0.0), (_surface.HorizontalOffset, _surface.VerticalOffset));
     }
@@ -163,17 +163,17 @@ public sealed class EngineDrivenViewportTests
     {
         Open(6000, 4000);
         _settings.KeyboardZoomAnchor = KeyboardZoomAnchor.ViewportCentre;
-        _surface.PointerPosition = new Point(10, 10); // bị bỏ qua với Centre
+        _surface.PointerPosition = new PointD(10, 10); // bị bỏ qua với Centre
         _viewer.SetZoom(1.0);
         _surface.ScrollTo(1500, 900);
         _surface.Pump();
-        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+        var centre = new PointD(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
         var before = _surface.ImageFractionAt(centre);
 
         await _surface.Run(_pointer.ZoomInAsync());
 
         Assert.Equal(1.25, _viewer.Zoom, 9);
-        var after = _surface.ImageFractionAt(new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2));
+        var after = _surface.ImageFractionAt(new PointD(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2));
         Assert.Equal(before.X, after.X, 9);
         Assert.Equal(before.Y, after.Y, 9);
     }
@@ -185,7 +185,7 @@ public sealed class EngineDrivenViewportTests
         _viewer.SetZoom(1.0);
         _surface.ScrollTo(1500, 900);
         _surface.Pump();
-        var mouse = new Point(200, 500);
+        var mouse = new PointD(200, 500);
         _surface.PointerPosition = mouse;
         var before = _surface.ImageFractionAt(mouse);
 
@@ -201,10 +201,10 @@ public sealed class EngineDrivenViewportTests
     public async Task ClickZoom_FromFit_ZoomsToTheClickLevelAtTheCursor()
     {
         Open(6000, 4000);
-        var cursor = new Point(700, 250);
+        var cursor = new PointD(700, 250);
         var before = _surface.ImageFractionAt(cursor);
 
-        Assert.True(_pointer.OnImagePress(MouseButton.Left, 1, cursor, 0));
+        Assert.True(_pointer.OnImagePress(PointerButton.Left, 1, cursor, 0));
         _pointer.OnImageRelease(cursor, 50);
         _surface.Pump();
 
@@ -239,7 +239,7 @@ public sealed class EngineDrivenViewportTests
         Assert.Equal(0, layout.MaxHorizontalOffset, 9);
         // Hành vi hiện có của PointerInputController (không phải của engine): pass hiệu chỉnh đọc ViewportCentre khi CẢ HAI
         // thanh đang hiện (1270x710), nên điểm neo nằm ở y = 355, thấp hơn tâm cuối (360) nửa độ dày thanh cuộn.
-        var anchoredAt = _surface.ImageFractionAt(new Point(1270 / 2.0, (720 - EngineImageSurface.ScrollBarThickness) / 2));
+        var anchoredAt = _surface.ImageFractionAt(new PointD(1270 / 2.0, (720 - EngineImageSurface.ScrollBarThickness) / 2));
         Assert.Equal(0.5, anchoredAt.X, 9);
         Assert.Equal(fraction, anchoredAt.Y, 9);
     }
@@ -277,16 +277,16 @@ public sealed class EngineDrivenViewportTests
         Open(6000, 4000);
         _viewer.SetZoom(1.0);
         _surface.Pump();
-        Assert.True(_pointer.OnImagePress(MouseButton.Left, 1, new Point(600, 400), 0));
-        _pointer.OnImageMove(true, new Point(5600, 4400), 10);
+        Assert.True(_pointer.OnImagePress(PointerButton.Left, 1, new PointD(600, 400), 0));
+        _pointer.OnImageMove(true, new PointD(5600, 4400), 10);
         _surface.Pump();
         Assert.Equal((0.0, 0.0), (_surface.HorizontalOffset, _surface.VerticalOffset));
-        _pointer.OnImageMove(true, new Point(-9400, -8600), 20);
+        _pointer.OnImageMove(true, new PointD(-9400, -8600), 20);
         _surface.Pump();
         var layout = _surface.State.Layout;
         Assert.Equal((layout.MaxHorizontalOffset, layout.MaxVerticalOffset), (_surface.HorizontalOffset, _surface.VerticalOffset));
         Assert.Equal((4730.0, 3290.0), (layout.MaxHorizontalOffset, layout.MaxVerticalOffset)); // 6000 - 1270, 4000 - 710
-        _pointer.OnImageRelease(new Point(-9400, -8600), 30);
+        _pointer.OnImageRelease(new PointD(-9400, -8600), 30);
     }
 
     [Fact]
@@ -297,13 +297,13 @@ public sealed class EngineDrivenViewportTests
         _viewer.SetZoom(1.0);
         _surface.ScrollTo(4000, 1000);
         _surface.Pump();
-        _pointer.OnImagePress(MouseButton.Left, 1, new Point(900, 400), 0);
+        _pointer.OnImagePress(PointerButton.Left, 1, new PointD(900, 400), 0);
         for (var i = 1; i <= 5; i++)
         {
-            _pointer.OnImageMove(true, new Point(900 - (i * 60), 400), i * 8);
+            _pointer.OnImageMove(true, new PointD(900 - (i * 60), 400), i * 8);
             _surface.Pump();
         }
-        _pointer.OnImageRelease(new Point(560, 400), 48);
+        _pointer.OnImageRelease(new PointD(560, 400), 48);
         Assert.True(_surface.HasFrameHandler);
 
         var previous = _surface.HorizontalOffset;
@@ -329,15 +329,15 @@ public sealed class EngineDrivenViewportTests
         _surface.ScrollTo(4700, 0);
         _surface.Pump();
 
-        Assert.True(_pointer.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_pointer.TryPanByArrow(KeyId.Right, isRepeat: false));
         _surface.Pump();
         Assert.Equal(4730, _surface.HorizontalOffset, 9); // 4700 + bước (cũ 127 / mới 71) kẹp ở Max 4730
 
-        Assert.True(_pointer.TryPanByArrow(Key.Right, isRepeat: false)); // ở mép: nuốt phím, không đổi
+        Assert.True(_pointer.TryPanByArrow(KeyId.Right, isRepeat: false)); // ở mép: nuốt phím, không đổi
         _surface.Pump();
         Assert.Equal(4730, _surface.HorizontalOffset, 9);
 
-        Assert.True(_pointer.TryPanByArrow(Key.Down, isRepeat: false));
+        Assert.True(_pointer.TryPanByArrow(KeyId.Down, isRepeat: false));
         _surface.Pump();
         Assert.Equal(71, _surface.VerticalOffset, 9); // 10 % của viewport 710
     }
@@ -351,7 +351,7 @@ public sealed class EngineDrivenViewportTests
         _viewer.SetZoom(2.0);
         _surface.ScrollTo(5000, 3000);
         _surface.Pump();
-        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+        var centre = new PointD(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
         var before = _surface.ImageFractionAt(centre);
 
         _viewer.SwapSourceSize(6024, 4016);

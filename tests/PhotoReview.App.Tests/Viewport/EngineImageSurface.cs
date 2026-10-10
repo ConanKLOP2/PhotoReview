@@ -146,8 +146,8 @@ internal sealed class EngineImageSurface : IImageSurface, IFitSurface
         return new ViewportSnapshot(_viewer.Zoom, _viewer.Stretch, _viewer.MaxImageWidth, _viewer.MaxImageHeight,
             _state.ImageActualWidth, _state.ImageActualHeight, layout.ExtentWidth, layout.ExtentHeight,
             layout.ViewportWidth, layout.ViewportHeight, _state.HorizontalOffset, _state.VerticalOffset,
-            layout.HorizontalBarVisible ? Visibility.Visible : Visibility.Collapsed,
-            layout.VerticalBarVisible ? Visibility.Visible : Visibility.Collapsed);
+            layout.HorizontalBarVisible,
+            layout.VerticalBarVisible);
     }
 
     public void ScrollHome()
@@ -168,13 +168,9 @@ internal sealed class EngineImageSurface : IImageSurface, IFitSurface
 
     public void ScrollTo(double horizontal, double vertical) => _state.ScrollTo(horizontal, vertical);
 
-    public Point ImageOrigin => new(_state.ImageOrigin.X, _state.ImageOrigin.Y);
+    public PointD ImageOrigin => new(_state.ImageOrigin.X, _state.ImageOrigin.Y);
 
-    public Point ToImageElement(Point surfacePoint)
-    {
-        var p = _state.ToImageElement(new PointD(surfacePoint.X, surfacePoint.Y));
-        return new Point(p.X, p.Y);
-    }
+    public PointD ToImageElement(PointD surfacePoint) => _state.ToImageElement(surfacePoint);
 
     public double ImageActualWidth => _state.ImageActualWidth;
     public double ImageActualHeight => _state.ImageActualHeight;
@@ -193,7 +189,7 @@ internal sealed class EngineImageSurface : IImageSurface, IFitSurface
     public TimeSpan? RenderingTime(EventArgs e) => e is FrameArgs frame ? frame.Time : null;
     public long Timestamp { get; set; }
     public PhotoReview.Core.Abstractions.DisplayTiming? DisplayTiming => null;
-    public Point? PointerPosition { get; set; }
+    public PointD? PointerPosition { get; set; }
 
     /// <summary>Một khung: CompositionTarget.Rendering rồi lượt layout của khung.</summary>
     public void Frame(TimeSpan renderingTime)
@@ -203,9 +199,9 @@ internal sealed class EngineImageSurface : IImageSurface, IFitSurface
     }
 
     /// <summary>Điểm ảnh (tỉ lệ 0..1 của ảnh đang vẽ) nằm dưới <paramref name="viewportPoint"/>.</summary>
-    public (double X, double Y) ImageFractionAt(Point viewportPoint)
+    public (double X, double Y) ImageFractionAt(PointD viewportPoint)
     {
-        var p = _state.ToImageElement(new PointD(viewportPoint.X, viewportPoint.Y));
+        var p = _state.ToImageElement(viewportPoint);
         return (p.X / _state.ImageActualWidth, p.Y / _state.ImageActualHeight);
     }
 
