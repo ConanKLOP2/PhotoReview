@@ -125,4 +125,5 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 16 test mới + 2 test chữ ký đã sửa; mutation 10/10 bị bắt. Hợp đồng v1 không đổi; còn chờ nối COM IFileOpenDialog (WP-13b) và
 `IClipboardService` dời sang App.Shared (WP-09). [Detail](decisions/NOWPF-WP19A-DIALOGS.md) |
 | ARROW-PAN-EQUAL-STEP | One arrow press now moves a zoomed image the SAME number of pixels horizontally and vertically: ArrowPanStepPercent % of the viewport's SHORTER side (was: the viewport size along the pressed axis). Reverses an earlier "not doing this" decision; applies to the instant and the kinetic arrow pan; no new setting. [Detail](decisions/ARROW-PAN-EQUAL-STEP.md) |
+| NOWPF-HANDOFF-20261010 | Bàn giao 2026-10-10: trạng thái đợt NO-WPF (đợt 1 gần xong), việc dở theo PR, kiểm toán test CI (A cổng CI, B an toàn dữ liệu: 3 lỗ hổng test thật), việc kế tiếp theo thứ tự ưu tiên, bẫy vận hành. [Detail](decisions/NOWPF-HANDOFF-20261010.md) |
 <!-- END GENERATED DECIDED TABLE -->
