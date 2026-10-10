@@ -32,6 +32,7 @@ Kế hoạch: [NO-WPF-EXEC-PLAN](NO-WPF-EXEC-PLAN.md) (mục 1-3), thẻ WP-11 t
 |---|---|
 | `App/WindowPlacementService.cs` (window-placement.json) | Thuộc WP-08 (placement); thẻ WP-11 cấm chạm App |
 | `App/SettingsWindow.xaml.cs`, `App/ActionProfilesWindow.xaml.cs`, `App/BenchmarkWindow.xaml.cs` | App, như trên. `SettingsWindow` dùng `UnsafeRelaxedJsonEscaping` nên cần đối chiếu byte riêng |
+| `App/Localization/TranslationExport.cs` (dùng `UnsafeRelaxedJsonEscaping`), `JsonSerializer.Deserialize<List<ReviewAction>>` trong `SettingsWindow` | App; cần đối chiếu byte riêng (không phải options mặc định) khi gói App chuyển sang source-gen (reviewer PR #401) |
 | `Benchmarking/BenchmarkModels.cs`, `PerfAnalysis/PerfAnalyzeReport.cs`, `PerfAnalyzeRules.cs`, `NaNAsNullDoubleConverter.cs` | Ngoài Core/Imaging/Platform; công cụ đo, không thuộc đường chạy của app |
 
 ## 4. Kiểm chứng
