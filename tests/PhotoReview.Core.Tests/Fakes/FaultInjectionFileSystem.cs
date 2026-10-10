@@ -129,6 +129,7 @@ public sealed class FaultInjectionFileSystem(InMemoryFileSystem disk) : IFileSys
     public IEnumerable<string> EnumerateDirectories(string directory) { ThrowIfDead(); return Disk.EnumerateDirectories(directory); }
 
     public void CreateDirectory(string path) => Mutate("mkdir", () => Disk.CreateDirectory(path));
+    public bool TryDeleteEmptyDirectory(string path) => Disk.TryDeleteEmptyDirectory(path);
 
     public void WriteAllTextAtomic(string path, string text, bool durable = true) =>
         Mutate("write", () => Disk.WriteAllTextAtomic(path, text, durable));

@@ -12,9 +12,9 @@ namespace PhotoReview.Core.Tests.FileActions;
 [Trait("Category", "HotPath")]
 public sealed class JournalDurabilityTests
 {
-    private sealed class NoopRecycleBin : IRecycleBin
+    private sealed class NoopRecycleBin(InMemoryFileSystem fs) : IRecycleBin
     {
-        public void SendToRecycleBin(string path) { }
+        public void SendToRecycleBin(string path) => fs.Delete(path); // the shell removes the file (B-06 post-check)
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => true;
     }
 
@@ -27,7 +27,7 @@ public sealed class JournalDurabilityTests
     public JournalDurabilityTests()
     {
         _journal = new OperationJournal(_paths, _fs, new SystemClock(), () => _mode);
-        _service = new FileActionService(_journal, _fs, new SystemClock(), new NoopRecycleBin());
+        _service = new FileActionService(_journal, _fs, new SystemClock(), new NoopRecycleBin(_fs));
     }
 
     private string JournalText => _fs.ReadAllText(_paths.JournalFile);

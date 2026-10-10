@@ -106,6 +106,31 @@ public class FileSystemContractTests
 
     [Theory]
     [MemberData(nameof(GetHarnessFactories))]
+    public void TryDeleteEmptyDirectoryRemovesOnlyAnEmptyDirectory(Func<IFileSystemHarness> factory)
+    {
+        using var harness = factory();
+        var fs = harness.FileSystem;
+        var empty = harness.Combine("Empty");
+        var full = harness.Combine("Full");
+        var withSubDir = harness.Combine("WithSub");
+        fs.CreateDirectory(empty);
+        fs.CreateDirectory(full);
+        fs.WriteAllTextAtomic(Path.Combine(full, "keep.txt"), "keep");
+        fs.CreateDirectory(Path.Combine(withSubDir, "Nested"));
+
+        Assert.False(fs.TryDeleteEmptyDirectory(harness.Combine("Missing")));
+        Assert.False(fs.TryDeleteEmptyDirectory(full));
+        Assert.False(fs.TryDeleteEmptyDirectory(withSubDir));
+        Assert.True(fs.TryDeleteEmptyDirectory(empty));
+
+        Assert.False(fs.DirectoryExists(empty));
+        Assert.True(fs.DirectoryExists(full));
+        Assert.True(fs.FileExists(Path.Combine(full, "keep.txt")));
+        Assert.True(fs.DirectoryExists(Path.Combine(withSubDir, "Nested")));
+    }
+
+    [Theory]
+    [MemberData(nameof(GetHarnessFactories))]
     public void GetFileStatReturnsMetadataForExistingFileAndNullForMissing(Func<IFileSystemHarness> factory)
     {
         using var harness = factory();

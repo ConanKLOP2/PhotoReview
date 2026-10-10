@@ -211,6 +211,26 @@ public sealed class FileActionMutationAuditBTests
         Assert.Equal(JournalErrors.SourceStillExistsAfterRecovery, failed.ErrorCode);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_Recycle_ShellReportsSuccessButFileIsStillThere_FailsAndIsNotCommitted()
+    {
+        // Arrange (B-06: the single Recycle has the same post-check as the group one)
+        _fs.AddFile(Jpeg, "jpeg", Stamp);
+        var bin = new ShellBin(_fs) { SendLeavesFile = true };
+        var service = new FileActionService(_journal, _fs, new FixedClock(Stamp), bin);
+
+        // Act
+        var result = await service.ExecuteAsync(new FileActionRequest(Jpeg, FileOperationType.Recycle, null));
+
+        // Assert: not reported as recycled; the journal keeps one Failed item with the coded error and no Committed line.
+        Assert.False(result.Succeeded);
+        Assert.False(result.PermanentlyDeleted);
+        Assert.Single(bin.Recycled);
+        Assert.True(_fs.FileExists(Jpeg));
+        var failed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal(JournalErrors.SourceStillExistsAfterRecovery, failed.ErrorCode);
+    }
+
     // ---- M30: a retry re-asks the bin right before deleting a journaled-Permanent member ----
 
     [Fact]

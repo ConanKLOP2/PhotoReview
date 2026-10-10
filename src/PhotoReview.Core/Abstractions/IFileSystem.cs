@@ -124,6 +124,14 @@ public interface IFileSystem
     void CreateDirectory(string path);
 
     /// <summary>
+    /// Xoá thư mục <paramref name="path"/> CHỈ khi nó tồn tại và đang rỗng (không đệ quy, không bao giờ xoá nội dung): dùng để
+    /// dọn thư mục đích RỖNG mà chính một thao tác vừa tạo khi thao tác thất bại trước khi di chuyển/sao chép bất cứ thứ gì.
+    /// Trả true khi thư mục đã bị xoá; false khi nó không tồn tại, không rỗng hoặc không xoá được (không ném cho các lỗi IO
+    /// thông thường). Mặc định false (không hỗ trợ: không dọn gì).
+    /// </summary>
+    bool TryDeleteEmptyDirectory(string path) => false;
+
+    /// <summary>
     /// SEC-01: trả về đường dẫn tuyệt đối của <paramref name="path"/> SAU KHI phân giải mọi reparse point
     /// (symlink/junction) đã tồn tại trong các đoạn của đường dẫn — kể cả đoạn cuối cùng (file/thư mục đích).
     /// <see cref="PhotoReview.Core.FileActions.ActionDestinationPolicy.Validate(string?)"/> chỉ kiểm tra dạng chuỗi (không có "..", không rooted) và

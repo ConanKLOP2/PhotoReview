@@ -290,6 +290,22 @@ public sealed class PhysicalFileSystem : IFileSystem
         Directory.CreateDirectory(path);
     }
 
+    public bool TryDeleteEmptyDirectory(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        try
+        {
+            // Directory.Delete without recursion refuses a non-empty directory atomically (IOException), so there is no
+            // check-then-delete race that could remove content.
+            Directory.Delete(path, recursive: false);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// SEC-01: walks <paramref name="path"/> one segment at a time from its root, following the real reparse
     /// point (symlink/junction) target whenever an existing segment is one, including the final segment (the

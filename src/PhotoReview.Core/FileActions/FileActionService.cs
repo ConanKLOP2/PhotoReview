@@ -83,6 +83,8 @@ public sealed class FileActionService
         // R01b: destination -> what it looked like right after this operation created it (size + write time). The compensation deletes a
         // copy only while it is still exactly that file; a foreign replacement (even of the same size) or an unobserved copy is kept.
         var createdCopies = new Dictionary<string, FileStat>(StringComparer.OrdinalIgnoreCase);
+        // Folders THIS call created for the destination (deepest first); removed again only if the journal's Prepared line cannot be written.
+        IReadOnlyList<string> createdDestinationFolders = [];
         try
         {
             if (request.Group.Paths.Count < 2)
@@ -164,7 +166,7 @@ public sealed class FileActionService
             }
             manifest = members;
 
-            if (destinationFolder is not null) _fileSystem.CreateDirectory(destinationFolder);
+            if (destinationFolder is not null) createdDestinationFolders = CreateDestinationFolder(destinationFolder);
             var firstMember = manifest[0];
             var prepared = new JournalEntry(
                 Guid.NewGuid().ToString("N"), request.Operation, JournalState.Prepared,
@@ -228,6 +230,9 @@ public sealed class FileActionService
         }
         catch (Exception ex)
         {
+            // Failed before the Prepared line exists (e.g. the journal cannot be written): nothing was moved or copied, so the empty
+            // folder this call just created must not stay behind. Never throws; the original failure below is unchanged.
+            if (tx is not { IsPrepared: true }) RemoveCreatedEmptyFolders(createdDestinationFolders);
             try
             {
                 // Compensate first (the outcome decides what the journal says), then inspect the real state.
@@ -274,6 +279,44 @@ public sealed class FileActionService
         {
             tx?.Dispose();
             End();
+        }
+    }
+
+    /// <summary>
+    /// Creates <paramref name="destinationFolder"/> and returns the folders this call actually brought into existence (deepest
+    /// first): the folder itself and any missing parents. A folder that already existed is never in the list, so the failure cleanup
+    /// cannot remove something that was not ours.
+    /// </summary>
+    private List<string> CreateDestinationFolder(string destinationFolder)
+    {
+        var missing = new List<string>();
+        for (var folder = Path.TrimEndingDirectorySeparator(destinationFolder);
+             !string.IsNullOrEmpty(folder) && !_fileSystem.DirectoryExists(folder);
+             folder = Path.GetDirectoryName(folder))
+        {
+            missing.Add(folder);
+        }
+
+        _fileSystem.CreateDirectory(destinationFolder);
+        return missing;
+    }
+
+    /// <summary>
+    /// Best-effort cleanup of folders this call created: each is removed only while it is empty (the file system refuses a folder with
+    /// content), deepest first, stopping at the first one that stays. Any error is swallowed so it can never mask the original failure.
+    /// </summary>
+    private void RemoveCreatedEmptyFolders(IReadOnlyList<string> createdFolders)
+    {
+        foreach (var folder in createdFolders)
+        {
+            try
+            {
+                if (!_fileSystem.TryDeleteEmptyDirectory(folder)) return;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                return;
+            }
         }
     }
 
@@ -466,6 +509,8 @@ public sealed class FileActionService
         // R01a/b: what the destination looked like right after THIS Copy created it. The failure cleanup deletes only a file that still
         // has this size and write time; without an observation (the stat failed) nothing is deleted.
         FileStat? copiedStat = null;
+        // Folders THIS call created for the destination (deepest first); removed again only if the Prepared line cannot be written.
+        IReadOnlyList<string> createdDestinationFolders = [];
 
         try
         {
@@ -515,7 +560,7 @@ public sealed class FileActionService
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
 
                 // Only after every pre-check passed: a missing source must not leave an empty destination folder behind.
-                _fileSystem.CreateDirectory(destinationFolder);
+                createdDestinationFolders = CreateDestinationFolder(destinationFolder);
 
                 tx = new JournalTransaction(_journal, _clock, new JournalEntry(
                     operationId,
@@ -611,6 +656,11 @@ public sealed class FileActionService
                     await Task.Run(() => _recycleBin.DeletePermanently(source), cancellationToken).ConfigureAwait(false);
                 else
                     await Task.Run(() => _recycleBin.SendToRecycleBin(source), cancellationToken).ConfigureAwait(false);
+
+                // B-06 (same post-check as the group Recycle): a shell that reports success while the source is still there must
+                // not be committed as a recycled file; fail with the same coded error so Recovery shows it.
+                if (_fileSystem.FileExists(source))
+                    throw new JournalCodedException(JournalErrors.SourceStillExistsAfterRecovery);
                 tx.MarkMutationCompleted();
 
                 _ = tx.Commit(out var journalError);
@@ -638,6 +688,10 @@ public sealed class FileActionService
         }
         catch (Exception ex)
         {
+            // Failed before the Prepared line exists (journal cannot be written): nothing was moved or copied, so the empty folder this
+            // call just created is removed. Never throws and never touches a pre-existing or non-empty folder.
+            if (tx is not { IsPrepared: true }) RemoveCreatedEmptyFolders(createdDestinationFolders);
+
             // RV-C03: a Copy cut short (disk full, ...) must not leave its partial file: Recovery would call the entry a
             // Conflict and a retry would refuse "destination exists".
             if (copyProof.DestinationCreated && destinationPath is not null && copiedStat is not null)

@@ -68,5 +68,6 @@ public sealed class FaultableFileSystem(InMemoryFileSystem inner) : IFileSystem
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => Inner.EnumerateFiles(directory, pattern);
     public IEnumerable<string> EnumerateDirectories(string directory) => Inner.EnumerateDirectories(directory);
     public void CreateDirectory(string path) => Inner.CreateDirectory(path);
+    public bool TryDeleteEmptyDirectory(string path) => Inner.TryDeleteEmptyDirectory(path);
     public string ResolveRealPath(string path) => Inner.ResolveRealPath(path);
 }
