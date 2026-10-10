@@ -4,7 +4,7 @@ namespace PhotoReview.Imaging.Caching;
 
 /// <summary>
 /// Shared "temp file -&gt; write -&gt; atomic rename" primitive behind both
-/// <see cref="DiskCacheStore.WriteAtomicallyAsync(System.Windows.Media.Imaging.BitmapSource, string, ILog?, CancellationToken)"/>
+/// <see cref="DiskCacheStore.WriteAtomicallyAsync(PhotoReview.Imaging.Pixels.PixelBuffer, string, ILog?, CancellationToken)"/>
 /// and <see cref="PreviewCacheFile"/>'s atomic write.
 /// </summary>
 internal static class AtomicCacheFile

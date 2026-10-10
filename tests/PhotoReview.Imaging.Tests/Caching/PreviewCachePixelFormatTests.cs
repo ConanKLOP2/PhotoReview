@@ -57,8 +57,8 @@ public sealed class PreviewCachePixelFormatTests(ITestOutputHelper output) : IDi
         var bitmap = Convert(format, palette);
         var path = _root.Combine(name + ".pv4");
 
-        await PreviewCacheFile.WriteAtomicallyAsync(bitmap, DecoderBackend.Wpf, orientation: 1, originalWidth: 0, originalHeight: 0, path);
-        var read = PreviewCacheFile.Read(path);
+        await PreviewCacheFileWpf.WriteAtomicallyAsync(bitmap, DecoderBackend.Wpf, orientation: 1, originalWidth: 0, originalHeight: 0, path);
+        var read = PreviewCacheFileWpf.Read(path);
 
         output.WriteLine($"{name}: {bitmap.Format} -> {read.Bitmap.Format}");
         Assert.Equal((17, 11), (read.Bitmap.PixelWidth, read.Bitmap.PixelHeight));

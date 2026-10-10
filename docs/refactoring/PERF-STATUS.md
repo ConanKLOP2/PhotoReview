@@ -41,5 +41,6 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-10 -- Mở ảnh từ Explorer: ảnh đầu, khung trắng lúc khởi động, so sánh v2.0.200-380 (không hồi quy ở v240)](perf/2026-10-10-startup-first-image.md)
 - [2026-10-10 -- P-1 "WPF nhanh": ảnh đầu từ Explorer R2R 1127 -> 782 ms, build 1321 -> 915 ms (chưa đạt NW-5 <= 600 ms); thí nghiệm self-contained + composite R2R -140..-160 ms](perf/2026-10-10-p1-startup-in-wpf.md)
 - [2026-10-10 -- WP-15 renderer Direct2D: upload 24 MP 35 ms, pan CPU submit P95 0,8 ms, Fit HQC 24 MP GPU 27-41 ms (rủi ro); tải nền 60-100 %, cần đo lại khi máy rảnh](perf/2026-10-10-wp15-d2d-renderer.md)
+- [2026-10-10 -- WP-04 cache đĩa bằng WIC (JPEG +17..30 %, PNG ngang/nhanh hơn; mutation 23/24)](perf/2026-10-10-wp04-cache-wic.md)
 - [2026-10-10 -- WP-03 WIC decode ra PixelBuffer: 24 MP -> 1920 px, new so với master -1.8 % gộp / +2.9 % lượt yên (trong ngưỡng 5 %)](perf/2026-10-10-wp03-wic-decode.md)
 - [2026-10-10 -- WP-05 TurboJpeg ra PixelBuffer (fine-scale vs WIC Fant)](perf/2026-10-10-wp05-native-pixelbuffer.md)

@@ -13,13 +13,6 @@ internal static class InputScriptCatalog
 {
     private const string Default = "{}";
 
-    /// <summary>
-    /// Group label of the scripts whose arrow-key pan step is about to change in the WPF app (per-axis viewport fraction -> the same
-    /// pixel step on both axes = ArrowPanStepPercent x min(viewport W, H)). Recorded under the OLD rule; the lead re-records them after
-    /// that PR merges. Excluded from the gating replay (GoldenWpfConformanceTests), replayed by a Manual test only.
-    /// </summary>
-    internal const string ArrowPanPending = "ArrowPan-pending-rule-change|";
-
     // Standard geometry: 1280x720 client at 100 % DPI. 6000x4000 landscape Fit = 1080x720 (x 100..1180); 4000x6000 portrait Fit = 480x720 (x 400..880).
     private static readonly (double X, double Y)[] FivePoints = [(150, 80), (1130, 80), (150, 640), (1130, 640), (640, 360)];
 
@@ -226,19 +219,19 @@ internal static class InputScriptCatalog
 
     private static void AddArrows(List<GoldenInputScript> scripts)
     {
-        var step = Begin(ArrowPanPending + "arrow-keys-pan-at-100pct-step10", 1280, 720, 1.0, 6000, 4000, Default);
+        var step = Begin("arrow-keys-pan-at-100pct-step10", 1280, 720, 1.0, 6000, 4000, Default);
         step.Command("ZoomActualSize").Key("Right").Key("Right").Key("Down").Key("Left").Key("Up").Key("Up");
         scripts.Add(step.Done());
 
-        var edge = Begin(ArrowPanPending + "arrow-keys-at-edge-consumed-no-navigate", 1280, 720, 1.0, 6000, 4000, Default);
+        var edge = Begin("arrow-keys-at-edge-consumed-no-navigate", 1280, 720, 1.0, 6000, 4000, Default);
         edge.Command("ZoomActualSize").Command("ZoomActualSize").Key("Left").Key("Up").Key("Left", repeat: true);
         scripts.Add(edge.Done());
 
-        var navigate = Begin(ArrowPanPending + "arrow-keys-at-edge-navigate-setting", 1280, 720, 1.0, 6000, 4000, "{\"arrowKeyNavigatesAtZoomEdge\":true}");
+        var navigate = Begin("arrow-keys-at-edge-navigate-setting", 1280, 720, 1.0, 6000, 4000, "{\"arrowKeyNavigatesAtZoomEdge\":true}");
         navigate.Command("ZoomActualSize").Key("Left").Key("Left", repeat: true).Key("Right").Key("Up");
         scripts.Add(navigate.Done());
 
-        var big = Begin(ArrowPanPending + "arrow-keys-step-25pct", 1280, 720, 1.0, 6000, 4000, "{\"arrowPanStepPercent\":25}");
+        var big = Begin("arrow-keys-step-25pct", 1280, 720, 1.0, 6000, 4000, "{\"arrowPanStepPercent\":25}");
         big.Command("ZoomActualSize").Key("Down").Key("Down").Key("Right");
         scripts.Add(big.Done());
 
@@ -246,7 +239,7 @@ internal static class InputScriptCatalog
         fit.Key("Right").Key("Left").Key("Down");
         scripts.Add(fit.Done());
 
-        var kinetic = Begin(ArrowPanPending + "arrow-keys-kinetic-impulse-frames", 1280, 720, 1.0, 6000, 4000, "{\"kineticPanEnabled\":true,\"kineticGlideSmoothing\":\"Off\"}");
+        var kinetic = Begin("arrow-keys-kinetic-impulse-frames", 1280, 720, 1.0, 6000, 4000, "{\"kineticPanEnabled\":true,\"kineticGlideSmoothing\":\"Off\"}");
         kinetic.Command("ZoomActualSize").Key("Right", repeat: false).Frames(start: 56, count: 40, intervalMs: 16);
         kinetic.Key("Down").Key("Down", repeat: true).Frames(start: 700, count: 60, intervalMs: 16);
         scripts.Add(kinetic.Done());

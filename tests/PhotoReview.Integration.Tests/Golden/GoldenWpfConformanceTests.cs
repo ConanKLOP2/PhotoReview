@@ -46,22 +46,13 @@ public sealed class GoldenWpfConformanceTests
 
     [Fact]
     public async Task InputScripts_CommittedGolden_ReplayOnWpf() =>
-        Assert.True(await ReplayAsync(pendingArrowPan: false) >= 60, "G-INPUT replays at least 60 gating scripts.");
+        Assert.True(await ReplayAsync() >= 60, "G-INPUT replays at least 60 gating scripts.");
 
-    /// <summary>
-    /// The arrow-pan scripts recorded under the OLD step rule (see <see cref="InputScriptCatalog.ArrowPanPending"/>): not gating,
-    /// because the pending app change makes them red on purpose. Run after the pan PR to see exactly what it changed, then re-record.
-    /// </summary>
-    [Fact]
-    [Trait("Category", "Manual")]
-    public async Task InputScripts_ArrowPanPendingRuleChange_ReplayOnWpf() =>
-        Assert.True(await ReplayAsync(pendingArrowPan: true) > 0);
-
-    private static async Task<int> ReplayAsync(bool pendingArrowPan)
+    private static async Task<int> ReplayAsync()
     {
         var all = GoldenFile.Read(GoldenFile.InputScripts, GoldenJsonContext.Default.GoldenDocumentGoldenInputScript);
         Assert.True(all.Items.Count >= 60, $"G-INPUT needs >= 60 scripts, has {all.Items.Count}.");
-        var scripts = all.Items.Where(s => s.Name.StartsWith(InputScriptCatalog.ArrowPanPending, StringComparison.Ordinal) == pendingArrowPan).ToList();
+        var scripts = all.Items;
         Assert.NotEmpty(scripts);
 
         await GoldenWpfHost.RunEachAsync(scripts, async (view, script) =>
