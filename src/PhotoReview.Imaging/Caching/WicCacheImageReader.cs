@@ -91,6 +91,12 @@ internal static class WicCacheImageReader
                 pixels = null;
                 return result;
             }
+            catch (COMException ex) when (IsOutOfMemory(ex))
+            {
+                // Hết bộ nhớ không phải "entry hỏng": COMException là lỗi entry theo IsCacheEntryFailure (xoá entry, giải mã lại từ
+                // nguồn), còn OutOfMemoryException thì lan lên và entry nguyên vẹn được giữ.
+                throw new OutOfMemoryException("Not enough memory to decode the cache entry.", ex);
+            }
             finally
             {
                 pixels?.Dispose();
@@ -123,6 +129,11 @@ internal static class WicCacheImageReader
         WicGuids.GUID_WICPixelFormat32bppCMYK,
         WicGuids.GUID_WICPixelFormat64bppCMYK,
     ];
+
+    private const int EOutOfMemory = unchecked((int)0x8007000E); // E_OUTOFMEMORY = WINCODEC_ERR_OUTOFMEMORY
+
+    /// <summary>True khi WIC báo hết bộ nhớ (E_OUTOFMEMORY): lỗi tài nguyên, không phải dữ liệu hỏng.</summary>
+    internal static bool IsOutOfMemory(COMException ex) => ex.HResult == EOutOfMemory;
 
     internal static bool IsOpaqueFormat(Guid format) => OpaqueFormats.Contains(format);
 }
