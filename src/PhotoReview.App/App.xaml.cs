@@ -417,7 +417,8 @@ public partial class App : System.Windows.Application, IDisposable
     {
         try
         {
-            var placement = await placementLoad.ConfigureAwait(false);
+            // Runs inside Task.Run (no synchronization context): the continuation stays on the pool.
+            var placement = await placementLoad;
             var box = PhotoReview.App.Services.InitialViewportPredictor.PredictDecodeBox(placement,
                 PhotoReview.App.MainWindow.DefaultWindowWidth, PhotoReview.App.MainWindow.DefaultWindowHeight, PhotoReview.App.MainWindow.PreviewQualityMultiplier);
             if (box is null || _services is not { } services) return null;
@@ -435,13 +436,14 @@ public partial class App : System.Windows.Application, IDisposable
     private void StartEarlyDecode(Task<EarlyDecodePlan?> plan, string path, AppSettings settings)
     {
         var viewport = _services!.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>();
-        _ = plan.ContinueWith(t =>
+        // Task.Run: the await continues on the pool the moment the plan is ready (not queued behind the UI thread's XAML load).
+        _ = Task.Run(async () =>
         {
-            if (t.Result is not { } p) return;
+            if (await plan is not { } p) return;
             viewport.StartupPrediction = p.Box;
             if (PhotoReview.App.Services.InitialImagePrewarm.Start(p.Previews, settings, path, p.Box) is not null)
                 PhotoReviewPerf.StartupMark("earlyDecodeStarted");
-        }, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        });
     }
 
     /// <summary>

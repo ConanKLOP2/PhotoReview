@@ -82,7 +82,26 @@ internal static class WindowPlacementService
         File.Exists(placementPath) ? JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(placementPath), JsonOptions) : null;
 
     private static readonly object PrefetchGate = new();
-    private static (string Path, Task<WindowPlacement?> Load)? _prefetch;
+    private static (string Path, PrefetchResult Outcome)? _prefetch;
+
+    /// <summary>The prefetch task writes its outcome here, so the UI thread can read a finished result without touching the Task.</summary>
+    private sealed class PrefetchResult
+    {
+        private WindowPlacement? _value;
+        private volatile bool _succeeded;
+
+        public void Complete(WindowPlacement? value)
+        {
+            _value = value;
+            _succeeded = true; // volatile write publishes _value
+        }
+
+        public bool TryGet(out WindowPlacement? value)
+        {
+            value = _succeeded ? _value : null;
+            return _succeeded;
+        }
+    }
 
     /// <summary>
     /// P-1 startup: reads the placement file on the thread pool now (the first JSON read costs ~25 ms of reflection
@@ -91,27 +110,31 @@ internal static class WindowPlacementService
     /// </summary>
     internal static Task<WindowPlacement?> Prefetch(string placementPath)
     {
+        var result = new PrefetchResult();
         var load = Task.Run(() =>
         {
-            try { return Read(placementPath); }
+            WindowPlacement? value;
+            try { value = Read(placementPath); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException) { return null; } // RestoreBeforeShow reads (and logs) it again
+            result.Complete(value);
+            return value;
         });
-        lock (PrefetchGate) _prefetch = (placementPath, load);
+        lock (PrefetchGate) _prefetch = (placementPath, result);
         return load;
     }
 
     /// <summary>The prefetched placement of <paramref name="placementPath"/> (once), or null: read the file instead.</summary>
     private static WindowPlacement? TakePrefetched(string placementPath)
     {
-        Task<WindowPlacement?> load;
+        PrefetchResult result;
         lock (PrefetchGate)
         {
             if (_prefetch is not { } p || !string.Equals(p.Path, placementPath, StringComparison.OrdinalIgnoreCase)) return null;
             _prefetch = null;
-            load = p.Load;
+            result = p.Outcome;
         }
         // A file read (bounded): normally finished long before the window gets its HWND. Not finished or failed: read again.
-        return load.IsCompletedSuccessfully ? load.Result : null;
+        return result.TryGet(out var value) ? value : null;
     }
 
     /// <summary>The WPF state a saved show command reopens in (same rule as <see cref="NormalizeShowCommand"/>).</summary>

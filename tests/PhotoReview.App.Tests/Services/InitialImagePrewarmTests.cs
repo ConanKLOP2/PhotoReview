@@ -118,7 +118,7 @@ public sealed class InitialImagePrewarmTests : IDisposable
         public IDecodedImage Decode(DecodeRequest request)
         {
             Interlocked.Increment(ref _calls);
-            LastRequestedBox = request.TargetBox;
+            LastRequestedBox = request.Box;
             return new FakeImage();
         }
 
