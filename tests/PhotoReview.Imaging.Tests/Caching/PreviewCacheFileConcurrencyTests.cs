@@ -47,7 +47,7 @@ public sealed class PreviewCacheFileConcurrencyTests : IDisposable
             {
                 try
                 {
-                    var read = PreviewCacheFile.Read(path);
+                    var read = PreviewCacheFileWpf.Read(path);
                     Interlocked.Increment(ref reads);
                     var consistent = (read.Bitmap.PixelWidth, read.Bitmap.PixelHeight, read.Orientation, read.ActualBackend) is
                         (8, 6, 1, DecoderBackend.Wpf) or (16, 12, 6, DecoderBackend.TurboJpeg);
@@ -65,6 +65,6 @@ public sealed class PreviewCacheFileConcurrencyTests : IDisposable
         Assert.Empty(failures);
         Assert.True(reads > 0);
         Assert.Empty(Directory.GetFiles(_root.Path, "*.tmp"));
-        Assert.True(PreviewCacheFile.Read(path).Bitmap.PixelWidth is 8 or 16);
+        Assert.True(PreviewCacheFileWpf.Read(path).Bitmap.PixelWidth is 8 or 16);
     }
 }

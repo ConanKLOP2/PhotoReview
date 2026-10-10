@@ -3,7 +3,7 @@ using System.IO;
 using System.Diagnostics;
 using PhotoReview.Core.Catalog;
 using System.Threading.Channels;
-using System.Windows.Media.Imaging;
+using PhotoReview.Imaging.Pixels;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Localization;
 
@@ -68,9 +68,12 @@ public sealed class PreviewImageService : IPreloadTarget
     // A small fixed worker pool with a bounded, drop-when-full queue caps that instead.
     private const int PersistWorkerCount = 2;
     private const int PersistQueueCapacity = 16; // queued bitmaps stay alive outside the RAM cache budget until written
-    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation, int OriginalWidth, int OriginalHeight, Metadata.ExifSummary? Exif)> _persistQueue =
-        Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int, int, int, Metadata.ExifSummary?)>(
+    // WP-04: the queue holds the decoded image itself (framework-agnostic); the worker borrows/copies its pixels through
+    // _platformCodec (C-02 ToPixels) only when it actually writes.
+    private readonly Channel<(IDecodedImage Image, string CachePath, long Epoch)> _persistQueue =
+        Channel.CreateBounded<(IDecodedImage, string, long)>(
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
+    private readonly IPlatformImageCodec _platformCodec;
     private readonly Task[] _persistWorkers;
 
     // Newest epoch that started writing each cache path. A worker that went stale mid-write deletes its file only while it is
@@ -100,10 +103,11 @@ public sealed class PreviewImageService : IPreloadTarget
         PreloadWindow? preloadWindow = null,
         ISourceReader? sourceReader = null,
         IImageDecoder? rawFullDecoder = null,
-        Func<bool>? isRawFullDecodeEnabled = null)
+        Func<bool>? isRawFullDecodeEnabled = null,
+        IPlatformImageCodec? platformCodec = null)
         : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
             diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache,
-            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader, rawFullDecoder, isRawFullDecodeEnabled)
+            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader, rawFullDecoder, isRawFullDecodeEnabled, platformCodec)
     {
     }
 
@@ -135,8 +139,13 @@ public sealed class PreviewImageService : IPreloadTarget
         PreloadWindow? preloadWindow = null,
         ISourceReader? sourceReader = null,
         IImageDecoder? rawFullDecoder = null,
-        Func<bool>? isRawFullDecodeEnabled = null)
+        Func<bool>? isRawFullDecodeEnabled = null,
+        IPlatformImageCodec? platformCodec = null)
     {
+        // WP-04: disk-cache reads/writes go through PixelBuffer + WIC; this codec turns pixels into the platform image the
+        // presenter shows and back. null = the WPF bridge (the WPF app's decoders all produce BitmapSources) until WP-06 makes it
+        // a required dependency.
+        _platformCodec = platformCodec ?? WpfCacheImageCodec.Instance;
         _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
         _rawFullDecoder = rawFullDecoder;
         _isRawFullDecodeEnabled = isRawFullDecodeEnabled ?? (() => false);
@@ -274,14 +283,27 @@ public sealed class PreviewImageService : IPreloadTarget
             if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
             try
             {
+                var image = request.Image;
+                PixelLease lease;
+                try
+                {
+                    lease = _platformCodec.ToPixels(image.PlatformImage);
+                }
+                catch (ArgumentException)
+                {
+                    // A platform image the codec cannot turn into pixels (a test double, a foreign type) is simply not
+                    // persisted -- what the pre-WP-04 "PlatformImage is BitmapSource" filter did.
+                    continue;
+                }
+                using var pixels = lease;
                 // IMG-01/Q-R7: JPEG would flatten transparency, so alpha-format previews persist only if no pixel is
                 // transparent. Scanned here (background) rather than on the decode path that returns the image.
-                if (!PreviewCacheFile.IsFullyOpaque(request.Bitmap)) continue;
+                if (!PixelOps.IsFullyOpaque(pixels.Pixels)) continue;
                 ClaimPersistPath(request.CachePath, request.Epoch);
                 try
                 {
-                    await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
-                            request.OriginalWidth, request.OriginalHeight, request.CachePath, opacityVerified: true, exif: request.Exif)
+                    await PreviewCacheFile.WriteAtomicallyAsync(pixels.Pixels, image.ActualBackend, image.Orientation,
+                            image.OriginalWidth, image.OriginalHeight, request.CachePath, opacityVerified: true, exif: image.Exif)
                         .ConfigureAwait(false);
                     AfterPersistWriteForTests?.Invoke();
                     if (request.Epoch != Volatile.Read(ref _cacheEpoch))
@@ -559,8 +581,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 // is stored under the requested backend's path but its header truthfully records
                 // whichever backend actually produced the pixels.
                 var cacheEntry = PreviewCacheFile.Read(cachePath);
-                decodedImage = new WpfDecodedImage(cacheEntry.Bitmap, downscaled: true, orientation: cacheEntry.Orientation, actualBackend: cacheEntry.ActualBackend,
-                    originalWidth: cacheEntry.OriginalWidth, originalHeight: cacheEntry.OriginalHeight, exif: cacheEntry.Exif);
+                decodedImage = PreviewCacheFile.ToDecodedImage(cacheEntry, _platformCodec);
                 _metrics.RecordDiskCacheHit();
                 _diskStore.NoteAccessed(cachePath);
                 if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), cacheEntry.FileBytes);
@@ -628,9 +649,8 @@ public sealed class PreviewImageService : IPreloadTarget
         // records which backend actually produced the pixels (PreviewCacheFile.ReadResult.ActualBackend
         // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
         // decode would have.
-        if (cachePath is not null && sourceRead && !degraded &&
-            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
-            PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight, decodedImage.Exif);
+        if (cachePath is not null && sourceRead && !degraded && decodedImage.Downscaled)
+            PersistToDiskCache(decodedImage, cachePath, cacheEpoch);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
@@ -870,12 +890,12 @@ public sealed class PreviewImageService : IPreloadTarget
     }
 
     /// <summary>Queues the decoded preview for background persistence; drops it if the bounded queue is full.</summary>
-    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch, DecoderBackend backend, int orientation, int originalWidth, int originalHeight, Metadata.ExifSummary? exif)
+    private void PersistToDiskCache(IDecodedImage image, string cachePath, long cacheEpoch)
     {
         if (cacheEpoch != Volatile.Read(ref _cacheEpoch)) return;
         // Best-effort: a full queue means persistence is falling behind decode, so this
         // preview is dropped rather than growing the backlog or blocking the caller.
-        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation, originalWidth, originalHeight, exif));
+        _persistQueue.Writer.TryWrite((image, cachePath, cacheEpoch));
     }
 
     /// <summary>
