@@ -103,8 +103,8 @@ SourceBytesCache/RawDecoder*Cache trong worktree audit — nguyên nhân chưa r
   Một "refactor sạch" làm MẤT CẤU HÌNH người dùng lặng lẽ khi nâng cấp. Cần: golden config.json v3 đầy đủ khoá (sinh từ bản đã phát hành,
   đóng băng) + test khoá danh sách tên khoá + byte-lock `Serialize(new AppSettings())` (C-02).
 - C-03 SỐNG SÓT: đổi mặc định `MemoryReserveBytes`, `PreviewDiskCacheCapacityBytes`, `PreloadMemoryLoadLimit`, `UseSourceBytesCache`,
-  `DefaultKeyboardZoomStepPercent` không test đỏ (test so với chính hằng số): thêm assert literal. C-04 SỐNG SÓT: Save sau khi Load file
-  ConfigVersion > 3 làm mất trường lạ (chưa có test Save). C-05 SỐNG SÓT: phím optional trùng phím mandatory (Fullscreen, NextFolder) không bị tắt.
+  `DefaultKeyboardZoomStepPercent` không test đỏ (test so với chính hằng số): thêm assert literal. C-04 ĐÃ KHOÁ (test đặc trưng, known limitation: Save sau khi Load file
+  ConfigVersion > 3 ghi lại v3, mất trường lạ, không backup — chờ chủ dự án quyết). C-05 ĐÃ KHOÁ (Theory mọi cặp mandatory x optional).
 - C-06/C-07/C-08: PreviewCacheFile v5-reject, round-trip kích thước gốc, alpha-reject, DiskCacheStore, PreviewImageService đều Slow ngoài CI;
   JPEG CMYK/progressive/gray chỉ có ở Native; nhiều test HotPath RAF/DNG/ORF `return` sớm khi thiếu corpus (xanh giả).
 - C-11/C-12/C-13/C-14 (chưa đột biến, chỉ đọc mã): không có fixture .pv4 v6/v7 sinh từ bản phát hành; không ghim identity hash cache đĩa
