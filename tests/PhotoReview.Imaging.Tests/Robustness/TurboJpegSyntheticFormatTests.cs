@@ -115,7 +115,7 @@ public sealed class TurboJpegSyntheticFormatTests(ITestOutputHelper output)
         var chains = new (string Name, IImageDecoder Decoder)[]
         {
             ("Turbo->Wpf", new FallbackImageDecoder(turbo, DecoderBackend.TurboJpeg, wpf)),
-            ("WicDirect->Wpf", new FallbackImageDecoder(new WicDirectDecoder(), DecoderBackend.WicDirect, wpf)),
+            ("WicDirect->Wpf", new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.WicDirect, wpf)),
         };
 
         foreach (var (chainName, chain) in chains)
@@ -155,7 +155,7 @@ public sealed class TurboJpegSyntheticFormatTests(ITestOutputHelper output)
         {
             ("TurboJpeg", new TurboJpeg.TurboJpegDecoder()),
             ("Wpf", new WpfBitmapImageDecoder()),
-            ("WicDirect", new WicDirectDecoder()),
+            ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance)),
         };
         foreach (var box in new[] { new DecodeBox(1, 1), new DecodeBox(2, 2), new DecodeBox(5, 0), new DecodeBox(0, 5), new DecodeBox(16, 16), new DecodeBox(50, 50), new DecodeBox(1000, 1000), new DecodeBox(7, 3) })
         {

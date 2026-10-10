@@ -57,7 +57,7 @@ public sealed class DecodeBoxDecoderTests(DecodeBoxDecoderTests.SourceImages ima
     private static IImageDecoder Create(string name) => name switch
     {
         "Wpf" => new WpfBitmapImageDecoder(),
-        "WicDirect" => new WicDirectDecoder(),
+        "WicDirect" => new WicDirectDecoder(WpfBitmapSourceCodec.Instance),
         "TurboJpeg" => new TurboJpegDecoder(),
         _ => throw new ArgumentOutOfRangeException(nameof(name))
     };

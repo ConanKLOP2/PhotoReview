@@ -16,7 +16,7 @@ public sealed class WicMetadataIndependenceTests
             ? (ushort)6
             : throw new FormatException("damaged exif block");
 
-        var orientation = WicDirectDecoder.ReadMetadataValues(Query, readOrientation: true, ExifQueryInterpreter.JpegIfdRoot, out var exif);
+        var orientation = WicExifReader.ReadMetadataValues(Query, readOrientation: true, ExifQueryInterpreter.JpegIfdRoot, out var exif);
 
         Assert.Equal(6, orientation);
         Assert.Null(exif);
@@ -29,7 +29,7 @@ public sealed class WicMetadataIndependenceTests
             ? throw new InvalidCastException("bad orientation tag")
             : name.EndsWith("{ushort=271}", StringComparison.Ordinal) ? "Canon" : null;
 
-        var orientation = WicDirectDecoder.ReadMetadataValues(Query, readOrientation: true, ExifQueryInterpreter.JpegIfdRoot, out var exif);
+        var orientation = WicExifReader.ReadMetadataValues(Query, readOrientation: true, ExifQueryInterpreter.JpegIfdRoot, out var exif);
 
         Assert.Equal(1, orientation);
         Assert.Equal("Canon", exif?.CameraMake);

@@ -48,7 +48,7 @@ public sealed class DecodeSizeDecisionMutationTests : IClassFixture<DecodeSizeDe
     private static IImageDecoder Create(string backend) => backend switch
     {
         "TurboJpeg" => new TurboJpegDecoder(),
-        "WicDirect" => new WicDirectDecoder(),
+        "WicDirect" => new WicDirectDecoder(WpfBitmapSourceCodec.Instance),
         "Wpf" => new WpfBitmapImageDecoder(),
         _ => throw new ArgumentOutOfRangeException(nameof(backend)),
     };

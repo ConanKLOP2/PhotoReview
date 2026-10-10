@@ -22,6 +22,11 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
         typeof(WicDirectDecoder).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)
         ?? throw new InvalidOperationException("WicDirectDecoder." + name + " was renamed or removed; update this test.");
 
+    // WP-03: the metadata half of WicDirectDecoder moved to WicExifReader.
+    private static MethodInfo ExifReaderMethod(string name) =>
+        typeof(WicExifReader).GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+        ?? throw new InvalidOperationException("WicExifReader." + name + " was renamed or removed; update this test.");
+
     private static T Unwrap<T>(Func<T> call)
     {
         try { return call(); }
@@ -121,7 +126,7 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
         var frame = new FakeFrame(metadata: () => throw ComFault());
         var args = new object?[] { frame, readOrientation, "/app1/ifd", null };
 
-        var orientation = Unwrap(() => (int)Private("ReadFrameMetadata").Invoke(null, args)!);
+        var orientation = Unwrap(() => (int)ExifReaderMethod("ReadFrameMetadata").Invoke(null, args)!);
 
         Assert.Equal(1, orientation);
         Assert.Null(args[3]);
@@ -135,7 +140,7 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
 #pragma warning restore CA2201
         var args = new object?[] { frame, true, null, null };
 
-        Assert.Throws<OutOfMemoryException>(() => Unwrap(() => Private("ReadFrameMetadata").Invoke(null, args)));
+        Assert.Throws<OutOfMemoryException>(() => Unwrap(() => ExifReaderMethod("ReadFrameMetadata").Invoke(null, args)));
     }
 
     // ---- ExifIfdRootOf ----
@@ -145,12 +150,12 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
     {
         var decoder = new FakeDecoder(() => throw ComFault());
 
-        Assert.Null(Unwrap(() => Private("ExifIfdRootOf").Invoke(null, [decoder])));
+        Assert.Null(Unwrap(() => ExifReaderMethod("ExifIfdRootOf").Invoke(null, [decoder])));
     }
 
     [Fact]
     public void ExifIfdRootOf_UnknownContainer_IsNull() =>
-        Assert.Null(Unwrap(() => Private("ExifIfdRootOf").Invoke(null, [new FakeDecoder(() => { })])));
+        Assert.Null(Unwrap(() => ExifReaderMethod("ExifIfdRootOf").Invoke(null, [new FakeDecoder(() => { })])));
 
     // ---- ReadColorContexts ----
 
@@ -264,7 +269,7 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
     public void Decode_StreamReportsInvalidArgument_IsInvalidDataNotArgumentException()
     {
         var path = FixtureGenerator.GenerateGradientJpeg(_root.Combine("a.jpg"), 64, 48);
-        var decoder = new WicDirectDecoder(new FaultReader(() => new ArgumentException("E_INVALIDARG from stream")));
+        var decoder = new WicDirectDecoder(WpfBitmapSourceCodec.Instance, new FaultReader(() => new ArgumentException("E_INVALIDARG from stream")));
 
         var ex = Record.Exception(() => decoder.Decode(new DecodeRequest(path, 0)));
 
@@ -275,7 +280,7 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
     public void ReadInfo_StreamReportsInvalidArgument_IsInvalidDataNotArgumentException()
     {
         var path = FixtureGenerator.GenerateGradientJpeg(_root.Combine("b.jpg"), 64, 48);
-        var decoder = new WicDirectDecoder(new FaultReader(() => new ArgumentException("E_INVALIDARG from stream")));
+        var decoder = new WicDirectDecoder(WpfBitmapSourceCodec.Instance, new FaultReader(() => new ArgumentException("E_INVALIDARG from stream")));
 
         var ex = Record.Exception(() => decoder.ReadInfo(path));
 

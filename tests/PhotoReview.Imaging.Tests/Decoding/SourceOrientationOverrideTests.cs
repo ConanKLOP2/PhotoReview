@@ -18,7 +18,7 @@ public sealed class SourceOrientationOverrideTests
         var jpeg = Metadata.ExifTestData.EncodeJpegWithExif(64, 48, withExif: true, orientation: embeddedExif);
 
         var wpfDecoder = new WpfBitmapImageDecoder();
-        var wicDecoder = new WicDirectDecoder();
+        var wicDecoder = new WicDirectDecoder(WpfBitmapSourceCodec.Instance);
         var turboDecoder = new TurboJpegDecoder();
 
         var request = new DecodeRequest(

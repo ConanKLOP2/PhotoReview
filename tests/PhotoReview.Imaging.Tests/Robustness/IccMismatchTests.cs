@@ -38,7 +38,7 @@ public sealed class IccMismatchTests
         {
             ("Wpf", new WpfBitmapImageDecoder()),
             ("Turbo->Wpf", new FallbackImageDecoder(new TurboJpegDecoder(), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder())),
-            ("WicDirect->Wpf", new FallbackImageDecoder(new WicDirectDecoder(), DecoderBackend.WicDirect, new WpfBitmapImageDecoder())),
+            ("WicDirect->Wpf", new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.WicDirect, new WpfBitmapImageDecoder())),
         };
         foreach (var (chainName, chain) in chains)
         {

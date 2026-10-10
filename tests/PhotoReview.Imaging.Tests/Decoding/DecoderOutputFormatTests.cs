@@ -38,7 +38,7 @@ public sealed class DecoderOutputFormatTests : IDisposable
         var path = FixtureGenerator.GenerateJpegWithOrientation(
             Path.Combine(_tempDir, $"wic-{targetWidth}-{orientation}.jpg"), 64, 48, orientation);
 
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, targetWidth));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, targetWidth));
 
         AssertMaterialized(decoded, PixelFormats.Bgr32);
     }
@@ -61,7 +61,7 @@ public sealed class DecoderOutputFormatTests : IDisposable
         var source = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
         FixtureGenerator.SavePng(source, path, is32Bit: true);
 
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, 0));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, 0));
         var bitmap = AssertMaterialized(decoded, PixelFormats.Pbgra32);
 
         var first = new byte[4];
