@@ -33,4 +33,20 @@ public sealed class ViewportSizeSource
         }
         set => Volatile.Write(ref _packedTargetDecodeBox, ((long)value.Width << 32) | (uint)value.Height);
     }
+
+    private long _packedStartupPrediction = -1;
+
+    /// <summary>
+    /// P-1 startup: the box the launch file's early decode was keyed with (predicted before the window existed), or null.
+    /// Diagnostics only: the window compares it with the box of its real client area when it is shown.
+    /// </summary>
+    public DecodeBox? StartupPrediction
+    {
+        get
+        {
+            var packed = Volatile.Read(ref _packedStartupPrediction);
+            return packed < 0 ? null : new DecodeBox((int)(packed >> 32), unchecked((int)packed));
+        }
+        set => Volatile.Write(ref _packedStartupPrediction, value is { } v ? ((long)v.Width << 32) | (uint)v.Height : -1);
+    }
 }

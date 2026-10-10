@@ -25,6 +25,12 @@ public partial class App : System.Windows.Application, IDisposable
 
     public static IServiceProvider Services => ((App)Current)._services ?? throw new InvalidOperationException("Services not initialized.");
 
+    /// <summary>
+    /// P-1: runs before WPF's Application constructor (~70 ms: dispatcher, theme), the earliest app code of the process,
+    /// so the settings parser's one-time cost is paid on the thread pool while the runtime and WPF start.
+    /// </summary>
+    static App() => _ = PhotoReview.App.Services.StartupWarmup.WarmSettingsParser();
+
     public static void ConfigureServices(IServiceCollection services)
     {
         // 1. Core Abstractions
@@ -295,6 +301,10 @@ public partial class App : System.Windows.Application, IDisposable
         // construction and Show(); the folder load joins this query instead of starting its own.
         if (!string.IsNullOrEmpty(launchFolder))
             _services.GetRequiredService<IExplorerOrderProvider>().Prefetch(launchFolder, ExplorerPrefetchTimeout);
+        // P-1: the saved placement is read on the pool now; Show() restores it from this read, and the launch file's
+        // decode box is predicted from it (below).
+        var placementLoad = WindowPlacementService.Prefetch(_services.GetRequiredService<IAppPaths>().WindowPlacementFile);
+        Task<EarlyDecodePlan?>? earlyDecode = null;
 
         var store = _services.GetRequiredService<SettingsStore>();
         store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled || DiagOptions.ForceLog;
@@ -310,6 +320,9 @@ public partial class App : System.Windows.Application, IDisposable
         {
             var loaded = store.Load();
             PhotoReviewPerf.StartupMark("settingsFileLoaded");
+            // P-1: the preview service (decoder probes, caches) is built and the viewport predicted in parallel with
+            // the language load and the main window; the decode itself starts once this instance owns its lock.
+            if (initial is not null) earlyDecode = Task.Run(() => PrepareEarlyDecodeAsync(placementLoad));
             var localizer = localization.Load(loaded.UiLanguage);
             PhotoReviewPerf.StartupMark("languageLoaded");
             return (Settings: loaded, Localizer: localizer);
@@ -370,6 +383,7 @@ public partial class App : System.Windows.Application, IDisposable
             return;
         }
         PhotoReviewPerf.StartupMark("instanceLock");
+        if (earlyDecode is not null && initial is not null) StartEarlyDecode(earlyDecode, initial, appSettings);
         var window = _services.GetRequiredService<MainWindow>();
         window.ViewModel.FolderOwnership = _instanceScope;
         // Manual/agent verification convenience: set PHOTOREVIEW_DIAG_INSTANCE_LABEL (e.g. "AGENT CHECK")
@@ -388,6 +402,48 @@ public partial class App : System.Windows.Application, IDisposable
                 PhotoReview.Core.Localization.Tr.AppTitle,
                 PhotoReview.Core.Settings.SettingsLoadRepairText.Build(store.LastLoadRepairs));
         }
+    }
+
+    /// <summary>P-1: what the launch file's early decode needs, prepared on the thread pool while settings and XAML load.</summary>
+    private sealed record EarlyDecodePlan(PreviewImageService Previews, DecodeBox Box);
+
+    /// <summary>
+    /// P-1 (thread pool, right after config.json is read): builds the preview service (decoder probes and caches, work
+    /// the main window's view model would otherwise do on the UI thread) and predicts the decode box of the window's
+    /// first layout from its saved placement. Null when no prediction is possible: the decode then starts when the
+    /// window is shown (MainWindow.StartInitialDecode), as before.
+    /// </summary>
+    private async Task<EarlyDecodePlan?> PrepareEarlyDecodeAsync(Task<WindowPlacementService.WindowPlacement?> placementLoad)
+    {
+        try
+        {
+            // Runs inside Task.Run (no synchronization context): the continuation stays on the pool.
+            var placement = await placementLoad;
+            var box = PhotoReview.App.Services.InitialViewportPredictor.PredictDecodeBox(placement,
+                PhotoReview.App.MainWindow.DefaultWindowWidth, PhotoReview.App.MainWindow.DefaultWindowHeight, PhotoReview.App.MainWindow.PreviewQualityMultiplier);
+            if (box is null || _services is not { } services) return null;
+            return new EarlyDecodePlan(services.GetRequiredService<PreviewImageService>(), box.Value);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Never fails the startup: the window starts the decode itself when it is shown.
+            AppLog.Error("Early decode preparation failed", ex);
+            return null;
+        }
+    }
+
+    /// <summary>P-1 (UI thread, after the instance lock): starts the launch file's decode once its plan is ready.</summary>
+    private void StartEarlyDecode(Task<EarlyDecodePlan?> plan, string path, AppSettings settings)
+    {
+        var viewport = _services!.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>();
+        // Task.Run: the await continues on the pool the moment the plan is ready (not queued behind the UI thread's XAML load).
+        _ = Task.Run(async () =>
+        {
+            if (await plan is not { } p) return;
+            viewport.StartupPrediction = p.Box;
+            if (PhotoReview.App.Services.InitialImagePrewarm.Start(p.Previews, settings, path, p.Box) is not null)
+                PhotoReviewPerf.StartupMark("earlyDecodeStarted");
+        });
     }
 
     /// <summary>

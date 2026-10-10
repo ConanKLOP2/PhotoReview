@@ -49,8 +49,7 @@ internal static class WindowPlacementService
     {
         try
         {
-            if (!File.Exists(placementPath)) return false;
-            var placement = JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(placementPath), JsonOptions);
+            var placement = TakePrefetched(placementPath) ?? Read(placementPath);
             if (placement is null) return false;
             var handle = new WindowInteropHelper(window).Handle;
             if (handle == IntPtr.Zero) return false;
@@ -76,6 +75,66 @@ internal static class WindowPlacementService
             AppLog.Error("Could not restore window placement before show", ex);
             return false;
         }
+    }
+
+    /// <summary>The saved placement, or null when the file is missing or empty (a damaged file throws).</summary>
+    internal static WindowPlacement? Read(string placementPath) =>
+        File.Exists(placementPath) ? JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(placementPath), JsonOptions) : null;
+
+    private static readonly object PrefetchGate = new();
+    private static (string Path, PrefetchResult Outcome)? _prefetch;
+
+    /// <summary>The prefetch task writes its outcome here, so the UI thread can read a finished result without touching the Task.</summary>
+    private sealed class PrefetchResult
+    {
+        private WindowPlacement? _value;
+        private volatile bool _succeeded;
+
+        public void Complete(WindowPlacement? value)
+        {
+            _value = value;
+            _succeeded = true; // volatile write publishes _value
+        }
+
+        public bool TryGet(out WindowPlacement? value)
+        {
+            value = _succeeded ? _value : null;
+            return _succeeded;
+        }
+    }
+
+    /// <summary>
+    /// P-1 startup: reads the placement file on the thread pool now (the first JSON read costs ~25 ms of reflection
+    /// metadata, measured on the UI thread inside Show()). <see cref="RestoreBeforeShow"/> takes the result once; the
+    /// launch decode uses it to predict the viewport (<see cref="Services.InitialViewportPredictor"/>).
+    /// </summary>
+    internal static Task<WindowPlacement?> Prefetch(string placementPath)
+    {
+        var result = new PrefetchResult();
+        var load = Task.Run(() =>
+        {
+            WindowPlacement? value;
+            try { value = Read(placementPath); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException) { return null; } // RestoreBeforeShow reads (and logs) it again
+            result.Complete(value);
+            return value;
+        });
+        lock (PrefetchGate) _prefetch = (placementPath, result);
+        return load;
+    }
+
+    /// <summary>The prefetched placement of <paramref name="placementPath"/> (once), or null: read the file instead.</summary>
+    private static WindowPlacement? TakePrefetched(string placementPath)
+    {
+        PrefetchResult result;
+        lock (PrefetchGate)
+        {
+            if (_prefetch is not { } p || !string.Equals(p.Path, placementPath, StringComparison.OrdinalIgnoreCase)) return null;
+            _prefetch = null;
+            result = p.Outcome;
+        }
+        // A file read (bounded): normally finished long before the window gets its HWND. Not finished or failed: read again.
+        return result.TryGet(out var value) ? value : null;
     }
 
     /// <summary>The WPF state a saved show command reopens in (same rule as <see cref="NormalizeShowCommand"/>).</summary>
@@ -147,7 +206,7 @@ internal static class WindowPlacementService
         _ => NormalizeShowCommand(showCommand),
     };
 
-    private static bool IsVisible(Rectangle bounds)
+    internal static bool IsVisible(Rectangle bounds)
     {
         if (bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top) return false;
         var nativeBounds = System.Drawing.Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);

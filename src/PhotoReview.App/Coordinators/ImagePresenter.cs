@@ -71,6 +71,16 @@ public sealed class ImagePresenter
     /// </summary>
     public IPresentationSink Sink => _sink;
 
+    /// <summary>
+    /// P-1 startup: when set, the next preview presentation starts preloading after a <see cref="IUiScheduler.YieldAsync"/>
+    /// (Background priority, i.e. after the frame showing the image) instead of synchronously before that frame, then
+    /// the flag clears. The first kick of a process pays one-time costs on the UI thread (~16 ms measured at startup;
+    /// 0.3 ms afterwards), so only the launch image uses it (MainWindow sets it for the file the app was opened with).
+    /// The deferred kick is dropped when another navigation became current meanwhile (that one kicks its own).
+    /// Without a UI scheduler the kick stays synchronous.
+    /// </summary>
+    public bool DeferNextPreloadKick { get; set; }
+
     public ImagePresenter(
         ReviewCatalog catalog,
         GenerationClock clock,
@@ -485,7 +495,20 @@ public sealed class ImagePresenter
 
             long perfKick = perf ? Stopwatch.GetTimestamp() : 0;
             if (perf) PhotoReviewPerf.Log.PostStart(token, "preloadKick");
-            TaskLogging.FireAndLog(() => _preloadController.PreloadAroundAsync(index), "Preload after present failed");
+            if (DeferNextPreloadKick && _uiScheduler is { } ui)
+            {
+                DeferNextPreloadKick = false;
+                var kickIndex = index;
+                TaskLogging.FireAndLog(async () =>
+                {
+                    await ui.YieldAsync();
+                    if (_clock.IsNavigationCurrent(token)) await _preloadController.PreloadAroundAsync(kickIndex);
+                }, "Preload after present failed");
+            }
+            else
+            {
+                TaskLogging.FireAndLog(() => _preloadController.PreloadAroundAsync(index), "Preload after present failed");
+            }
             if (perf) PhotoReviewPerf.Log.PostEnd(token, "preloadKick", PhotoReviewPerf.Ms(perfKick));
 
             // 6. Compare (qua CompareViewModel) hoặc lấy dimension (Original thì lấy từ ảnh)

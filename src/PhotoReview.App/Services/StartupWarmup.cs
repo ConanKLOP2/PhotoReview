@@ -21,4 +21,26 @@ internal static class StartupWarmup
         var root = new ContainerVisual();
         root.Children.Add(new DrawingVisual());
     }
+
+    /// <summary>
+    /// P-1: runs the config.json parse pipeline once on built-in defaults, on the thread pool, from the very start of
+    /// the process (App's static constructor, before WPF's Application exists). The first parse pays ~100-150 ms of
+    /// one-time cost (System.Text.Json metadata of the ~100 AppSettings properties and the JIT of their converters,
+    /// measured with dotnet-trace: <c>AppSettingsPropInit</c> alone ~60 ms) which the UI thread otherwise waits for
+    /// after connecting the render thread. Nothing is read or written: the real <see cref="SettingsStore.Load"/> then
+    /// finds the metadata ready. A failure only loses the warm-up.
+    /// </summary>
+    public static Task WarmSettingsParser() => Task.Run(() =>
+    {
+        try
+        {
+            var defaults = System.Text.Json.JsonSerializer.Serialize(new AppSettings(), AppSettingsJsonContext.Default.AppSettings);
+            _ = SettingsStore.ParseText(defaults);
+            PhotoReview.Core.Diagnostics.PhotoReviewPerf.StartupMark("settingsParserWarm");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Warm-up only: the real load reports its own failures.
+        }
+    });
 }

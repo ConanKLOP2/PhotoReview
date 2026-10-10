@@ -352,11 +352,17 @@ public sealed class PreviewImageService : IPreloadTarget
     private static byte SourceKindFor(string path) =>
         ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path)) ? ImageSourceKind.RawPreview : ImageSourceKind.Standard;
 
-    public ImageCacheKey GetCurrentCacheKey(string path)
+    public ImageCacheKey GetCurrentCacheKey(string path) => GetCurrentCacheKey(path, _targetDecodeBox());
+
+    /// <summary>
+    /// P-1 startup: the key <see cref="GetCurrentCacheKey(string)"/> would build once the viewport decode box is
+    /// <paramref name="targetBox"/> (the launch file's decode starts before the window exists, from a predicted box).
+    /// </summary>
+    public ImageCacheKey GetCurrentCacheKey(string path, DecodeBox targetBox)
     {
         var isOriginal = IsOriginalLoadingMode();
         var sourceKind = SourceKindFor(path);
-        return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(),
+        return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : targetBox,
             orientationApplied: true, backend: _currentBackend(), sourceKind: sourceKind);
     }
 

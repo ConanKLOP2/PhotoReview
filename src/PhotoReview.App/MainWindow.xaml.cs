@@ -122,6 +122,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(initialPath)) return;
         PhotoReviewPerf.StartupMark("openPathBegin");
         if (!IsLoaded && File.Exists(initialPath)) _prewarmPath = initialPath; // its decode starts when the window is shown (StartInitialDecode)
+        _viewModel.Presenter.DeferNextPreloadKick = true; // P-1: the launch image's frame first, then preloading
         _viewModel.OpenPathAsync(initialPath).FireAndLog("Open initial path failed");
     }
 
@@ -194,7 +195,9 @@ public partial class MainWindow : Window
     // quantized (AdaptivePreviewPolicy.BoxQuantum) so small resizes keep the same cache keys.
     private const double FallbackViewportWidth = 2200;
     private const double FallbackViewportHeight = 1400;
-    private const double PreviewQualityMultiplier = 1.15;
+    internal const double PreviewQualityMultiplier = 1.15;
+    internal const double DefaultWindowWidth = 1200; // MainWindow.xaml Width/Height (first start, no saved placement)
+    internal const double DefaultWindowHeight = 800;
 
     private void UpdateTargetDecodeBox((double Width, double Height)? viewportSize = null)
     {
@@ -245,6 +248,9 @@ public partial class MainWindow : Window
         if (!GetClientRect(hwnd, out var client) || client.Right <= 0 || client.Bottom <= 0) return;
         var dpi = _cachedDpiScale ??= System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
         UpdateTargetDecodeBox((client.Right / dpi, client.Bottom / dpi));
+        // P-1: App started the decode already, keyed by a predicted box; this joins it when the prediction was right.
+        if (_viewport?.StartupPrediction is { } predicted)
+            PhotoReviewPerf.StartupMark(predicted == _viewport.TargetDecodeBox ? "earlyDecodeBoxMatched" : "earlyDecodeBoxMismatch");
         if (_viewModel.PrewarmInitialImage(path) is not null) PhotoReviewPerf.StartupMark("initialDecodeStarted");
     }
 
