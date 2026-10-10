@@ -309,7 +309,10 @@ public partial class App : System.Windows.Application, IDisposable
         var settingsLoad = Task.Run(() =>
         {
             var loaded = store.Load();
-            return (Settings: loaded, Localizer: localization.Load(loaded.UiLanguage));
+            PhotoReviewPerf.StartupMark("settingsFileLoaded");
+            var localizer = localization.Load(loaded.UiLanguage);
+            PhotoReviewPerf.StartupMark("languageLoaded");
+            return (Settings: loaded, Localizer: localizer);
         });
         PhotoReview.App.Services.StartupWarmup.ConnectRenderThread();
         PhotoReviewPerf.StartupMark("renderThreadConnected");
