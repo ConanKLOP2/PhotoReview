@@ -10,7 +10,7 @@
 
 # The one designated implementation of IFileSystem; direct File./Directory. calls are its entire purpose.
 # 17: +1 for TryCopyNew (atomic fail-if-exists copy used by group Copy compensation so it never deletes a foreign file).
-src/PhotoReview.Core/IO/PhysicalFileSystem.cs|16
+src/PhotoReview.Core/IO/PhysicalFileSystem.cs|17
 
 # Process-wide log writer (FileLog.Default), constructed before any DI container/IFileSystem exists and
 # shared by every composition root (App, Benchmark.Cli, PerfSession); has no IFileSystem seam today.
