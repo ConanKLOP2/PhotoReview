@@ -107,4 +107,7 @@ added without frontmatter or without re-running the generator.
 sinh mã nguồn (session, journal đọc/ghi); giữ nguyên byte và đặc tả tương thích ngược (có test khoá định dạng). Core không còn
 IL2026/IL3050 khi bật IsAotCompatible (kiểm bằng cờ dòng lệnh, chưa đặt trong csproj - việc đó thuộc WP-33). Phần App,
 Benchmarking, PerfAnalysis để nguyên vì ngoài vùng của WP-11. [Detail](decisions/NOWPF-WP11-JSONSRCGEN.md) |
+| NOWPF-WP13A | WP-13a (đợt 1 của NO-WPF-EXEC-PLAN, 2026-10-10): khai báo interop Win32 (user32/kernel32/gdi32/dwmapi/shcore/comctl32/ole32/shell32) trong
+`src/PhotoReview.Shell.Interop/Win32/*` bằng LibraryImport, struct blittable và hằng; `InteropSignatureTests` (14 ca) kiểm kích thước/offset
+struct và gọi thử 4 hàm an toàn; mutation M1 (đổi kiểu một trường struct) và M2 (sai EntryPoint) đều bị bắt. Hợp đồng v1 không đổi. [Detail](decisions/NOWPF-WP13A-INTEROP.md) |
 <!-- END GENERATED DECIDED TABLE -->
