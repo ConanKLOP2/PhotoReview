@@ -181,18 +181,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// Camera RAW files are skipped (their pairing decides which file is shown, and their decode is the costly one).
     /// </summary>
     /// <returns>The started decode, or null when nothing was started.</returns>
-    public Task? PrewarmInitialImage(string path)
-    {
-        if (_previewService is not { } previews || string.IsNullOrWhiteSpace(path)) return null;
-        if (!ImageFileTypes.IsSupported(path, rawEnabled: false, _settingsStore.Current.WebpHeicSupportEnabled)) return null;
-        var fullPath = Path.GetFullPath(path);
-        // The key needs a file stat: off the UI thread (Q-R29: a slow link must never stall it).
-        var decode = Task.Run(() => previews.GetViewerPreviewAsync(fullPath, previews.GetCurrentCacheKey(fullPath), CancellationToken.None));
-        // A failure (unreadable or damaged file) is reported by the presenter's own request; only observe it here.
-        _ = decode.ContinueWith(t => _ = t.Exception, CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-        return decode;
-    }
+    public Task? PrewarmInitialImage(string path) => InitialImagePrewarm.Start(_previewService, _settingsStore.Current, path);
     // _undoService is a required constructor parameter (no default) that is null-checked via
     // ArgumentNullException in the constructor, so it is never null once the object exists; the
     // field is annotated `UndoService?` only by convention shared with the other DI fields above,
