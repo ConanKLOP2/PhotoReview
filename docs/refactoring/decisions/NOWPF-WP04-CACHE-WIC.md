@@ -2,7 +2,7 @@
 id: NOWPF-WP04
 order: 412
 summary: |-
-  WP-04 (đợt 1 của NO-WPF-EXEC-PLAN, 2026-10-10): cache đĩa (PreviewCacheFile JPEG q95, DiskCacheStore/ThumbnailCache PNG) mã hoá và giải mã bằng WIC trên PixelBuffer, PhotoReview.Imaging.Caching không còn dùng kiểu WPF nào. Định dạng file KHÔNG đổi (v7, header 24 byte, khối EXIF, payload JPEG byte-identical với bản WPF; cache cũ đọc được và ngược lại, có fixture sinh từ mã cũ). Codec WPF (WpfCacheImageCodec) đang là MẶC ĐỊNH khi không truyền codec: WP-06 phải chuyển sang tiêm bắt buộc. Ba thay đổi hành vi nhỏ (không nguy hiểm): entry JPEG có đoạn metadata hỏng nhưng pixel nguyên giờ vẫn dùng được, ảnh Rgba64/float đục giờ được cache, PNG alpha đi qua Pbgra32 lệch nhẹ vùng alpha thấp; thumbnail đọc từ đĩa báo ActualBackend=WicDirect, orientation 1.
+  WP-04 (NO-WPF-EXEC-PLAN, 2026-10-10): cache đĩa (JPEG q95, PNG) encode/decode bằng WIC trên PixelBuffer; định dạng file không đổi (byte-identical, đọc chéo hai chiều). Codec WPF là MẶC ĐỊNH khi không truyền codec (WP-06 phải bắt buộc). JPEG chậm hơn 17-30 % do hai bản chép của cầu WPF (chủ dự án quyết); ba thay đổi hành vi nhỏ, không nguy hiểm.
 ---
 
 # NOWPF-WP04-CACHE-WIC - cache đĩa bằng WIC (2026-10-10)
@@ -36,6 +36,8 @@ Kế hoạch: [NO-WPF-EXEC-PLAN](NO-WPF-EXEC-PLAN.md), thẻ WP-04 trong [NO-WPF
      ghi thẳng Bgra32. Chỉ ảnh hưởng ảnh nguồn có alpha; thumbnail đọc lại là Pbgra32 như trước.
 3. Thumbnail đọc từ đĩa nay có `ActualBackend = WicDirect`, `Orientation = 1` (WPF cũ: `Wpf`; PNG đã chứa pixel đã xoay). Không nơi nào
    trong App đọc `ActualBackend` của thumbnail; entry preview vẫn ghi đúng backend thật vào header.
+
+4. **Hiệu năng JPEG chưa đạt tiêu chí thẻ (persist P50 không tệ hơn 10 %)**: ghi +28-30 %, đọc +17-21 % ở 24/12 MP (PNG ngang, thumbnail nhanh hơn 10 %), vì cầu WPF thêm hai bản chép toàn khung (chi tiết trong perf). Quy ra preview cỡ viewport: ~+4 ms trên luồng persist nền, ~+3 ms đọc. Hai lựa chọn: (a) chấp nhận, hai bản chép biến mất khi ảnh nền tảng là PixelBuffer (WP-06+); (b) lối tắt băng-dải trong cầu WPF, cần mở rộng C-02 đóng băng. Đề xuất (a).
 
 ## 3. Kiểm chứng
 
