@@ -154,6 +154,30 @@ public sealed class FileActionServiceGroupMutationGapTests
     }
 
     [Fact]
+    public async Task ExecuteGroupAsync_RecycleOnDriveWithoutBinAndNoOptIn_IsRefusedBeforeAnythingHappens()
+    {
+        // Audit B-02 (2026-10-10): removing the AllowPermanentDelete guard in ExecuteGroupAsync survived all 1026 FileActions tests.
+        // Without the opt-in a group Recycle must be refused up front: nothing deleted, nothing recycled, nothing journaled,
+        // even when only ONE member (JPEG or RAW) sits on a drive without a Recycle Bin.
+        foreach (var (jpegNoBin, rawNoBin) in new[] { (true, true), (true, false), (false, true) })
+        {
+            var world = new World();
+            if (jpegNoBin) world.Bin.NoBin.Add(Jpeg);
+            if (rawNoBin) world.Bin.NoBin.Add(Raw);
+
+            var result = await world.Service.ExecuteGroupAsync(Req(FileOperationType.Recycle, null, allowPermanent: false));
+
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Entry);
+            Assert.False(result.PermanentlyDeleted);
+            Assert.Empty(world.Bin.PermanentlyDeleted);
+            Assert.Empty(world.Bin.Recycled); // not even the member that does have a bin
+            Assert.True(world.Disk.FileExists(Jpeg));
+            Assert.True(world.Disk.FileExists(Raw));
+        }
+    }
+
+    [Fact]
     public async Task ExecuteGroupAsync_RecycleWithBin_IsNotFlaggedPermanent()
     {
         var world = new World();
