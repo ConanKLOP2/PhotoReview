@@ -10,6 +10,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Input;
+using PhotoReview.App.Services;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
@@ -568,7 +569,7 @@ public partial class MainWindow : Window
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
         // Q-TOUCHPAD-REFRESH: the device hint is read while the WM_MOUSEWHEEL is still being dispatched (WPF raises this synchronously).
         var input = new WheelInput(e.Delta, Horizontal: false, ctrl, e.Timestamp, WheelMessageSource.Current());
-        var position = e.GetPosition(ImageScroll);
+        var position = e.GetPosition(ImageScroll).ToPointD();
         await RunGuardedAsync(Tr.MainMenuZoom, () => _pointer.OnWheelAsync(input, position));
     }
 
@@ -585,7 +586,7 @@ public partial class MainWindow : Window
             StartInitialDecode(hwnd);
         }
         if (msg != WheelMessageSource.WmMouseHWheel || !IsLoaded || _viewModel.Compare.IsVisible) return IntPtr.Zero;
-        var position = ImageScroll.PointFromScreen(WheelMessageSource.ScreenPoint(lParam));
+        var position = ImageScroll.PointFromScreen(WheelMessageSource.ScreenPoint(lParam).ToWpfPoint()).ToPointD();
         if (position.X < 0 || position.Y < 0 || position.X >= ImageScroll.ViewportWidth || position.Y >= ImageScroll.ViewportHeight) return IntPtr.Zero;
         handled = true;
         NoteInfoActivity();
@@ -623,7 +624,7 @@ public partial class MainWindow : Window
 
     private void MainImage_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (_pointer.OnImagePress(e.ChangedButton, e.ClickCount, e.GetPosition(ImageScroll), e.Timestamp)) e.Handled = true;
+        if (_pointer.OnImagePress(e.ChangedButton.ToPointerButton(), e.ClickCount, e.GetPosition(ImageScroll).ToPointD(), e.Timestamp)) e.Handled = true;
     }
 
     /// <summary>
@@ -652,12 +653,12 @@ public partial class MainWindow : Window
 
     private void MainImage_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (_pointer.OnImageMove(e.LeftButton == MouseButtonState.Pressed, e.GetPosition(ImageScroll), e.Timestamp)) e.Handled = true;
+        if (_pointer.OnImageMove(e.LeftButton == MouseButtonState.Pressed, e.GetPosition(ImageScroll).ToPointD(), e.Timestamp)) e.Handled = true;
     }
 
     private void MainImage_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_pointer.OnImageRelease(e.GetPosition(ImageScroll), e.Timestamp)) e.Handled = true;
+        if (_pointer.OnImageRelease(e.GetPosition(ImageScroll).ToPointD(), e.Timestamp)) e.Handled = true;
     }
 
     private void MainImage_LostMouseCapture(object sender, MouseEventArgs e) => _pointer.OnLostCapture();
@@ -692,7 +693,7 @@ public partial class MainWindow : Window
         var pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
         // feat/zoom-key-anchor: an arrow key that TryPanByArrow consumes owns the glide decision itself (it may
         // start/extend a kinetic impulse); every other key still stops a running glide unconditionally.
-        var arrowConsumed = Keyboard.Modifiers == ModifierKeys.None && !_viewModel.Compare.IsVisible && _pointer.TryPanByArrow(pressedKey, e.IsRepeat);
+        var arrowConsumed = Keyboard.Modifiers == ModifierKeys.None && !_viewModel.Compare.IsVisible && _pointer.TryPanByArrow(pressedKey.ToKeyId(), e.IsRepeat);
         if (!arrowConsumed) _pointer.StopKinetic(); // feat/mouse-zoom: any other key press stops a glide
         if (PhotoReviewPerf.Log.IsEnabled())
             PhotoReviewPerf.Log.KeyInput(0, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
@@ -722,7 +723,7 @@ public partial class MainWindow : Window
         // otherwise Space/Enter would keep re-activating that button instead of Skip / Move to folder 2.
         if (pressedKey is Key.Space or Key.Enter && e.OriginalSource is DependencyObject source && OwnsActivationKeys(source)) return;
 
-        var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible, hasCapturePair: _viewModel.CurrentHasCapturePair);
+        var cmd = _shortcutRouter.TryResolve(e.Key.ToKeyId(), e.SystemKey.ToKeyId(), Keyboard.Modifiers.ToKeyModifiers(), _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible, hasCapturePair: _viewModel.CurrentHasCapturePair);
         if (cmd is null) return;
         e.Handled = true;
         if (e.IsRepeat && cmd.Value.Type.IgnoresAutoRepeat()) return; // R2-F-06: never repeat file actions

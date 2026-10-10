@@ -1,5 +1,4 @@
-﻿using System.Windows.Input;
-using PhotoReview.App.Input;
+﻿using PhotoReview.App.Input;
 using PhotoReview.Core.Model;
 using Xunit;
 
@@ -41,11 +40,11 @@ public sealed class ShortcutRouterTests
         _router = new ShortcutRouter(_settings);
     }
 
-    // Alt+F11 reaches WPF as Key.System with SystemKey = F11, so both spellings must resolve.
+    // Alt+F11 reaches WPF as KeyId.System with SystemKey = F11, so both spellings must resolve.
     [Theory]
-    [InlineData(Key.F11, Key.None, ModifierKeys.None)]
-    [InlineData(Key.System, Key.F11, ModifierKeys.Alt)]
-    public void Fullscreen_ResolvesToFullscreen(Key key, Key systemKey, ModifierKeys modifiers)
+    [InlineData(KeyId.F11, KeyId.None, KeyModifiers.None)]
+    [InlineData(KeyId.System, KeyId.F11, KeyModifiers.Alt)]
+    public void Fullscreen_ResolvesToFullscreen(KeyId key, KeyId systemKey, KeyModifiers modifiers)
     {
         var cmd = _router.TryResolve(key, systemKey, modifiers, isFullscreen: false, hasImage: false);
         Assert.NotNull(cmd);
@@ -57,7 +56,7 @@ public sealed class ShortcutRouterTests
     [InlineData(false, ReviewCommandType.Close)]
     public void Escape_ResolvesByFullscreenState(bool isFullscreen, ReviewCommandType expected)
     {
-        var cmd = _router.TryResolve(Key.Escape, Key.None, ModifierKeys.None, isFullscreen: isFullscreen, hasImage: true);
+        var cmd = _router.TryResolve(KeyId.Escape, KeyId.None, KeyModifiers.None, isFullscreen: isFullscreen, hasImage: true);
         Assert.NotNull(cmd);
         Assert.Equal(expected, cmd.Value.Type);
     }
@@ -65,8 +64,8 @@ public sealed class ShortcutRouterTests
     [Fact]
     public void FolderNavigation_ResolvesCorrectly()
     {
-        var nextFolder = _router.TryResolve(Key.PageDown, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false);
-        var prevFolder = _router.TryResolve(Key.PageUp, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false);
+        var nextFolder = _router.TryResolve(KeyId.PageDown, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false);
+        var prevFolder = _router.TryResolve(KeyId.PageUp, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false);
 
         Assert.Equal(ReviewCommandType.NextFolder, nextFolder?.Type);
         Assert.Equal(ReviewCommandType.PreviousFolder, prevFolder?.Type);
@@ -75,22 +74,22 @@ public sealed class ShortcutRouterTests
     [Fact]
     public void FirstImage_WhenHasImage_ResolvesToFirstImage()
     {
-        var cmd = _router.TryResolve(Key.Home, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        var cmd = _router.TryResolve(KeyId.Home, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: true);
         Assert.Equal(ReviewCommandType.FirstImage, cmd?.Type);
     }
 
     [Fact]
     public void FirstImage_WhenNoImage_ReturnsNull()
     {
-        var cmd = _router.TryResolve(Key.Home, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false);
+        var cmd = _router.TryResolve(KeyId.Home, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false);
         Assert.Null(cmd);
     }
 
     [Fact]
     public void Undo_RequiresControlModifier()
     {
-        var withCtrl = _router.TryResolve(Key.Z, Key.None, ModifierKeys.Control, isFullscreen: false, hasImage: false);
-        var withoutCtrl = _router.TryResolve(Key.Z, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false);
+        var withCtrl = _router.TryResolve(KeyId.Z, KeyId.None, KeyModifiers.Control, isFullscreen: false, hasImage: false);
+        var withoutCtrl = _router.TryResolve(KeyId.Z, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false);
 
         Assert.Equal(ReviewCommandType.Undo, withCtrl?.Type);
         Assert.Null(withoutCtrl);
@@ -99,11 +98,11 @@ public sealed class ShortcutRouterTests
     [Fact]
     public void ImageCommands_WhenNoImage_ReturnNull()
     {
-        Assert.Null(_router.TryResolve(Key.Right, Key.None, ModifierKeys.None, false, hasImage: false));
-        Assert.Null(_router.TryResolve(Key.Left, Key.None, ModifierKeys.None, false, hasImage: false));
-        Assert.Null(_router.TryResolve(Key.Delete, Key.None, ModifierKeys.None, false, hasImage: false));
-        Assert.Null(_router.TryResolve(Key.S, Key.None, ModifierKeys.None, false, hasImage: false));
-        Assert.Null(_router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: false));
+        Assert.Null(_router.TryResolve(KeyId.Right, KeyId.None, KeyModifiers.None, false, hasImage: false));
+        Assert.Null(_router.TryResolve(KeyId.Left, KeyId.None, KeyModifiers.None, false, hasImage: false));
+        Assert.Null(_router.TryResolve(KeyId.Delete, KeyId.None, KeyModifiers.None, false, hasImage: false));
+        Assert.Null(_router.TryResolve(KeyId.S, KeyId.None, KeyModifiers.None, false, hasImage: false));
+        Assert.Null(_router.TryResolve(KeyId.D1, KeyId.None, KeyModifiers.None, false, hasImage: false));
     }
 
     [Theory]
@@ -112,15 +111,15 @@ public sealed class ShortcutRouterTests
     [InlineData(false, true, true)]   // visible: always closable, even without a pair
     public void Compare_ResolvesToToggleOnlyWhenThereIsSomethingToToggle(bool hasComparePair, bool isCompareVisible, bool resolves)
     {
-        var cmd = _router.TryResolve(Key.C, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: hasComparePair, isCompareVisible: isCompareVisible);
+        var cmd = _router.TryResolve(KeyId.C, KeyId.None, KeyModifiers.None, false, hasImage: true, hasComparePair: hasComparePair, isCompareVisible: isCompareVisible);
         Assert.Equal(resolves ? ReviewCommandType.ToggleCompare : null, cmd?.Type);
     }
 
     [Fact]
     public void CustomActions_ResolveToCorrectIndex()
     {
-        var action0 = _router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: true);
-        var action1 = _router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, hasImage: true);
+        var action0 = _router.TryResolve(KeyId.D1, KeyId.None, KeyModifiers.None, false, hasImage: true);
+        var action1 = _router.TryResolve(KeyId.D2, KeyId.None, KeyModifiers.None, false, hasImage: true);
 
         Assert.NotNull(action0);
         Assert.Equal(ReviewCommandType.RunAction, action0.Value.Type);
@@ -134,13 +133,13 @@ public sealed class ShortcutRouterTests
     [Fact]
     public void NavigationAndZoomCommands_ResolveCorrectly()
     {
-        Assert.Equal(ReviewCommandType.Next, _router.TryResolve(Key.Right, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.Previous, _router.TryResolve(Key.Left, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.Recycle, _router.TryResolve(Key.Delete, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.Skip, _router.TryResolve(Key.S, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ToggleFit, _router.TryResolve(Key.F, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ZoomIn, _router.TryResolve(Key.OemPlus, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ZoomOut, _router.TryResolve(Key.OemMinus, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.Next, _router.TryResolve(KeyId.Right, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.Previous, _router.TryResolve(KeyId.Left, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.Recycle, _router.TryResolve(KeyId.Delete, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.Skip, _router.TryResolve(KeyId.S, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ToggleFit, _router.TryResolve(KeyId.F, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ZoomIn, _router.TryResolve(KeyId.OemPlus, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ZoomOut, _router.TryResolve(KeyId.OemMinus, KeyId.None, KeyModifiers.None, false, true)?.Type);
     }
 
     // --- Optional shortcuts: LastImage (End), ZoomActualSize (D1), ToggleInfoOverlay (I); empty = disabled ---
@@ -150,7 +149,7 @@ public sealed class ShortcutRouterTests
     [Fact]
     public void LastImage_WhenHasImage_ResolvesToLastImage()
     {
-        var cmd = DefaultRouter().TryResolve(Key.End, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        var cmd = DefaultRouter().TryResolve(KeyId.End, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: true);
         Assert.Equal(ReviewCommandType.LastImage, cmd?.Type);
     }
 
@@ -158,34 +157,34 @@ public sealed class ShortcutRouterTests
     public void LastImage_WhenNoImage_ReturnsNull_LikeFirstImage()
     {
         var router = DefaultRouter();
-        Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
-        Assert.Null(router.TryResolve(Key.Home, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+        Assert.Null(router.TryResolve(KeyId.End, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false));
+        Assert.Null(router.TryResolve(KeyId.Home, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false));
     }
 
     [Fact]
     public void ZoomActualSize_WhenHasImage_ResolvesToZoomActualSize()
     {
-        var cmd = DefaultRouter().TryResolve(Key.D1, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        var cmd = DefaultRouter().TryResolve(KeyId.D1, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: true);
         Assert.Equal(ReviewCommandType.ZoomActualSize, cmd?.Type);
     }
 
     [Fact]
     public void ZoomActualSize_WhenNoImage_ReturnsNull()
     {
-        Assert.Null(DefaultRouter().TryResolve(Key.D1, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+        Assert.Null(DefaultRouter().TryResolve(KeyId.D1, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false));
     }
 
     [Fact]
     public void ClickZoom_WhenHasImage_ResolvesToClickZoom()
     {
-        var cmd = DefaultRouter().TryResolve(Key.D2, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        var cmd = DefaultRouter().TryResolve(KeyId.D2, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: true);
         Assert.Equal(ReviewCommandType.ClickZoom, cmd?.Type);
     }
 
     [Fact]
     public void ClickZoom_WhenNoImage_ReturnsNull()
     {
-        Assert.Null(DefaultRouter().TryResolve(Key.D2, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+        Assert.Null(DefaultRouter().TryResolve(KeyId.D2, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false));
     }
 
     [Theory]
@@ -193,7 +192,7 @@ public sealed class ShortcutRouterTests
     [InlineData(false)]
     public void ToggleInfoOverlay_ResolvesWithOrWithoutImage(bool hasImage)
     {
-        var cmd = DefaultRouter().TryResolve(Key.I, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: hasImage);
+        var cmd = DefaultRouter().TryResolve(KeyId.I, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: hasImage);
         Assert.Equal(ReviewCommandType.ToggleInfoOverlay, cmd?.Type);
     }
 
@@ -211,10 +210,10 @@ public sealed class ShortcutRouterTests
         settings.Shortcuts.ClickZoom = value;
         var router = new ShortcutRouter(settings);
 
-        Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, false, hasImage: true));
-        Assert.Null(router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: true));
-        Assert.Null(router.TryResolve(Key.I, Key.None, ModifierKeys.None, false, hasImage: true));
-        Assert.Null(router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, hasImage: true));
+        Assert.Null(router.TryResolve(KeyId.End, KeyId.None, KeyModifiers.None, false, hasImage: true));
+        Assert.Null(router.TryResolve(KeyId.D1, KeyId.None, KeyModifiers.None, false, hasImage: true));
+        Assert.Null(router.TryResolve(KeyId.I, KeyId.None, KeyModifiers.None, false, hasImage: true));
+        Assert.Null(router.TryResolve(KeyId.D2, KeyId.None, KeyModifiers.None, false, hasImage: true));
     }
 
     [Fact]
@@ -228,19 +227,19 @@ public sealed class ShortcutRouterTests
         settings.Shortcuts.ClickZoom = "D5";
         router.Rebuild(settings);
 
-        Assert.Equal(ReviewCommandType.LastImage, router.TryResolve(Key.F7, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ZoomActualSize, router.TryResolve(Key.D0, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ToggleInfoOverlay, router.TryResolve(Key.P, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ClickZoom, router.TryResolve(Key.D5, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, false, true));
-        Assert.Null(router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, true)); // old ClickZoom default no longer bound
+        Assert.Equal(ReviewCommandType.LastImage, router.TryResolve(KeyId.F7, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ZoomActualSize, router.TryResolve(KeyId.D0, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ToggleInfoOverlay, router.TryResolve(KeyId.P, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ClickZoom, router.TryResolve(KeyId.D5, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Null(router.TryResolve(KeyId.End, KeyId.None, KeyModifiers.None, false, true));
+        Assert.Null(router.TryResolve(KeyId.D2, KeyId.None, KeyModifiers.None, false, true)); // old ClickZoom default no longer bound
     }
 
     [Fact]
     public void ZoomActualSize_ActionOnTheSameKey_KeepsPriority()
     {
         // The fixture binds an action to D1 (an old config): actions are resolved before the zoom group.
-        var cmd = _router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: true);
+        var cmd = _router.TryResolve(KeyId.D1, KeyId.None, KeyModifiers.None, false, hasImage: true);
         Assert.Equal(ReviewCommandType.RunAction, cmd?.Type);
     }
 
@@ -248,7 +247,7 @@ public sealed class ShortcutRouterTests
     public void ClickZoom_ActionOnTheSameKey_KeepsPriority()
     {
         // The fixture binds an action to D2 (ClickZoom's default): actions are resolved before the zoom group.
-        var cmd = _router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, hasImage: true);
+        var cmd = _router.TryResolve(KeyId.D2, KeyId.None, KeyModifiers.None, false, hasImage: true);
         Assert.Equal(ReviewCommandType.RunAction, cmd?.Type);
     }
 
@@ -258,17 +257,17 @@ public sealed class ShortcutRouterTests
     [Fact]
     public void FitWidth_ResolvesOnlyWithAnImage()
     {
-        Assert.Equal(ReviewCommandType.FitWidth, _router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
-        Assert.Null(_router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, hasImage: false));
+        Assert.Equal(ReviewCommandType.FitWidth, _router.TryResolve(KeyId.W, KeyId.None, KeyModifiers.None, false, hasImage: true)?.Type);
+        Assert.Null(_router.TryResolve(KeyId.W, KeyId.None, KeyModifiers.None, false, hasImage: false));
     }
 
     [Fact]
     public void FitWidth2_DefaultKeyD4_ResolvesToItsOwnCommandOnlyWithAnImage()
     {
-        Assert.Equal(ReviewCommandType.FitWidth2, _router.TryResolve(Key.D4, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
-        Assert.Null(_router.TryResolve(Key.D4, Key.None, ModifierKeys.None, false, hasImage: false));
+        Assert.Equal(ReviewCommandType.FitWidth2, _router.TryResolve(KeyId.D4, KeyId.None, KeyModifiers.None, false, hasImage: true)?.Type);
+        Assert.Null(_router.TryResolve(KeyId.D4, KeyId.None, KeyModifiers.None, false, hasImage: false));
         // The first Fit width key is unaffected.
-        Assert.Equal(ReviewCommandType.FitWidth, _router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
+        Assert.Equal(ReviewCommandType.FitWidth, _router.TryResolve(KeyId.W, KeyId.None, KeyModifiers.None, false, hasImage: true)?.Type);
     }
 
     [Fact]
@@ -276,25 +275,25 @@ public sealed class ShortcutRouterTests
     {
         var settings = new AppSettings { Shortcuts = new ShortcutMappings { FitWidth2 = "" } };
         var router = new ShortcutRouter(settings);
-        Assert.Null(router.TryResolve(Key.D4, Key.None, ModifierKeys.None, false, true));
+        Assert.Null(router.TryResolve(KeyId.D4, KeyId.None, KeyModifiers.None, false, true));
 
         settings.Shortcuts.FitWidth2 = "Q";
         router.Rebuild(settings);
-        Assert.Equal(ReviewCommandType.FitWidth2, router.TryResolve(Key.Q, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Null(router.TryResolve(Key.D4, Key.None, ModifierKeys.None, false, true));
+        Assert.Equal(ReviewCommandType.FitWidth2, router.TryResolve(KeyId.Q, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Null(router.TryResolve(KeyId.D4, KeyId.None, KeyModifiers.None, false, true));
     }
 
     [Fact]
     public void FitHeight_ResolvesOnlyWithAnImage()
     {
-        Assert.Equal(ReviewCommandType.FitHeight, _router.TryResolve(Key.H, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
-        Assert.Null(_router.TryResolve(Key.H, Key.None, ModifierKeys.None, false, hasImage: false));
+        Assert.Equal(ReviewCommandType.FitHeight, _router.TryResolve(KeyId.H, KeyId.None, KeyModifiers.None, false, hasImage: true)?.Type);
+        Assert.Null(_router.TryResolve(KeyId.H, KeyId.None, KeyModifiers.None, false, hasImage: false));
     }
 
     [Fact]
     public void ToggleKeepZoom_ResolvesWithoutAnImage_LikeToggleInfoOverlay()
     {
-        Assert.Equal(ReviewCommandType.ToggleKeepZoom, _router.TryResolve(Key.K, Key.None, ModifierKeys.None, false, hasImage: false)?.Type);
+        Assert.Equal(ReviewCommandType.ToggleKeepZoom, _router.TryResolve(KeyId.K, KeyId.None, KeyModifiers.None, false, hasImage: false)?.Type);
     }
 
     [Fact]
@@ -307,9 +306,9 @@ public sealed class ShortcutRouterTests
         settings.Shortcuts.ToggleKeepZoom = "";
         router.Rebuild(settings);
 
-        Assert.Null(router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, true));
-        Assert.Null(router.TryResolve(Key.H, Key.None, ModifierKeys.None, false, true));
-        Assert.Null(router.TryResolve(Key.K, Key.None, ModifierKeys.None, false, true));
+        Assert.Null(router.TryResolve(KeyId.W, KeyId.None, KeyModifiers.None, false, true));
+        Assert.Null(router.TryResolve(KeyId.H, KeyId.None, KeyModifiers.None, false, true));
+        Assert.Null(router.TryResolve(KeyId.K, KeyId.None, KeyModifiers.None, false, true));
     }
 
     // ---- Q-R42 OpenFolder (default Ctrl+O) / Q-R43 CustomZoom (default D3) ----
@@ -318,8 +317,8 @@ public sealed class ShortcutRouterTests
     public void OpenFolder_RequiresControlModifier_LikeUndo()
     {
         var router = DefaultRouter();
-        var withCtrl = router.TryResolve(Key.O, Key.None, ModifierKeys.Control, isFullscreen: false, hasImage: false);
-        var withoutCtrl = router.TryResolve(Key.O, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false);
+        var withCtrl = router.TryResolve(KeyId.O, KeyId.None, KeyModifiers.Control, isFullscreen: false, hasImage: false);
+        var withoutCtrl = router.TryResolve(KeyId.O, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false);
 
         Assert.Equal(ReviewCommandType.OpenFolder, withCtrl?.Type);
         Assert.Null(withoutCtrl);
@@ -328,21 +327,21 @@ public sealed class ShortcutRouterTests
     [Fact]
     public void OpenFolder_ResolvesWithoutAnImage()
     {
-        var cmd = DefaultRouter().TryResolve(Key.O, Key.None, ModifierKeys.Control, isFullscreen: false, hasImage: false);
+        var cmd = DefaultRouter().TryResolve(KeyId.O, KeyId.None, KeyModifiers.Control, isFullscreen: false, hasImage: false);
         Assert.Equal(ReviewCommandType.OpenFolder, cmd?.Type);
     }
 
     [Fact]
     public void CustomZoom_WhenHasImage_ResolvesToCustomZoom()
     {
-        var cmd = DefaultRouter().TryResolve(Key.D3, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        var cmd = DefaultRouter().TryResolve(KeyId.D3, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: true);
         Assert.Equal(ReviewCommandType.CustomZoom, cmd?.Type);
     }
 
     [Fact]
     public void CustomZoom_WhenNoImage_ReturnsNull()
     {
-        Assert.Null(DefaultRouter().TryResolve(Key.D3, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+        Assert.Null(DefaultRouter().TryResolve(KeyId.D3, KeyId.None, KeyModifiers.None, isFullscreen: false, hasImage: false));
     }
 
     [Fact]
@@ -350,16 +349,16 @@ public sealed class ShortcutRouterTests
     {
         var settings = new AppSettings();
         var router = new ShortcutRouter(settings);
-        Assert.Null(router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: true, hasCapturePair: true));
+        Assert.Null(router.TryResolve(KeyId.B, KeyId.None, KeyModifiers.None, false, hasImage: true, hasCapturePair: true));
 
         settings.Shortcuts.ToggleCaptureMember = "B";
         router.Rebuild(settings);
 
-        Assert.Null(router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: true, hasCapturePair: false));
+        Assert.Null(router.TryResolve(KeyId.B, KeyId.None, KeyModifiers.None, false, hasImage: true, hasCapturePair: false));
         Assert.Equal(ReviewCommandType.ToggleCaptureMember,
-            router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: true, hasCapturePair: true)?.Type);
-        Assert.Null(router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: true, hasCapturePair: true, isCompareVisible: true));
-        Assert.Null(router.TryResolve(Key.B, Key.None, ModifierKeys.None, false, hasImage: false, hasCapturePair: true));
+            router.TryResolve(KeyId.B, KeyId.None, KeyModifiers.None, false, hasImage: true, hasCapturePair: true)?.Type);
+        Assert.Null(router.TryResolve(KeyId.B, KeyId.None, KeyModifiers.None, false, hasImage: true, hasCapturePair: true, isCompareVisible: true));
+        Assert.Null(router.TryResolve(KeyId.B, KeyId.None, KeyModifiers.None, false, hasImage: false, hasCapturePair: true));
     }
 
     [Fact]
@@ -370,8 +369,8 @@ public sealed class ShortcutRouterTests
         settings.Shortcuts.CustomZoom = "NotAKey";
         var router = new ShortcutRouter(settings);
 
-        Assert.Null(router.TryResolve(Key.O, Key.None, ModifierKeys.Control, false, hasImage: true));
-        Assert.Null(router.TryResolve(Key.D3, Key.None, ModifierKeys.None, false, hasImage: true));
+        Assert.Null(router.TryResolve(KeyId.O, KeyId.None, KeyModifiers.Control, false, hasImage: true));
+        Assert.Null(router.TryResolve(KeyId.D3, KeyId.None, KeyModifiers.None, false, hasImage: true));
     }
 
     [Fact]
@@ -385,20 +384,20 @@ public sealed class ShortcutRouterTests
     }
 
     // RV-A03 / RV-D3 = A: file-changing commands fire only with NO modifier.
-    public static TheoryData<Key> FileChangingKeys() => new()
+    public static TheoryData<KeyId> FileChangingKeys() => new()
     {
-        Key.Delete, Key.Enter, Key.F3, Key.F4, Key.F5
+        KeyId.Delete, KeyId.Enter, KeyId.F3, KeyId.F4, KeyId.F5
     };
 
     [Theory]
     [MemberData(nameof(FileChangingKeys))]
-    public void RecycleAndActions_WithAnyModifier_DoNotResolve(Key key)
+    public void RecycleAndActions_WithAnyModifier_DoNotResolve(KeyId key)
     {
         var router = DefaultRouter();
-        Assert.NotNull(router.TryResolve(key, Key.None, ModifierKeys.None, false, hasImage: true));
-        foreach (var mods in new[] { ModifierKeys.Control, ModifierKeys.Shift, ModifierKeys.Control | ModifierKeys.Shift })
+        Assert.NotNull(router.TryResolve(key, KeyId.None, KeyModifiers.None, false, hasImage: true));
+        foreach (var mods in new[] { KeyModifiers.Control, KeyModifiers.Shift, KeyModifiers.Control | KeyModifiers.Shift })
         {
-            Assert.Null(router.TryResolve(key, Key.None, mods, false, hasImage: true));
+            Assert.Null(router.TryResolve(key, KeyId.None, mods, false, hasImage: true));
         }
     }
 
@@ -406,27 +405,27 @@ public sealed class ShortcutRouterTests
     public void NavigationZoomAndToggles_StillAcceptCtrl()
     {
         var router = DefaultRouter();
-        Assert.Equal(ReviewCommandType.Next, router.TryResolve(Key.Right, Key.None, ModifierKeys.Control, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.Previous, router.TryResolve(Key.Left, Key.None, ModifierKeys.Control, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ZoomIn, router.TryResolve(Key.Add, Key.None, ModifierKeys.Control, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ZoomOut, router.TryResolve(Key.Subtract, Key.None, ModifierKeys.Control, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ToggleFit, router.TryResolve(Key.F, Key.None, ModifierKeys.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.Next, router.TryResolve(KeyId.Right, KeyId.None, KeyModifiers.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.Previous, router.TryResolve(KeyId.Left, KeyId.None, KeyModifiers.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ZoomIn, router.TryResolve(KeyId.Add, KeyId.None, KeyModifiers.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ZoomOut, router.TryResolve(KeyId.Subtract, KeyId.None, KeyModifiers.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ToggleFit, router.TryResolve(KeyId.F, KeyId.None, KeyModifiers.Control, false, true)?.Type);
     }
 
     [Fact]
     public void MoveToFolder_ShiftForcesPicker_CtrlDoesNotResolve()
     {
         var router = DefaultRouter();
-        var shifted = router.TryResolve(Key.M, Key.None, ModifierKeys.Shift, false, hasImage: true);
+        var shifted = router.TryResolve(KeyId.M, KeyId.None, KeyModifiers.Shift, false, hasImage: true);
         Assert.Equal(ReviewCommandType.MoveToFolder, shifted?.Type);
         Assert.True(shifted?.ForcePicker);
-        Assert.Null(router.TryResolve(Key.M, Key.None, ModifierKeys.Control, false, hasImage: true));
+        Assert.Null(router.TryResolve(KeyId.M, KeyId.None, KeyModifiers.Control, false, hasImage: true));
     }
 
     [Fact]
     public void AltF4_ReportedAsKeySystem_DoesNotTriggerTheF4Action()
     {
-        Assert.Null(DefaultRouter().TryResolve(Key.System, Key.F4, ModifierKeys.Alt, false, hasImage: true));
+        Assert.Null(DefaultRouter().TryResolve(KeyId.System, KeyId.F4, KeyModifiers.Alt, false, hasImage: true));
     }
 
     [Fact]
@@ -435,29 +434,29 @@ public sealed class ShortcutRouterTests
         var settings = new AppSettings();
         settings.Shortcuts.SendToRecycleBin = "D5";
         settings.Actions = [new ReviewAction { Name = "A", Shortcut = "D5", Operation = FileOperationType.Move, Destination = "X" }];
-        var cmd = new ShortcutRouter(settings).TryResolve(Key.D5, Key.None, ModifierKeys.None, false, hasImage: true);
+        var cmd = new ShortcutRouter(settings).TryResolve(KeyId.D5, KeyId.None, KeyModifiers.None, false, hasImage: true);
         Assert.Equal(ReviewCommandType.RunAction, cmd?.Type);
         Assert.Equal(0, cmd?.ActionIndex);
     }
 
     [Theory]
-    [InlineData(Key.Delete)]
-    [InlineData(Key.Space)]
-    [InlineData(Key.F)]
-    [InlineData(Key.Add)]
-    [InlineData(Key.Subtract)]
-    [InlineData(Key.W)]
-    [InlineData(Key.H)]
-    [InlineData(Key.Right)]
-    [InlineData(Key.Left)]
-    [InlineData(Key.Enter)]
-    [InlineData(Key.F5)]
-    [InlineData(Key.M)]
-    [InlineData(Key.Y)]
-    [InlineData(Key.D3)]
-    public void ImageGroupCommands_WithoutImage_ReturnNull(Key key)
+    [InlineData(KeyId.Delete)]
+    [InlineData(KeyId.Space)]
+    [InlineData(KeyId.F)]
+    [InlineData(KeyId.Add)]
+    [InlineData(KeyId.Subtract)]
+    [InlineData(KeyId.W)]
+    [InlineData(KeyId.H)]
+    [InlineData(KeyId.Right)]
+    [InlineData(KeyId.Left)]
+    [InlineData(KeyId.Enter)]
+    [InlineData(KeyId.F5)]
+    [InlineData(KeyId.M)]
+    [InlineData(KeyId.Y)]
+    [InlineData(KeyId.D3)]
+    public void ImageGroupCommands_WithoutImage_ReturnNull(KeyId key)
     {
-        Assert.Null(DefaultRouter().TryResolve(key, Key.None, ModifierKeys.None, false, hasImage: false));
+        Assert.Null(DefaultRouter().TryResolve(key, KeyId.None, KeyModifiers.None, false, hasImage: false));
     }
 
     [Fact]
@@ -467,7 +466,7 @@ public sealed class ShortcutRouterTests
         settings.Shortcuts.Compare = "S";
         settings.Shortcuts.Skip = "S";
         var router = new ShortcutRouter(settings);
-        Assert.Null(router.TryResolve(Key.S, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: false, isCompareVisible: false));
-        Assert.Equal(ReviewCommandType.ToggleCompare, router.TryResolve(Key.S, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: true)?.Type);
+        Assert.Null(router.TryResolve(KeyId.S, KeyId.None, KeyModifiers.None, false, hasImage: true, hasComparePair: false, isCompareVisible: false));
+        Assert.Equal(ReviewCommandType.ToggleCompare, router.TryResolve(KeyId.S, KeyId.None, KeyModifiers.None, false, hasImage: true, hasComparePair: true)?.Type);
     }
 }

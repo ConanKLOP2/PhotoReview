@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using PhotoReview.App.Input;
 using PhotoReview.App.Services;
 using PhotoReview.App.ViewModels;
 using PhotoReview.TestSupport.Windows;
@@ -102,8 +103,8 @@ public sealed class WpfImageSurfaceTests
             Assert.Equal(scroll.ViewportHeight, snapshot.ViewportHeight);
             Assert.Equal(30, snapshot.HorizontalOffset, 3);
             Assert.Equal(20, snapshot.VerticalOffset, 3);
-            Assert.Equal(Visibility.Visible, snapshot.HorizontalScrollbarVisibility);
-            Assert.Equal(Visibility.Visible, snapshot.VerticalScrollbarVisibility);
+            Assert.True(snapshot.HorizontalScrollBarVisible);
+            Assert.True(snapshot.VerticalScrollBarVisible);
         });
     }
 
@@ -127,8 +128,8 @@ public sealed class WpfImageSurfaceTests
 
             var snapshot = Surface(scroll, image).Capture();
 
-            Assert.Equal(Visibility.Collapsed, snapshot.HorizontalScrollbarVisibility);
-            Assert.Equal(Visibility.Collapsed, snapshot.VerticalScrollbarVisibility);
+            Assert.False(snapshot.HorizontalScrollBarVisible);
+            Assert.False(snapshot.VerticalScrollBarVisible);
         });
     }
 
@@ -152,8 +153,8 @@ public sealed class WpfImageSurfaceTests
 
             var snapshot = Surface(scroll, image).Capture();
 
-            Assert.Equal(Visibility.Visible, snapshot.HorizontalScrollbarVisibility);
-            Assert.Equal(Visibility.Collapsed, snapshot.VerticalScrollbarVisibility);
+            Assert.True(snapshot.HorizontalScrollBarVisible);
+            Assert.False(snapshot.VerticalScrollBarVisible);
         });
     }
 
@@ -206,10 +207,10 @@ public sealed class WpfImageSurfaceTests
             var origin = surface.ImageOrigin;
             Assert.Equal(unscrolled.X - 10, origin.X, 3);
             Assert.Equal(unscrolled.Y - 5, origin.Y, 3);
-            var local = surface.ToImageElement(new Point(100, 60));
+            var local = surface.ToImageElement(new PointD(100, 60));
             Assert.Equal(100 - origin.X, local.X, 3);
             Assert.Equal(60 - origin.Y, local.Y, 3);
-            Assert.Equal(image.TranslatePoint(new Point(0, 0), scroll), origin);
+            Assert.Equal(new PointD(image.TranslatePoint(new Point(0, 0), scroll).X, image.TranslatePoint(new Point(0, 0), scroll).Y), origin);
             Assert.Equal(image.ActualWidth, surface.ImageActualWidth);
             Assert.Equal(image.ActualHeight, surface.ImageActualHeight);
             Assert.Equal(1000, surface.ImageActualWidth);
