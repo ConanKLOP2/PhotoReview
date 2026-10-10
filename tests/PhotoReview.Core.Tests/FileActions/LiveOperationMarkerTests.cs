@@ -25,8 +25,14 @@ public sealed class LiveOperationMarkerTests
     private sealed class ScriptedRecycleBin : IRecycleBin
     {
         public Action<string>? OnRecycle { get; set; }
+        /// <summary>Like the real shell, a successful send removes the file (B-06 post-check).</summary>
+        public Action<string>? RemoveFile { get; set; }
 
-        public void SendToRecycleBin(string path) => OnRecycle?.Invoke(path);
+        public void SendToRecycleBin(string path)
+        {
+            OnRecycle?.Invoke(path);
+            RemoveFile?.Invoke(path);
+        }
 
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => false;
     }
@@ -63,6 +69,7 @@ public sealed class LiveOperationMarkerTests
         public Rig()
         {
             Journal = new OperationJournal(Paths, Fs, new FixedClock(Start), liveOperations: Markers);
+            Bin.RemoveFile = path => Fs.Delete(path);
             Fs.OpenAppendHook = _ =>
             {
                 lock (LiveAtAppend) LiveAtAppend.Add(Markers.LiveNow());

@@ -55,6 +55,7 @@ public sealed class CrashPointFileSystem(InMemoryFileSystem inner) : IFileSystem
     public void Copy(string source, string destination) { Mutate("copy", source + ">" + destination); Inner.Copy(source, destination); }
     public void Delete(string path) { Mutate("delete", path); Inner.Delete(path); }
     public void CreateDirectory(string path) { Mutate("mkdir", path); Inner.CreateDirectory(path); }
+    public bool TryDeleteEmptyDirectory(string path) => Inner.TryDeleteEmptyDirectory(path);
     public void WriteAllTextAtomic(string path, string text, bool durable = true) { Mutate("write", path); Inner.WriteAllTextAtomic(path, text, durable); }
     public Stream OpenReadShared(string path, int bufferSize = 65536) { Read(); return Inner.OpenReadShared(path, bufferSize); }
     public string ReadAllText(string path) { Read(); return Inner.ReadAllText(path); }

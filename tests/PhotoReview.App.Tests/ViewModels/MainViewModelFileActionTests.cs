@@ -1045,6 +1045,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         public virtual IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
         public virtual IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
         public virtual void CreateDirectory(string path) => inner.CreateDirectory(path);
+        public virtual bool TryDeleteEmptyDirectory(string path) => inner.TryDeleteEmptyDirectory(path);
     }
 
     private sealed class BlockingMoveFileSystem(IFileSystem inner, Task blockTask) : DelegatingFileSystem(inner)

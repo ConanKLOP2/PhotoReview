@@ -13,7 +13,7 @@ $T1FileBudgetBytes = 24 * 1024
 # or split instead. Keys are repo-relative paths with forward slashes.
 $T1FileBudgetOverrides = @{
     'docs/architecture.md'               = 32 * 1024  # settings/mechanism reference: one row per setting
-    'docs/refactoring/OPEN-DECISIONS.md' = 32 * 1024  # generated table, one row per decided item (grows with every decision)
+    'docs/refactoring/OPEN-DECISIONS.md' = 48 * 1024  # generated table, one row per decided item (grows with every decision)
 }
 
 function Get-T1Budget {

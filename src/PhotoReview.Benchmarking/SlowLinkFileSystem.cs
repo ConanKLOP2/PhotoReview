@@ -86,6 +86,7 @@ public sealed class SlowLinkFileSystem : IFileSystem
 
     public IEnumerable<string> EnumerateDirectories(string directory) => _inner.EnumerateDirectories(directory);
     public void CreateDirectory(string path) => _inner.CreateDirectory(path);
+    public bool TryDeleteEmptyDirectory(string path) => _inner.TryDeleteEmptyDirectory(path);
     public string ResolveRealPath(string path) { DelayMetadata(); return _inner.ResolveRealPath(path); }
 }
 
