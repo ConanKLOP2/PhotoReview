@@ -290,4 +290,41 @@ public sealed class ViewportLayoutEngineTests
         Assert.True(ViewportLayoutMath.IsZero(-1e-15));
         Assert.False(ViewportLayoutMath.IsZero(1e-14));
     }
+
+    [Fact]
+    public void DoubleUtil_IsZero_IsAStrictLessThan_AtTenEpsilonItIsNotZero()
+    {
+        // WPF: Math.Abs(value) < 10.0 * DBL_EPSILON.
+        var ten = 10.0 * ViewportLayoutMath.WpfDoubleEpsilon;
+        Assert.False(ViewportLayoutMath.IsZero(ten));
+        Assert.False(ViewportLayoutMath.IsZero(-ten));
+    }
+
+    [Fact]
+    public void DoubleUtil_AreClose_BothEdgesOfTheOpenIntervalAreNotClose()
+    {
+        // 2^52 - 4 và 2^52 - 6 đều biểu diễn chính xác: eps = (a + b + 10) * 2^-52 = 2^53 * 2^-52 = 2 và delta = +/-2
+        // đúng bằng eps -> WPF (-eps < delta && eps > delta, bất đẳng thức chặt) trả về false ở cả hai chiều.
+        const double a = 4503599627370492.0;
+        const double b = 4503599627370490.0;
+        Assert.False(ViewportLayoutMath.AreClose(a, b));
+        Assert.False(ViewportLayoutMath.AreClose(b, a));
+        Assert.True(ViewportLayoutMath.GreaterThan(a, b));
+    }
+
+    // ---- kích thước tường minh bằng 0 là hợp lệ (WPF: Width/MaxWidth >= 0) ----
+
+    [Fact]
+    public void ExplicitWidthZero_IsAValidZeroWidth_NotAutoSize()
+    {
+        var layout = ViewportLayoutEngine.Compute(Zoomed(1000, 600, 0, 1500));
+        AssertLayout(layout, 990, 600, 0, 1500, false, true, 495, 0, 0, 1500, 0, 900);
+    }
+
+    [Fact]
+    public void MaxWidthZero_IsAValidBound_NotUnbounded()
+    {
+        var input = Zoomed(1000, 600, 2000, 1500) with { MaxImageWidth = 0 };
+        AssertLayout(ViewportLayoutEngine.Compute(input), 990, 600, 0, 1500, false, true, 495, 0, 0, 1500, 0, 900);
+    }
 }

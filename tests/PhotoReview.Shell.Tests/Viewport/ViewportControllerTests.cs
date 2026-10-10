@@ -158,6 +158,8 @@ public sealed class ViewportControllerTests
     [InlineData(0.0, 4.0)]      // DPI hỏng -> 1
     [InlineData(double.NaN, 4.0)]
     [InlineData(17.0, 4.0)]
+    [InlineData(0.25, 16.0)]    // biên dưới của khoảng hợp lệ 0,25..16 (đóng) như ViewerState.NormalizeDpi
+    [InlineData(16.0, 0.25)]    // biên trên
     public void DragThreshold_IsTheSystemMetricInDips(double dpi, double expected)
     {
         _window.DpiScale = dpi;

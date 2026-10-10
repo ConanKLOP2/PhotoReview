@@ -48,7 +48,7 @@ Mutation: xem mục 5.
 
 ## 5. Mutation
 
-Stryker (Basic, filter chuẩn) phạm vi `ViewportLayoutEngine.cs`, `ViewportState.cs`, `ArrowPanRule.cs` (từ Shell.Tests) và `ViewportController.cs`: kết quả ghi trong PR. Ngoài ra kiểm thủ công nhánh quan trọng trên App.Tests (mục PR).
+Stryker 5.0.0 (Basic, filter chuẩn, từ Shell.Tests): `ViewportLayoutEngine.cs` 76,9 % -> **86,5 %** (45/52; 7 survivor còn lại đều tương đương: `>`/`>=`, `<`/`<=` tại biên mà hai nhánh cho cùng giá trị, nên điểm hiệu dụng 100 %), `ViewportState.cs` 100 %, `ArrowPanRule.cs` 84,6 % (2 tương đương), `ViewportController.cs` **97,7 %** (1 cần xác nhận: số vòng layout tối đa 8 là lựa chọn cài đặt, không suy được từ WPF). Thủ công trên App.Tests (controller thật + đối chứng WPF): 8/9 mutant nhánh quan trọng bị giết (căn giữa, lượt đo 3, thanh cuộn chiếm chỗ, kẹp trên, nhớ offset yêu cầu, Uniform thành Fill, kiểm thanh thứ hai không trừ độ dày); "áp cuộn ngay" chỉ Shell.Tests giết (call site hiện tại không phụ thuộc).
 
 ## 6. Đề xuất hợp đồng v1.1 (lead)
 

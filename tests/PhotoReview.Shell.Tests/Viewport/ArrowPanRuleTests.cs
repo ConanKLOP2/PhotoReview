@@ -48,6 +48,13 @@ public sealed class ArrowPanRuleTests
     }
 
     [Fact]
+    public void ARemainingDistanceOfExactlyHalfADip_StillPans_LikeKeyboardPan()
+    {
+        // KeyboardPan: Math.Abs(target - current) < 0,5 -> AtEdge; đúng 0,5 vẫn là Panned. 2009,5 + 59 kẹp về Max 2010.
+        Assert.Equal((ArrowPanOutcome.Panned, 2010.0, 0.0), ArrowPanRule.Step(1, 0, 2009.5, 0, Zoomed));
+    }
+
+    [Fact]
     public void AnAxisThatDoesNotScroll_IsNotScrollable()
     {
         var wide = Zoomed with { MaxVerticalOffset = 0.5 };
