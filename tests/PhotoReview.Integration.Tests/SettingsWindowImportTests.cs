@@ -61,6 +61,7 @@ public sealed class SettingsWindowImportTests
     {
         await StaTestHost.RunAsync(() =>
         {
+                StaTestHost.ExpectLoggedError("Settings import: the file could not be applied", "an unusable import file is the scenario; the window logs why it was rejected", mustOccur: true);
             var window = new SettingsWindow(new AppSettings { KeyboardZoomStepPercent = 33 });
             try
             {
@@ -238,6 +239,7 @@ public sealed class SettingsWindowImportTests
             File.WriteAllText(path, "this is not json");
             await StaTestHost.RunAsync(() =>
             {
+                StaTestHost.ExpectLoggedError("Settings import: the file could not be applied", "an unusable import file is the scenario; the window logs why it was rejected", mustOccur: true);
                 var window = new SettingsWindow(new AppSettings { KeyboardZoomStepPercent = 33 });
                 try
                 {

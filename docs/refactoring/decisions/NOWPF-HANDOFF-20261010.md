@@ -20,10 +20,13 @@ Mỗi gói đã merge có fragment `NOWPF-WPxx-*.md` cạnh file này. Người 
   WP-19a (#404), WP-08 (#403), WP-14 (#406), WP-18 (#409), WP-10 golden (#405), bước pan phím bằng nhau (#407).
 
 ## 2. Đang mở hoặc dở (xem `gh pr list`)
-- **#411 WP-16 engine viewport**: golden của WP-10 đã có trên master; test
-  `ViewportInputGoldenTests.EveryRecordedScript_ReplaysOnTheEngine` (App.Tests) ĐANG ĐỎ với golden thật. Đó là tín hiệu thật:
-  engine lệch golden HOẶC từ vựng bước G-INPUT lệch bộ ghi WP-10 (AfterStep 0-based, `frame` = TimestampMs, tên lệnh `command`).
-  Xem chi tiết đỏ, KHÔNG sửa golden cho xanh. Chưa bật auto-merge. Test G-VIEW (Shell.Tests) 103 xanh.
+- **#411 WP-16 engine viewport**: `ViewportInputGoldenTests.EveryRecordedScript_ReplaysOnTheEngine` XANH với golden thật (85 kịch bản
+  chặn; 512 -> 0 checkpoint lệch). Nguyên nhân đều ở RUNNER, không phải engine: (1) override JSON đọc phân biệt hoa thường nên
+  `keyboardZoomStepPercent` bị bỏ qua (bước wheel 0,1 thay vì 0,5; Ctrl+wheel ở chế độ Navigate không áp); (2) bộ ghi hiện ảnh đầu
+  với cài đặt mặc định + Fit RỒI MỚI áp override (runner áp trước); (3) thiếu Touchpad hint, chuột giữa, trạng thái nút trái ở `move`,
+  con trỏ kịch bản (PointerPosition), Timestamp theo `frame`; (4) `Next/Previous` là no-op. 5 kịch bản `ArrowPan-pending-rule-change|`
+  bị loại khỏi phát lại (như WPF, WP10 mục 5) vì ghi theo quy tắc pan CŨ: chờ ghi lại golden bằng `tools/diag/record-golden.ps1`
+  rồi bỏ tiền tố và dòng `continue` trong test. Chưa bật auto-merge. Test G-VIEW (Shell.Tests) 103 xanh.
 - **#412 WP-04 cache đĩa bằng WIC** (WIP): mã và fixture tương thích hai chiều (`tests/Fixtures/PreviewCache`) có, 17 + 4 test xanh.
   Chưa: Architecture/App tests, đo hiệu năng 24 MP, mutation, decision fragment. Cần quyết: codec WPF đang là mặc định khi không truyền
   codec (WP-06 phải chuyển sang tiêm bắt buộc); ba thay đổi hành vi nhỏ ghi trong mô tả PR (EXIF hỏng vẫn dùng cache, Rgba64 đục được cache,
@@ -71,6 +74,10 @@ Lỗ hổng test đã có PR riêng, mỗi PR đã kiểm XANH trên master và 
 - Khởi động: NW-5 (<= 600 ms R2R) chưa đạt (782 ms). Bước kế: (a) self-contained + R2R composite (-140 ms, 174 MB),
   (b) hoãn UI thấy được tới sau ảnh đầu (-100 ms). P-STARTUP-FIRST-IMAGE: liên kết .jpg đang trỏ bản build; bản publish R2R nhanh hơn
   150-250 ms. Chế độ chạy nền (giữ tiến trình, khay): người dùng chọn nhầm rồi huỷ, chưa làm, hỏi lại.
+- ĐÃ CHỐT 2026-10-10 (người dùng chọn b): fine-scale của WP-05 dùng **WIC Fant (IWICBitmapScaler)**, không dùng PixelAreaResampler
+  tự viết (chậm hơn WIC 30-90 %, vượt ngưỡng 5 %). WP-06 nối codec theo hướng này; đo lại benchmark lúc máy yên.
+- ĐÃ LÀM 2026-10-10: liên kết .jpg trỏ bản publish R2R `C:\MyProjects\PhotoReview\publish-r2r` (15 MB, phụ thuộc framework,
+  git-ignored cục bộ); phải publish lại sau mỗi lần merge mã. Phương án 174 MB (self-contained + composite) chưa chọn.
 - Native AOT (đợt 5): cần MSVC x64 và Windows 11 SDK (4-5 GB); ổ C: gần đầy (14 GB trống), dọn `work/diag/tune-runs`.
 - Sửa Fit width/Fit height lệch 5 DIP (nửa độ dày thanh cuộn) trong PointerInputController: PR riêng trên app WPF.
 
@@ -103,8 +110,8 @@ SourceBytesCache/RawDecoder*Cache trong worktree audit — nguyên nhân chưa r
   Một "refactor sạch" làm MẤT CẤU HÌNH người dùng lặng lẽ khi nâng cấp. Cần: golden config.json v3 đầy đủ khoá (sinh từ bản đã phát hành,
   đóng băng) + test khoá danh sách tên khoá + byte-lock `Serialize(new AppSettings())` (C-02).
 - C-03 SỐNG SÓT: đổi mặc định `MemoryReserveBytes`, `PreviewDiskCacheCapacityBytes`, `PreloadMemoryLoadLimit`, `UseSourceBytesCache`,
-  `DefaultKeyboardZoomStepPercent` không test đỏ (test so với chính hằng số): thêm assert literal. C-04 SỐNG SÓT: Save sau khi Load file
-  ConfigVersion > 3 làm mất trường lạ (chưa có test Save). C-05 SỐNG SÓT: phím optional trùng phím mandatory (Fullscreen, NextFolder) không bị tắt.
+  `DefaultKeyboardZoomStepPercent` không test đỏ (test so với chính hằng số): thêm assert literal. C-04 ĐÃ KHOÁ (test đặc trưng, known limitation: Save sau khi Load file
+  ConfigVersion > 3 ghi lại v3, mất trường lạ, không backup — chờ chủ dự án quyết). C-05 ĐÃ KHOÁ (Theory mọi cặp mandatory x optional).
 - C-06/C-07/C-08: PreviewCacheFile v5-reject, round-trip kích thước gốc, alpha-reject, DiskCacheStore, PreviewImageService đều Slow ngoài CI;
   JPEG CMYK/progressive/gray chỉ có ở Native; nhiều test HotPath RAF/DNG/ORF `return` sớm khi thiếu corpus (xanh giả).
 - C-11/C-12/C-13/C-14 (chưa đột biến, chỉ đọc mã): không có fixture .pv4 v6/v7 sinh từ bản phát hành; không ghim identity hash cache đĩa
