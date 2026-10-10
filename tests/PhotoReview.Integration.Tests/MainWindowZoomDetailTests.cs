@@ -21,6 +21,9 @@ namespace PhotoReview.Integration.Tests;
 [Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Slow")]
+// Audit D-01 (2026-10-10): Slow without Integration meant CI never ran these two gating tests (zoom-to-100 % swaps in the original;
+// Refresh keeps layout and scroll). Integration makes the "Integration&Slow" CI step pick them up.
+[Trait("Category", "Integration")]
 public sealed class MainWindowZoomDetailTests(ITestOutputHelper output)
 {
     private const string DisableDiskCacheVariable = "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE";

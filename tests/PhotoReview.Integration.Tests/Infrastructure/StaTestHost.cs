@@ -24,6 +24,7 @@ public static class StaTestHost
     private static Thread? _thread;
     private static Dispatcher? _dispatcher;
     private static Win32DialogGuard? _dialogGuard;
+    private static AppLogErrorGuard? _logGuard;
 
     /// <summary>The STA thread's dispatcher. Only valid inside a <see cref="RunAsync(Func{Task})"/> body.</summary>
     public static Dispatcher Dispatcher => _dispatcher ?? throw new InvalidOperationException("STA host not started.");
@@ -56,6 +57,7 @@ public static class StaTestHost
                 if (Application.Current is null)
                     _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 _dialogGuard = Win32DialogGuard.InstallOnCurrentThread();
+                _logGuard = AppLogErrorGuard.InstallForProcess();
                 ready.Set();
                 foreach (var action in Work.GetConsumingEnumerable()) action();
             })
@@ -80,6 +82,7 @@ public static class StaTestHost
         var timer = new DispatcherTimer(DispatcherPriority.Send, dispatcher) { Interval = timeout };
         timer.Tick += (_, _) => { timedOut = true; frame.Continue = false; };
         _dialogGuard!.Clear();
+        _logGuard!.Begin();
 
         try
         {
@@ -97,12 +100,13 @@ public static class StaTestHost
         catch (Exception ex)
         {
             timer.Stop();
-            if (!FailOnUnexpectedDialogs(outer)) outer.TrySetException(ex);
+            if (!FailOnUnexpectedDialogs(outer) && !FailOnUnexpectedLogErrors(outer, ex)) outer.TrySetException(ex);
             return;
         }
         timer.Stop();
 
         if (FailOnUnexpectedDialogs(outer)) return;
+        if (FailOnUnexpectedLogErrors(outer, inner.IsFaulted ? inner.Exception!.GetBaseException() : null)) return;
 
         if (!inner.IsCompleted)
         {
@@ -126,6 +130,27 @@ public static class StaTestHost
         outer.TrySetException(exception);
         return true;
     }
+
+    /// <summary>
+    /// D-03: fails the body when the app logged an <c>AppLog.Error</c> that no <see cref="ExpectLoggedError"/> announced (or an
+    /// announced mustOccur error never came). Dialogs are reported first; they are the more direct symptom.
+    /// </summary>
+    private static bool FailOnUnexpectedLogErrors(TaskCompletionSource<object?> outer, Exception? bodyFailure)
+    {
+        var exception = _logGuard!.End(bodyFailure);
+        if (exception is null) return false;
+        outer.TrySetException(exception);
+        return true;
+    }
+
+    /// <summary>
+    /// Announces, inside a <see cref="RunAsync(Func{Task})"/> body, that this test legitimately makes the app log an Error
+    /// containing <paramref name="substring"/> (message or exception text). Any other <c>AppLog.Error</c> during the body fails
+    /// the test. <paramref name="reason"/> is mandatory documentation of why the error is the correct behaviour here.
+    /// With <paramref name="mustOccur"/> the body also fails when the error never shows up (use it when the test is about it).
+    /// </summary>
+    public static void ExpectLoggedError(string substring, string reason, bool mustOccur = false) =>
+        (_logGuard ?? throw new InvalidOperationException("STA host not started.")).Expect(substring, reason, mustOccur);
 
     /// <summary>
     /// Lets queued dispatcher work (the fire-and-forget folder load MainWindow starts in its

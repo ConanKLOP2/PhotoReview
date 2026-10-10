@@ -125,6 +125,7 @@ public sealed class SettingsWindowShellTests
         var shell = new FakeShell { FailWith = new UnauthorizedAccessException("denied by policy") };
         await WithWindowAsync(shell, Exe, window =>
         {
+            StaTestHost.ExpectLoggedError("Explorer integration change failed", "the registry failure is the scenario; the window logs it and shows it in the status line", mustOccur: true);
             Click(window.ShellAddButton);
 
             Assert.Equal(Tr.SettingsShellStatusError("denied by policy"), window.ShellStatusText.Text);

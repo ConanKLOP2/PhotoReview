@@ -226,6 +226,75 @@ public sealed class Win32UiDispatcherTests
     }
 
     [Fact]
+    public async Task Background_WithMoreQueuedMessagesThanOnePumpPass_YieldsToEveryQueuedMessageFirst()
+    {
+        // Một lượt bơm chỉ lấy tối đa MaxMessagesPerPass message; hàng đợi vẫn còn message thì việc Background phải NHƯỜNG
+        // (không được chạy giữa các message). Đột biến M7: vòng lặp chạy TryRunBackground kể cả khi IsMessagePending().
+        await using var ui = await UiThread.StartAsync();
+        var order = new List<string>();
+        var window = await ui.InvokeAsync(() => CreateRecordingWindow(ui, order));
+        var messageCount = MessageLoop.MaxMessagesPerPass * 3;
+
+        Task? background = null;
+        await ui.InvokeAsync(() =>
+        {
+            background = ui.Dispatcher.InvokeAsync(() => order.Add("B"), UiPriority.Background);
+            for (var i = 1; i <= messageCount; i++)
+            {
+                Assert.True(User32.PostMessage(window.Hwnd, TestMessage, i, 0));
+            }
+        });
+        await background!.WaitAsync(UiThread.Bound);
+
+        var expected = Enumerable.Range(1, messageCount)
+            .Select(i => "M" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Append("B")
+            .ToArray();
+        Assert.Equal(expected, order);
+        await ui.InvokeAsync(window.Dispose);
+    }
+
+    [Fact]
+    public async Task SynchronizationContextPost_RunsAtNormalPriority_BeforeBackgroundQueuedEarlier()
+    {
+        // Đột biến M23: Post của SynchronizationContext dùng Background thay Normal thì "ctx" xếp FIFO sau "bg".
+        await using var ui = await UiThread.StartAsync();
+        var order = new List<string>();
+
+        Task? last = null;
+        await ui.InvokeAsync(() =>
+        {
+            ui.Dispatcher.Post(() => order.Add("bg"), UiPriority.Background);
+            SynchronizationContext.Current!.Post(_ => order.Add("ctx"), null);
+            last = ui.Dispatcher.InvokeAsync(() => order.Add("last"), UiPriority.Background);
+        });
+        await last!.WaitAsync(UiThread.Bound);
+
+        Assert.Equal(["ctx", "bg", "last"], order);
+    }
+
+    [Theory]
+    [InlineData(UiPriority.Send)]
+    [InlineData(UiPriority.Normal)]
+    public async Task YieldAsync_ContinuationRunsInlineInTheYieldedWorkItem_BeforeNextItemOfTheSamePriority(UiPriority priority)
+    {
+        // Đột biến M24: YieldAsync dùng RunContinuationsAsynchronously => continuation bị Post thêm một lần (mức Normal) nên
+        // chạy SAU việc cùng mức xếp ngay sau nó (Send: sau; Normal: FIFO sau).
+        await using var ui = await UiThread.StartAsync();
+        var order = new List<string>();
+
+        await ui.RunAsync(async () =>
+        {
+            var yielded = ui.Dispatcher.YieldAsync(priority).AsTask();
+            ui.Dispatcher.Post(() => order.Add("same-level-after"), priority);
+            await yielded;
+            order.Add("continuation");
+            await ui.Dispatcher.YieldAsync(UiPriority.Background);
+        });
+
+        Assert.Equal(["continuation", "same-level-after"], order);
+    }
+    [Fact]
     public async Task YieldAsync_Canceled_ThrowsBeforeOrWhileQueued()
     {
         await using var ui = await UiThread.StartAsync();
