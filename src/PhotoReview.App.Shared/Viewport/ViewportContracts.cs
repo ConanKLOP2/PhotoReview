@@ -50,16 +50,16 @@ public readonly record struct ViewportLayout(
     RectD ImageRect,
     double MaxHorizontalOffset, double MaxVerticalOffset);
 
-public static class ViewportLayoutEngine
+// WP-16: partial - thân hai phương thức ở ViewportLayoutEngine.cs (chữ ký giữ nguyên, ContractSurfaceTests không đổi).
+public static partial class ViewportLayoutEngine
 {
     /// <summary>
     /// Mô phỏng ScrollViewer(HorizontalScrollBarVisibility=Auto, VerticalScrollBarVisibility=Auto,
     /// HorizontalContentAlignment=Stretch, VerticalContentAlignment=Stretch) chứa Image(Stretch, MaxWidth/MaxHeight,
     /// Width/Height). Lặp điểm bất động cho thanh cuộn Auto (tối đa 3 vòng). Thuần, không cấp phát. WP-16 thực thi.
     /// </summary>
-    public static ViewportLayout Compute(in ViewportInput input) => throw new NotImplementedException();
+    public static partial ViewportLayout Compute(in ViewportInput input);
 
     /// <summary>Kẹp offset như ScrollViewer. WP-16 thực thi.</summary>
-    public static (double Horizontal, double Vertical) ClampOffset(in ViewportLayout layout, double horizontal, double vertical) =>
-        throw new NotImplementedException();
+    public static partial (double Horizontal, double Vertical) ClampOffset(in ViewportLayout layout, double horizontal, double vertical);
 }
