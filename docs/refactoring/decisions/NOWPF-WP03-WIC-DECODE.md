@@ -2,7 +2,7 @@
 id: NOWPF-WP03
 order: 412
 summary: |-
-  WP-03 (đợt 1 của NO-WPF-EXEC-PLAN, 2026-10-10): WicDirectDecoder ghi thẳng vào PixelBuffer rồi IPlatformImageCodec.FromPixels (WPF: BitmapSource đóng băng như cũ, Win32: chính buffer); EmbeddedThumbnailReader và đọc EXIF (WicExifReader) dùng WIC COM, không còn BitmapMetadata/BitmapDecoder; ExifOrientation tách phần thuần (IsTransposed/Normalize/ReadFromWic) khỏi phần WPF (ExifOrientationWpf.cs, WP-06 dời). Parity từng byte với đường WPF cũ (30 ảnh x 8 orientation x {full, DecodeBox}, WebP, 40 thumbnail), mutation 38/40 bị giết (2 tương đương/lưới an toàn), bench 24 MP -> 1920 px so với master; lệch thẻ: TryRead một tham số giữ codec WPF mặc định, thumbnail Pbgra32, ActualBackend=Wpf giữ định danh cache, WpfExifReader giữ lại; đề xuất v1.1 khoá ExifOrientation.IsTransposed/Normalize.
+  WP-03 (2026-10-10): WicDirectDecoder, EmbeddedThumbnailReader, WicExifReader ghi/đọc qua WIC ra PixelBuffer + IPlatformImageCodec, parity từng byte, mutation 38/40, bench 24 MP trong ngưỡng 5 %; lệch thẻ: TryRead một tham số, thumbnail Pbgra32, ActualBackend=Wpf, WpfExifReader giữ; đề xuất v1.1 khoá ExifOrientation.IsTransposed/Normalize.
 ---
 
 # NOWPF-WP03-WIC-DECODE - WIC decode, EXIF, thumbnail ra PixelBuffer (2026-10-10)
