@@ -344,33 +344,26 @@ public sealed class Win32DialogServiceTests
 
     private static string? ReadClipboardText(nint owner)
     {
-        for (var attempt = 0; attempt < 10; attempt++)
+        // The clipboard may be held briefly by another process: poll (bounded) until it can be opened.
+        var opened = SpinWait.SpinUntil(() => User32.OpenClipboard(owner), TimeSpan.FromMilliseconds(500));
+        if (!opened) return null;
+        try
         {
-            if (!User32.OpenClipboard(owner)) { Thread.Sleep(20); continue; }
+            var handle = User32.GetClipboardData(WindowMessages.CfUnicodeText);
+            if (handle == 0) return null;
+            var locked = Kernel32.GlobalLock(handle);
             try
             {
-                var handle = User32.GetClipboardData(WindowMessages.CfUnicodeText);
-                if (handle == 0) return null;
-                var locked = Kernel32.GlobalLock(handle);
-                try
-                {
-                    return locked == 0 ? null : Marshal.PtrToStringUni(locked);
-                }
-                finally
-                {
-                    Kernel32.GlobalUnlock(handle);
-                }
+                return locked == 0 ? null : Marshal.PtrToStringUni(locked);
             }
             finally
             {
-                User32.CloseClipboard();
+                Kernel32.GlobalUnlock(handle);
             }
         }
-
-        return null;
+        finally
+        {
+            User32.CloseClipboard();
+        }
     }
 }
-
-
-
-

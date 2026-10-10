@@ -82,7 +82,7 @@ internal sealed unsafe class NativeTaskDialogPort : ITaskDialogPort
                 catch (EntryPointNotFoundException)
                 {
                     // Tiến trình không khai manifest comctl32 v6 (vd. testhost): coi như người dùng đóng hộp thoại.
-                    LastFailure = "TaskDialogIndirect không có (comctl32 v5)";
+                    LastFailure = "TaskDialogIndirect is missing (comctl32 v5)";
                     return WindowMessages.IdCancel;
                 }
             }
