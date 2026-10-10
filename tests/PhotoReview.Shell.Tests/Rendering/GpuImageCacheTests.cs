@@ -32,6 +32,33 @@ public sealed class GpuImageCacheTests : IDisposable
     private GpuImageCache Cache(long budget, int stripeBytes = 40) => new(_backend, _dispatcher, budget, stripeBytes);
 
     [Fact]
+    public void TiledGpuImage_IsDrawable_OnlyForItsOwnDeviceGenerationAndWhenCompleteAndNotReleased()
+    {
+        PixelBuffer px = Image(4, 4);
+        var image = new TiledGpuImage(px, [], generation: 3) { UploadedRows = 4 };
+
+        Assert.True(image.IsDrawable(3));
+        Assert.False(image.IsDrawable(4));   // thiết bị đã được tạo lại: bitmap thuộc thế hệ cũ không được vẽ
+
+        image.UploadedRows = 2;
+        Assert.False(image.IsDrawable(3));   // prefetch dở
+
+        image.UploadedRows = 4;
+        image.IsReleased = true;
+        Assert.False(image.IsDrawable(3));
+    }
+
+    [Fact]
+    public void PixelBuffer_HasNoRowPadding_SoCacheMayAssumeStrideIsWidthTimesFour()
+    {
+        // GpuImageCache/D2DGpuImageBackend chép theo Stride của PixelBuffer; nếu PixelBuffer sau này có đệm hàng,
+        // test này đỏ để buộc rà lại các phép tính offset (đột biến M21/M22 của WP-15 tương đương tới lúc đó).
+        PixelBuffer px = Image(7, 3);
+
+        Assert.Equal(7 * 4, px.Stride);
+    }
+
+    [Fact]
     public void GetOrUpload_SameBuffer_UploadsOnceAndReturnsSameImage()
     {
         using GpuImageCache cache = Cache(budget: 10_000);

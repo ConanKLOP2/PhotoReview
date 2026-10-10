@@ -349,6 +349,51 @@ public sealed class D2DRenderSurfaceTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void PushTransform_Nested_AppliesInnerFirstThenOuter()
+    {
+        using D2DRenderSurface surface = D2DRenderSurface.CreateOffscreenSurface(30, 10, 1);
+        ColorF white = new(1, 1, 1, 1);
+
+        using PixelBuffer pixels = RenderTestImages.Render(surface, dc =>
+        {
+            dc.Clear(new ColorF(0, 0, 0, 1));
+            dc.PushTransform(Matrix3x2.CreateTranslation(10, 0));   // ngoài
+            dc.PushTransform(Matrix3x2.CreateScale(2, 2));          // trong: co giãn trước, dịch sau
+            dc.FillRectangle(new RectD(1, 1, 2, 2), white);         // -> x 2..6 rồi +10 = 12..16
+            dc.PopTransform();
+            dc.PopTransform();
+        });
+
+        Assert.Equal((byte)255, RenderTestImages.Pixel(pixels, 13, 3).B);
+        Assert.Equal((byte)255, RenderTestImages.Pixel(pixels, 15, 5).B);
+        Assert.Equal((byte)0, RenderTestImages.Pixel(pixels, 11, 3).B);
+        Assert.Equal((byte)0, RenderTestImages.Pixel(pixels, 23, 3).B);   // vị trí nếu thứ tự ngược (dịch trước, co giãn sau)
+    }
+
+    [Fact]
+    public void PushOpacity_Nested_MultipliesAndPopRestoresOuterValue()
+    {
+        using D2DRenderSurface surface = D2DRenderSurface.CreateOffscreenSurface(30, 5, 1);
+        ColorF white = new(1, 1, 1, 1);
+
+        using PixelBuffer pixels = RenderTestImages.Render(surface, dc =>
+        {
+            dc.Clear(new ColorF(0, 0, 0, 1));
+            dc.PushOpacity(0.5f);
+            dc.PushOpacity(0.5f);
+            dc.FillRectangle(new RectD(0, 0, 5, 5), white);    // 0,25
+            dc.PopOpacity();
+            dc.FillRectangle(new RectD(10, 0, 5, 5), white);   // 0,5
+            dc.PopOpacity();
+            dc.FillRectangle(new RectD(20, 0, 5, 5), white);   // 1
+        });
+
+        Assert.InRange(RenderTestImages.Pixel(pixels, 2, 2).B, 61, 67);
+        Assert.InRange(RenderTestImages.Pixel(pixels, 12, 2).B, 125, 131);
+        Assert.Equal((byte)255, RenderTestImages.Pixel(pixels, 22, 2).B);
+    }
+
+    [Fact]
     public void PushTransform_TranslatesAndPopRestores()
     {
         using D2DRenderSurface surface = D2DRenderSurface.CreateOffscreenSurface(20, 10, 1);
