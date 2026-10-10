@@ -274,7 +274,8 @@ public sealed class DecodingHelpersMutationTests : IDisposable
 
         Assert.NotNull(image);
         var bitmap = Assert.IsAssignableFrom<BitmapSource>(image.PlatformImage);
-        Assert.Equal(PixelFormats.Bgra32, bitmap.Format);
+        // WP-03: premultiplied BGRA from the WIC reader (was straight Bgra32 from WPF); A = 255 so the bytes are the same.
+        Assert.Equal(PixelFormats.Pbgra32, bitmap.Format);
         var px = new byte[4];
         bitmap.CopyPixels(new System.Windows.Int32Rect(8, 4, 1, 1), px, 4, 0);
         Assert.InRange(px[0], 240, 255); // B

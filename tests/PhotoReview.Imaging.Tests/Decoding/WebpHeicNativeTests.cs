@@ -65,8 +65,8 @@ public sealed class WebpHeicNativeTests : IDisposable
         if (!HasWebp) return;
         var path = Write("alpha.webp", WebPTestImage.Lossless(4, 2, (x, y) => x == 0 && y == 0 ? Red : x == 3 && y == 1 ? TransparentBlue : Blue));
 
-        var info = new WicDirectDecoder().ReadInfo(path);
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, TargetWidth: 0));
+        var info = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path);
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, TargetWidth: 0));
 
         Assert.Equal((4, 2, 1), (info.Width, info.Height, info.Orientation));
         Assert.Equal(DecoderBackend.WicDirect, decoded.ActualBackend);
@@ -81,9 +81,9 @@ public sealed class WebpHeicNativeTests : IDisposable
     public async Task Webp_TransparentPreview_IsRefusedByTheJpegDiskCache_OpaqueOneRoundTrips()
     {
         if (!HasWebp) return;
-        var transparent = new WicDirectDecoder().Decode(new DecodeRequest(
+        var transparent = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(
             Write("t.webp", WebPTestImage.Lossless(8, 8, (x, _) => x < 4 ? Blue : TransparentBlue)), TargetWidth: 0));
-        var opaque = new WicDirectDecoder().Decode(new DecodeRequest(
+        var opaque = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(
             Write("o.webp", WebPTestImage.Lossless(8, 8, (x, _) => x < 4 ? Blue : Red)), TargetWidth: 0));
 
         // Transparency is never flattened into the JPEG disk cache (IMG-01/Q-R7): the write is refused.
@@ -105,8 +105,8 @@ public sealed class WebpHeicNativeTests : IDisposable
         // Stored 4x2, red marker top-left; orientation 6 = rotate 90 degrees clockwise for display.
         var path = Write("exif6.webp", WebPTestImage.WithExifOrientation(4, 2, (x, y) => x == 0 && y == 0 ? Red : Blue, exifOrientation: 6));
 
-        var info = new WicDirectDecoder().ReadInfo(path);
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, TargetWidth: 0));
+        var info = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path);
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, TargetWidth: 0));
 
         Assert.Equal(6, info.Orientation);
         Assert.Equal(6, decoded.Orientation);
@@ -122,7 +122,7 @@ public sealed class WebpHeicNativeTests : IDisposable
         if (!HasWebp) return;
         var path = Write("exif6raw.webp", WebPTestImage.WithExifOrientation(4, 2, (x, y) => x == 0 && y == 0 ? Red : Blue, exifOrientation: 6));
 
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: false));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: false));
 
         Assert.Equal((4, 2), (decoded.PixelWidth, decoded.PixelHeight));
         Assert.Equal(Red, BgraAt(decoded, 0, 0));
@@ -134,7 +134,7 @@ public sealed class WebpHeicNativeTests : IDisposable
         if (!HasWebp) return;
         var path = Write("anim.webp", WebPTestImage.Animated(3, 3, Green, Red, Blue));
 
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, TargetWidth: 0));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, TargetWidth: 0));
 
         Assert.Equal((3, 3), (decoded.PixelWidth, decoded.PixelHeight));
         Assert.All(Enumerable.Range(0, 9), i => Assert.Equal(Green, BgraAt(decoded, i % 3, i / 3)));
@@ -146,7 +146,7 @@ public sealed class WebpHeicNativeTests : IDisposable
         if (!HasWebp) return;
         var path = Write("big.webp", WebPTestImage.Lossless(400, 200, (x, _) => x < 200 ? Red : Blue));
 
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, new DecodeBox(100, 100)));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, new DecodeBox(100, 100)));
 
         Assert.True(decoded.Downscaled);
         Assert.Equal((100, 50), (decoded.PixelWidth, decoded.PixelHeight));
@@ -161,7 +161,7 @@ public sealed class WebpHeicNativeTests : IDisposable
         var factory = new ImageDecoderFactory(
             [(DecoderBackend.TurboJpeg, () => new JpegOnlyDecoder())],
             decoderDecorator: (_, standard) => new WebpHeicRoutingDecoder(standard,
-                new FallbackImageDecoder(new WicDirectDecoder(), DecoderBackend.WicDirect, new WpfBitmapImageDecoder()),
+                new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.WicDirect, new WpfBitmapImageDecoder()),
                 () => true, () => WicCodecAvailability.Current));
 
         var decoded = factory.Create(DecoderBackend.TurboJpeg).Decode(new DecodeRequest(path, TargetWidth: 0));
@@ -176,8 +176,8 @@ public sealed class WebpHeicNativeTests : IDisposable
         var sample = Environment.GetEnvironmentVariable("PHOTOREVIEW_HEIC_SAMPLE");
         if (!WicCodecAvailability.Current.Heif || string.IsNullOrEmpty(sample) || !File.Exists(sample)) return;
 
-        var info = new WicDirectDecoder().ReadInfo(sample);
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(sample, new DecodeBox(800, 800)));
+        var info = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(sample);
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(sample, new DecodeBox(800, 800)));
 
         Assert.True(info.Width > 0 && info.Height > 0);
         Assert.InRange(info.Orientation, 1, 8);

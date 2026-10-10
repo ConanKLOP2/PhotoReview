@@ -24,7 +24,7 @@ public sealed class ReadInfoBufferBenchmarkTests(ITestOutputHelper output) : IDi
     {
         var path = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_root.Path, "big.jpg"), 6000, 4000);
         output.WriteLine($"fixture: {new FileInfo(path).Length / 1024} KiB");
-        foreach (var (name, decoder) in new (string, IImageDecoder)[] { ("Wpf", new WpfBitmapImageDecoder()), ("WicDirect", new WicDirectDecoder()) })
+        foreach (var (name, decoder) in new (string, IImageDecoder)[] { ("Wpf", new WpfBitmapImageDecoder()), ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance)) })
         {
             for (var i = 0; i < 50; i++) decoder.ReadInfo(path); // warm-up (JIT, file cache)
             var times = new double[Iterations];
