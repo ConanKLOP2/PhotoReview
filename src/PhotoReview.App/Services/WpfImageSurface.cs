@@ -50,8 +50,8 @@ internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerSt
             ViewportHeight: scroll.ViewportHeight,
             HorizontalOffset: scroll.HorizontalOffset,
             VerticalOffset: scroll.VerticalOffset,
-            HorizontalScrollbarVisibility: scroll.ComputedHorizontalScrollBarVisibility,
-            VerticalScrollbarVisibility: scroll.ComputedVerticalScrollBarVisibility);
+            HorizontalScrollBarVisible: scroll.ComputedHorizontalScrollBarVisibility == Visibility.Visible,
+            VerticalScrollBarVisible: scroll.ComputedVerticalScrollBarVisibility == Visibility.Visible);
 
     public double HorizontalOffset => scroll.HorizontalOffset;
     public double VerticalOffset => scroll.VerticalOffset;
@@ -74,8 +74,8 @@ internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerSt
     // DispatcherOperation's awaiter is its Task's awaiter: awaiting .Task resumes exactly as awaiting the operation did.
     public Task YieldToRenderAsync() => scroll.Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render).Task;
 
-    public Point ImageOrigin => image.TranslatePoint(new Point(0, 0), scroll);
-    public Point ToImageElement(Point surfacePoint) => scroll.TranslatePoint(surfacePoint, image);
+    public PointD ImageOrigin => image.TranslatePoint(new Point(0, 0), scroll).ToPointD();
+    public PointD ToImageElement(PointD surfacePoint) => scroll.TranslatePoint(surfacePoint.ToWpfPoint(), image).ToPointD();
     public double ImageActualWidth => image.ActualWidth;
     public double ImageActualHeight => image.ActualHeight;
     public (double Width, double Height)? SourceSize => image.Source is { } source ? (source.Width, source.Height) : null;
@@ -99,13 +99,13 @@ internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerSt
             ? displayClock.GetTiming(source.Handle)
             : null;
 
-    public Point? PointerPosition
+    public PointD? PointerPosition
     {
         get
         {
             var position = (mouse ?? RealMouse.Instance).GetPosition(scroll);
             return position.X >= 0 && position.Y >= 0 && position.X <= scroll.ViewportWidth && position.Y <= scroll.ViewportHeight
-                ? position
+                ? position.ToPointD()
                 : null;
         }
     }

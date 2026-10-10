@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using PhotoReview.Shell.Interop;
 
 namespace PhotoReview.Shell.Tests;
@@ -77,23 +77,23 @@ public sealed unsafe class InteropSignatureTests
 
     [Trait("Category", "HotPath")]
     [Fact]
-    public void TaskDialogButton_Size_Is16()
+    public void TaskDialogButton_Size_Is12()
     {
-        Assert.Equal(16, sizeof(TaskDialogButton)); // TASKDIALOG_BUTTON x64: int + pad + PCWSTR
+        Assert.Equal(12, sizeof(TaskDialogButton)); // TASKDIALOG_BUTTON x64 (pshpack1): int + PCWSTR, không pad
     }
 
     [Trait("Category", "HotPath")]
     [Fact]
-    public void TaskDialogConfig_Size_Is176AndFieldOffsetsMatch()
+    public void TaskDialogConfig_Size_Is160AndFieldOffsetsMatch()
     {
-        // TASKDIALOGCONFIG x64: 8 DWORD + 16 pointer-sized fields, có pad sau cbSize, cButtons, nDefaultRadioButton, cxWidth.
-        Assert.Equal(176, sizeof(TaskDialogConfig));
-        Assert.Equal(8, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.ParentWindow)).ToInt32());
-        Assert.Equal(32, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.WindowTitle)).ToInt32());
-        Assert.Equal(64, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.ButtonCount)).ToInt32());
-        Assert.Equal(72, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.Buttons)).ToInt32());
-        Assert.Equal(152, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.Callback)).ToInt32());
-        Assert.Equal(168, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.Width)).ToInt32());
+        // TASKDIALOGCONFIG x64 (pshpack1.h: đóng gói 1 byte, không pad): 8 DWORD/int + 16 trường cỡ con trỏ... = 160.
+        Assert.Equal(160, sizeof(TaskDialogConfig));
+        Assert.Equal(4, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.ParentWindow)).ToInt32());
+        Assert.Equal(28, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.WindowTitle)).ToInt32());
+        Assert.Equal(60, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.ButtonCount)).ToInt32());
+        Assert.Equal(64, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.Buttons)).ToInt32());
+        Assert.Equal(140, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.Callback)).ToInt32());
+        Assert.Equal(156, Marshal.OffsetOf<TaskDialogConfig>(nameof(TaskDialogConfig.Width)).ToInt32());
     }
 
     // --- Gọi thử hàm an toàn (thật sự chạm OS) ---
@@ -156,3 +156,4 @@ public sealed unsafe class InteropSignatureTests
         return User32.DefWindowProc(hwnd, message, wParam, lParam);
     }
 }
+

@@ -1,17 +1,419 @@
+using System.Collections.Frozen;
+using PhotoReview.Core.Settings;
+
 namespace PhotoReview.App.Input;
 
 /// <summary>
-/// C-06: ánh xạ giữa <see cref="KeyId"/> và mã phím ảo Win32 / tên trong config.json. Thực thi ở WP-07
-/// (phải khớp <c>KeyInterop.KeyFromVirtualKey</c>/<c>VirtualKeyFromKey</c> của WPF, kiểm bằng golden G-KEY).
+/// C-06: ánh xạ giữa <see cref="KeyId"/> và mã phím ảo Win32 / tên trong config.json. Bảng được sinh một lần từ
+/// <c>KeyInterop.KeyFromVirtualKey</c>/<c>VirtualKeyFromKey</c> của WPF .NET 10 và được test G-KEY so lại với chính WPF
+/// (<c>KeyIdMappingTests</c> ở App.Tests, vì cần WPF) cho mọi mã 0..255 và mọi giá trị <see cref="KeyId"/>.
 /// </summary>
 public static class KeyIdMapping
 {
-    /// <summary>Khớp <c>KeyInterop.KeyFromVirtualKey</c> (WPF).</summary>
-    public static KeyId FromVirtualKey(int virtualKey, bool isExtended) => throw new NotImplementedException();
+    private const int VkShift = 0x10;
+    private const int VkControl = 0x11;
+    private const int VkMenu = 0x12;
 
-    /// <summary>Khớp <c>KeyInterop.VirtualKeyFromKey</c> (WPF).</summary>
-    public static int ToVirtualKey(KeyId key) => throw new NotImplementedException();
+    private static readonly KeyId[] VirtualKeyToKey = BuildVirtualKeyToKey();
+    private static readonly int[] KeyToVirtualKey = BuildKeyToVirtualKey();
 
-    /// <summary><c>Enum.TryParse(ignoreCase: false)</c> + <c>ShortcutKeyCanonical</c> (Core).</summary>
-    public static bool TryParse(string name, out KeyId key) => throw new NotImplementedException();
+    /// <summary>
+    /// Khớp <c>KeyInterop.KeyFromVirtualKey</c> (WPF) cho mã 0..255, mã ngoài dải cho <see cref="KeyId.None"/>. Khác WPF đúng một
+    /// chỗ, giống bộ cấp phím của WPF (<c>HwndKeyboardInputProvider</c>): mã chung VK_CONTROL / VK_MENU với cờ extended
+    /// (phím bên phải) cho <see cref="KeyId.RightCtrl"/> / <see cref="KeyId.RightAlt"/>. VK_SHIFT luôn là <see cref="KeyId.LeftShift"/>
+    /// (bên phải của Shift không đọc được từ cờ extended: người gọi phải đưa VK_RSHIFT từ scan code).
+    /// </summary>
+    public static KeyId FromVirtualKey(int virtualKey, bool isExtended)
+    {
+        if ((uint)virtualKey >= (uint)VirtualKeyToKey.Length) return KeyId.None;
+        if (isExtended)
+        {
+            if (virtualKey == VkControl) return KeyId.RightCtrl;
+            if (virtualKey == VkMenu) return KeyId.RightAlt;
+        }
+
+        return VirtualKeyToKey[virtualKey];
+    }
+
+    /// <summary>Khớp <c>KeyInterop.VirtualKeyFromKey</c> (WPF): 0 cho phím không có mã ảo (<see cref="KeyId.None"/>, <see cref="KeyId.DeadCharProcessed"/>, giá trị ngoài dải).</summary>
+    public static int ToVirtualKey(KeyId key)
+    {
+        var index = (int)key;
+        return (uint)index < (uint)KeyToVirtualKey.Length ? KeyToVirtualKey[index] : 0;
+    }
+
+    /// <summary>
+    /// Tên phím trong config.json -> <see cref="KeyId"/>: bí danh được chuẩn hoá (<see cref="ShortcutKeyCanonical"/>), sau đó
+    /// <c>Enum.TryParse(ignoreCase: false)</c>. Từ chối số ("999"), danh sách ("A,B") và giá trị không định nghĩa.
+    /// </summary>
+    public static bool TryParse(string name, out KeyId key)
+    {
+        key = KeyId.None;
+        var text = ShortcutKeyCanonical.Canonicalize(name);
+        if (text.Length == 0 || text.Contains(',', StringComparison.Ordinal) || char.IsDigit(text[0]) || text[0] is '-' or '+') return false;
+        if (!Enum.TryParse(text, ignoreCase: false, out KeyId parsed) || !Enum.IsDefined(parsed)) return false;
+        key = parsed;
+        return true;
+    }
+
+    private static KeyId[] BuildVirtualKeyToKey()
+    {
+        var map = new Dictionary<int, KeyId>
+        {
+        [0x03] = KeyId.Cancel,
+        [0x08] = KeyId.Back,
+        [0x09] = KeyId.Tab,
+        [0x0C] = KeyId.Clear,
+        [0x0D] = KeyId.Return,
+        [0x10] = KeyId.LeftShift,
+        [0x11] = KeyId.LeftCtrl,
+        [0x12] = KeyId.LeftAlt,
+        [0x13] = KeyId.Pause,
+        [0x14] = KeyId.Capital,
+        [0x15] = KeyId.KanaMode,
+        [0x17] = KeyId.JunjaMode,
+        [0x18] = KeyId.FinalMode,
+        [0x19] = KeyId.HanjaMode,
+        [0x1B] = KeyId.Escape,
+        [0x1C] = KeyId.ImeConvert,
+        [0x1D] = KeyId.ImeNonConvert,
+        [0x1E] = KeyId.ImeAccept,
+        [0x1F] = KeyId.ImeModeChange,
+        [0x20] = KeyId.Space,
+        [0x21] = KeyId.Prior,
+        [0x22] = KeyId.Next,
+        [0x23] = KeyId.End,
+        [0x24] = KeyId.Home,
+        [0x25] = KeyId.Left,
+        [0x26] = KeyId.Up,
+        [0x27] = KeyId.Right,
+        [0x28] = KeyId.Down,
+        [0x29] = KeyId.Select,
+        [0x2A] = KeyId.Print,
+        [0x2B] = KeyId.Execute,
+        [0x2C] = KeyId.Snapshot,
+        [0x2D] = KeyId.Insert,
+        [0x2E] = KeyId.Delete,
+        [0x2F] = KeyId.Help,
+        [0x30] = KeyId.D0,
+        [0x31] = KeyId.D1,
+        [0x32] = KeyId.D2,
+        [0x33] = KeyId.D3,
+        [0x34] = KeyId.D4,
+        [0x35] = KeyId.D5,
+        [0x36] = KeyId.D6,
+        [0x37] = KeyId.D7,
+        [0x38] = KeyId.D8,
+        [0x39] = KeyId.D9,
+        [0x41] = KeyId.A,
+        [0x42] = KeyId.B,
+        [0x43] = KeyId.C,
+        [0x44] = KeyId.D,
+        [0x45] = KeyId.E,
+        [0x46] = KeyId.F,
+        [0x47] = KeyId.G,
+        [0x48] = KeyId.H,
+        [0x49] = KeyId.I,
+        [0x4A] = KeyId.J,
+        [0x4B] = KeyId.K,
+        [0x4C] = KeyId.L,
+        [0x4D] = KeyId.M,
+        [0x4E] = KeyId.N,
+        [0x4F] = KeyId.O,
+        [0x50] = KeyId.P,
+        [0x51] = KeyId.Q,
+        [0x52] = KeyId.R,
+        [0x53] = KeyId.S,
+        [0x54] = KeyId.T,
+        [0x55] = KeyId.U,
+        [0x56] = KeyId.V,
+        [0x57] = KeyId.W,
+        [0x58] = KeyId.X,
+        [0x59] = KeyId.Y,
+        [0x5A] = KeyId.Z,
+        [0x5B] = KeyId.LWin,
+        [0x5C] = KeyId.RWin,
+        [0x5D] = KeyId.Apps,
+        [0x5F] = KeyId.Sleep,
+        [0x60] = KeyId.NumPad0,
+        [0x61] = KeyId.NumPad1,
+        [0x62] = KeyId.NumPad2,
+        [0x63] = KeyId.NumPad3,
+        [0x64] = KeyId.NumPad4,
+        [0x65] = KeyId.NumPad5,
+        [0x66] = KeyId.NumPad6,
+        [0x67] = KeyId.NumPad7,
+        [0x68] = KeyId.NumPad8,
+        [0x69] = KeyId.NumPad9,
+        [0x6A] = KeyId.Multiply,
+        [0x6B] = KeyId.Add,
+        [0x6C] = KeyId.Separator,
+        [0x6D] = KeyId.Subtract,
+        [0x6E] = KeyId.Decimal,
+        [0x6F] = KeyId.Divide,
+        [0x70] = KeyId.F1,
+        [0x71] = KeyId.F2,
+        [0x72] = KeyId.F3,
+        [0x73] = KeyId.F4,
+        [0x74] = KeyId.F5,
+        [0x75] = KeyId.F6,
+        [0x76] = KeyId.F7,
+        [0x77] = KeyId.F8,
+        [0x78] = KeyId.F9,
+        [0x79] = KeyId.F10,
+        [0x7A] = KeyId.F11,
+        [0x7B] = KeyId.F12,
+        [0x7C] = KeyId.F13,
+        [0x7D] = KeyId.F14,
+        [0x7E] = KeyId.F15,
+        [0x7F] = KeyId.F16,
+        [0x80] = KeyId.F17,
+        [0x81] = KeyId.F18,
+        [0x82] = KeyId.F19,
+        [0x83] = KeyId.F20,
+        [0x84] = KeyId.F21,
+        [0x85] = KeyId.F22,
+        [0x86] = KeyId.F23,
+        [0x87] = KeyId.F24,
+        [0x90] = KeyId.NumLock,
+        [0x91] = KeyId.Scroll,
+        [0xA0] = KeyId.LeftShift,
+        [0xA1] = KeyId.RightShift,
+        [0xA2] = KeyId.LeftCtrl,
+        [0xA3] = KeyId.RightCtrl,
+        [0xA4] = KeyId.LeftAlt,
+        [0xA5] = KeyId.RightAlt,
+        [0xA6] = KeyId.BrowserBack,
+        [0xA7] = KeyId.BrowserForward,
+        [0xA8] = KeyId.BrowserRefresh,
+        [0xA9] = KeyId.BrowserStop,
+        [0xAA] = KeyId.BrowserSearch,
+        [0xAB] = KeyId.BrowserFavorites,
+        [0xAC] = KeyId.BrowserHome,
+        [0xAD] = KeyId.VolumeMute,
+        [0xAE] = KeyId.VolumeDown,
+        [0xAF] = KeyId.VolumeUp,
+        [0xB0] = KeyId.MediaNextTrack,
+        [0xB1] = KeyId.MediaPreviousTrack,
+        [0xB2] = KeyId.MediaStop,
+        [0xB3] = KeyId.MediaPlayPause,
+        [0xB4] = KeyId.LaunchMail,
+        [0xB5] = KeyId.SelectMedia,
+        [0xB6] = KeyId.LaunchApplication1,
+        [0xB7] = KeyId.LaunchApplication2,
+        [0xBA] = KeyId.Oem1,
+        [0xBB] = KeyId.OemPlus,
+        [0xBC] = KeyId.OemComma,
+        [0xBD] = KeyId.OemMinus,
+        [0xBE] = KeyId.OemPeriod,
+        [0xBF] = KeyId.Oem2,
+        [0xC0] = KeyId.Oem3,
+        [0xC1] = KeyId.AbntC1,
+        [0xC2] = KeyId.AbntC2,
+        [0xDB] = KeyId.Oem4,
+        [0xDC] = KeyId.Oem5,
+        [0xDD] = KeyId.Oem6,
+        [0xDE] = KeyId.Oem7,
+        [0xDF] = KeyId.Oem8,
+        [0xE2] = KeyId.Oem102,
+        [0xE5] = KeyId.ImeProcessed,
+        [0xF0] = KeyId.OemAttn,
+        [0xF1] = KeyId.OemFinish,
+        [0xF2] = KeyId.OemCopy,
+        [0xF3] = KeyId.OemAuto,
+        [0xF4] = KeyId.OemEnlw,
+        [0xF5] = KeyId.OemBackTab,
+        [0xF6] = KeyId.Attn,
+        [0xF7] = KeyId.CrSel,
+        [0xF8] = KeyId.ExSel,
+        [0xF9] = KeyId.EraseEof,
+        [0xFA] = KeyId.Play,
+        [0xFB] = KeyId.Zoom,
+        [0xFC] = KeyId.NoName,
+        [0xFD] = KeyId.Pa1,
+        [0xFE] = KeyId.OemClear,
+        };
+        var table = new KeyId[256];
+        foreach (var (vk, key) in map) table[vk] = key;
+        return table;
+    }
+
+    private static int[] BuildKeyToVirtualKey()
+    {
+        var map = new Dictionary<KeyId, int>
+        {
+        [KeyId.Cancel] = 0x03,
+        [KeyId.Back] = 0x08,
+        [KeyId.Tab] = 0x09,
+        [KeyId.Clear] = 0x0C,
+        [KeyId.Return] = 0x0D,
+        [KeyId.Pause] = 0x13,
+        [KeyId.Capital] = 0x14,
+        [KeyId.KanaMode] = 0x15,
+        [KeyId.JunjaMode] = 0x17,
+        [KeyId.FinalMode] = 0x18,
+        [KeyId.HanjaMode] = 0x19,
+        [KeyId.Escape] = 0x1B,
+        [KeyId.ImeConvert] = 0x1C,
+        [KeyId.ImeNonConvert] = 0x1D,
+        [KeyId.ImeAccept] = 0x1E,
+        [KeyId.ImeModeChange] = 0x1F,
+        [KeyId.Space] = 0x20,
+        [KeyId.Prior] = 0x21,
+        [KeyId.Next] = 0x22,
+        [KeyId.End] = 0x23,
+        [KeyId.Home] = 0x24,
+        [KeyId.Left] = 0x25,
+        [KeyId.Up] = 0x26,
+        [KeyId.Right] = 0x27,
+        [KeyId.Down] = 0x28,
+        [KeyId.Select] = 0x29,
+        [KeyId.Print] = 0x2A,
+        [KeyId.Execute] = 0x2B,
+        [KeyId.Snapshot] = 0x2C,
+        [KeyId.Insert] = 0x2D,
+        [KeyId.Delete] = 0x2E,
+        [KeyId.Help] = 0x2F,
+        [KeyId.D0] = 0x30,
+        [KeyId.D1] = 0x31,
+        [KeyId.D2] = 0x32,
+        [KeyId.D3] = 0x33,
+        [KeyId.D4] = 0x34,
+        [KeyId.D5] = 0x35,
+        [KeyId.D6] = 0x36,
+        [KeyId.D7] = 0x37,
+        [KeyId.D8] = 0x38,
+        [KeyId.D9] = 0x39,
+        [KeyId.A] = 0x41,
+        [KeyId.B] = 0x42,
+        [KeyId.C] = 0x43,
+        [KeyId.D] = 0x44,
+        [KeyId.E] = 0x45,
+        [KeyId.F] = 0x46,
+        [KeyId.G] = 0x47,
+        [KeyId.H] = 0x48,
+        [KeyId.I] = 0x49,
+        [KeyId.J] = 0x4A,
+        [KeyId.K] = 0x4B,
+        [KeyId.L] = 0x4C,
+        [KeyId.M] = 0x4D,
+        [KeyId.N] = 0x4E,
+        [KeyId.O] = 0x4F,
+        [KeyId.P] = 0x50,
+        [KeyId.Q] = 0x51,
+        [KeyId.R] = 0x52,
+        [KeyId.S] = 0x53,
+        [KeyId.T] = 0x54,
+        [KeyId.U] = 0x55,
+        [KeyId.V] = 0x56,
+        [KeyId.W] = 0x57,
+        [KeyId.X] = 0x58,
+        [KeyId.Y] = 0x59,
+        [KeyId.Z] = 0x5A,
+        [KeyId.LWin] = 0x5B,
+        [KeyId.RWin] = 0x5C,
+        [KeyId.Apps] = 0x5D,
+        [KeyId.Sleep] = 0x5F,
+        [KeyId.NumPad0] = 0x60,
+        [KeyId.NumPad1] = 0x61,
+        [KeyId.NumPad2] = 0x62,
+        [KeyId.NumPad3] = 0x63,
+        [KeyId.NumPad4] = 0x64,
+        [KeyId.NumPad5] = 0x65,
+        [KeyId.NumPad6] = 0x66,
+        [KeyId.NumPad7] = 0x67,
+        [KeyId.NumPad8] = 0x68,
+        [KeyId.NumPad9] = 0x69,
+        [KeyId.Multiply] = 0x6A,
+        [KeyId.Add] = 0x6B,
+        [KeyId.Separator] = 0x6C,
+        [KeyId.Subtract] = 0x6D,
+        [KeyId.Decimal] = 0x6E,
+        [KeyId.Divide] = 0x6F,
+        [KeyId.F1] = 0x70,
+        [KeyId.F2] = 0x71,
+        [KeyId.F3] = 0x72,
+        [KeyId.F4] = 0x73,
+        [KeyId.F5] = 0x74,
+        [KeyId.F6] = 0x75,
+        [KeyId.F7] = 0x76,
+        [KeyId.F8] = 0x77,
+        [KeyId.F9] = 0x78,
+        [KeyId.F10] = 0x79,
+        [KeyId.F11] = 0x7A,
+        [KeyId.F12] = 0x7B,
+        [KeyId.F13] = 0x7C,
+        [KeyId.F14] = 0x7D,
+        [KeyId.F15] = 0x7E,
+        [KeyId.F16] = 0x7F,
+        [KeyId.F17] = 0x80,
+        [KeyId.F18] = 0x81,
+        [KeyId.F19] = 0x82,
+        [KeyId.F20] = 0x83,
+        [KeyId.F21] = 0x84,
+        [KeyId.F22] = 0x85,
+        [KeyId.F23] = 0x86,
+        [KeyId.F24] = 0x87,
+        [KeyId.NumLock] = 0x90,
+        [KeyId.Scroll] = 0x91,
+        [KeyId.LeftShift] = 0xA0,
+        [KeyId.RightShift] = 0xA1,
+        [KeyId.LeftCtrl] = 0xA2,
+        [KeyId.RightCtrl] = 0xA3,
+        [KeyId.LeftAlt] = 0xA4,
+        [KeyId.RightAlt] = 0xA5,
+        [KeyId.BrowserBack] = 0xA6,
+        [KeyId.BrowserForward] = 0xA7,
+        [KeyId.BrowserRefresh] = 0xA8,
+        [KeyId.BrowserStop] = 0xA9,
+        [KeyId.BrowserSearch] = 0xAA,
+        [KeyId.BrowserFavorites] = 0xAB,
+        [KeyId.BrowserHome] = 0xAC,
+        [KeyId.VolumeMute] = 0xAD,
+        [KeyId.VolumeDown] = 0xAE,
+        [KeyId.VolumeUp] = 0xAF,
+        [KeyId.MediaNextTrack] = 0xB0,
+        [KeyId.MediaPreviousTrack] = 0xB1,
+        [KeyId.MediaStop] = 0xB2,
+        [KeyId.MediaPlayPause] = 0xB3,
+        [KeyId.LaunchMail] = 0xB4,
+        [KeyId.SelectMedia] = 0xB5,
+        [KeyId.LaunchApplication1] = 0xB6,
+        [KeyId.LaunchApplication2] = 0xB7,
+        [KeyId.Oem1] = 0xBA,
+        [KeyId.OemPlus] = 0xBB,
+        [KeyId.OemComma] = 0xBC,
+        [KeyId.OemMinus] = 0xBD,
+        [KeyId.OemPeriod] = 0xBE,
+        [KeyId.Oem2] = 0xBF,
+        [KeyId.Oem3] = 0xC0,
+        [KeyId.AbntC1] = 0xC1,
+        [KeyId.AbntC2] = 0xC2,
+        [KeyId.Oem4] = 0xDB,
+        [KeyId.Oem5] = 0xDC,
+        [KeyId.Oem6] = 0xDD,
+        [KeyId.Oem7] = 0xDE,
+        [KeyId.Oem8] = 0xDF,
+        [KeyId.Oem102] = 0xE2,
+        [KeyId.ImeProcessed] = 0xE5,
+        [KeyId.OemAttn] = 0xF0,
+        [KeyId.OemFinish] = 0xF1,
+        [KeyId.OemCopy] = 0xF2,
+        [KeyId.OemAuto] = 0xF3,
+        [KeyId.OemEnlw] = 0xF4,
+        [KeyId.OemBackTab] = 0xF5,
+        [KeyId.Attn] = 0xF6,
+        [KeyId.CrSel] = 0xF7,
+        [KeyId.ExSel] = 0xF8,
+        [KeyId.EraseEof] = 0xF9,
+        [KeyId.Play] = 0xFA,
+        [KeyId.Zoom] = 0xFB,
+        [KeyId.NoName] = 0xFC,
+        [KeyId.Pa1] = 0xFD,
+        [KeyId.OemClear] = 0xFE,
+        };
+        var table = new int[(int)KeyId.DeadCharProcessed + 1];
+        foreach (var (key, vk) in map) table[(int)key] = vk;
+        return table;
+    }
 }

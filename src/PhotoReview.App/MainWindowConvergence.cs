@@ -1,4 +1,3 @@
-using System.Windows;
 using PhotoReview.App.ViewModels;
 
 namespace PhotoReview.App;
@@ -17,14 +16,14 @@ internal record ViewportSnapshot(
     double ViewportHeight,
     double HorizontalOffset,
     double VerticalOffset,
-    Visibility HorizontalScrollbarVisibility,
-    Visibility VerticalScrollbarVisibility)
+    bool HorizontalScrollBarVisible,
+    bool VerticalScrollBarVisible)
 {
     public override string ToString() =>
         $"Zoom={Zoom:F2} Stretch={Stretch} MaxImage=({MaxImageWidth:F0},{MaxImageHeight:F0}) " +
         $"Actual=({ActualImageWidth:F0},{ActualImageHeight:F0}) Extent=({ExtentWidth:F0},{ExtentHeight:F0}) " +
         $"Viewport=({ViewportWidth:F0},{ViewportHeight:F0}) Offset=({HorizontalOffset:F1},{VerticalOffset:F1}) " +
-        $"Scrollbars=({HorizontalScrollbarVisibility},{VerticalScrollbarVisibility})";
+        $"Scrollbars=({(HorizontalScrollBarVisible ? "Visible" : "Collapsed")},{(VerticalScrollBarVisible ? "Visible" : "Collapsed")})"; // same text as when these were WPF Visibility (diagnostics)
 }
 
 /// <summary>Helper to detect viewport convergence and validate measurements.</summary>
@@ -43,8 +42,8 @@ internal static class ViewportConvergence
             Math.Abs(before.ViewportHeight - after.ViewportHeight) < Epsilon &&
             Math.Abs(before.ExtentWidth - after.ExtentWidth) < Epsilon &&
             Math.Abs(before.ExtentHeight - after.ExtentHeight) < Epsilon &&
-            before.HorizontalScrollbarVisibility == after.HorizontalScrollbarVisibility &&
-            before.VerticalScrollbarVisibility == after.VerticalScrollbarVisibility;
+            before.HorizontalScrollBarVisible == after.HorizontalScrollBarVisible &&
+            before.VerticalScrollBarVisible == after.VerticalScrollBarVisible;
     }
 
     /// <summary>Validate that measurements are finite, positive, and usable.</summary>

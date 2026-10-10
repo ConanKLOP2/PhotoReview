@@ -177,9 +177,9 @@ public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)
         try
         {
             await Frames(3);
-            var start = new Point(700, 450);
+            var start = new PhotoReview.App.Input.PointD(700, 450);
             phase = "drag";
-            Assert.True(pointer.OnImagePress(MouseButton.Left, 1, start, 0), "The press was not taken as a pan (image not pannable?).");
+            Assert.True(pointer.OnImagePress(PhotoReview.App.Input.PointerButton.Left, 1, start, 0), "The press was not taken as a pan (image not pannable?).");
             var pressAt = clock.Elapsed.TotalMilliseconds;
 
             // Mouse moves posted at Input priority from a background thread at moveHz, like WM_MOUSEMOVE arriving between frames.
@@ -197,7 +197,7 @@ public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)
                     }
                     var at = next - pressAt;
                     var last = at >= DragMs;
-                    var point = new Point(start.X + DragVelocityX * at, start.Y + DragVelocityY * at);
+                    var point = new PhotoReview.App.Input.PointD(start.X + DragVelocityX * at, start.Y + DragVelocityY * at);
                     var stamp = (int)Math.Round(at);
                     dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
                     {

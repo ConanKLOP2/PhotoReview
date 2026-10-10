@@ -84,7 +84,7 @@ public sealed class MainWindowSupportTests
         double vw = 800, double vh = 600, double hOff = 0, double vOff = 0,
         double maxW = 800, double maxH = 600, double actW = 800, double actH = 600)
         => new(1.0, ViewerStretchMode.Uniform, maxW, maxH, actW, actH, 800, 600, vw, vh, hOff, vOff,
-            Visibility.Collapsed, Visibility.Collapsed);
+            false, false);
 
     [Theory]
     [InlineData(double.NaN, 600, 0, 0, 800, 600, 800, 600, "Viewport not ready")]
@@ -125,7 +125,7 @@ public sealed class MainWindowSupportTests
     public void ViewportSnapshot_ToString_ListsEveryMeasurementWithRoundedFormats()
     {
         var snapshot = new ViewportSnapshot(1.234, ViewerStretchMode.Uniform, 100.4, 200.6, 300.2, 400.8, 500, 600, 700, 800, 1.26, 2.34,
-            Visibility.Visible, Visibility.Collapsed);
+            true, false);
 
         // The numbers use the current culture (diagnostic text for a human), so the expectation is formatted the same way.
         Assert.Equal(

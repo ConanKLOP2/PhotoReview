@@ -1,4 +1,3 @@
-using System.Windows.Input;
 using PhotoReview.App.Input;
 
 namespace PhotoReview.App.Tests.Input;
@@ -11,8 +10,8 @@ public sealed class RefreshShortcutRouterTests
     {
         var router = new ShortcutRouter(new AppSettings());
 
-        Assert.Equal(ReviewCommandType.Refresh, router.TryResolve(Key.R, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
-        Assert.Null(router.TryResolve(Key.R, Key.None, ModifierKeys.None, false, hasImage: false));
+        Assert.Equal(ReviewCommandType.Refresh, router.TryResolve(KeyId.R, KeyId.None, KeyModifiers.None, false, hasImage: true)?.Type);
+        Assert.Null(router.TryResolve(KeyId.R, KeyId.None, KeyModifiers.None, false, hasImage: false));
     }
 
     [Fact]
@@ -21,7 +20,7 @@ public sealed class RefreshShortcutRouterTests
         var settings = new AppSettings();
         var router = new ShortcutRouter(settings);
 
-        var command = router.TryResolve(Key.F5, Key.None, ModifierKeys.None, false, hasImage: true);
+        var command = router.TryResolve(KeyId.F5, KeyId.None, KeyModifiers.None, false, hasImage: true);
 
         Assert.Equal(ReviewCommandType.RunAction, command?.Type);
         Assert.Equal("F5", settings.Actions[command!.Value.ActionIndex].Shortcut);
@@ -32,14 +31,14 @@ public sealed class RefreshShortcutRouterTests
     {
         var settings = new AppSettings { Shortcuts = new ShortcutMappings { Refresh = "" } };
         var router = new ShortcutRouter(settings);
-        Assert.Null(router.TryResolve(Key.R, Key.None, ModifierKeys.None, false, true));
+        Assert.Null(router.TryResolve(KeyId.R, KeyId.None, KeyModifiers.None, false, true));
 
         settings.Actions.RemoveAll(a => a.Shortcut == "F5");
         settings.Shortcuts.Refresh = "F5";
         router.Rebuild(settings);
 
-        Assert.Equal(ReviewCommandType.Refresh, router.TryResolve(Key.F5, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Null(router.TryResolve(Key.R, Key.None, ModifierKeys.None, false, true));
+        Assert.Equal(ReviewCommandType.Refresh, router.TryResolve(KeyId.F5, KeyId.None, KeyModifiers.None, false, true)?.Type);
+        Assert.Null(router.TryResolve(KeyId.R, KeyId.None, KeyModifiers.None, false, true));
     }
 
     [Fact]
