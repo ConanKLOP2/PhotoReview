@@ -51,10 +51,11 @@ public sealed class WicDirectDecoder : IImageDecoder
             {
                 return DecodeFromStream(stream, request, _codec, MemoryInfo);
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException ex) when (ex is not ArgumentNullException)
             {
                 // WIC maps E_INVALIDARG (damaged metadata/header) to ArgumentException, which the fallback chain treats as a
                 // caller bug and does not catch. The argument checks of this method ran before the try, so this is a data fault.
+                // An ArgumentNullException is a programming error in our own code and is not relabelled as bad data (NOWPF-WP03).
                 throw AsInvalidData(ex);
             }
         }
@@ -253,18 +254,9 @@ public sealed class WicDirectDecoder : IImageDecoder
 
             // WP-03: WIC writes straight into the native PixelBuffer (one copy); the codec then owns it. With the WPF codec
             // that is the same single BitmapSource.Create copy into MIL as before (2 copies in all), with the pixel codec none.
-            var pixels = PixelBuffer.Allocate((int)finalW, (int)finalH, opaque ? PixelLayout.Bgr32 : PixelLayout.Pbgra32);
-            try
-            {
-                CopyPixelsGuarded(
-                    () => currentSource.CopyPixels(IntPtr.Zero, (uint)stride, (uint)bufferSize, pixels.Address),
-                    colorChain.IsActive);
-            }
-            catch
-            {
-                pixels.Dispose();
-                throw;
-            }
+            var source = currentSource;
+            var pixels = AllocateAndFill((int)finalW, (int)finalH, opaque ? PixelLayout.Bgr32 : PixelLayout.Pbgra32,
+                buffer => source.CopyPixels(IntPtr.Zero, (uint)stride, (uint)bufferSize, buffer.Address), colorChain.IsActive);
 
             var platformImage = codec.FromPixels(pixels);
 
@@ -291,6 +283,26 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
+    /// <summary>
+    /// Allocates the native output buffer and lets <paramref name="copy"/> fill it (WIC's single CopyPixels). When the copy throws
+    /// (a lazily evaluated colour transform, a damaged stream) the buffer is disposed before the exception leaves, so a failed
+    /// decode never holds native memory until a finalizer runs. On success the caller owns the buffer.
+    /// </summary>
+    internal static PixelBuffer AllocateAndFill(int width, int height, PixelLayout layout, Action<PixelBuffer> copy, bool colorTransformActive)
+    {
+        var pixels = PixelBuffer.Allocate(width, height, layout);
+        try
+        {
+            CopyPixelsGuarded(() => copy(pixels), colorTransformActive);
+            return pixels;
+        }
+        catch
+        {
+            pixels.Dispose();
+            throw;
+        }
+    }
+
     /// <summary>Bytes of a 4-bytes-per-pixel output, saturating at <see cref="long.MaxValue"/> instead of wrapping: two positive int sides
     /// can multiply past a long, and a wrapped (negative) count would be mistaken for a small buffer by the admission check.</summary>
     internal static long OutputByteLength(int width, int height)
@@ -304,12 +316,19 @@ public sealed class WicDirectDecoder : IImageDecoder
     {
         // A negative length is an overflowed count, never a small buffer: it goes through the memory check like any huge one.
         if (bufferLength >= 0 && bufferLength < MemoryHeadroom.GuardThresholdBytes) return;
+        // Stride, size and the WIC/BitmapSource copy APIs are int-based: a buffer beyond int.MaxValue can never be filled, however
+        // much memory the machine has. Refused here as the clean admission error, not later as an OverflowException (which the
+        // fallback chain would take for a retryable backend failure and hand to WPF).
+        if (bufferLength > int.MaxValue || bufferLength < 0) throw OutputTooLarge(width, height, bufferLength);
         var (total, load) = memoryInfo();
         if (MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load)) return;
-        throw UserFacingError.Localized(
+        throw OutputTooLarge(width, height, bufferLength);
+    }
+
+    private static DecoderMemoryAdmissionException OutputTooLarge(int width, int height, long bufferLength) =>
+        UserFacingError.Localized(
             new DecoderMemoryAdmissionException($"WicDirect output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
             () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
-    }
 
     internal static IWICImagingFactory CreateFactory()
     {
