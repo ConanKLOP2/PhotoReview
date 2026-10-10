@@ -4,6 +4,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Platforms>AnyCPU;x64</Platforms>
+    <!-- WP-02: PixelBuffer giữ bộ nhớ native (NativeMemory.AlignedAlloc, C-01) và PixelOps đọc/ghi qua con trỏ. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
