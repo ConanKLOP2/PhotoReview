@@ -30,6 +30,7 @@ public sealed class MainWindowGuardedHandlerTests
                 window = TestAppHost.CreateMainWindow(null);
                 window.Show();
 
+                StaTestHost.ExpectLoggedError("Move to folder failed", "RunGuardedAsync logs the command failure it turns into the status text", mustOccur: true);
                 await Invoke(window, "Move to folder", () => throw new InvalidOperationException("picker exploded"));
 
                 var status = window.ViewModel.StatusText;
