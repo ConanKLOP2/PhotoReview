@@ -18,6 +18,10 @@ Seven xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`,
 
 `tools/run-tests-hidden.ps1 [dotnet-test-args]` (or `verify-all.ps1 -Hidden`) runs `dotnet test` on a private, non-interactive Win32 desktop (`CreateDesktop`): `Category=UI` real-WPF windows and `MessageBox`es never appear on your desktop or steal focus. Defaults to the CI filter and hang flags; exit code, output (also logged under `TestResults\hidden-desktop-runner\`) and the hang guard behave exactly like a normal run. CI is unchanged.
 
+## UI test guards: dialogs and logged errors
+
+`StaTestHost.RunAsync` (Integration.Tests) fails the body on two silent-failure channels (audit D-02/D-03). **Dialogs**: a real `MessageBox` is force-closed and fails the test (`Win32DialogGuard`); to assert that the app *shows* a confirmation/error, pass `TestHostHooks.Dialogs = new RecordingDialogs { ConfirmationAnswer = ... }` (records `ShowConfirmation`/`ShowError`/`ShowMessage`, default answer No, everything else still the production `WpfDialogService`). **Logged errors**: the harness swaps `AppLog.Instance` for an enabled temp-file log and fails the body when the app logged an `AppLog.Error` (what `FireAndLog` leaves for a faulted fire-and-forget task) that the test did not announce with `StaTestHost.ExpectLoggedError(substring, reason, mustOccur)`. Limit: only `AppLog` callers are seen, not code holding `FileLog.Default`/`ILog` directly, and an error logged between two `RunAsync` pumps is not attributed. Probes: `StaTestHostLogGuardTests`; Delete/Undo dialogs and in-place undo: `MainWindowDialogAndUndoTests`.
+
 ## Hang guard
 
 `tests/test.runsettings` caps `dotnet test` at 120s/test, 20min/session, no flags needed; prefer `verify-all.ps1` ([detail](refactoring/decisions/TEST-HANG-GUARD.md)).

@@ -49,6 +49,10 @@ internal static class TestAppHost
                 services.AddSingleton<IExplorerOrderProvider>(_ => explorerOrder);
             // Never the real WindowsRecycleBin: a test that deletes must pass its own bin (TestHostHooks.RecycleBin).
             services.AddSingleton(hooks?.RecycleBin ?? ThrowingRecycleBin.Instance);
+            // D-02: records every confirmation/error the app would show (and answers them) instead of a real MessageBox.
+            // Everything else (Settings, Recovery, pickers, ...) still goes to the production WpfDialogService.
+            if (hooks?.Dialogs is { } dialogs)
+                services.AddSingleton<IDialogService>(provider => dialogs.Attach(new PhotoReview.App.Services.WpfDialogService(provider)));
             if (hooks?.OnPresented is { } onPresented)
                 services.AddSingleton<IPresentationObserver>(new DelegatePresentationObserver(onPresented));
             if (hooks?.MoveOverride is { } moveOverride)
@@ -96,6 +100,13 @@ internal sealed class TestHostHooks
 
     /// <summary>Alternate recycle-bin implementation.</summary>
     public IRecycleBin? RecycleBin { get; init; }
+
+    /// <summary>
+    /// D-02: records (and answers) <see cref="IDialogService.ShowConfirmation"/> / <see cref="IDialogService.ShowError"/> /
+    /// <see cref="IDialogService.ShowMessage"/>. Unset keeps the production <c>WpfDialogService</c>, whose real MessageBox the
+    /// <c>Win32DialogGuard</c> would force-close and fail the test on.
+    /// </summary>
+    public RecordingDialogs? Dialogs { get; init; }
 
     /// <summary>Raised once an image has finished presenting on screen.</summary>
     public Action<string>? OnPresented { get; init; }
@@ -163,4 +174,60 @@ internal sealed class PlacementFileOverride(PhotoReview.Core.Abstractions.IAppPa
     public string PreviewCacheDir => inner.PreviewCacheDir;
     public string ThumbnailCacheDir => inner.ThumbnailCacheDir;
     public string WindowPlacementFile => placementFile;
+}
+
+/// <summary>
+/// D-02: what <see cref="TestHostHooks.Dialogs"/> records. Confirmations are answered by <see cref="ConfirmationAnswer"/>
+/// (default: No, the safe answer, so a delete the test did not mean to confirm never happens).
+/// </summary>
+internal sealed class RecordingDialogs
+{
+    private readonly object _gate = new();
+    private readonly List<(string Title, string Message)> _confirmations = [];
+    private readonly List<(string Title, string Message)> _errors = [];
+    private readonly List<(string Title, string Message)> _messages = [];
+
+    /// <summary>The answer returned by <c>ShowConfirmation</c>.</summary>
+    public Func<string, string, bool> ConfirmationAnswer { get; set; } = (_, _) => false;
+
+    /// <summary>Invoked (on the calling thread) the moment a confirmation is asked, before it is answered.</summary>
+    public Action<string, string>? OnConfirmation { get; set; }
+
+    public IReadOnlyList<(string Title, string Message)> Confirmations { get { lock (_gate) return [.. _confirmations]; } }
+
+    public IReadOnlyList<(string Title, string Message)> Errors { get { lock (_gate) return [.. _errors]; } }
+
+    public IReadOnlyList<(string Title, string Message)> Messages { get { lock (_gate) return [.. _messages]; } }
+
+    internal IDialogService Attach(IDialogService inner) => new Service(this, inner);
+
+    private sealed class Service(RecordingDialogs owner, IDialogService inner) : IDialogService
+    {
+        public bool ShowConfirmation(string title, string message)
+        {
+            lock (owner._gate) owner._confirmations.Add((title, message));
+            owner.OnConfirmation?.Invoke(title, message);
+            return owner.ConfirmationAnswer(title, message);
+        }
+
+        public void ShowMessage(string title, string message)
+        {
+            lock (owner._gate) owner._messages.Add((title, message));
+        }
+
+        public void ShowError(string title, string message)
+        {
+            lock (owner._gate) owner._errors.Add((title, message));
+        }
+
+        public string? PickFolder(string? initialFolder = null) => inner.PickFolder(initialFolder);
+        public bool ShowBatchReview(IReadOnlyList<string> paths) => inner.ShowBatchReview(paths);
+        public bool ShowBatchReview(IReadOnlyList<BatchReviewItem> items) => inner.ShowBatchReview(items);
+        public void ShowRecovery() => inner.ShowRecovery();
+        public void ShowDiagnostics() => inner.ShowDiagnostics();
+        public bool ShowSettings() => inner.ShowSettings();
+        public bool ShowSettings(SettingsTarget target) => inner.ShowSettings(target);
+        public void ShowBenchmark(string? folder = null) => inner.ShowBenchmark(folder);
+        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) => inner.ShowSkippedFiles(entries);
+    }
 }
