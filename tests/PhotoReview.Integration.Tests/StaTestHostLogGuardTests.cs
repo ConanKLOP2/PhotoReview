@@ -72,11 +72,17 @@ public sealed class StaTestHostLogGuardTests
     [Fact]
     public async Task WarningsAndInfo_DoNotFailTheBody()
     {
+        var bodyCompleted = false;
+
         await StaTestHost.RunAsync(() =>
         {
             AppLog.Info("log-guard-probe-info");
             AppLog.Warn("log-guard-probe-warn");
+            bodyCompleted = true;
             return Task.CompletedTask;
         });
+
+        // RunAsync would have thrown if the guard had treated Info/Warn as errors; the body must also have run to the end.
+        Assert.True(bodyCompleted);
     }
 }
