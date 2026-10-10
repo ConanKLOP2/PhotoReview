@@ -106,4 +106,7 @@ added without frontmatter or without re-running the generator.
 | NOWPF-WP13A | WP-13a (đợt 1 của NO-WPF-EXEC-PLAN, 2026-10-10): khai báo interop Win32 (user32/kernel32/gdi32/dwmapi/shcore/comctl32/ole32/shell32) trong
 `src/PhotoReview.Shell.Interop/Win32/*` bằng LibraryImport, struct blittable và hằng; `InteropSignatureTests` (14 ca) kiểm kích thước/offset
 struct và gọi thử 4 hàm an toàn; mutation M1 (đổi kiểu một trường struct) và M2 (sai EntryPoint) đều bị bắt. Hợp đồng v1 không đổi. [Detail](decisions/NOWPF-WP13A-INTEROP.md) |
+| NOWPF-WP18 | WP-18 (đợt 2 của NO-WPF-EXEC-PLAN, 2026-10-10): `ContextMenuModelBuilder` (App.Shared, dùng `ContextMenuItems.Compute` nên không nhân đôi luật ẩn/hiện/dấu phân cách)
+dựng mô hình menu chuột phải + menu Tools tương đương menu WPF; host native `NativePopupMenuHost` (`CreatePopupMenu`/`TrackPopupMenuEx`, `TPM_RETURNCMD`) +
+`DarkModeMenus` (uxtheme ordinal 135/136/133, rơi về sáng). Hợp đồng v1 không đổi; G-MENU thật chờ WP-10 merge. [Detail](decisions/NOWPF-WP18-MENU.md) |
 <!-- END GENERATED DECIDED TABLE -->
