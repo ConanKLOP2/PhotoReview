@@ -20,7 +20,7 @@ public sealed class JsonWindowPlacementStoreRoundTripTests : IDisposable
         "  \"ShowCommand\": 3,\n" +
         "  \"MinPosition\": {\n" +
         "    \"X\": -1,\n" +
-        "    \"Y\": -1\n" +
+        "    \"Y\": -2\n" +
         "  },\n" +
         "  \"MaxPosition\": {\n" +
         "    \"X\": -8,\n" +
@@ -36,7 +36,7 @@ public sealed class JsonWindowPlacementStoreRoundTripTests : IDisposable
 
     private static readonly JsonSerializerOptions LegacyOptions = new() { IncludeFields = true, WriteIndented = true };
 
-    private static readonly WindowPlacementData Sample = new(44, 2, 3, -1, -1, -8, -31, 100, 120, 1300, 920);
+    private static readonly WindowPlacementData Sample = new(44, 2, 3, -1, -2, -8, -31, 100, 120, 1300, 920);
 
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "PhotoReview_PlacementStore_" + Guid.NewGuid().ToString("N"));
 
@@ -232,5 +232,21 @@ public sealed class JsonWindowPlacementStoreRoundTripTests : IDisposable
         controller.Enter(0, WindowShowState.Minimized);
 
         Assert.Equal(WindowShowState.Normal, controller.StateBefore);
+    }
+
+    [Theory(DisplayName = "WP-08: the caption band of a saved Normal rect stays usable at exactly 120x16 px inside a work area, not below")]
+    [InlineData(680, 0, 2000, 1000, true)]    // 120 px wide (800 - 680)
+    [InlineData(681, 0, 2000, 1000, false)]   // 119 px wide
+    [InlineData(0, -100, 1000, 16, true)]     // 16 px of the band above the work area's bottom edge
+    [InlineData(0, -100, 1000, 15, false)]    // 15 px
+    [InlineData(0, 16, 1000, 1000, true)]     // band is 32 px tall: 16 px below the work area's top edge
+    [InlineData(0, 17, 1000, 1000, false)]    // 15 px
+    public void ResolveNormalExitRect_CaptionBandBoundaries(int left, int top, int right, int bottom, bool keptAsIs)
+    {
+        var saved = new ScreenRect(0, 0, 800, 600);
+
+        var resolved = FullscreenController.ResolveNormalExitRect(saved, [new ScreenRect(left, top, right, bottom)]);
+
+        Assert.Equal(keptAsIs, resolved == saved);
     }
 }
