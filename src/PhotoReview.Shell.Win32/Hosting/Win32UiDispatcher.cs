@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 
 namespace PhotoReview.Shell.Win32.Hosting;
@@ -26,7 +27,7 @@ namespace PhotoReview.Shell.Win32.Hosting;
 internal sealed unsafe class Win32UiDispatcher : IUiDispatcher, IDisposable
 {
     /// <summary>WM_APP+1 gửi tới cửa sổ message-only để đánh thức UI thread.</summary>
-    internal const uint WakeMessage = PendingUser32.WmApp + 1;
+    internal const uint WakeMessage = WindowMessages.WmApp + 1;
 
     /// <summary>Một lượt xả mức cao tự ngắt sau chừng này ms để message (input) được xử lý.</summary>
     internal const int BatchSliceMs = 50;
@@ -61,8 +62,8 @@ internal sealed unsafe class Win32UiDispatcher : IUiDispatcher, IDisposable
         _log = log ?? NullLog.Instance;
         _threadId = Environment.CurrentManagedThreadId;
         EnsureClassRegistered();
-        _hwnd = PendingUser32.CreateWindowEx(0, ClassName, string.Empty, 0, 0, 0, 0, 0, PendingUser32.HwndMessage, 0,
-            PendingKernel32.GetModuleHandle(0), 0);
+        _hwnd = User32.CreateWindowEx(0, ClassName, string.Empty, 0, 0, 0, 0, 0, PendingUser32.HwndMessage, 0,
+            Kernel32.GetModuleHandle(0), 0);
         if (_hwnd == 0)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "CreateWindowEx (message-only dispatcher window) failed");
@@ -248,7 +249,7 @@ internal sealed unsafe class Win32UiDispatcher : IUiDispatcher, IDisposable
             item.Completion?.TrySetCanceled();
         }
 
-        PendingUser32.DestroyWindow(_hwnd);
+        User32.DestroyWindow(_hwnd);
         if (ReferenceEquals(current, this))
         {
             current = null;
@@ -317,7 +318,7 @@ internal sealed unsafe class Win32UiDispatcher : IUiDispatcher, IDisposable
             return;
         }
 
-        if (PendingUser32.PostMessage(_hwnd, WakeMessage, 0, 0))
+        if (User32.PostMessage(_hwnd, WakeMessage, 0, 0))
         {
             Interlocked.Increment(ref _wakeMessagesPosted);
             return;
@@ -367,14 +368,14 @@ internal sealed unsafe class Win32UiDispatcher : IUiDispatcher, IDisposable
 
             fixed (char* className = ClassName)
             {
-                var windowClass = new PendingWndClassEx
+                var windowClass = new WndClassEx
                 {
-                    Size = (uint)sizeof(PendingWndClassEx),
+                    Size = (uint)sizeof(WndClassEx),
                     WndProc = WndProcThunk.DispatcherProc,
-                    Instance = PendingKernel32.GetModuleHandle(0),
+                    Instance = Kernel32.GetModuleHandle(0),
                     ClassName = className,
                 };
-                if (PendingUser32.RegisterClassEx(&windowClass) == 0)
+                if (User32.RegisterClassEx(&windowClass) == 0)
                 {
                     throw new Win32Exception(Marshal.GetLastPInvokeError(), "RegisterClassEx (dispatcher window) failed");
                 }

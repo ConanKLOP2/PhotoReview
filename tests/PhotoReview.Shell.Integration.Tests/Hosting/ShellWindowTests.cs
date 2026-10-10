@@ -4,6 +4,7 @@ using PhotoReview.App.Input;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Shell.Tests.Hosting;
 using PhotoReview.Shell.Win32.Hosting;
+using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 
 namespace PhotoReview.Shell.Integration.Tests.Hosting;
@@ -16,7 +17,7 @@ namespace PhotoReview.Shell.Integration.Tests.Hosting;
 [Trait("Category", "Integration")]
 public sealed partial class ShellWindowTests
 {
-    private const uint TestMessage = PendingUser32.WmApp + 60;
+    private const uint TestMessage = WindowMessages.WmApp + 60;
 
     [Fact]
     public async Task Close_ClosingCanceled_KeepsTheWindow_ThenClosesWhenAllowed()
@@ -65,7 +66,7 @@ public sealed partial class ShellWindowTests
             return w.Hwnd;
         });
 
-        Assert.True(PendingUser32.PostMessage(hwnd, PendingUser32.WmClose, 0, 0)); // từ thread test
+        Assert.True(User32.PostMessage(hwnd, WindowMessages.WmClose, 0, 0)); // từ thread test
         await closed.Task.WaitAsync(UiThread.Bound);
 
         Assert.Equal(["closing", "closed"], events);
@@ -76,14 +77,14 @@ public sealed partial class ShellWindowTests
     {
         await using var ui = await UiThread.StartAsync();
         var window = await ui.InvokeAsync(() => CreateWindow(ui));
-        var observed = new List<(double Scale, PendingRect Rect)>();
+        var observed = new List<(double Scale, Rect Rect)>();
         var sizeChanges = 0;
         await ui.InvokeAsync(() =>
         {
             window.DpiChanged += (_, _) => observed.Add((window.DpiScale, WindowRect(window.Hwnd)));
             window.ClientSizeChanged += (_, _) => sizeChanges++;
         });
-        var suggested = new PendingRect(40, 50, 40 + 800, 50 + 600);
+        var suggested = NativeRect.Create(40, 50, 40 + 800, 50 + 600);
 
         var (scale, client, clientPixels) = await ui.InvokeAsync(() =>
         {
@@ -153,10 +154,10 @@ public sealed partial class ShellWindowTests
             window.Activated += (_, _) => events.Add("activated");
             window.Deactivated += (_, _) => events.Add("deactivated");
             var result = new List<bool>();
-            PendingUser32.SendMessage(window.Hwnd, PendingUser32.WmActivate, 1, 0);  // WA_ACTIVE
+            PendingUser32.SendMessage(window.Hwnd, WindowMessages.WmActivate, 1, 0);  // WA_ACTIVE
             result.Add(window.IsActive);
-            PendingUser32.SendMessage(window.Hwnd, PendingUser32.WmActivate, 2, 0);  // WA_CLICKACTIVE: vẫn active
-            PendingUser32.SendMessage(window.Hwnd, PendingUser32.WmActivate, 0, 0);  // WA_INACTIVE
+            PendingUser32.SendMessage(window.Hwnd, WindowMessages.WmActivate, 2, 0);  // WA_CLICKACTIVE: vẫn active
+            PendingUser32.SendMessage(window.Hwnd, WindowMessages.WmActivate, 0, 0);  // WA_INACTIVE
             result.Add(window.IsActive);
             return result;
         });
@@ -198,7 +199,7 @@ public sealed partial class ShellWindowTests
         {
             window.ClientSizeChanged += (_, _) => raised++;
             window.AddMessageHandler(new SizeProbe(window, seen));
-            PendingUser32.SetWindowPos(window.Hwnd, 0, 0, 0, 900, 700, PendingUser32.SwpNoMove | PendingUser32.SwpNoZOrder | PendingUser32.SwpNoActivate);
+            User32.SetWindowPos(window.Hwnd, 0, 0, 0, 900, 700, WindowMessages.SwpNoMove | WindowMessages.SwpNoZOrder | WindowMessages.SwpNoActivate);
         });
 
         var client = await ui.InvokeAsync(() => window.ClientSizeDip);
@@ -283,7 +284,7 @@ public sealed partial class ShellWindowTests
         var (client, cursor) = await ui.InvokeAsync(() =>
         {
             window.SetCursor(ShellCursor.SizeAll);
-            var inClient = PendingUser32.SendMessage(window.Hwnd, PendingUser32.WmSetCursor, window.Hwnd, PendingUser32.HtClient);
+            var inClient = PendingUser32.SendMessage(window.Hwnd, WindowMessages.WmSetCursor, window.Hwnd, PendingUser32.HtClient);
             return (inClient, window.Cursor);
         });
 
@@ -334,7 +335,7 @@ public sealed partial class ShellWindowTests
             return w.Hwnd;
         });
 
-        Assert.True(PendingUser32.PostMessage(hwnd, TestMessage, 0, 0));
+        Assert.True(User32.PostMessage(hwnd, TestMessage, 0, 0));
 
         var error = await Assert.ThrowsAsync<InvalidDataException>(() => ui.Exit.WaitAsync(UiThread.Bound));
         Assert.Equal("from WndProc", error.Message);
@@ -375,37 +376,37 @@ public sealed partial class ShellWindowTests
         }
     }
 
-    private static unsafe void SendDpiChanged(nint hwnd, int dpi, PendingRect suggested)
+    private static unsafe void SendDpiChanged(nint hwnd, int dpi, Rect suggested)
     {
         var rect = suggested;
-        PendingUser32.SendMessage(hwnd, PendingUser32.WmDpiChanged, (dpi << 16) | dpi, (nint)(&rect));
+        PendingUser32.SendMessage(hwnd, WindowMessages.WmDpiChanged, (dpi << 16) | dpi, (nint)(&rect));
         WndProcThunk.RethrowPending(); // ngoại lệ WndProc trong SendMessage đồng bộ tới được test
     }
 
-    private static unsafe PendingPoint SendGetMinMaxInfo(nint hwnd)
+    private static unsafe Point SendGetMinMaxInfo(nint hwnd)
     {
         var info = default(PendingMinMaxInfo);
-        PendingUser32.SendMessage(hwnd, PendingUser32.WmGetMinMaxInfo, 0, (nint)(&info));
+        PendingUser32.SendMessage(hwnd, WindowMessages.WmGetMinMaxInfo, 0, (nint)(&info));
         return info.MinTrackSize;
     }
 
-    private static unsafe PendingPoint ExpectedFrameSize(int clientWidth, int clientHeight, uint dpi)
+    private static unsafe Point ExpectedFrameSize(int clientWidth, int clientHeight, uint dpi)
     {
-        var rect = new PendingRect(0, 0, clientWidth, clientHeight);
-        Assert.True(PendingUser32.AdjustWindowRectExForDpi(&rect, PendingUser32.WsOverlappedWindow, false, 0, dpi));
-        return new PendingPoint { X = rect.Width, Y = rect.Height };
+        var rect = NativeRect.Create(0, 0, clientWidth, clientHeight);
+        Assert.True(User32.AdjustWindowRectExForDpi(&rect, WindowMessages.WsOverlappedWindow, false, 0, dpi));
+        return new Point { X = NativeRect.Width(rect), Y = NativeRect.Height(rect) };
     }
 
-    private static unsafe PendingRect WindowRect(nint hwnd)
+    private static unsafe Rect WindowRect(nint hwnd)
     {
-        PendingRect rect;
+        Rect rect;
         Assert.True(GetWindowRect(hwnd, &rect));
         return rect;
     }
 
-    private static unsafe PendingPoint ClientOrigin(nint hwnd)
+    private static unsafe Point ClientOrigin(nint hwnd)
     {
-        var point = default(PendingPoint);
+        var point = default(Point);
         Assert.True(ClientToScreen(hwnd, &point));
         return point;
     }
@@ -420,11 +421,11 @@ public sealed partial class ShellWindowTests
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowRect", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static unsafe partial bool GetWindowRect(nint hwnd, PendingRect* rect);
+    private static unsafe partial bool GetWindowRect(nint hwnd, Rect* rect);
 
     [LibraryImport("user32.dll", EntryPoint = "ClientToScreen")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static unsafe partial bool ClientToScreen(nint hwnd, PendingPoint* point);
+    private static unsafe partial bool ClientToScreen(nint hwnd, Point* point);
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowTextW")]
     private static unsafe partial int GetWindowText(nint hwnd, char* buffer, int maxCount);
@@ -449,7 +450,7 @@ public sealed partial class ShellWindowTests
         public bool TryHandle(in WindowMessage message, out nint result)
         {
             result = 0;
-            if (message.Msg == PendingUser32.WmSize)
+            if (message.Msg == WindowMessages.WmSize)
             {
                 seen.Add(window.ClientSizeDip);
             }

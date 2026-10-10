@@ -1,5 +1,6 @@
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
+using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 
 namespace PhotoReview.Shell.Win32.Hosting;
@@ -42,7 +43,7 @@ internal static unsafe class WndProcThunk
         try
         {
             ShellWindow? window;
-            if (message == PendingUser32.WmNcCreate)
+            if (message == WindowMessages.WmNcCreate)
             {
                 var create = (PendingCreateStruct*)lParam;
                 window = GCHandle.FromIntPtr(create->CreateParams).Target as ShellWindow;
@@ -51,23 +52,23 @@ internal static unsafe class WndProcThunk
                     return 0; // huỷ tạo cửa sổ: không có chủ
                 }
 
-                PendingUser32.SetWindowLongPtr(hwnd, PendingUser32.GwlpUserData, create->CreateParams);
+                User32.SetWindowLongPtr(hwnd, WindowMessages.GwlpUserData, create->CreateParams);
             }
             else
             {
-                var cookie = PendingUser32.GetWindowLongPtr(hwnd, PendingUser32.GwlpUserData);
+                var cookie = User32.GetWindowLongPtr(hwnd, WindowMessages.GwlpUserData);
                 window = cookie == 0 ? null : GCHandle.FromIntPtr(cookie).Target as ShellWindow;
             }
 
             if (window is null)
             {
-                return PendingUser32.DefWindowProc(hwnd, message, wParam, lParam);
+                return User32.DefWindowProc(hwnd, message, wParam, lParam);
             }
 
             var result = window.ProcessMessage(hwnd, message, wParam, lParam);
-            if (message == PendingUser32.WmNcDestroy)
+            if (message == WindowMessages.WmNcDestroy)
             {
-                PendingUser32.SetWindowLongPtr(hwnd, PendingUser32.GwlpUserData, 0);
+                User32.SetWindowLongPtr(hwnd, WindowMessages.GwlpUserData, 0);
                 window.OnNativeDestroyed();
             }
 
@@ -92,7 +93,7 @@ internal static unsafe class WndProcThunk
                 return 0;
             }
 
-            return PendingUser32.DefWindowProc(hwnd, message, wParam, lParam);
+            return User32.DefWindowProc(hwnd, message, wParam, lParam);
         }
         catch (Exception ex)
         {

@@ -46,22 +46,18 @@ MessageBox) WM_APP+1 vẫn được dispatch nên hàng đợi vẫn chạy.
 7. `Program.cs`/`BootstrapWindow` (smoke WP-01) không đổi - thuộc WP-20.
 8. `tests/PhotoReview.Shell.Integration.Tests/*.csproj`: bật `AllowUnsafeBlocks` và link `Shell.Tests/Hosting/UiThread.cs` (harness UI thread).
 
-## 3. Khai báo tạm cần đổi sang Shell.Interop (WP-13a)
+## 3. Interop: dùng Shell.Interop (WP-13a), phần còn thiếu để tạm
 
-Xoá `Hosting/PendingInterop/` và đổi `using PhotoReview.Shell.Win32.Hosting.PendingInterop;` trong Hosting/* (và 3 file test) sang
-namespace của WP-13a. L-PINV (bật ở WP-13) sẽ đỏ cho tới khi đổi. Danh sách:
+WP-13a (#400) merge trong lúc làm: Hosting/* đã chuyển sang `PhotoReview.Shell.Interop` (`User32`, `Kernel32`, `WindowMessages`, `Rect`,
+`Point`, `Msg`, `WndClassEx`; tiện ích `Hosting/NativeRect.cs` cho Width/Height). Những thứ WP-13a chưa khai báo vẫn ở
+`Hosting/PendingInterop/PendingNativeMethods.cs` (WP-14 không sửa file của WP-13a); lead chuyển sang `Shell.Interop/Win32/*` rồi xoá thư
+mục (L-PINV, bật sau, sẽ đỏ tới khi chuyển):
 
-- Struct: `PendingWndClassEx` (WNDCLASSEXW), `PendingMsg` (MSG), `PendingRect` (RECT + `Width/Height`), `PendingPoint` (POINT),
-  `PendingMinMaxInfo` (MINMAXINFO), `PendingCreateStruct` (CREATESTRUCTW).
-- user32: `RegisterClassExW`, `CreateWindowExW`, `DestroyWindow`, `IsWindow`, `DefWindowProcW`, `PeekMessageW`, `TranslateMessage`,
-  `DispatchMessageW`, `MsgWaitForMultipleObjectsEx`, `PostMessageW`, `SendMessageW`, `PostQuitMessage`, `SetWindowLongPtrW`,
-  `GetWindowLongPtrW`, `LoadCursorW`, `SetCursor`, `GetCursorPos`, `WindowFromPoint`, `SetCapture`, `ReleaseCapture`, `GetCapture`,
-  `GetDpiForWindow`, `AdjustWindowRectExForDpi`, `SetWindowPos`, `GetClientRect`, `ScreenToClient`, `SetWindowTextW`, `ShowWindow`,
-  `ValidateRect`.
-- kernel32: `GetModuleHandleW`, `CreateWaitableTimerExW`, `SetWaitableTimer`, `CancelWaitableTimer`, `WaitForSingleObject`, `CloseHandle`.
-- Hằng: WM_CREATE/DESTROY/SIZE/ACTIVATE/PAINT/CLOSE/QUIT/ERASEBKGND/SETCURSOR/GETMINMAXINFO/NCCREATE/NCDESTROY/DPICHANGED/APP,
-  WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, HWND_MESSAGE, GWLP_USERDATA, SW_*, SWP_NOMOVE/NOZORDER/NOACTIVATE, HTCLIENT, WA_INACTIVE,
-  PM_*, QS_ALLINPUT, MWMO_INPUTAVAILABLE, WAIT_*, INFINITE, IDC_ARROW/WAIT/SIZEALL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS.
+- user32: `IsWindow`, `SendMessageW`, `GetCursorPos`, `WindowFromPoint` (POINT theo giá trị, tạm khai báo `long` đóng gói vì `Point` của
+  assembly khác không được coi là blittable - SYSLIB1051), `GetCapture`, `ScreenToClient`, `SetWindowTextW`, `ValidateRect`.
+- kernel32: `CreateWaitableTimerExW`, `SetWaitableTimer`, `CancelWaitableTimer`, `WaitForSingleObject`, `CloseHandle`.
+- Struct: `MINMAXINFO`, `CREATESTRUCTW`. Hằng: `HWND_MESSAGE`, `HTCLIENT`, `WA_INACTIVE`, `IDC_WAIT`, `IDC_SIZEALL`,
+  `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`, `TIMER_ALL_ACCESS`.
 
 Test tự khai báo riêng (không thuộc shell): `GetWindowRect`, `ClientToScreen`, `GetWindowTextW`, `GetGuiResources`, `GetCurrentProcess`,
 `GetCurrentThread`, `GetThreadTimes`.

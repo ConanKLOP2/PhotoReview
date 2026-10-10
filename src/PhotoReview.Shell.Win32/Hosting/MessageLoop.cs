@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 
 namespace PhotoReview.Shell.Win32.Hosting;
@@ -85,13 +86,13 @@ internal sealed unsafe class MessageLoop
     }
 
     /// <summary>Kết thúc <see cref="Run"/> của thread hiện tại với mã <paramref name="exitCode"/> (PostQuitMessage).</summary>
-    public static void Quit(int exitCode) => PendingUser32.PostQuitMessage(exitCode);
+    public static void Quit(int exitCode) => User32.PostQuitMessage(exitCode);
 
     /// <summary>Hàng đợi message của thread hiện tại còn message (không lấy ra).</summary>
     internal static bool IsMessagePending()
     {
-        PendingMsg message;
-        return PendingUser32.PeekMessage(&message, 0, 0, 0, PendingUser32.PmNoRemove);
+        Msg message;
+        return User32.PeekMessage(&message, 0, 0, 0, WindowMessages.PmNoRemove);
     }
 
     /// <summary>Chạy tới WM_QUIT; trả mã thoát của <see cref="Quit"/>. Không lồng.</summary>
@@ -152,15 +153,15 @@ internal sealed unsafe class MessageLoop
     private bool PumpMessages(out int exitCode)
     {
         exitCode = 0;
-        PendingMsg message;
+        Msg message;
         for (var pumped = 0; pumped < MaxMessagesPerPass; pumped++)
         {
-            if (!PendingUser32.PeekMessage(&message, 0, 0, 0, PendingUser32.PmRemove))
+            if (!User32.PeekMessage(&message, 0, 0, 0, WindowMessages.PmRemove))
             {
                 return false;
             }
 
-            if (message.Message == PendingUser32.WmQuit)
+            if (message.Message == WindowMessages.WmQuit)
             {
                 exitCode = (int)message.WParam;
                 return true;
@@ -168,8 +169,8 @@ internal sealed unsafe class MessageLoop
 
             if (!Filtered(message))
             {
-                PendingUser32.TranslateMessage(&message);
-                PendingUser32.DispatchMessage(&message);
+                User32.TranslateMessage(&message);
+                User32.DispatchMessage(&message);
                 WndProcThunk.RethrowPending();
             }
 
@@ -182,7 +183,7 @@ internal sealed unsafe class MessageLoop
         return false;
     }
 
-    private bool Filtered(in PendingMsg message)
+    private bool Filtered(in Msg message)
     {
         var filters = _filters;
         if (filters.Length == 0)
@@ -212,7 +213,7 @@ internal sealed unsafe class MessageLoop
             }
 
             var handle = clock.WaitHandle;
-            if (handle != 0 && PendingKernel32.WaitForSingleObject(handle, 0) == PendingUser32.WaitObject0)
+            if (handle != 0 && PendingKernel32.WaitForSingleObject(handle, 0) == WindowMessages.WaitObject0)
             {
                 clock.OnSignaled();
             }
@@ -244,19 +245,19 @@ internal sealed unsafe class MessageLoop
             }
         }
 
-        var timeout = PendingUser32.Infinite;
+        var timeout = WindowMessages.InfiniteWait;
         if (untilDeadline != long.MaxValue)
         {
             var ms = untilDeadline <= 0 ? 0 : ((untilDeadline * 1000) + Stopwatch.Frequency - 1) / Stopwatch.Frequency;
-            timeout = (uint)Math.Min(ms, PendingUser32.Infinite - 1);
+            timeout = (uint)Math.Min(ms, WindowMessages.InfiniteWait - 1);
         }
 
         WaitCount++;
-        var result = PendingUser32.MsgWaitForMultipleObjectsEx((uint)count, handles, timeout, PendingUser32.QsAllInput,
-            PendingUser32.MwmoInputAvailable);
+        var result = User32.MsgWaitForMultipleObjectsEx((uint)count, handles, timeout, WindowMessages.QsAllInput,
+            WindowMessages.MwmoInputAvailable);
         try
         {
-            if (result == PendingUser32.WaitFailed)
+            if (result == WindowMessages.WaitFailed)
             {
                 throw new Win32Exception(Marshal.GetLastPInvokeError(), "MsgWaitForMultipleObjectsEx failed");
             }

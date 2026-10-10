@@ -1,5 +1,6 @@
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Shell.Win32.Hosting;
+using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 
 namespace PhotoReview.Shell.Tests.Hosting;
@@ -11,7 +12,7 @@ namespace PhotoReview.Shell.Tests.Hosting;
 [Trait("Category", "UI")]
 public sealed class Win32UiDispatcherTests
 {
-    private const uint TestMessage = PendingUser32.WmApp + 50;
+    private const uint TestMessage = WindowMessages.WmApp + 50;
 
     [Fact]
     public async Task Priorities_ThousandInterleavedPostsFromUiThread_RunSendNormalRenderBackgroundEachInFifoOrder()
@@ -89,7 +90,7 @@ public sealed class Win32UiDispatcherTests
             background = ui.Dispatcher.InvokeAsync(() => order.Add("B"), UiPriority.Background);
             for (var i = 1; i <= 3; i++)
             {
-                Assert.True(PendingUser32.PostMessage(window.Hwnd, TestMessage, i, 0));
+                Assert.True(User32.PostMessage(window.Hwnd, TestMessage, i, 0));
             }
 
             ui.Dispatcher.Post(() => order.Add("N"), UiPriority.Normal);
@@ -110,8 +111,8 @@ public sealed class Win32UiDispatcherTests
         var drained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await ui.InvokeAsync(() =>
         {
-            Assert.True(PendingUser32.PostMessage(window.Hwnd, TestMessage, 1, 0));
-            Assert.True(PendingUser32.PostMessage(window.Hwnd, TestMessage, 2, 0));
+            Assert.True(User32.PostMessage(window.Hwnd, TestMessage, 1, 0));
+            Assert.True(User32.PostMessage(window.Hwnd, TestMessage, 2, 0));
             ui.Dispatcher.Post(() => drained.TrySetResult(), UiPriority.Background);
         });
         await drained.Task.WaitAsync(UiThread.Bound);
@@ -348,15 +349,15 @@ public sealed class Win32UiDispatcherTests
         var deadline = DateTime.UtcNow + UiThread.Bound;
         while (!until() && DateTime.UtcNow < deadline)
         {
-            PendingMsg message;
-            if (PendingUser32.PeekMessage(&message, 0, 0, 0, PendingUser32.PmRemove))
+            Msg message;
+            if (User32.PeekMessage(&message, 0, 0, 0, WindowMessages.PmRemove))
             {
-                PendingUser32.TranslateMessage(&message);
-                PendingUser32.DispatchMessage(&message);
+                User32.TranslateMessage(&message);
+                User32.DispatchMessage(&message);
             }
             else
             {
-                _ = PendingUser32.MsgWaitForMultipleObjectsEx(0, null, 100, PendingUser32.QsAllInput, PendingUser32.MwmoInputAvailable);
+                _ = User32.MsgWaitForMultipleObjectsEx(0, null, 100, WindowMessages.QsAllInput, WindowMessages.MwmoInputAvailable);
             }
         }
     }

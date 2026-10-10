@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using PhotoReview.App.Input;
+using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 
 namespace PhotoReview.Shell.Win32.Hosting;
@@ -60,9 +61,9 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         EnsureClassRegistered();
 
         _self = GCHandle.Alloc(this);
-        var hwnd = PendingUser32.CreateWindowEx(0, ClassName, options.Title, PendingUser32.WsOverlappedWindow,
-            PendingUser32.CwUseDefault, PendingUser32.CwUseDefault, PendingUser32.CwUseDefault, PendingUser32.CwUseDefault,
-            0, 0, PendingKernel32.GetModuleHandle(0), GCHandle.ToIntPtr(_self));
+        var hwnd = User32.CreateWindowEx(0, ClassName, options.Title, WindowMessages.WsOverlappedWindow,
+            User32.CwUseDefault, User32.CwUseDefault, User32.CwUseDefault, User32.CwUseDefault,
+            0, 0, Kernel32.GetModuleHandle(0), GCHandle.ToIntPtr(_self));
         if (hwnd == 0)
         {
             var error = Marshal.GetLastPInvokeError();
@@ -153,7 +154,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         _cursor = cursor;
         if (!_destroyed && (HasPointerCapture || IsPointerOverClient()))
         {
-            PendingUser32.SetCursor(CursorHandle(cursor));
+            User32.SetCursor(CursorHandle(cursor));
         }
     }
 
@@ -162,7 +163,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         VerifyAccess();
         if (!_destroyed)
         {
-            PendingUser32.SetCapture(_hwnd);
+            User32.SetCapture(_hwnd);
         }
     }
 
@@ -171,14 +172,14 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         VerifyAccess();
         if (HasPointerCapture)
         {
-            PendingUser32.ReleaseCapture();
+            User32.ReleaseCapture();
         }
     }
 
     public PointD ScreenToClientDip(PointD screenPixel)
     {
         VerifyAccess();
-        var point = new PendingPoint { X = (int)Math.Round(screenPixel.X), Y = (int)Math.Round(screenPixel.Y) };
+        var point = new Point { X = (int)Math.Round(screenPixel.X), Y = (int)Math.Round(screenPixel.Y) };
         if (!_destroyed)
         {
             PendingUser32.ScreenToClient(_hwnd, &point);
@@ -196,7 +197,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
             return;
         }
 
-        PendingUser32.SendMessage(_hwnd, PendingUser32.WmClose, 0, 0);
+        PendingUser32.SendMessage(_hwnd, WindowMessages.WmClose, 0, 0);
         WndProcThunk.RethrowPending();
     }
 
@@ -204,7 +205,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
     internal void Show(bool activate)
     {
         VerifyAccess();
-        PendingUser32.ShowWindow(_hwnd, activate ? PendingUser32.SwShowNormal : PendingUser32.SwShowNoActivate);
+        User32.ShowWindow(_hwnd, activate ? WindowMessages.SwShowNormal : WindowMessages.SwShowNoActivate);
         WndProcThunk.RethrowPending();
     }
 
@@ -221,7 +222,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         if (_hwnd != 0 && !_destroyed)
         {
             VerifyAccess();
-            PendingUser32.DestroyWindow(_hwnd);
+            User32.DestroyWindow(_hwnd);
             WndProcThunk.RethrowPending();
         }
 
@@ -232,26 +233,26 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
     {
         switch (message)
         {
-            case PendingUser32.WmNcCreate:
+            case WindowMessages.WmNcCreate:
                 _hwnd = hwnd;
-                var dpi = PendingUser32.GetDpiForWindow(hwnd);
+                var dpi = User32.GetDpiForWindow(hwnd);
                 _dpi = dpi == 0 ? DefaultDpi : dpi;
-                return PendingUser32.DefWindowProc(hwnd, message, wParam, lParam);
-            case PendingUser32.WmCreate:
+                return User32.DefWindowProc(hwnd, message, wParam, lParam);
+            case WindowMessages.WmCreate:
                 _created = true;
                 return 0;
-            case PendingUser32.WmDestroy:
+            case WindowMessages.WmDestroy:
                 OnDestroy();
                 return 0;
-            case PendingUser32.WmNcDestroy:
-                return PendingUser32.DefWindowProc(hwnd, message, wParam, lParam);
-            case PendingUser32.WmSize:
+            case WindowMessages.WmNcDestroy:
+                return User32.DefWindowProc(hwnd, message, wParam, lParam);
+            case WindowMessages.WmSize:
                 UpdateClientSize(LowWord(lParam), HighWord(lParam));
                 break;
-            case PendingUser32.WmDpiChanged:
-                ApplyDpiChange(LowWord(wParam), (PendingRect*)lParam);
+            case WindowMessages.WmDpiChanged:
+                ApplyDpiChange(LowWord(wParam), (Rect*)lParam);
                 break;
-            case PendingUser32.WmActivate:
+            case WindowMessages.WmActivate:
                 UpdateActive(LowWord(wParam) != PendingUser32.WaInactive);
                 break;
         }
@@ -266,28 +267,28 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
 
         switch (message)
         {
-            case PendingUser32.WmSize:
+            case WindowMessages.WmSize:
                 Invalidate();
                 return 0;
-            case PendingUser32.WmDpiChanged:
+            case WindowMessages.WmDpiChanged:
                 return 0;
-            case PendingUser32.WmGetMinMaxInfo:
+            case WindowMessages.WmGetMinMaxInfo:
                 ApplyMinTrackSize((PendingMinMaxInfo*)lParam);
                 return 0;
-            case PendingUser32.WmClose:
+            case WindowMessages.WmClose:
                 RaiseClosing();
                 return 0;
-            case PendingUser32.WmSetCursor when LowWord(lParam) == PendingUser32.HtClient:
-                PendingUser32.SetCursor(CursorHandle(_cursor));
+            case WindowMessages.WmSetCursor when LowWord(lParam) == PendingUser32.HtClient:
+                User32.SetCursor(CursorHandle(_cursor));
                 return 1;
-            case PendingUser32.WmEraseBkgnd:
+            case WindowMessages.WmEraseBkgnd:
                 return 1; // renderer phủ toàn bộ client: không xoá nền (không nháy trắng)
-            case PendingUser32.WmPaint:
+            case WindowMessages.WmPaint:
                 PendingUser32.ValidateRect(hwnd, null);
                 Invalidate();
                 return 0;
             default:
-                return PendingUser32.DefWindowProc(hwnd, message, wParam, lParam);
+                return User32.DefWindowProc(hwnd, message, wParam, lParam);
         }
     }
 
@@ -296,19 +297,19 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
 
     private void ApplyInitialSize()
     {
-        var rect = new PendingRect(0, 0, ToPixels(_options.WidthDip), ToPixels(_options.HeightDip));
-        if (PendingUser32.AdjustWindowRectExForDpi(&rect, PendingUser32.WsOverlappedWindow, false, 0, _dpi))
+        var rect = NativeRect.Create(0, 0, ToPixels(_options.WidthDip), ToPixels(_options.HeightDip));
+        if (User32.AdjustWindowRectExForDpi(&rect, WindowMessages.WsOverlappedWindow, false, 0, _dpi))
         {
-            PendingUser32.SetWindowPos(_hwnd, 0, 0, 0, rect.Width, rect.Height,
-                PendingUser32.SwpNoMove | PendingUser32.SwpNoZOrder | PendingUser32.SwpNoActivate);
+            User32.SetWindowPos(_hwnd, 0, 0, 0, NativeRect.Width(rect), NativeRect.Height(rect),
+                WindowMessages.SwpNoMove | WindowMessages.SwpNoZOrder | WindowMessages.SwpNoActivate);
             WndProcThunk.RethrowPending();
         }
 
-        var client = default(PendingRect);
-        if (PendingUser32.GetClientRect(_hwnd, &client))
+        var client = default(Rect);
+        if (User32.GetClientRect(_hwnd, &client))
         {
-            _clientWidthPx = client.Width;
-            _clientHeightPx = client.Height;
+            _clientWidthPx = NativeRect.Width(client);
+            _clientHeightPx = NativeRect.Height(client);
         }
     }
 
@@ -331,7 +332,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         ClientSizeChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void ApplyDpiChange(int newDpi, PendingRect* suggested)
+    private void ApplyDpiChange(int newDpi, Rect* suggested)
     {
         if (newDpi > 0)
         {
@@ -341,8 +342,8 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         if (suggested is not null)
         {
             var rect = *suggested;
-            PendingUser32.SetWindowPos(_hwnd, 0, rect.Left, rect.Top, rect.Width, rect.Height,
-                PendingUser32.SwpNoZOrder | PendingUser32.SwpNoActivate);
+            User32.SetWindowPos(_hwnd, 0, rect.Left, rect.Top, NativeRect.Width(rect), NativeRect.Height(rect),
+                WindowMessages.SwpNoZOrder | WindowMessages.SwpNoActivate);
         }
 
         // WM_SIZE đã phát ClientSizeChanged nếu số pixel đổi; cùng số pixel nhưng DPI khác thì DIP vẫn đổi.
@@ -369,11 +370,11 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
             return;
         }
 
-        var frame = new PendingRect(0, 0, ToPixels(_options.MinWidthDip), ToPixels(_options.MinHeightDip));
-        if (PendingUser32.AdjustWindowRectExForDpi(&frame, PendingUser32.WsOverlappedWindow, false, 0, _dpi))
+        var frame = NativeRect.Create(0, 0, ToPixels(_options.MinWidthDip), ToPixels(_options.MinHeightDip));
+        if (User32.AdjustWindowRectExForDpi(&frame, WindowMessages.WsOverlappedWindow, false, 0, _dpi))
         {
-            info->MinTrackSize.X = frame.Width;
-            info->MinTrackSize.Y = frame.Height;
+            info->MinTrackSize.X = NativeRect.Width(frame);
+            info->MinTrackSize.Y = NativeRect.Height(frame);
         }
     }
 
@@ -383,7 +384,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         Closing?.Invoke(this, args);
         if (!args.Cancel)
         {
-            PendingUser32.DestroyWindow(_hwnd);
+            User32.DestroyWindow(_hwnd);
         }
     }
 
@@ -393,7 +394,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         IsActive = false;
         if (PendingUser32.GetCapture() == _hwnd)
         {
-            PendingUser32.ReleaseCapture();
+            User32.ReleaseCapture();
         }
 
         if (_renderRequested)
@@ -420,8 +421,8 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
 
     private bool IsPointerOverClient()
     {
-        PendingPoint point;
-        return PendingUser32.GetCursorPos(&point) && PendingUser32.WindowFromPoint(point) == _hwnd;
+        Point point;
+        return PendingUser32.GetCursorPos(&point) && PendingUser32.WindowFromPoint(((long)point.Y << 32) | (uint)point.X) == _hwnd;
     }
 
     private int ToPixels(double dip) => (int)Math.Round(dip * DpiScale);
@@ -464,14 +465,14 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
 
             fixed (char* className = ClassName)
             {
-                var windowClass = new PendingWndClassEx
+                var windowClass = new WndClassEx
                 {
-                    Size = (uint)sizeof(PendingWndClassEx),
+                    Size = (uint)sizeof(WndClassEx),
                     WndProc = WndProcThunk.ShellWindowProc,
-                    Instance = PendingKernel32.GetModuleHandle(0),
+                    Instance = Kernel32.GetModuleHandle(0),
                     ClassName = className,
                 };
-                if (PendingUser32.RegisterClassEx(&windowClass) == 0)
+                if (User32.RegisterClassEx(&windowClass) == 0)
                 {
                     throw new Win32Exception(Marshal.GetLastPInvokeError(), "RegisterClassEx (shell window) failed");
                 }
@@ -484,8 +485,8 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
     /// <summary>Con trỏ hệ thống dùng chung (LoadCursor không cấp handle mới, không cần huỷ).</summary>
     private static class SystemCursors
     {
-        public static readonly nint Arrow = PendingUser32.LoadCursor(0, PendingUser32.IdcArrow);
-        public static readonly nint SizeAll = PendingUser32.LoadCursor(0, PendingUser32.IdcSizeAll);
-        public static readonly nint Wait = PendingUser32.LoadCursor(0, PendingUser32.IdcWait);
+        public static readonly nint Arrow = User32.LoadCursor(0, User32.IdcArrow);
+        public static readonly nint SizeAll = User32.LoadCursor(0, PendingUser32.IdcSizeAll);
+        public static readonly nint Wait = User32.LoadCursor(0, PendingUser32.IdcWait);
     }
 }
