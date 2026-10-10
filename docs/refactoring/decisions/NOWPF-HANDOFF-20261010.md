@@ -35,7 +35,13 @@ Mỗi gói đã merge có fragment `NOWPF-WPxx-*.md` cạnh file này. Người 
   thumbnail 40 ca; Imaging.Tests xanh, Architecture 86 xanh. Chưa: decision fragment (`NOWPF-WP03-*`), mutation, bench decode 24 MP
   (rủi ro perf: `GC.AddMemoryPressure` cho buffer tạm). Đề xuất v1.1: khoá `ExifOrientation.IsTransposed`/`Normalize`. Có thể còn sót thư mục
   `.claude/worktrees/wp03-base` (xoá tay).
-- **WP-15 (renderer Direct2D)**: agent được yêu cầu chốt và mở PR "TRẠNG THÁI BÀN GIAO"; đọc mô tả PR nếu có (`gh pr list`).
+- **#415 WP-15 renderer Direct2D** (WIP): `DeviceResources`, `D2DRenderSurface`, `D2DDrawContext`, `GpuImageCache` (LRU theo byte), tile
+  <= 16384 không lộ đường nối, mất thiết bị (tạo lại, xoá cache, `DeviceRecreated`), swap chain flip-model, MaxFrameLatency 1, 8 orientation.
+  Shell.Tests Rendering 91 xanh (kể cả Native WARP). 1:1 byte-exact; PSNR 47-56 dB; pan CPU submit P95 0,26-1,74 ms (<= 3 ms đạt);
+  upload 24 MP P50 ~40 ms. RỦI RO: HQC thu nhỏ 24 MP mỗi khung 37-45 ms trên GPU (zoom < 100 % trên ảnh original ở WP-21; ở Fit vẽ
+  preview cỡ viewport nên không gặp). Chưa: mutation, decision fragment (order dự kiến 542) và generate/check-open-decisions, đo lại khi máy
+  rảnh (số hiện nhiễu vì CPU 99 %). Đề xuất v1.1: C-09 `static abstract` cản fake và không dùng được làm type argument, thay bằng
+  `IRenderSurfaceFactory`.
 - Golden pan phím (5 kịch bản `ArrowPan-pending-rule-change|`): #407 đã merge, cần ghi lại bằng `tools/diag/record-golden.ps1`
   và bỏ hằng `InputScriptCatalog.ArrowPanPending` (xem NOWPF-WP10-GOLDEN-RECORDER mục 5).
 - Hợp đồng v1.1 (C-07: dời IImageSurface, IFitSurface, ViewportSnapshot sang App.Shared): PR nhỏ của lead; đặt
