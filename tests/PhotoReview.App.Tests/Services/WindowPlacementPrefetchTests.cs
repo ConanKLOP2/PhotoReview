@@ -84,11 +84,14 @@ public sealed class WindowPlacementPrefetchTests
             StaUi.Run(() =>
             {
                 first = RestoreIntoNewWindow(path);
+                // The first restore consumed the prefetch (and reshaped that object), so the next one must read the file,
+                // which now says Maximized again: a prefetch that stayed around would reopen Normal here.
+                WritePlacement(directory, "placement.json", ShowMaximized);
                 second = RestoreIntoNewWindow(path);
             });
 
-            Assert.Equal(WindowState.Maximized, first);
-            Assert.Equal(WindowState.Normal, second);
+            Assert.Equal(WindowState.Maximized, first); // prefetched value, not the Normal on disk
+            Assert.Equal(WindowState.Maximized, second); // read from the file after the prefetch was used up
         }
         finally { Directory.Delete(directory, true); }
     }

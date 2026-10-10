@@ -35,4 +35,21 @@ public sealed class ComparePairTieOrderTests
             Assert.Equal(ComparePairService.Find(files, numbered), pair);
         }
     }
+
+    [Theory(DisplayName = "Two files whose paths differ only by case: the ordinal order (upper case first) picks the original, whatever the input order")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildIndex_PathsDifferingOnlyByCase_OrdinalOrderPicksTheOriginal(bool lowerCaseListedFirst)
+    {
+        const string lower = @"C:\Photos\shot.jpg";
+        const string upper = @"C:\Photos\SHOT.jpg";
+        const string numbered = @"C:\Photos\shot (1).jpg";
+        var files = lowerCaseListedFirst ? new[] { lower, upper, numbered } : new[] { upper, lower, numbered };
+
+        var index = ComparePairService.BuildIndex(files);
+
+        Assert.True(index.TryGetValue(numbered, out var pair));
+        Assert.Equal((upper, numbered), pair); // "S" sorts before "s" ordinally
+        Assert.Equal(ComparePairService.Find(files, numbered), pair);
+    }
 }
