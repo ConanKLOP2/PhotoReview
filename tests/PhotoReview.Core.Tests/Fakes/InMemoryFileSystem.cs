@@ -28,6 +28,8 @@ public sealed class InMemoryFileSystem : IFileSystem
     /// <summary>Runs (outside the internal lock, so it may block) at the start of every <see cref="GetFileStat"/>; a returned exception is thrown.</summary>
     public Func<string, Exception?>? StatHook { get; set; }
     public Func<string, Exception?>? DeleteHook { get; set; }
+    /// <summary>Runs at the start of every <see cref="TryDeleteEmptyDirectory"/>; a returned exception is thrown (a cleanup that itself fails).</summary>
+    public Func<string, Exception?>? DeleteDirectoryHook { get; set; }
     /// <summary>Runs at the start of every <see cref="EnumerateFiles"/>; a returned exception is thrown (e.g. access denied on a directory listing).</summary>
     public Func<string, Exception?>? EnumerateFilesHook { get; set; }
     public Func<string, string, Exception?>? MoveHook { get; set; }
@@ -465,6 +467,23 @@ public sealed class InMemoryFileSystem : IFileSystem
         lock (_lock)
         {
             InternalCreateDirectory(NormalizeDirectoryPath(path));
+        }
+    }
+
+    public bool TryDeleteEmptyDirectory(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (DeleteDirectoryHook?.Invoke(path) is { } hookEx) throw hookEx;
+        lock (_lock)
+        {
+            var normalized = NormalizeDirectoryPath(path);
+            if (!_directories.Contains(normalized)) return false;
+            var prefix = normalized.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (_files.Keys.Any(file => file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                || _directories.Any(dir => dir.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                return false;
+            _reparsePoints.Remove(normalized);
+            return _directories.Remove(normalized);
         }
     }
 
