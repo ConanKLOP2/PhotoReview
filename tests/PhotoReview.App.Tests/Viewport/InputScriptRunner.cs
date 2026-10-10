@@ -45,15 +45,15 @@ internal static class InputScriptRunner
         if (wanted.Contains(-1)) checkpoints.Add(Checkpoint(-1, viewer, surface));
         for (var i = 0; i < script.Steps.Count; i++)
         {
-            Apply(script.Steps[i], i, settings, surface, pointer, fit);
+            Apply(script.Steps[i], i, settings, surface, viewer, pointer, fit);
             surface.Pump();
             if (wanted.Contains(i)) checkpoints.Add(Checkpoint(i, viewer, surface));
         }
         return checkpoints;
     }
 
-    private static void Apply(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, PointerInputController pointer,
-        FitViewController fit)
+    private static void Apply(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, ViewerState viewer,
+        PointerInputController pointer, FitViewController fit)
     {
         var point = new PointD(step.X, step.Y);
         var ctrl = step.Modifiers?.Contains("Control", StringComparison.OrdinalIgnoreCase) == true;
@@ -74,25 +74,10 @@ internal static class InputScriptRunner
                 pointer.OnImageRelease(point, step.TimestampMs);
                 break;
             case "key":
-                var key = step.Key is { } name && Enum.TryParse<KeyId>(name, out var parsed) && parsed is KeyId.Left or KeyId.Right or KeyId.Up or KeyId.Down
-                    ? parsed
-                    : throw Unsupported(index, step);
-                pointer.TryPanByArrow(key, isRepeat: step.Delta != 0);
+                Drive(surface, KeyTask(step, index, settings, surface, viewer, pointer, fit));
                 break;
             case "command":
-                Drive(surface, step.Command switch
-                {
-                    "Fit" => fit.ApplyFitAsync(),
-                    "FitWidth" => pointer.FitWidthAsync(settings.FitWidthAnchor),
-                    "FitWidth2" => pointer.FitWidthAsync(settings.FitWidthAnchor2),
-                    "FitHeight" => pointer.FitHeightAsync(),
-                    "ZoomIn" => pointer.ZoomInAsync(),
-                    "ZoomOut" => pointer.ZoomOutAsync(),
-                    "ActualSize" => pointer.ZoomActualSizeAsync(),
-                    "ClickZoom" => pointer.ToggleClickZoomAsync(),
-                    "ClickZoomLevel" => pointer.SetClickZoomLevelAsync(step.Delta),
-                    _ => throw Unsupported(index, step),
-                });
+                Drive(surface, CommandTask(step, index, settings, surface, viewer, pointer, fit));
                 break;
             case "frame":
                 surface.Frame(TimeSpan.FromMilliseconds(step.TimestampMs));
@@ -103,6 +88,91 @@ internal static class InputScriptRunner
             default:
                 throw Unsupported(index, step);
         }
+    }
+
+    /// <summary>
+    /// Từ vựng lệnh của bộ ghi WP-10 (InputScriptRecorder.CommandAsync/ExecuteCommandAsync): tên ReviewCommandType
+    /// (ToggleFit, ZoomActualSize, FitWidth, FitWidth2, FitHeight, ZoomIn, ZoomOut, ClickZoom) và các lệnh dựng cảnh
+    /// (SetClickZoomLevel X = %, ZoomToLevelMenu, SetDpi X = hệ số, LoadImage X/Y = px, SwapSourceSize X/Y = px).
+    /// Tên cũ của runner (Fit, ActualSize, ClickZoomLevel) giữ làm bí danh. Bước lạ vẫn ném NotSupportedException.
+    /// </summary>
+    private static Task CommandTask(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, ViewerState viewer,
+        PointerInputController pointer, FitViewController fit) => step.Command switch
+    {
+        "ToggleFit" or "Fit" => fit.ApplyFitAsync(),
+        "FitWidth" => pointer.FitWidthAsync(settings.FitWidthAnchor),
+        "FitWidth2" => pointer.FitWidthAsync(settings.FitWidthAnchor2),
+        "FitHeight" => pointer.FitHeightAsync(),
+        "ZoomIn" => pointer.ZoomInAsync(),
+        "ZoomOut" => pointer.ZoomOutAsync(),
+        "ZoomActualSize" or "ActualSize" => pointer.ZoomActualSizeAsync(),
+        "ClickZoom" => pointer.ToggleClickZoomAsync(),
+        "SetClickZoomLevel" => pointer.SetClickZoomLevelAsync((int)step.X),
+        "ClickZoomLevel" => pointer.SetClickZoomLevelAsync(step.Delta),
+        "ZoomToLevelMenu" => pointer.SetClickZoomLevelAsync(settings.ClickZoomPercent),
+        "SetDpi" => SetDpi(surface, viewer, step.X),
+        "LoadImage" => LoadImage(surface, viewer, pointer, settings, (int)step.X, (int)step.Y),
+        "SwapSourceSize" => SwapSourceSize(surface, viewer, (int)step.X, (int)step.Y),
+        _ => throw Unsupported(index, step),
+    };
+
+    private static Task SetDpi(EngineImageSurface surface, ViewerState viewer, double dpiScale)
+    {
+        viewer.DpiScale = dpiScale;
+        surface.UpdateFitSize(); // MainWindow.UpdateFitSize -> UpdateViewport (+ decode box): DpiScale feeds the Fit factor
+        return Task.CompletedTask;
+    }
+
+    private static Task LoadImage(EngineImageSurface surface, ViewerState viewer, PointerInputController pointer, AppSettings settings,
+        int width, int height)
+    {
+        pointer.OnCurrentIndexChanged(0);
+        surface.SetBitmap(width, height);
+        viewer.SetSourceSize(width, height, newImage: true);
+        surface.UpdateLayout();
+        if (viewer.IsFit) surface.UpdateFitSize();
+        surface.UpdateLayout();
+        return pointer.ApplyInitialViewAsync(settings.InitialViewMode, settings.ClickZoomPercent);
+    }
+
+    private static Task SwapSourceSize(EngineImageSurface surface, ViewerState viewer, int width, int height)
+    {
+        surface.SetBitmap(width, height);
+        viewer.SwapSourceSize(width, height);
+        surface.UpdateLayout();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// MainWindow.Window_KeyDown, the part that reaches the viewport (same as the WP-10 recorder's KeyAsync): arrow pan first (no
+    /// modifier), otherwise the shortcut router resolves the key to a ReviewCommand that is run by name. "Repeat" in
+    /// <see cref="GoldenInputStep.Modifiers"/> marks key auto-repeat.
+    /// </summary>
+    private static Task KeyTask(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, ViewerState viewer,
+        PointerInputController pointer, FitViewController fit)
+    {
+        if (step.Key is not { } name || !Enum.TryParse<KeyId>(name, out var key)) throw Unsupported(index, step);
+        var modifierText = step.Modifiers ?? string.Empty;
+        bool Has(string flag) => modifierText.Contains(flag, StringComparison.OrdinalIgnoreCase);
+        var modifiers = KeyModifiers.None;
+        if (Has("Control")) modifiers |= KeyModifiers.Control;
+        if (Has("Shift")) modifiers |= KeyModifiers.Shift;
+        if (Has("Alt")) modifiers |= KeyModifiers.Alt;
+        var repeat = Has("Repeat");
+
+        if (modifiers == KeyModifiers.None && pointer.TryPanByArrow(key, repeat)) return Task.CompletedTask;
+        pointer.StopKinetic();
+        var command = new ShortcutRouter(settings).TryResolve(key, KeyId.None, modifiers, isFullscreen: false, hasImage: true,
+            hasComparePair: false, isCompareVisible: false, hasCapturePair: false);
+        if (command is null) return Task.CompletedTask;
+        if (repeat && command.Value.Type.IgnoresAutoRepeat()) return Task.CompletedTask;
+        var asCommand = step with { Kind = "command", Command = command.Value.Type.ToString() };
+        // Commands that change nothing in the viewport (Next, Previous, Fullscreen...) are no-ops here, exactly as in the recorder.
+        return command.Value.Type is ReviewCommandType.ToggleFit or ReviewCommandType.ZoomIn or ReviewCommandType.ZoomOut
+            or ReviewCommandType.ZoomActualSize or ReviewCommandType.ClickZoom or ReviewCommandType.FitWidth
+            or ReviewCommandType.FitWidth2 or ReviewCommandType.FitHeight
+            ? CommandTask(asCommand, index, settings, surface, viewer, pointer, fit)
+            : Task.CompletedTask;
     }
 
     private static void Drive(EngineImageSurface surface, Task operation) => surface.Run(operation).GetAwaiter().GetResult();
