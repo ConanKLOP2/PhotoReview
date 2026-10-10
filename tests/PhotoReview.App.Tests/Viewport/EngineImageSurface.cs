@@ -189,7 +189,18 @@ internal sealed class EngineImageSurface : IImageSurface, IFitSurface
     public TimeSpan? RenderingTime(EventArgs e) => e is FrameArgs frame ? frame.Time : null;
     public long Timestamp { get; set; }
     public PhotoReview.Core.Abstractions.DisplayTiming? DisplayTiming => null;
-    public PointD? PointerPosition { get; set; }
+    private PointD? _pointerPosition;
+
+    /// <summary>Con trỏ do kịch bản đặt (ScriptedMouse của bộ ghi WP-10): được kiểm tra trong viewport LÚC ĐỌC, như ScriptedSurface.</summary>
+    public PointD? ScriptedMouse { get; set; }
+
+    public PointD? PointerPosition
+    {
+        get => ScriptedMouse is { } m
+            ? (m.X >= 0 && m.Y >= 0 && m.X <= ViewportWidth && m.Y <= ViewportHeight ? m : null)
+            : _pointerPosition;
+        set => _pointerPosition = value;
+    }
 
     /// <summary>Một khung: CompositionTarget.Rendering rồi lượt layout của khung.</summary>
     public void Frame(TimeSpan renderingTime)

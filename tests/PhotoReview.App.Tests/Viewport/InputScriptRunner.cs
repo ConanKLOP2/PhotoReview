@@ -25,9 +25,8 @@ internal static class InputScriptRunner
 {
     public static List<GoldenCheckpoint> Run(GoldenInputScript script)
     {
-        var settings = string.IsNullOrWhiteSpace(script.Setup.SettingsOverridesJson)
-            ? new AppSettings()
-            : JsonSerializer.Deserialize(script.Setup.SettingsOverridesJson, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+        // Bộ ghi WP-10 (InputScriptRecorder.RunAsync): ảnh đầu hiện với cài đặt MẶC ĐỊNH, Fit, RỒI MỚI áp SettingsOverridesJson.
+        var settings = new AppSettings();
         var viewer = new ViewerState { DpiScale = script.Setup.DpiScale, ZoomStep = settings.KeyboardZoomStepPercent / 100.0 };
         viewer.SetSourceSize(script.Setup.ImagePixelWidth, script.Setup.ImagePixelHeight, newImage: true);
         var version = new ViewportOperationVersion();
@@ -39,9 +38,12 @@ internal static class InputScriptRunner
         fit = new FitViewController(surface, viewer, version, pointer.CancelPan);
         viewer.ZoomModeChanged += (_, _) => pointer.StopKinetic(); // MainWindow.WireViewModelEvents
 
+        leftDown = false;
         var checkpoints = new List<GoldenCheckpoint>();
         var wanted = script.Expected.Select(c => c.AfterStep).ToHashSet();
         Drive(surface, pointer.ApplyInitialViewAsync(settings.InitialViewMode, settings.ClickZoomPercent));
+        Drive(surface, fit.ApplyFitAsync());
+        ApplySettings(script.Setup.SettingsOverridesJson, settings, viewer);
         if (wanted.Contains(-1)) checkpoints.Add(Checkpoint(-1, viewer, surface));
         for (var i = 0; i < script.Steps.Count; i++)
         {
@@ -52,26 +54,75 @@ internal static class InputScriptRunner
         return checkpoints;
     }
 
+    [ThreadStatic] private static bool leftDown;
+
+    private static bool HasModifier(string? modifiers, string name) =>
+        modifiers is not null && modifiers.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Contains(name, StringComparer.Ordinal);
+
+    private static readonly JsonSerializerOptions SettingsOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    /// <summary>GoldenWpfView.ApplySettings: mặc định cho mọi script, rồi từng khoá override (không phân biệt hoa thường) và ZoomStep xuống viewer.</summary>
+    private static void ApplySettings(string? overridesJson, AppSettings settings, ViewerState viewer)
+    {
+        var defaults = new AppSettings();
+        foreach (var property in typeof(AppSettings).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+        {
+            if (property.CanRead && property.CanWrite && property.GetIndexParameters().Length == 0
+                && (property.PropertyType.IsValueType || property.PropertyType == typeof(string) || property.PropertyType == typeof(List<string>)))
+                property.SetValue(settings, property.GetValue(defaults));
+        }
+        if (!string.IsNullOrWhiteSpace(overridesJson))
+        {
+            using var document = JsonDocument.Parse(overridesJson);
+            foreach (var entry in document.RootElement.EnumerateObject())
+            {
+                var property = typeof(AppSettings).GetProperty(entry.Name,
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase)
+                    ?? throw new InvalidOperationException($"Unknown AppSettings property in golden setup: {entry.Name}");
+                property.SetValue(settings, JsonSerializer.Deserialize(entry.Value.GetRawText(), property.PropertyType, SettingsOptions));
+            }
+        }
+        viewer.ZoomStep = settings.KeyboardZoomStepPercent / 100.0;
+        viewer.ScalingQuality = settings.ScalingQuality;
+    }
+
     private static void Apply(GoldenInputStep step, int index, AppSettings settings, EngineImageSurface surface, ViewerState viewer,
         PointerInputController pointer, FitViewController fit)
     {
         var point = new PointD(step.X, step.Y);
-        var ctrl = step.Modifiers?.Contains("Control", StringComparison.OrdinalIgnoreCase) == true;
+        var ctrl = HasModifier(step.Modifiers, "Control");
+        if (step.Kind is "wheel" or "hwheel" or "press" or "move" or "release") surface.ScriptedMouse = point;
         switch (step.Kind)
         {
             case "wheel":
             case "hwheel":
-                Drive(surface, pointer.OnWheelAsync(new WheelInput(step.Delta, step.Kind == "hwheel", ctrl, step.TimestampMs), point));
+                Drive(surface, pointer.OnWheelAsync(new WheelInput(step.Delta, step.Kind == "hwheel", ctrl, step.TimestampMs,
+                    step.Key == "Touchpad" ? WheelDeviceHint.Touchpad : WheelDeviceHint.Unknown), point));
                 break;
             case "press":
-                pointer.OnWindowPreviewMouseDown();
-                pointer.OnImagePress(PointerButton.Left, step.Delta > 0 ? step.Delta : 1, point, step.TimestampMs);
+                pointer.OnWindowPreviewMouseDown(); // Window.PreviewMouseDown tunnels first, for every button
+                if (step.Key == "Middle")
+                {
+                    // ImageScroll_PreviewMouseDown: acts on the first press of a multi-click only.
+                    if (step.Delta <= 1 && MiddleClickResolver.Resolve(settings.MiddleClickAction) is { } middle)
+                        Drive(surface, CommandTask(step with { Command = middle.Type.ToString() }, index, settings, surface, viewer, pointer, fit));
+                }
+                else
+                {
+                    pointer.OnImagePress(PointerButton.Left, Math.Max(1, step.Delta), point, step.TimestampMs);
+                    leftDown = true;
+                }
                 break;
             case "move":
-                pointer.OnImageMove(true, point, step.TimestampMs);
+                pointer.OnImageMove(leftDown, point, step.TimestampMs);
                 break;
             case "release":
                 pointer.OnImageRelease(point, step.TimestampMs);
+                leftDown = false;
                 break;
             case "key":
                 Drive(surface, KeyTask(step, index, settings, surface, viewer, pointer, fit));
@@ -80,6 +131,7 @@ internal static class InputScriptRunner
                 Drive(surface, CommandTask(step, index, settings, surface, viewer, pointer, fit));
                 break;
             case "frame":
+                surface.Timestamp = (long)(step.TimestampMs * (System.Diagnostics.Stopwatch.Frequency / 1000.0));
                 surface.Frame(TimeSpan.FromMilliseconds(step.TimestampMs));
                 break;
             case "resize":
@@ -109,6 +161,7 @@ internal static class InputScriptRunner
         "ClickZoom" => pointer.ToggleClickZoomAsync(),
         "SetClickZoomLevel" => pointer.SetClickZoomLevelAsync((int)step.X),
         "ClickZoomLevel" => pointer.SetClickZoomLevelAsync(step.Delta),
+        "Next" or "Previous" => Task.CompletedTask, // the recorder only counts navigation; nothing changes in the viewport
         "ZoomToLevelMenu" => pointer.SetClickZoomLevelAsync(settings.ClickZoomPercent),
         "SetDpi" => SetDpi(surface, viewer, step.X),
         "LoadImage" => LoadImage(surface, viewer, pointer, settings, (int)step.X, (int)step.Y),
@@ -152,8 +205,7 @@ internal static class InputScriptRunner
         PointerInputController pointer, FitViewController fit)
     {
         if (step.Key is not { } name || !Enum.TryParse<KeyId>(name, out var key)) throw Unsupported(index, step);
-        var modifierText = step.Modifiers ?? string.Empty;
-        bool Has(string flag) => modifierText.Contains(flag, StringComparison.OrdinalIgnoreCase);
+        bool Has(string flag) => HasModifier(step.Modifiers, flag);
         var modifiers = KeyModifiers.None;
         if (Has("Control")) modifiers |= KeyModifiers.Control;
         if (Has("Shift")) modifiers |= KeyModifiers.Shift;
