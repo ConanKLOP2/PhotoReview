@@ -26,10 +26,10 @@ public sealed class PixelOpsAlphaTests
     public void AlphaChecks_MatchPreviewCacheFile(string formatName, bool withTransparentPixel)
     {
         var source = CreateSource(formatName, withTransparentPixel);
-        var layout = PreviewCacheFile.HasAlpha(source) ? PixelLayout.Pbgra32 : PixelLayout.Bgr32;
+        var layout = WpfCacheImageCodec.HasAlpha(source) ? PixelLayout.Pbgra32 : PixelLayout.Bgr32;
         using var pixels = PixelAssert.FromBitmapSource(source, layout);
 
-        var legacyOpaque = PreviewCacheFile.IsFullyOpaque(source);
+        var legacyOpaque = WpfCacheImageCodec.IsFullyOpaque(source);
 
         Assert.Equal(legacyOpaque, PixelOps.IsFullyOpaque(pixels));
         Assert.Equal(!legacyOpaque, PixelOps.HasAlpha(pixels));

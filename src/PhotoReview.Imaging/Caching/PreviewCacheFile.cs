@@ -1,8 +1,9 @@
-using System.IO;
+using System.Buffers;
 using System.Buffers.Binary;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using System.IO;
+using System.Runtime.InteropServices;
 using PhotoReview.Imaging.Metadata;
+using PhotoReview.Imaging.Pixels;
 
 namespace PhotoReview.Imaging.Caching;
 
@@ -68,40 +69,74 @@ public static class PreviewCacheFile
     private const int HeaderSize = 24;
     private static ReadOnlySpan<byte> MagicBytes => "PRVC"u8;
 
-    /// <summary>Decoded contents of a v5 preview cache entry, ready to hand to <see cref="WpfDecodedImage"/>.</summary>
-    // Internal, not public: architecture rule K-1 forbids public types in PhotoReview.Imaging.Caching
-    // from exposing System.Windows.Media.* on their public surface (see
-    // ImagingPublicSurfaceTests.Imaging_CachingAndPreload_PublicMembers_DoNotExpose_SystemWindowsMediaTypes).
-    // PreviewImageService (same assembly) uses this directly; a caller outside the assembly goes
-    // through the IDecodedImage-based WriteAtomicallyAsync/ReadAsDecodedImage overloads below,
-    // exactly like DiskCacheStore's public IDecodedImage overload vs. its internal BitmapSource one.
-    internal readonly record struct ReadResult(BitmapSource Bitmap, DecoderBackend ActualBackend, int Orientation, long FileBytes, int OriginalWidth, int OriginalHeight,
+    /// <summary>
+    /// Decoded contents of a preview cache entry. <see cref="Pixels"/> is a fresh buffer the caller owns: hand it to
+    /// <see cref="IPlatformImageCodec.FromPixels"/> (which takes ownership) or dispose it.
+    /// </summary>
+    // WP-04: pixels, not a BitmapSource -- PhotoReview.Imaging.Caching no longer uses any WPF type (the WPF bitmap is made by
+    // the injected IPlatformImageCodec, see PreviewImageService / ReadAsDecodedImage).
+    internal readonly record struct ReadResult(PixelBuffer Pixels, DecoderBackend ActualBackend, int Orientation, long FileBytes, int OriginalWidth, int OriginalHeight,
         ExifSummary? Exif = null);
 
-    /// <summary>Public, framework-agnostic entry point: encodes an already-decoded preview.</summary>
+    /// <summary>
+    /// Encodes an already-decoded preview, taking its pixels through the WPF bridge codec (WP-04 temporary default: the WPF
+    /// app's previews are BitmapSources; WP-06 removes this overload when the codec becomes a required dependency).
+    /// </summary>
     public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, CancellationToken cancellationToken = default)
+        => WriteAtomicallyAsync(image, WpfCacheImageCodec.Instance, cachePath, cancellationToken);
+
+    /// <summary>Encodes an already-decoded preview whose platform image <paramref name="codec"/> understands (C-02).</summary>
+    public static async Task WriteAtomicallyAsync(IDecodedImage image, IPlatformImageCodec codec, string cachePath, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(image);
-        if (image.PlatformImage is not BitmapSource bitmap)
-            throw new ArgumentException("PlatformImage must be a BitmapSource for the preview cache.", nameof(image));
-        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath, exif: image.Exif, cancellationToken: cancellationToken);
+        ArgumentNullException.ThrowIfNull(codec);
+        using var lease = codec.ToPixels(image.PlatformImage);
+        await WriteAtomicallyAsync(lease.Pixels, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath,
+            exif: image.Exif, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Public, framework-agnostic entry point: reads a v5 entry back as an <see cref="IDecodedImage"/>.</summary>
-    public static IDecodedImage ReadAsDecodedImage(string cachePath)
+    /// <summary>Reads an entry back as an <see cref="IDecodedImage"/> through the WPF bridge codec (see the write overload).</summary>
+    public static IDecodedImage ReadAsDecodedImage(string cachePath) => ReadAsDecodedImage(cachePath, WpfCacheImageCodec.Instance);
+
+    /// <summary>Reads an entry back as an <see cref="IDecodedImage"/> whose platform image comes from <paramref name="codec"/>.</summary>
+    public static IDecodedImage ReadAsDecodedImage(string cachePath, IPlatformImageCodec codec)
     {
-        var result = Read(cachePath);
-        return new WpfDecodedImage(result.Bitmap, downscaled: true, orientation: result.Orientation, actualBackend: result.ActualBackend,
-            originalWidth: result.OriginalWidth, originalHeight: result.OriginalHeight, exif: result.Exif);
+        ArgumentNullException.ThrowIfNull(codec);
+        return ToDecodedImage(Read(cachePath), codec);
     }
 
     /// <summary>
-    /// Atomically encodes <paramref name="bitmap"/> as a current-version (<see cref="CurrentVersion"/>) cache entry (header + JPEG payload) via
+    /// Wraps a <see cref="Read"/> result as a downscaled preview: the codec takes ownership of the pixels (and on failure they
+    /// are released here, never leaked).
+    /// </summary>
+    internal static IDecodedImage ToDecodedImage(ReadResult entry, IPlatformImageCodec codec)
+    {
+        var pixels = entry.Pixels;
+        var (width, height) = (pixels.Width, pixels.Height);
+        object platformImage;
+        try
+        {
+            platformImage = codec.FromPixels(pixels);
+        }
+        catch
+        {
+            pixels.Dispose(); // safe even if the codec already disposed it
+            throw;
+        }
+        return new DecodedImage(platformImage, width, height, estimatedBytes: (long)width * height * 4, downscaled: true,
+            orientation: entry.Orientation, actualBackend: entry.ActualBackend, originalWidth: entry.OriginalWidth,
+            originalHeight: entry.OriginalHeight, exif: entry.Exif);
+    }
+
+    /// <summary>
+    /// Atomically encodes <paramref name="pixels"/> as a current-version (<see cref="CurrentVersion"/>) cache entry (header + JPEG payload) via
     /// <see cref="AtomicCacheFile.WriteAsync"/> (temp file, write, atomic rename -- see that type for
-    /// the durability rationale). The alpha/orientation validation below runs before the write.
+    /// the durability rationale). The alpha/orientation validation below runs before the write. The JPEG comes from WIC
+    /// (<see cref="WicImageEncoder"/>) with exactly the parameters WPF's JpegBitmapEncoder used, so entries are byte-identical to
+    /// the pre-WP-04 ones and both builds read each other's caches. <paramref name="pixels"/> is only read (not disposed).
     /// </summary>
     internal static async Task WriteAtomicallyAsync(
-        BitmapSource bitmap,
+        PixelBuffer pixels,
         DecoderBackend actualBackend,
         int orientation,
         int originalWidth,
@@ -111,20 +146,20 @@ public static class PreviewCacheFile
         ExifSummary? exif = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(bitmap);
+        ArgumentNullException.ThrowIfNull(pixels);
         ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
         // IMG-01: JPEG cannot carry alpha; refuse so a future caller cannot silently flatten transparency.
-        // Q-R7: alpha-capable formats are accepted only when every pixel is actually opaque.
-        if (!opacityVerified && !IsFullyOpaque(bitmap)) throw new ArgumentException("Bitmaps with transparent pixels cannot be stored in the JPEG preview cache.", nameof(bitmap));
+        // Q-R7: alpha-capable buffers are accepted only when every pixel is actually opaque.
+        if (!opacityVerified && !PixelOps.IsFullyOpaque(pixels)) throw new ArgumentException("Bitmaps with transparent pixels cannot be stored in the JPEG preview cache.", nameof(pixels));
         if (orientation is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(orientation), orientation, "EXIF orientation must be 1-8.");
 
         // A caller that doesn't know the original (pre-downscale) source size yet reports 0/0
         // here; fall back to this entry's own pixel dimensions rather than persisting a
         // header that claims "no original size known" (0 would round-trip as "unknown" and
         // force a real ReadInfo later, defeating the point of storing it at all).
-        var headerOriginalWidth = originalWidth > 0 ? originalWidth : bitmap.PixelWidth;
-        var headerOriginalHeight = originalHeight > 0 ? originalHeight : bitmap.PixelHeight;
-        var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight, headerOriginalWidth, headerOriginalHeight);
+        var headerOriginalWidth = originalWidth > 0 ? originalWidth : pixels.Width;
+        var headerOriginalHeight = originalHeight > 0 ? originalHeight : pixels.Height;
+        var header = BuildHeader(actualBackend, orientation, pixels.Width, pixels.Height, headerOriginalWidth, headerOriginalHeight);
         // v7: EXIF block (2-byte length, 0 = none, then the encoded summary) between header and payload.
         var exifBytes = ExifSummaryCodec.Encode(exif);
         var exifLength = new byte[2];
@@ -135,17 +170,15 @@ public static class PreviewCacheFile
             stream.Write(header);
             stream.Write(exifLength);
             stream.Write(exifBytes);
-            var encoder = new JpegBitmapEncoder { QualityLevel = DefaultJpegQuality };
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            encoder.Save(stream);
+            WicImageEncoder.EncodeJpeg(pixels, stream, DefaultJpegQuality);
         }, log: null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Reads and fully decodes a cache entry in one file open (no separate metadata file to
     /// read). Throws <see cref="InvalidDataException"/> for a bad magic, an unsupported/mismatched
-    /// version, or any other structurally invalid header -- callers treat that exactly like a
-    /// corrupt payload (delete the entry, fall back to decoding the source).
+    /// version, any other structurally invalid header, or a payload that does not decode to the header's size -- callers
+    /// treat that exactly like a corrupt payload (delete the entry, fall back to decoding the source).
     /// </summary>
     internal static ReadResult Read(string cachePath)
     {
@@ -205,122 +238,52 @@ public static class PreviewCacheFile
         var payloadLength = fileBytes - HeaderSize - exifBlockSize;
         if (payloadLength <= 0)
             throw new InvalidDataException("Preview cache entry has no payload.");
-
-        // BitmapImage always decodes its StreamSource from that stream's absolute beginning
-        // (it seeks back to 0 internally, e.g. to read ColorContexts during FinalizeCreation) --
-        // handing it the still-open FileStream positioned right after the header would make it
-        // decode the header bytes themselves as if they were the JPEG. Copying just the payload
-        // (still a single file open/read) into a fresh, independently-zero-based stream sidesteps
-        // that without a second file open.
         if (payloadLength > int.MaxValue)
             throw new InvalidDataException("Preview cache entry payload is implausibly large.");
-        using var payloadStream = new MemoryStream((int)payloadLength);
-        stream.CopyTo(payloadStream);
-        // The entry has no length or checksum, and WPF decodes a truncated JPEG into a partly grey picture instead of failing,
-        // so a cut-off entry would be served (and kept in RAM) as a valid preview. Every payload the encoder writes ends with
-        // the EOI marker; a payload without it was cut short (or is not a JPEG at all).
-        var payload = payloadStream.GetBuffer().AsSpan(0, (int)payloadLength);
-        if (payload.Length < 4 || payload[^2] != 0xFF || payload[^1] != 0xD9)
-            throw new InvalidDataException("Preview cache entry payload is truncated (no JPEG end-of-image marker).");
-        payloadStream.Position = 0;
 
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.StreamSource = payloadStream;
-        bitmap.EndInit();
-
-        if (bitmap.PixelWidth != width || bitmap.PixelHeight != height)
-            throw new InvalidDataException("Preview cache entry payload dimensions do not match its header.");
-
-        // Render-native output (D-item 3): the disk-cache read path used to hand back whatever
-        // format BitmapImage produced (Bgra32 for a PNG decode); converting once here means the
-        // renderer never has to format-convert this bitmap on every present.
-        var targetFormat = hasAlpha ? PixelFormats.Pbgra32 : PixelFormats.Bgr32;
-        BitmapSource native = bitmap.Format == targetFormat ? bitmap : new FormatConvertedBitmap(bitmap, targetFormat, null, 0);
-        native.Freeze();
-
-        return new ReadResult(native, backendValue, orientation, fileBytes, originalWidth, originalHeight, exif);
-    }
-
-    /// <summary>Framework-agnostic form of <see cref="HasAlpha(BitmapSource)"/> for a decoded preview.</summary>
-    public static bool HasAlpha(IDecodedImage image)
-    {
-        ArgumentNullException.ThrowIfNull(image);
-        return image.PlatformImage is BitmapSource bitmap && HasAlpha(bitmap);
-    }
-
-    /// <summary>
-    /// True when <paramref name="bmp"/> can carry transparency (alpha pixel format, or an indexed
-    /// format whose palette has a non-opaque color). Such previews must not go through the JPEG cache.
-    /// </summary>
-    internal static bool HasAlpha(BitmapSource bmp)
-    {
-        ArgumentNullException.ThrowIfNull(bmp);
-        var format = bmp.Format;
-        if (format == PixelFormats.Bgra32 || format == PixelFormats.Pbgra32 || format == PixelFormats.Rgba64
-            || format == PixelFormats.Prgba64 || format == PixelFormats.Rgba128Float || format == PixelFormats.Prgba128Float)
-            return true;
-        if (format == PixelFormats.Indexed1 || format == PixelFormats.Indexed2 || format == PixelFormats.Indexed4 || format == PixelFormats.Indexed8)
-            return bmp.Palette?.Colors.Any(c => c.A < 255) == true;
-        return false;
-    }
-
-    /// <summary>
-    /// Q-R7: true when <paramref name="bmp"/> can be written to the JPEG cache without losing
-    /// transparency. Formats that cannot carry alpha are opaque without a scan; Bgra32/Pbgra32 are
-    /// scanned (band by band through a small pooled buffer, vectorised, early exit on the first
-    /// A&lt;255 pixel). For fully opaque pixels premultiplied equals straight colour, so writing
-    /// them is colour-safe. Other alpha formats (16-bit/float) are conservatively treated as not opaque.
-    /// </summary>
-    internal static bool IsFullyOpaque(BitmapSource bmp)
-    {
-        ArgumentNullException.ThrowIfNull(bmp);
-        if (!HasAlpha(bmp)) return true;
-        var format = bmp.Format;
-        if (format != PixelFormats.Bgra32 && format != PixelFormats.Pbgra32) return false;
-
-        var width = bmp.PixelWidth;
-        var height = bmp.PixelHeight;
-        if (width <= 0 || height <= 0) return true;
-        var stride = width * 4;
-        var rowsPerBand = Math.Clamp(65536 / stride, 1, height);
-        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(rowsPerBand * stride);
+        // WP-04: the payload is read once into a pooled buffer and WIC decodes it straight from memory (IWICStream over the
+        // buffer) -- no MemoryStream copy as BitmapImage needed (it always decoded from its stream's absolute beginning, so the
+        // header could not stay in front of it), and still a single file open/read.
+        var payloadBuffer = ArrayPool<byte>.Shared.Rent((int)payloadLength);
         try
         {
-            for (var y = 0; y < height; y += rowsPerBand)
+            var payload = payloadBuffer.AsSpan(0, (int)payloadLength);
+            stream.ReadExactly(payload);
+            // The entry has no length or checksum, and the JPEG decoder turns a truncated JPEG into a partly grey picture instead
+            // of failing, so a cut-off entry would be served (and kept in RAM) as a valid preview. Every payload the encoder writes
+            // ends with the EOI marker; a payload without it was cut short (or is not a JPEG at all).
+            if (payload.Length < 4 || payload[^2] != 0xFF || payload[^1] != 0xD9)
+                throw new InvalidDataException("Preview cache entry payload is truncated (no JPEG end-of-image marker).");
+
+            // Render-native output (D-item 3): Bgr32 (or Pbgra32 for a future alpha payload), the formats the renderer presents
+            // without converting -- the same two the WPF read path produced.
+            PixelBuffer pixels;
+            try
             {
-                var rows = Math.Min(rowsPerBand, height - y);
-                bmp.CopyPixels(new System.Windows.Int32Rect(0, y, width, rows), buffer, stride, 0);
-                if (!AllAlphaOpaque(buffer.AsSpan(0, rows * stride))) return false;
+                pixels = WicCacheImageReader.Decode(payload, hasAlpha ? PixelLayout.Pbgra32 : PixelLayout.Bgr32, DecodeBox.Unbounded,
+                    width, height, out _);
             }
-            return true;
+            catch (COMException ex)
+            {
+                throw new InvalidDataException("Preview cache entry payload could not be decoded.", ex);
+            }
+
+            return new ReadResult(pixels, backendValue, orientation, fileBytes, originalWidth, originalHeight, exif);
         }
         finally
         {
-            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+            ArrayPool<byte>.Shared.Return(payloadBuffer);
         }
     }
 
-    /// <summary>True when every 4th byte (alpha of BGRA) of <paramref name="pixels"/> is 255.</summary>
-    internal static bool AllAlphaOpaque(ReadOnlySpan<byte> pixels)
+    /// <summary>
+    /// True when <paramref name="image"/> can carry transparency (an alpha-capable pixel format, or a palette with a
+    /// non-opaque colour) -- such previews go through the JPEG cache only once every pixel is verified opaque (Q-R7).
+    /// </summary>
+    public static bool HasAlpha(IDecodedImage image)
     {
-        var px = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(pixels);
-        const uint AlphaMask = 0xFF000000u; // little-endian: byte 3 is the top byte
-        var i = 0;
-        if (System.Numerics.Vector.IsHardwareAccelerated && px.Length >= System.Numerics.Vector<uint>.Count)
-        {
-            var mask = new System.Numerics.Vector<uint>(AlphaMask);
-            var last = px.Length - System.Numerics.Vector<uint>.Count;
-            for (; i <= last; i += System.Numerics.Vector<uint>.Count)
-            {
-                var v = new System.Numerics.Vector<uint>(px.Slice(i));
-                if (!System.Numerics.Vector.EqualsAll(v & mask, mask)) return false;
-            }
-        }
-        for (; i < px.Length; i++)
-            if ((px[i] & AlphaMask) != AlphaMask) return false;
-        return true;
+        ArgumentNullException.ThrowIfNull(image);
+        return WpfCacheImageCodec.CanCarryAlpha(image.PlatformImage);
     }
 
     private static byte[] BuildHeader(DecoderBackend actualBackend, int orientation, int width, int height, int originalWidth, int originalHeight)

@@ -1,3 +1,4 @@
+using PhotoReview.Imaging.Tests.Caching;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Media;
@@ -67,7 +68,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
             var started = Stopwatch.GetTimestamp();
             try
             {
-                var result = PreviewCacheFile.Read(path);
+                var result = PreviewCacheFileWpf.Read(path);
                 good++;
                 Assert.True(result.Bitmap.IsFrozen);
                 Assert.InRange(result.Orientation, 1, 8);
@@ -102,7 +103,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
             await File.WriteAllBytesAsync(path, seed.AsSpan(0, length).ToArray());
             try
             {
-                _ = PreviewCacheFile.Read(path);
+                _ = PreviewCacheFileWpf.Read(path);
                 Assert.Fail($"an entry truncated to {length}/{seed.Length} bytes was accepted as a valid preview");
             }
             catch (Exception ex) when (IsCorruptEntryFailure(ex))
@@ -111,7 +112,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
             }
         }
 
-        Assert.True(PreviewCacheFile.Read(await WriteFullAsync(seed)).Bitmap.PixelWidth == 8); // the untruncated entry is still good
+        Assert.True(PreviewCacheFileWpf.Read(await WriteFullAsync(seed)).Bitmap.PixelWidth == 8); // the untruncated entry is still good
     }
 
     private async Task<string> WriteFullAsync(byte[] bytes)
@@ -141,8 +142,8 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
 
         // Width/height that disagree with the payload are corrupt; the original size must merely be positive, so a
         // huge original size is a good entry (it is only ever reported, never allocated).
-        if (offset is 16 or 20 && value == int.MaxValue) { _ = PreviewCacheFile.Read(path); return; }
-        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.Read(path));
+        if (offset is 16 or 20 && value == int.MaxValue) { _ = PreviewCacheFileWpf.Read(path); return; }
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFileWpf.Read(path));
     }
 
     [Theory(DisplayName = "Orientation byte 0, 9 and 255 and an undefined backend byte are rejected")]
@@ -157,7 +158,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         var path = Path.Combine(_dir, "enum.pv4");
         await File.WriteAllBytesAsync(path, seed);
 
-        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.Read(path));
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFileWpf.Read(path));
     }
 
     [Fact(DisplayName = "An EXIF block length that runs past the end of the file, or exceeds the codec maximum, is rejected")]
@@ -170,7 +171,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
             var mutant = (byte[])seed.Clone();
             System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(mutant.AsSpan(24), length);
             await File.WriteAllBytesAsync(path, mutant);
-            Assert.Throws<InvalidDataException>(() => PreviewCacheFile.Read(path));
+            Assert.Throws<InvalidDataException>(() => PreviewCacheFileWpf.Read(path));
         }
     }
 
@@ -185,7 +186,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         var path = Path.Combine(_dir, "garbage-exif.pv4");
         await File.WriteAllBytesAsync(path, seed);
 
-        var result = PreviewCacheFile.Read(path);
+        var result = PreviewCacheFileWpf.Read(path);
 
         Assert.Null(result.Exif);
         Assert.Equal(16, result.Bitmap.PixelWidth);
@@ -198,7 +199,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         foreach (var bytes in new[] { Array.Empty<byte>(), new byte[] { (byte)'P' } })
         {
             await File.WriteAllBytesAsync(path, bytes);
-            var ex = Assert.ThrowsAny<Exception>(() => PreviewCacheFile.Read(path));
+            var ex = Assert.ThrowsAny<Exception>(() => PreviewCacheFileWpf.Read(path));
             Assert.True(IsCorruptEntryFailure(ex), ex.GetType().FullName);
         }
     }

@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Windows.Media.Imaging;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Catalog;
 
@@ -24,6 +23,7 @@ public sealed class ThumbnailCache : IDisposable
     private readonly ILog _log;
     private readonly Func<string, CancellationToken, Task<IDecodedImage?>> _embeddedThumbnailReader;
     private readonly DiskCacheStore _diskStore;
+    private readonly IPlatformImageCodec _platformCodec;
     private readonly BoundedLruCache<string, IDecodedImage> _ramCache;
     private readonly ConcurrentDictionary<string, Lazy<Task<IDecodedImage?>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _disposeCts = new();
@@ -46,8 +46,12 @@ public sealed class ThumbnailCache : IDisposable
         long maxRamBytes = 1L * 1024 * 1024 * 1024,
         long maxDiskBytes = DefaultMaxDiskBytes,
         ILog? log = null,
-        Func<string, CancellationToken, Task<IDecodedImage?>>? embeddedThumbnailReader = null)
+        Func<string, CancellationToken, Task<IDecodedImage?>>? embeddedThumbnailReader = null,
+        IPlatformImageCodec? platformCodec = null)
     {
+        // WP-04: disk thumbnails decode with WIC into pixels; the codec makes the platform image (null = the WPF bridge until
+        // WP-06 makes it a required dependency).
+        _platformCodec = platformCodec ?? WpfCacheImageCodec.Instance;
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRamBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDiskBytes);
         _diskDirectory = diskDirectory ?? Path.Combine(
@@ -214,14 +218,46 @@ public sealed class ThumbnailCache : IDisposable
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { _log.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
     }
 
-    private static Task<IDecodedImage> DecodeAsync(string path, CancellationToken cancellationToken)
+    private Task<IDecodedImage> DecodeAsync(string path, CancellationToken cancellationToken)
     {
+        var codec = _platformCodec;
         return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             // Only ever called with the .png disk-cache path (RV-I11): the source bytes cache never holds these.
-            return WpfBitmapImageDecoder.DecodeWithFallback(new DecodeRequest(path, MaxThumbnailWidth, ApplyOrientation: true));
+            return DecodeDiskThumbnail(path, codec);
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// WP-04: one read of the cached PNG (shared ReadWrite/Delete, INV-8), decoded by WIC into pixels (fitted to
+    /// <see cref="MaxThumbnailWidth"/>, never upscaled -- what the WPF decoder did with this request), then handed to the
+    /// platform codec. Opaque PNGs come back Bgr32, alpha-capable ones Pbgra32.
+    /// </summary>
+    internal static IDecodedImage DecodeDiskThumbnail(string path, IPlatformImageCodec codec)
+    {
+        byte[] encoded;
+        using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.SequentialScan))
+        {
+            if (stream.Length is 0 or > WicCacheImageReader.MaxDecodedBytes) throw new InvalidDataException("Thumbnail cache entry has an invalid length.");
+            encoded = new byte[stream.Length];
+            stream.ReadExactly(encoded);
+        }
+
+        var pixels = WicCacheImageReader.Decode(encoded, layout: null, new DecodeBox(MaxThumbnailWidth, 0), expectedWidth: 0, expectedHeight: 0, out var info);
+        var (width, height) = (pixels.Width, pixels.Height);
+        object platformImage;
+        try
+        {
+            platformImage = codec.FromPixels(pixels);
+        }
+        catch
+        {
+            pixels.Dispose();
+            throw;
+        }
+        return new DecodedImage(platformImage, width, height, estimatedBytes: (long)width * height * 4, downscaled: info.Downscaled,
+            orientation: 1, actualBackend: DecoderBackend.WicDirect, originalWidth: info.SourceWidth, originalHeight: info.SourceHeight);
     }
 
     private static string BuildKey(string path)

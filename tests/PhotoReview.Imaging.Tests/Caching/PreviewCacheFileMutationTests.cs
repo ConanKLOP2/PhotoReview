@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
@@ -47,7 +47,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
     private byte[] SamplePayload()
     {
         var path = NewPath("sample-" + Guid.NewGuid().ToString("N"));
-        PreviewCacheFile.WriteAtomicallyAsync(Gradient(16, 8), DecoderBackend.Wpf, 1, 16, 8, path).GetAwaiter().GetResult();
+        PreviewCacheFileWpf.WriteAtomicallyAsync(Gradient(16, 8), DecoderBackend.Wpf, 1, 16, 8, path).GetAwaiter().GetResult();
         return File.ReadAllBytes(path)[(HeaderSize + 2)..];
     }
 
@@ -82,7 +82,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
     }
 
     private static InvalidDataException Rejected(string path) =>
-        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.Read(path));
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFileWpf.Read(path));
 
     // ---- write: orientation range ---------------------------------------------------------------------------------
 
@@ -90,14 +90,14 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
     public async Task Write_OrientationRange()
     {
         var bmp = Gradient(16, 8);
-        await PreviewCacheFile.WriteAtomicallyAsync(bmp, DecoderBackend.Wpf, 8, 16, 8, NewPath("o8"));
-        await PreviewCacheFile.WriteAtomicallyAsync(bmp, DecoderBackend.Wpf, 1, 16, 8, NewPath("o1"));
-        Assert.Equal(8, PreviewCacheFile.Read(NewPath("o8")).Orientation);
+        await PreviewCacheFileWpf.WriteAtomicallyAsync(bmp, DecoderBackend.Wpf, 8, 16, 8, NewPath("o8"));
+        await PreviewCacheFileWpf.WriteAtomicallyAsync(bmp, DecoderBackend.Wpf, 1, 16, 8, NewPath("o1"));
+        Assert.Equal(8, PreviewCacheFileWpf.Read(NewPath("o8")).Orientation);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            PreviewCacheFile.WriteAtomicallyAsync(bmp, DecoderBackend.Wpf, 0, 16, 8, NewPath("o0")));
+            PreviewCacheFileWpf.WriteAtomicallyAsync(bmp, DecoderBackend.Wpf, 0, 16, 8, NewPath("o0")));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            PreviewCacheFile.WriteAtomicallyAsync(bmp, DecoderBackend.Wpf, 9, 16, 8, NewPath("o9")));
+            PreviewCacheFileWpf.WriteAtomicallyAsync(bmp, DecoderBackend.Wpf, 9, 16, 8, NewPath("o9")));
         Assert.False(File.Exists(NewPath("o0")));
         Assert.False(File.Exists(NewPath("o9")));
     }
@@ -110,8 +110,8 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         var payload = SamplePayload();
         var exif = ExifBlock(0, 0);
 
-        Assert.Equal(8, PreviewCacheFile.Read(WriteEntry("o8", Header(orientation: 8), exif, payload)).Orientation);
-        Assert.Equal(1, PreviewCacheFile.Read(WriteEntry("o1", Header(orientation: 1), exif, payload)).Orientation);
+        Assert.Equal(8, PreviewCacheFileWpf.Read(WriteEntry("o8", Header(orientation: 8), exif, payload)).Orientation);
+        Assert.Equal(1, PreviewCacheFileWpf.Read(WriteEntry("o1", Header(orientation: 1), exif, payload)).Orientation);
         foreach (var bad in new byte[] { 0, 9, 255 })
             Assert.Contains("orientation", Rejected(WriteEntry("bad" + bad, Header(orientation: bad), exif, payload)).Message, StringComparison.Ordinal);
     }
@@ -122,9 +122,9 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         var payload = SamplePayload();
         var exif = ExifBlock(0, 0);
 
-        Assert.Equal(PixelFormats.Pbgra32, PreviewCacheFile.Read(WriteEntry("alpha", Header(alpha: 1), exif, payload)).Bitmap.Format);
-        Assert.Equal(PixelFormats.Pbgra32, PreviewCacheFile.Read(WriteEntry("alpha255", Header(alpha: 255), exif, payload)).Bitmap.Format);
-        Assert.Equal(PixelFormats.Bgr32, PreviewCacheFile.Read(WriteEntry("opaque", Header(alpha: 0), exif, payload)).Bitmap.Format);
+        Assert.Equal(PixelFormats.Pbgra32, PreviewCacheFileWpf.Read(WriteEntry("alpha", Header(alpha: 1), exif, payload)).Bitmap.Format);
+        Assert.Equal(PixelFormats.Pbgra32, PreviewCacheFileWpf.Read(WriteEntry("alpha255", Header(alpha: 255), exif, payload)).Bitmap.Format);
+        Assert.Equal(PixelFormats.Bgr32, PreviewCacheFileWpf.Read(WriteEntry("opaque", Header(alpha: 0), exif, payload)).Bitmap.Format);
     }
 
     [Theory(DisplayName = "A zero or negative pixel width or height in the header is rejected as invalid pixel dimensions")]
@@ -182,7 +182,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         var max = PhotoReview.Imaging.Metadata.ExifSummaryCodec.MaxEncodedLength;
         var payload = SamplePayload();
 
-        var ok = PreviewCacheFile.Read(WriteEntry("max", Header(), ExifBlock(max, max), payload));
+        var ok = PreviewCacheFileWpf.Read(WriteEntry("max", Header(), ExifBlock(max, max), payload));
         Assert.Null(ok.Exif);
         Assert.Equal(16, ok.Bitmap.PixelWidth);
 
@@ -194,7 +194,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
     {
         var path = WriteEntry("four", Header(), ExifBlock(0, 0), [0x00, 0x00, 0xFF, 0xD9]);
 
-        var ex = Record.Exception(() => PreviewCacheFile.Read(path));
+        var ex = Record.Exception(() => PreviewCacheFileWpf.Read(path));
 
         Assert.NotNull(ex);
         Assert.False(ex is InvalidDataException ide && ide.Message.Contains("truncated", StringComparison.Ordinal),
@@ -219,7 +219,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
 
         using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.DeleteOnClose))
         {
-            var read = PreviewCacheFile.Read(path);
+            var read = PreviewCacheFileWpf.Read(path);
 
             Assert.Equal(16, read.Bitmap.PixelWidth);
         }
@@ -259,10 +259,10 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
     {
         var bmp = Create(FormatByName(name));
 
-        Assert.True(PreviewCacheFile.HasAlpha(bmp));
+        Assert.True(WpfCacheImageCodec.HasAlpha(bmp));
         Assert.True(PreviewCacheFile.HasAlpha(new WpfDecodedImage(bmp)));
         if (name is not ("Bgra32" or "Pbgra32"))
-            Assert.False(PreviewCacheFile.IsFullyOpaque(bmp));
+            Assert.False(WpfCacheImageCodec.IsFullyOpaque(bmp));
     }
 
     [Theory(DisplayName = "HasAlpha is false for opaque pixel formats")]
@@ -281,8 +281,8 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         };
         var bmp = Create(format);
 
-        Assert.False(PreviewCacheFile.HasAlpha(bmp));
-        Assert.True(PreviewCacheFile.IsFullyOpaque(bmp));
+        Assert.False(WpfCacheImageCodec.HasAlpha(bmp));
+        Assert.True(WpfCacheImageCodec.IsFullyOpaque(bmp));
     }
 
     [Theory(DisplayName = "HasAlpha for an indexed format depends on whether its palette has a non-opaque colour (254 counts, 255 does not)")]
@@ -297,11 +297,11 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         var nearlyOpaque = new BitmapPalette([Color.FromArgb(255, 0, 0, 0), Color.FromArgb(254, 255, 255, 255)]);
         var translucent = new BitmapPalette([Color.FromArgb(0, 0, 0, 0), Color.FromArgb(255, 255, 255, 255)]);
 
-        Assert.False(PreviewCacheFile.HasAlpha(Create(format, opaque)));
-        Assert.True(PreviewCacheFile.HasAlpha(Create(format, nearlyOpaque)));
-        Assert.True(PreviewCacheFile.HasAlpha(Create(format, translucent)));
-        Assert.False(PreviewCacheFile.IsFullyOpaque(Create(format, translucent)));
-        Assert.True(PreviewCacheFile.IsFullyOpaque(Create(format, opaque)));
+        Assert.False(WpfCacheImageCodec.HasAlpha(Create(format, opaque)));
+        Assert.True(WpfCacheImageCodec.HasAlpha(Create(format, nearlyOpaque)));
+        Assert.True(WpfCacheImageCodec.HasAlpha(Create(format, translucent)));
+        Assert.False(WpfCacheImageCodec.IsFullyOpaque(Create(format, translucent)));
+        Assert.True(WpfCacheImageCodec.IsFullyOpaque(Create(format, opaque)));
     }
 
     [Fact(DisplayName = "HasAlpha(IDecodedImage) rejects null and is false for a platform image that is not a BitmapSource")]
@@ -351,10 +351,10 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
     {
         foreach (var format in new[] { PixelFormats.Bgra32, PixelFormats.Pbgra32 })
         {
-            Assert.True(PreviewCacheFile.IsFullyOpaque(Bgra(format, width, height, null)), $"{format} {width}x{height} opaque");
+            Assert.True(WpfCacheImageCodec.IsFullyOpaque(Bgra(format, width, height, null)), $"{format} {width}x{height} opaque");
             var total = width * height;
             foreach (var position in new[] { 0, total / 2, total - 1, (height - 1) * width })
-                Assert.False(PreviewCacheFile.IsFullyOpaque(Bgra(format, width, height, position)), $"{format} {width}x{height} pixel {position}");
+                Assert.False(WpfCacheImageCodec.IsFullyOpaque(Bgra(format, width, height, position)), $"{format} {width}x{height} pixel {position}");
         }
     }
 
@@ -366,12 +366,12 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         {
             var pixels = new uint[length];
             Array.Fill(pixels, 0xFF123456u); // colour bits set: the check must look at alpha only
-            Assert.True(PreviewCacheFile.AllAlphaOpaque(MemoryMarshal.AsBytes(pixels.AsSpan())), $"all opaque, length {length}");
+            Assert.True(WpfCacheImageCodec.AllAlphaOpaque(MemoryMarshal.AsBytes(pixels.AsSpan())), $"all opaque, length {length}");
             for (var index = 0; index < length; index++)
             {
                 var copy = (uint[])pixels.Clone();
                 copy[index] = 0xFE123456u;
-                Assert.False(PreviewCacheFile.AllAlphaOpaque(MemoryMarshal.AsBytes(copy.AsSpan())), $"length {length}, index {index}");
+                Assert.False(WpfCacheImageCodec.AllAlphaOpaque(MemoryMarshal.AsBytes(copy.AsSpan())), $"length {length}, index {index}");
             }
         }
     }

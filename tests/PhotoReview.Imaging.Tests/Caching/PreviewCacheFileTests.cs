@@ -226,8 +226,8 @@ public sealed class PreviewCacheFileTests : IDisposable
     [InlineData(2200, 3)]
     public void IsFullyOpaque_AllOpaque_True(int width, int height)
     {
-        Assert.True(PreviewCacheFile.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, (_, _) => 255)));
-        Assert.True(PreviewCacheFile.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, (_, _) => 255)));
+        Assert.True(WpfCacheImageCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, (_, _) => 255)));
+        Assert.True(WpfCacheImageCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, (_, _) => 255)));
     }
 
     [Theory(DisplayName = "IsFullyOpaque: one non-opaque pixel anywhere (first, middle, last, vector tail) makes it not cacheable")]
@@ -240,17 +240,17 @@ public sealed class PreviewCacheFileTests : IDisposable
     public void IsFullyOpaque_OneTransparentPixel_False(int width, int height, int tx, int ty)
     {
         byte AlphaAt(int x, int y) => x == tx && y == ty ? (byte)254 : (byte)255;
-        Assert.False(PreviewCacheFile.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, AlphaAt)));
-        Assert.False(PreviewCacheFile.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, AlphaAt)));
+        Assert.False(WpfCacheImageCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, AlphaAt)));
+        Assert.False(WpfCacheImageCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, AlphaAt)));
     }
 
     [Fact(DisplayName = "IsFullyOpaque: opaque formats skip the scan, translucent palettes are rejected")]
     public void IsFullyOpaque_NonAlphaFormats()
     {
-        Assert.True(PreviewCacheFile.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr32, null, new byte[64], 16)));
-        Assert.True(PreviewCacheFile.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr24, null, new byte[48], 12)));
+        Assert.True(WpfCacheImageCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr32, null, new byte[64], 16)));
+        Assert.True(WpfCacheImageCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr24, null, new byte[48], 12)));
         var translucent = new BitmapPalette([Colors.Red, Color.FromArgb(10, 0, 0, 0)]);
-        Assert.False(PreviewCacheFile.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, translucent, new byte[4], 1)));
+        Assert.False(WpfCacheImageCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, translucent, new byte[4], 1)));
     }
 
     [Fact(DisplayName = "A fully opaque Pbgra32 bitmap is written and reads back with the same colours (premultiplied == straight)")]

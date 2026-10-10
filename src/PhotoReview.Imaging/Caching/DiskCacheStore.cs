@@ -1,7 +1,7 @@
 using System.IO;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using System.Windows.Media.Imaging;
+using PhotoReview.Imaging.Pixels;
 
 namespace PhotoReview.Imaging.Caching;
 
@@ -71,30 +71,33 @@ public sealed class DiskCacheStore
     }
 
     /// <summary>
-    /// Static atomic write helper for IDecodedImage.
+    /// Static atomic PNG write helper for an <see cref="IDecodedImage"/> whose platform image goes through the WPF bridge codec
+    /// (WP-04 temporary default, removed by WP-06 together with the codec default). A platform image the codec does not
+    /// understand is an <see cref="ArgumentException"/>.
     /// </summary>
     public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
+        => WriteAtomicallyAsync(image, WpfCacheImageCodec.Instance, cachePath, log, cancellationToken);
+
+    /// <summary>Static atomic PNG write helper for an <see cref="IDecodedImage"/> whose platform image <paramref name="codec"/> understands (C-02).</summary>
+    public static async Task WriteAtomicallyAsync(IDecodedImage image, IPlatformImageCodec codec, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(image);
-        if (image.PlatformImage is not BitmapSource bitmap)
-            throw new ArgumentException("PlatformImage must be a BitmapSource for PNG encoding.", nameof(image));
-        return WriteAtomicallyAsync(bitmap, cachePath, log, cancellationToken);
+        ArgumentNullException.ThrowIfNull(codec);
+        ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
+        using var lease = codec.ToPixels(image.PlatformImage);
+        await WriteAtomicallyAsync(lease.Pixels, cachePath, log, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Internal static atomic write helper for BitmapSource.
+    /// Internal static atomic PNG write helper for pixels (WIC PNG encoder, the one WPF's PngBitmapEncoder wrapped, same
+    /// default options). <paramref name="pixels"/> is only read, never disposed.
     /// </summary>
-    internal static Task WriteAtomicallyAsync(BitmapSource image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
+    internal static Task WriteAtomicallyAsync(PixelBuffer pixels, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(pixels);
         ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
 
-        return AtomicCacheFile.WriteAsync(cachePath, stream =>
-        {
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(image));
-            encoder.Save(stream);
-        }, log, cancellationToken);
+        return AtomicCacheFile.WriteAsync(cachePath, stream => WicImageEncoder.EncodePng(pixels, stream), log, cancellationToken);
     }
 
     /// <summary>
@@ -239,7 +242,7 @@ public sealed class DiskCacheStore
     }
 
     /// <summary>
-    /// Temp files of <see cref="WriteAtomicallyAsync(BitmapSource, string, ILog?, CancellationToken)"/> and
+    /// Temp files of <see cref="WriteAtomicallyAsync(PixelBuffer, string, ILog?, CancellationToken)"/> and
     /// PreviewCacheFile's atomic write (<c>X.png.&lt;guid&gt;.tmp</c>, <c>X.pv4.&lt;guid&gt;.tmp</c>). A process killed
     /// between creating one and the rename leaves it behind; no prune or clear pattern of the store matches it.
     /// </summary>

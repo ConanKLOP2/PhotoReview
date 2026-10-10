@@ -55,9 +55,8 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         "garbage-with-eoi",
         "jpeg-soi-garbage-eoi",
         "jpeg-header-mangled-eoi",
-        // A damaged EXIF segment inside an otherwise well-formed entry makes WPF fail in EndInit with
-        // ArgumentException (see WpfBitmapImageDecoder.DecodeWithoutProfileFallback), which the read catch must treat as a miss.
-        "damaged-exif-segment",
+        // WP-04: "damaged-exif-segment" moved to DamagedExifSegment_PixelsIntact_IsAHit -- WIC decodes the pixels without parsing
+        // the APP1 segment (WPF's BitmapImage failed in EndInit with ArgumentException), so such an entry is a valid hit now.
     ];
 
     private static byte[] Break(string kind, byte[] valid)
@@ -89,7 +88,6 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
                 // Keep the payload's SOI and tail, zero the middle (frame header/tables/scan data).
                 for (var i = 40; i < bytes.Length - 2; i++) bytes[i] = 0;
                 break;
-            case "damaged-exif-segment": return DamagedJpegFixture.WithBrokenExifSegment(valid, soiOffset: 26); // v7: 24-byte header + 2-byte EXIF length (0 here)
             default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
 
@@ -119,6 +117,27 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         if (File.Exists(entry)) Assert.False((await File.ReadAllBytesAsync(entry)).AsSpan().SequenceEqual(broken), "the broken entry was left in place");
     }
 
+    [Fact(DisplayName = "WP-04: an entry whose JPEG carries a damaged EXIF segment but intact pixels is a disk hit with the clean entry's pixels")]
+    public async Task DamagedExifSegment_PixelsIntact_IsAHit()
+    {
+        var diskDir = _root.Dir("disk-damaged-exif");
+        var (entry, valid) = await WriteEntryAsync(diskDir);
+        var clean = PreviewCacheFile.ReadAsDecodedImage(entry, PixelBufferImageCodec.Instance);
+        using var cleanPixels = (PhotoReview.Imaging.Pixels.PixelBuffer)clean.PlatformImage;
+        await File.WriteAllBytesAsync(entry, DamagedJpegFixture.WithBrokenExifSegment(valid, soiOffset: 26));
+
+        var metrics = new ReviewMetrics();
+        var reader = NewService(metrics, diskDir);
+        var image = await reader.GetPreviewAsync(_source);
+        await reader.ShutdownPersistWorkersAsync();
+        var snapshot = metrics.Snapshot();
+
+        Assert.Equal(0, snapshot.SourceReads);
+        Assert.Equal(1, snapshot.DiskCacheHits);
+        using var served = PhotoReview.TestSupport.Windows.PixelAssert.FromBitmapSource(
+            (System.Windows.Media.Imaging.BitmapSource)image.PlatformImage, PhotoReview.Imaging.Pixels.PixelLayout.Bgr32);
+        PhotoReview.TestSupport.Windows.PixelAssert.Equal(cleanPixels, served, compareUnusedByte: false);
+    }
     [Fact(DisplayName = "An entry file that another process holds open exclusively is a miss (the source is decoded), not an error")]
     public async Task LockedEntry_FallsBackToSource()
     {
