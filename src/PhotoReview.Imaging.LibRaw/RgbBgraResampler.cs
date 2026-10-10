@@ -1,5 +1,5 @@
 using System.IO;
-using System.Runtime.InteropServices;
+using PhotoReview.Imaging.Pixels;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -50,10 +50,11 @@ internal static class RgbBgraResampler
     }
 
     /// <summary>
-    /// Resamples the decoder's packed source (<paramref name="channels"/> = 3 RGB or 1 gray) into a temporary unmanaged BGRA buffer. No managed
+    /// Resamples the decoder's packed source (<paramref name="channels"/> = 3 RGB or 1 gray) straight into a native BGRA <see cref="PixelBuffer"/>. No managed
     /// array: a full-size 100 MP target would be a 400 MB LOH object that lingers until the next gen-2 GC. The caller frees the source
-    /// buffer, then calls <see cref="ToBitmap"/> (which copies, as BitmapSource.Create always does; a WriteableBitmap holds two native buffers
-    /// too, measured) and disposes the buffer. Peak of the bitmap step: target + WPF copy, never source + target + copy.
+    /// buffer, then either takes the pixels (<see cref="BgraBuffer.TakePixels"/>, pixel path: no copy) or calls <see cref="ToBitmap"/>
+    /// (WPF path: BitmapSource.Create copies; a WriteableBitmap holds two native buffers too, measured) and disposes the buffer.
+    /// Peak of the bitmap step: target + WPF copy, never source + target + copy.
     /// </summary>
     internal static unsafe BgraBuffer ResizeToBuffer(ReadOnlySpan<byte> rgb, int sourceWidth, int sourceHeight,
         int targetWidth, int targetHeight, int channels, CancellationToken cancellationToken)
@@ -83,10 +84,14 @@ internal static class RgbBgraResampler
         return bitmap;
     }
 
-    /// <summary>Unmanaged BGRA pixel buffer (4 bytes per pixel, stride = width x 4), freed on dispose.</summary>
-    internal sealed unsafe class BgraBuffer : IDisposable
+    /// <summary>
+    /// BGRA (Bgr32) target of a resample: a thin owner over a <see cref="PixelBuffer"/> (C-01, native, 64-byte aligned,
+    /// stride = width x 4), so the pixels are written once, straight into the memory the codec / WPF adapter later takes.
+    /// Dispose frees it unless <see cref="TakePixels"/> handed it over.
+    /// </summary>
+    internal sealed class BgraBuffer : IDisposable
     {
-        private void* _pointer;
+        private PixelBuffer? _pixels;
 
         internal BgraBuffer(int width, int height)
         {
@@ -94,24 +99,36 @@ internal static class RgbBgraResampler
             Height = height;
             Stride = checked(width * 4);
             Length = checked(Stride * height);
-            _pointer = NativeMemory.Alloc((nuint)Length);
+            _pixels = PixelBuffer.Allocate(width, height, PixelLayout.Bgr32);
         }
 
         internal int Width { get; }
         internal int Height { get; }
         internal int Stride { get; }
         internal int Length { get; }
-        internal IntPtr Pointer => (IntPtr)_pointer;
-        internal Span<byte> AsSpan() => new(_pointer, Length);
+        internal IntPtr Pointer => _pixels is { IsDisposed: false } pixels ? pixels.Address : IntPtr.Zero;
+
+        internal Span<byte> AsSpan()
+        {
+            var pixels = _pixels ?? throw new ObjectDisposedException(nameof(BgraBuffer));
+            return pixels.TryGetSpan(out var span) ? span : throw new InvalidDataException("The decoded RAW image is too large to hold in memory.");
+        }
+
+        /// <summary>Hands the pixels (and their ownership) to the caller; the buffer is empty afterwards and Dispose frees nothing.</summary>
+        internal PixelBuffer TakePixels()
+        {
+            var pixels = _pixels ?? throw new ObjectDisposedException(nameof(BgraBuffer));
+            _pixels = null;
+            return pixels;
+        }
 
         public void Dispose()
         {
-            var pointer = _pointer;
-            _pointer = null;
-            if (pointer != null) NativeMemory.Free(pointer);
+            var pixels = _pixels;
+            _pixels = null;
+            pixels?.Dispose();
         }
     }
-
     // Source layout is <channels> bytes per pixel: R,G,B for 3; a single gray value for 1 (green/blue offsets collapse to 0).
     private static void Convert(ReadOnlySpan<byte> rgb, Span<byte> bgra, int channels, CancellationToken cancellationToken)
     {
