@@ -109,6 +109,34 @@ public sealed class StartupFirstShowTests
     }
 
     [Fact]
+    public void SafetyTimeout_RevealsAWindowThatNeverReportsAFrame()
+    {
+        var ticks = new FakeTicks();
+        var revealedInTime = false;
+        var calls = WithRecordedCloak(accept: true, () =>
+        {
+            var gate = new StartupWindowReveal(h => ticks.Handler += h, h => ticks.Handler -= h, safetyTimeout: TimeSpan.FromMilliseconds(30));
+            gate.Hide(new IntPtr(11));
+            // Pump this thread's dispatcher until the gate opens; a 10 s watchdog ends the frame if it never does.
+            var frame = new System.Windows.Threading.DispatcherFrame();
+            var poll = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(5) };
+            var watchdog = System.Diagnostics.Stopwatch.StartNew();
+            poll.Tick += (_, _) =>
+            {
+                if (!gate.IsHidden) { revealedInTime = true; frame.Continue = false; }
+                else if (watchdog.Elapsed > TimeSpan.FromSeconds(10)) frame.Continue = false;
+            };
+            poll.Start();
+            System.Windows.Threading.Dispatcher.PushFrame(frame);
+            poll.Stop();
+        });
+
+        Assert.True(revealedInTime, "The safety timer never revealed the window");
+        Assert.Equal([(new IntPtr(11), true), (new IntPtr(11), false)], calls);
+        Assert.Null(ticks.Handler);
+    }
+
+    [Fact]
     public void Hide_IsAppliedOnlyOnce_AndNeverAfterReveal()
     {
         var ticks = new FakeTicks();

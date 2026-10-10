@@ -111,6 +111,43 @@ public sealed class StartupFirstShowIntegrationTests
         finally { StartupWindowReveal.SetCloaked = previous; }
     }
 
+    [Fact(DisplayName = "Without render ticks the window is still revealed by ContentRendered (fallback), not only by the 3 s timer")]
+    public async Task Reveal_WithoutRenderTicks_HappensAtContentRendered()
+    {
+        using var dataRoot = new DataRootFixture();
+        var previousCloak = StartupWindowReveal.SetCloaked;
+        var previousSubscribe = StartupWindowReveal.DefaultSubscribeRendering;
+        StartupWindowReveal.SetCloaked = (handle, cloaked) => { previousCloak(handle, cloaked); return true; };
+        StartupWindowReveal.DefaultSubscribeRendering = _ => { }; // no render ticks reach the gate
+        try
+        {
+            await StaTestHost.RunAsync(async () =>
+            {
+                var window = TestAppHost.CreateMainWindow(null);
+                window.WindowStartupLocation = WindowStartupLocation.Manual;
+                window.Left = -32000;
+                window.Top = -32000;
+                window.ShowInTaskbar = false;
+                window.ShowActivated = false;
+                bool? cloakedAfterContentRendered = null;
+                // Subscribed after MainWindow's own ContentRendered handler (constructor), so this runs after it.
+                window.ContentRendered += (_, _) => cloakedAfterContentRendered = window.IsStartupCloaked;
+                try
+                {
+                    window.Show();
+                    Assert.True(await StaTestHost.WaitForAsync(() => cloakedAfterContentRendered is not null, Deadline), "The window never rendered");
+                    Assert.False(cloakedAfterContentRendered, "ContentRendered did not reveal the window");
+                }
+                finally { window.Close(); }
+            });
+        }
+        finally
+        {
+            StartupWindowReveal.SetCloaked = previousCloak;
+            StartupWindowReveal.DefaultSubscribeRendering = previousSubscribe;
+        }
+    }
+
     [Fact(DisplayName = "The launch file's decode is already running (or done) when Show() returns, under the key the presenter uses")]
     public async Task Show_WithALaunchFile_StartsItsDecodeBeforeTheFolderIsPresented()
     {
@@ -119,13 +156,15 @@ public sealed class StartupFirstShowIntegrationTests
         var target = Path.Combine(folder.Path, "b.png");
         WriteImage(Path.Combine(folder.Path, "a.png"));
         WriteImage(target);
+        // Saved Maximized: the window only gets its real (maximized) viewport when it is shown, so the decode box must be
+        // taken from the shown window's client rect, not from the layout done before the show.
+        var placement = dataRoot.Root.Combine("placement.json");
+        var work = PrimaryWorkArea();
+        WritePlacement(placement, 3, new WindowPlacementService.Rectangle { Left = work.Left + 60, Top = work.Top + 60, Right = work.Left + 560, Bottom = work.Top + 460 });
         await StaTestHost.RunAsync(async () =>
         {
             var presented = new List<string>();
-            var window = TestAppHost.CreateMainWindow(target, new TestHostHooks { OnPresented = presented.Add, DisablePreload = true });
-            window.WindowStartupLocation = WindowStartupLocation.Manual;
-            window.Left = -32000;
-            window.Top = -32000;
+            var window = TestAppHost.CreateMainWindow(target, new TestHostHooks { OnPresented = presented.Add, DisablePreload = true }, placement);
             window.ShowInTaskbar = false;
             window.ShowActivated = false;
             try

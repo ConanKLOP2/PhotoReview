@@ -20,6 +20,12 @@ internal sealed class StartupWindowReveal
     /// <summary>Test seam: (hwnd, cloaked) -> accepted. Production: DWMWA_CLOAK.</summary>
     internal static Func<IntPtr, bool, bool> SetCloaked { get; set; } = PhotoReview.Platform.Windows.WindowsDwmCloak.TrySetCloaked;
 
+    /// <summary>Test seam: the render-tick source a gate built without one uses. Production: <c>CompositionTarget.Rendering</c>.</summary>
+    internal static Action<EventHandler> DefaultSubscribeRendering { get; set; } = h => CompositionTarget.Rendering += h;
+
+    /// <inheritdoc cref="DefaultSubscribeRendering"/>
+    internal static Action<EventHandler> DefaultUnsubscribeRendering { get; set; } = h => CompositionTarget.Rendering -= h;
+
     /// <summary>Longest time the window may stay cloaked if no frame is ever reported (e.g. rendering stalls).</summary>
     internal static readonly TimeSpan SafetyTimeout = TimeSpan.FromSeconds(3);
 
@@ -29,6 +35,7 @@ internal sealed class StartupWindowReveal
     private readonly Action<EventHandler> _subscribeRendering;
     private readonly Action<EventHandler> _unsubscribeRendering;
     private readonly Action? _onRevealed;
+    private readonly TimeSpan _safetyTimeout;
     private readonly EventHandler _onRendering;
     private DispatcherTimer? _timer;
     private IntPtr _handle;
@@ -37,13 +44,16 @@ internal sealed class StartupWindowReveal
     private bool _shown;
     private int _ticksSinceShown;
 
-    /// <param name="subscribeRendering">Test seam; default <c>CompositionTarget.Rendering +=</c>.</param>
-    /// <param name="unsubscribeRendering">Test seam; default <c>CompositionTarget.Rendering -=</c>.</param>
+    /// <param name="subscribeRendering">Test seam; default <see cref="DefaultSubscribeRendering"/>.</param>
+    /// <param name="unsubscribeRendering">Test seam; default <see cref="DefaultUnsubscribeRendering"/>.</param>
     /// <param name="onRevealed">Called once when a cloaked window is uncloaked.</param>
-    public StartupWindowReveal(Action<EventHandler>? subscribeRendering = null, Action<EventHandler>? unsubscribeRendering = null, Action? onRevealed = null)
+    /// <param name="safetyTimeout">Test seam; default <see cref="SafetyTimeout"/>.</param>
+    public StartupWindowReveal(Action<EventHandler>? subscribeRendering = null, Action<EventHandler>? unsubscribeRendering = null, Action? onRevealed = null,
+        TimeSpan? safetyTimeout = null)
     {
-        _subscribeRendering = subscribeRendering ?? (h => CompositionTarget.Rendering += h);
-        _unsubscribeRendering = unsubscribeRendering ?? (h => CompositionTarget.Rendering -= h);
+        _safetyTimeout = safetyTimeout ?? SafetyTimeout;
+        _subscribeRendering = subscribeRendering ?? DefaultSubscribeRendering;
+        _unsubscribeRendering = unsubscribeRendering ?? DefaultUnsubscribeRendering;
         _onRevealed = onRevealed;
         _onRendering = OnRendering;
     }
@@ -58,7 +68,7 @@ internal sealed class StartupWindowReveal
         _handle = handle;
         _cloaked = SetCloaked(handle, true);
         if (!_cloaked) return;
-        _timer = new DispatcherTimer { Interval = SafetyTimeout };
+        _timer = new DispatcherTimer { Interval = _safetyTimeout };
         _timer.Tick += (_, _) => Reveal();
         _timer.Start();
         _subscribeRendering(_onRendering);
