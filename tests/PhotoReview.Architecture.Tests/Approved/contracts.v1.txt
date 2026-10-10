@@ -1,0 +1,720 @@
+# PhotoReview - hợp đồng NO-WPF v1 (đóng băng ở WP-01). FILE SINH TỰ ĐỘNG - không sửa tay.
+# Sinh lại: dotnet test tests/PhotoReview.Architecture.Tests -c Release --filter "FullyQualifiedName~ContractSurfaceTests.WriteApprovedSurface"
+# Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5. C-07 (IImageSurface/IFitSurface/ViewportSnapshot), phần thuần của
+# ExifOrientation (C-03) và IClipboardService (C-13, dời) được khoá khi gói sở hữu sửa chúng (v1.1).
+
+[C-01] public sealed class PhotoReview.Imaging.Pixels.PixelBuffer : System.IDisposable  (assembly PhotoReview.Imaging)
+  method public System.Span<byte> GetRow(int y)
+  method public bool TryGetSpan(out System.Span<byte> span)
+  method public static PhotoReview.Imaging.Pixels.PixelBuffer Allocate(int width, int height, PhotoReview.Imaging.Pixels.PixelLayout layout)
+  method public void Dispose()
+  property public PhotoReview.Imaging.Pixels.PixelLayout Layout { get; }
+  property public bool IsDisposed { get; }
+  property public int Height { get; }
+  property public int Stride { get; }
+  property public int Width { get; }
+  property public long ByteCount { get; }
+  property public long Id { get; }
+  property public nint Address { get; }
+
+[C-01] public enum PhotoReview.Imaging.Pixels.PixelLayout  (assembly PhotoReview.Imaging)
+  Bgr32 = 0
+  Pbgra32 = 1
+
+[C-02] public sealed class PhotoReview.Imaging.Decoding.DecodedImage : PhotoReview.Imaging.Decoding.IDecodedImage  (assembly PhotoReview.Imaging)
+  ctor public (object platformImage, int pixelWidth, int pixelHeight, long estimatedBytes, bool downscaled = false, int orientation = 1, PhotoReview.Core.Model.DecoderBackend actualBackend = DecoderBackend.WicDirect, int originalWidth = 0, int originalHeight = 0, PhotoReview.Imaging.Metadata.ExifSummary? exif = null, bool isDegradedFallback = false)
+  property public PhotoReview.Core.Model.DecoderBackend ActualBackend { get; }
+  property public PhotoReview.Imaging.Metadata.ExifSummary? Exif { get; }
+  property public bool Downscaled { get; }
+  property public bool IsDegradedFallback { get; }
+  property public int Orientation { get; }
+  property public int OriginalHeight { get; }
+  property public int OriginalWidth { get; }
+  property public int PixelHeight { get; }
+  property public int PixelWidth { get; }
+  property public long EstimatedBytes { get; }
+  property public object PlatformImage { get; }
+
+[C-02] public interface PhotoReview.Imaging.Decoding.IPlatformImageCodec  (assembly PhotoReview.Imaging)
+  method public PhotoReview.Imaging.Decoding.PixelLease ToPixels(object platformImage)
+  method public object FromPixels(PhotoReview.Imaging.Pixels.PixelBuffer pixels)
+  property public string Name { get; }
+
+[C-02] public sealed class PhotoReview.Imaging.Decoding.PixelBufferImageCodec : PhotoReview.Imaging.Decoding.IPlatformImageCodec  (assembly PhotoReview.Imaging)
+  field public static readonly PhotoReview.Imaging.Decoding.PixelBufferImageCodec Instance
+  method public PhotoReview.Imaging.Decoding.PixelLease ToPixels(object platformImage)
+  method public object FromPixels(PhotoReview.Imaging.Pixels.PixelBuffer pixels)
+  property public string Name { get; }
+
+[C-02] public readonly struct PhotoReview.Imaging.Decoding.PixelLease : System.IDisposable  (assembly PhotoReview.Imaging)
+  ctor public (PhotoReview.Imaging.Pixels.PixelBuffer pixels, bool owned)
+  method public void Dispose()
+  property public PhotoReview.Imaging.Pixels.PixelBuffer Pixels { get; }
+  property public bool Owned { get; }
+
+[C-03] public static class PhotoReview.Imaging.Pixels.PixelOps  (assembly PhotoReview.Imaging)
+  method public static PhotoReview.Imaging.Pixels.PixelBuffer ApplyOrientation(PhotoReview.Imaging.Pixels.PixelBuffer src, int exifOrientation)
+  method public static bool HasAlpha(PhotoReview.Imaging.Pixels.PixelBuffer px)
+  method public static bool IsFullyOpaque(PhotoReview.Imaging.Pixels.PixelBuffer px)
+
+[C-04] public interface PhotoReview.Core.Abstractions.IUiDispatcher : PhotoReview.Core.Abstractions.IUiScheduler  (assembly PhotoReview.Core)
+  method public System.Threading.Tasks.Task InvokeAsync(System.Action action, PhotoReview.Core.Abstractions.UiPriority priority)
+  method public System.Threading.Tasks.ValueTask YieldAsync(PhotoReview.Core.Abstractions.UiPriority priority, System.Threading.CancellationToken cancellationToken = default)
+  method public bool CheckAccess()
+  method public void Post(System.Action action, PhotoReview.Core.Abstractions.UiPriority priority)
+
+[C-04] public enum PhotoReview.Core.Abstractions.UiPriority  (assembly PhotoReview.Core)
+  Send = 0
+  Normal = 1
+  Render = 2
+  Background = 3
+
+[C-05] public readonly record struct PhotoReview.App.Input.FrameTick : System.IEquatable<PhotoReview.App.Input.FrameTick>  (assembly PhotoReview.App.Shared)
+  ctor public (long Timestamp, double RenderingTimeMs, PhotoReview.Core.Abstractions.DisplayTiming? Timing)
+  property public PhotoReview.Core.Abstractions.DisplayTiming? Timing { get; init; }
+  property public double RenderingTimeMs { get; init; }
+  property public long Timestamp { get; init; }
+
+[C-05] public sealed class PhotoReview.App.Input.FrameTickEventArgs : System.EventArgs  (assembly PhotoReview.App.Shared)
+  ctor public (PhotoReview.App.Input.FrameTick tick)
+  property public PhotoReview.App.Input.FrameTick Tick { get; }
+
+[C-05] public interface PhotoReview.App.Input.IFrameClock  (assembly PhotoReview.App.Shared)
+  event public System.EventHandler<PhotoReview.App.Input.FrameTickEventArgs>? Frame
+  method public void RequestFrame()
+
+[C-06] public enum PhotoReview.App.Input.KeyId  (assembly PhotoReview.App.Shared)
+  None = 0
+  Cancel = 1
+  Back = 2
+  Tab = 3
+  LineFeed = 4
+  Clear = 5
+  Enter = 6
+  Return = 6
+  Pause = 7
+  Capital = 8
+  CapsLock = 8
+  HangulMode = 9
+  KanaMode = 9
+  JunjaMode = 10
+  FinalMode = 11
+  HanjaMode = 12
+  KanjiMode = 12
+  Escape = 13
+  ImeConvert = 14
+  ImeNonConvert = 15
+  ImeAccept = 16
+  ImeModeChange = 17
+  Space = 18
+  PageUp = 19
+  Prior = 19
+  Next = 20
+  PageDown = 20
+  End = 21
+  Home = 22
+  Left = 23
+  Up = 24
+  Right = 25
+  Down = 26
+  Select = 27
+  Print = 28
+  Execute = 29
+  PrintScreen = 30
+  Snapshot = 30
+  Insert = 31
+  Delete = 32
+  Help = 33
+  D0 = 34
+  D1 = 35
+  D2 = 36
+  D3 = 37
+  D4 = 38
+  D5 = 39
+  D6 = 40
+  D7 = 41
+  D8 = 42
+  D9 = 43
+  A = 44
+  B = 45
+  C = 46
+  D = 47
+  E = 48
+  F = 49
+  G = 50
+  H = 51
+  I = 52
+  J = 53
+  K = 54
+  L = 55
+  M = 56
+  N = 57
+  O = 58
+  P = 59
+  Q = 60
+  R = 61
+  S = 62
+  T = 63
+  U = 64
+  V = 65
+  W = 66
+  X = 67
+  Y = 68
+  Z = 69
+  LWin = 70
+  RWin = 71
+  Apps = 72
+  Sleep = 73
+  NumPad0 = 74
+  NumPad1 = 75
+  NumPad2 = 76
+  NumPad3 = 77
+  NumPad4 = 78
+  NumPad5 = 79
+  NumPad6 = 80
+  NumPad7 = 81
+  NumPad8 = 82
+  NumPad9 = 83
+  Multiply = 84
+  Add = 85
+  Separator = 86
+  Subtract = 87
+  Decimal = 88
+  Divide = 89
+  F1 = 90
+  F2 = 91
+  F3 = 92
+  F4 = 93
+  F5 = 94
+  F6 = 95
+  F7 = 96
+  F8 = 97
+  F9 = 98
+  F10 = 99
+  F11 = 100
+  F12 = 101
+  F13 = 102
+  F14 = 103
+  F15 = 104
+  F16 = 105
+  F17 = 106
+  F18 = 107
+  F19 = 108
+  F20 = 109
+  F21 = 110
+  F22 = 111
+  F23 = 112
+  F24 = 113
+  NumLock = 114
+  Scroll = 115
+  LeftShift = 116
+  RightShift = 117
+  LeftCtrl = 118
+  RightCtrl = 119
+  LeftAlt = 120
+  RightAlt = 121
+  BrowserBack = 122
+  BrowserForward = 123
+  BrowserRefresh = 124
+  BrowserStop = 125
+  BrowserSearch = 126
+  BrowserFavorites = 127
+  BrowserHome = 128
+  VolumeMute = 129
+  VolumeDown = 130
+  VolumeUp = 131
+  MediaNextTrack = 132
+  MediaPreviousTrack = 133
+  MediaStop = 134
+  MediaPlayPause = 135
+  LaunchMail = 136
+  SelectMedia = 137
+  LaunchApplication1 = 138
+  LaunchApplication2 = 139
+  Oem1 = 140
+  OemSemicolon = 140
+  OemPlus = 141
+  OemComma = 142
+  OemMinus = 143
+  OemPeriod = 144
+  Oem2 = 145
+  OemQuestion = 145
+  Oem3 = 146
+  OemTilde = 146
+  AbntC1 = 147
+  AbntC2 = 148
+  Oem4 = 149
+  OemOpenBrackets = 149
+  Oem5 = 150
+  OemPipe = 150
+  Oem6 = 151
+  OemCloseBrackets = 151
+  Oem7 = 152
+  OemQuotes = 152
+  Oem8 = 153
+  Oem102 = 154
+  OemBackslash = 154
+  ImeProcessed = 155
+  System = 156
+  DbeAlphanumeric = 157
+  OemAttn = 157
+  DbeKatakana = 158
+  OemFinish = 158
+  DbeHiragana = 159
+  OemCopy = 159
+  DbeSbcsChar = 160
+  OemAuto = 160
+  DbeDbcsChar = 161
+  OemEnlw = 161
+  DbeRoman = 162
+  OemBackTab = 162
+  Attn = 163
+  DbeNoRoman = 163
+  CrSel = 164
+  DbeEnterWordRegisterMode = 164
+  DbeEnterImeConfigureMode = 165
+  ExSel = 165
+  DbeFlushString = 166
+  EraseEof = 166
+  DbeCodeInput = 167
+  Play = 167
+  DbeNoCodeInput = 168
+  Zoom = 168
+  DbeDetermineString = 169
+  NoName = 169
+  DbeEnterDialogConversionMode = 170
+  Pa1 = 170
+  OemClear = 171
+  DeadCharProcessed = 172
+
+[C-06] public static class PhotoReview.App.Input.KeyIdMapping  (assembly PhotoReview.App.Shared)
+  method public static PhotoReview.App.Input.KeyId FromVirtualKey(int virtualKey, bool isExtended)
+  method public static bool TryParse(string name, out PhotoReview.App.Input.KeyId key)
+  method public static int ToVirtualKey(PhotoReview.App.Input.KeyId key)
+
+[C-06] public [Flags] enum PhotoReview.App.Input.KeyModifiers  (assembly PhotoReview.App.Shared)
+  None = 0
+  Alt = 1
+  Control = 2
+  Shift = 4
+  Windows = 8
+
+[C-06] public readonly record struct PhotoReview.App.Input.PointD : System.IEquatable<PhotoReview.App.Input.PointD>  (assembly PhotoReview.App.Shared)
+  ctor public (double X, double Y)
+  property public double X { get; init; }
+  property public double Y { get; init; }
+
+[C-06] public enum PhotoReview.App.Input.PointerButton  (assembly PhotoReview.App.Shared)
+  Left = 0
+  Middle = 1
+  Right = 2
+  XButton1 = 3
+  XButton2 = 4
+
+[C-06] public readonly record struct PhotoReview.App.Input.RectD : System.IEquatable<PhotoReview.App.Input.RectD>  (assembly PhotoReview.App.Shared)
+  ctor public (double X, double Y, double Width, double Height)
+  method public bool Contains(PhotoReview.App.Input.PointD p)
+  property public double Bottom { get; }
+  property public double Height { get; init; }
+  property public double Right { get; }
+  property public double Width { get; init; }
+  property public double X { get; init; }
+  property public double Y { get; init; }
+
+[C-06] public readonly record struct PhotoReview.App.Input.SizeD : System.IEquatable<PhotoReview.App.Input.SizeD>  (assembly PhotoReview.App.Shared)
+  ctor public (double Width, double Height)
+  property public double Height { get; init; }
+  property public double Width { get; init; }
+
+[C-08] public enum PhotoReview.App.ViewModels.ViewerStretchMode  (assembly PhotoReview.App.Shared)
+  None = 0
+  Uniform = 1
+
+[C-08] public enum PhotoReview.App.Viewport.ScrollBarPolicy  (assembly PhotoReview.App.Shared)
+  Auto = 0
+  Overlay = 1
+  Hidden = 2
+
+[C-08] public readonly record struct PhotoReview.App.Viewport.ViewportInput : System.IEquatable<PhotoReview.App.Viewport.ViewportInput>  (assembly PhotoReview.App.Shared)
+  ctor public (double ClientWidth, double ClientHeight, double ScrollBarThickness, PhotoReview.App.Viewport.ScrollBarPolicy ScrollBars, PhotoReview.App.ViewModels.ViewerStretchMode Stretch, double ImageWidth, double ImageHeight, double MaxImageWidth, double MaxImageHeight, double BitmapWidth, double BitmapHeight)
+  property public PhotoReview.App.ViewModels.ViewerStretchMode Stretch { get; init; }
+  property public PhotoReview.App.Viewport.ScrollBarPolicy ScrollBars { get; init; }
+  property public double BitmapHeight { get; init; }
+  property public double BitmapWidth { get; init; }
+  property public double ClientHeight { get; init; }
+  property public double ClientWidth { get; init; }
+  property public double ImageHeight { get; init; }
+  property public double ImageWidth { get; init; }
+  property public double MaxImageHeight { get; init; }
+  property public double MaxImageWidth { get; init; }
+  property public double ScrollBarThickness { get; init; }
+
+[C-08] public readonly record struct PhotoReview.App.Viewport.ViewportLayout : System.IEquatable<PhotoReview.App.Viewport.ViewportLayout>  (assembly PhotoReview.App.Shared)
+  ctor public (double ViewportWidth, double ViewportHeight, double ExtentWidth, double ExtentHeight, bool HorizontalBarVisible, bool VerticalBarVisible, PhotoReview.App.Input.RectD ImageRect, double MaxHorizontalOffset, double MaxVerticalOffset)
+  property public PhotoReview.App.Input.RectD ImageRect { get; init; }
+  property public bool HorizontalBarVisible { get; init; }
+  property public bool VerticalBarVisible { get; init; }
+  property public double ExtentHeight { get; init; }
+  property public double ExtentWidth { get; init; }
+  property public double MaxHorizontalOffset { get; init; }
+  property public double MaxVerticalOffset { get; init; }
+  property public double ViewportHeight { get; init; }
+  property public double ViewportWidth { get; init; }
+
+[C-08] public static class PhotoReview.App.Viewport.ViewportLayoutEngine  (assembly PhotoReview.App.Shared)
+  method public static (double Horizontal, double Vertical) ClampOffset(in PhotoReview.App.Viewport.ViewportLayout layout, double horizontal, double vertical)
+  method public static PhotoReview.App.Viewport.ViewportLayout Compute(in PhotoReview.App.Viewport.ViewportInput input)
+
+[C-09] public readonly record struct PhotoReview.Shell.Rendering.ColorF : System.IEquatable<PhotoReview.Shell.Rendering.ColorF>  (assembly PhotoReview.Shell.Rendering)
+  ctor public (float R, float G, float B, float A)
+  property public float A { get; init; }
+  property public float B { get; init; }
+  property public float G { get; init; }
+  property public float R { get; init; }
+
+[C-09] public interface PhotoReview.Shell.Rendering.IDrawContext  (assembly PhotoReview.Shell.Rendering)
+  method public bool TryReadPixels(out PhotoReview.Imaging.Pixels.PixelBuffer pixels)
+  method public void Clear(PhotoReview.Shell.Rendering.ColorF color)
+  method public void DrawImage(PhotoReview.Shell.Rendering.IGpuImage image, PhotoReview.App.Input.RectD destination, PhotoReview.App.Input.RectD? sourcePixels, PhotoReview.Shell.Rendering.ImageInterpolation interpolation, float opacity = 1f)
+  method public void DrawRectangle(PhotoReview.App.Input.RectD rect, PhotoReview.Shell.Rendering.ColorF color, double strokeWidth)
+  method public void DrawText(PhotoReview.Shell.Rendering.ITextLayout layout, PhotoReview.App.Input.PointD origin, PhotoReview.Shell.Rendering.ColorF color)
+  method public void FillRectangle(PhotoReview.App.Input.RectD rect, PhotoReview.Shell.Rendering.ColorF color)
+  method public void FillRoundedRectangle(PhotoReview.App.Input.RectD rect, double radius, PhotoReview.Shell.Rendering.ColorF color)
+  method public void PopClip()
+  method public void PopOpacity()
+  method public void PushClip(PhotoReview.App.Input.RectD rect)
+  method public void PushOpacity(float opacity)
+
+[C-09] public interface PhotoReview.Shell.Rendering.IRenderSurface : System.IDisposable  (assembly PhotoReview.Shell.Rendering)
+  event public System.EventHandler? DeviceRecreated
+  method public PhotoReview.Shell.Rendering.IDrawContext BeginDraw()
+  method public PhotoReview.Shell.Rendering.PresentResult EndDrawAndPresent()
+  method public static abstract PhotoReview.Shell.Rendering.IRenderSurface CreateForWindow(nint hwnd, PhotoReview.Shell.Rendering.RenderSurfaceOptions options)
+  method public static abstract PhotoReview.Shell.Rendering.IRenderSurface CreateOffscreen(int pixelWidth, int pixelHeight, double dpiScale)
+  method public void Resize(int pixelWidth, int pixelHeight, double dpiScale)
+  property public bool IsWarp { get; }
+  property public double DpiScale { get; }
+  property public int PixelHeight { get; }
+  property public int PixelWidth { get; }
+  property public nint FrameLatencyWaitHandle { get; }
+  property public nint Hwnd { get; }
+
+[C-09] public enum PhotoReview.Shell.Rendering.ImageInterpolation  (assembly PhotoReview.Shell.Rendering)
+  NearestNeighbor = 0
+  Linear = 1
+  HighQualityCubic = 2
+
+[C-09] public enum PhotoReview.Shell.Rendering.PresentResult  (assembly PhotoReview.Shell.Rendering)
+  Presented = 0
+  Occluded = 1
+  DeviceRecreated = 2
+  Failed = 3
+
+[C-09] public sealed record PhotoReview.Shell.Rendering.RenderSurfaceOptions : System.IEquatable<PhotoReview.Shell.Rendering.RenderSurfaceOptions>  (assembly PhotoReview.Shell.Rendering)
+  ctor public (bool PreferWarp = false, bool AllowTearing = false, int MaxFrameLatency = 1)
+  property public bool AllowTearing { get; init; }
+  property public bool PreferWarp { get; init; }
+  property public int MaxFrameLatency { get; init; }
+
+[C-10] public interface PhotoReview.Shell.Rendering.IGpuImage  (assembly PhotoReview.Shell.Rendering)
+  property public int PixelHeight { get; }
+  property public int PixelWidth { get; }
+  property public long GpuBytes { get; }
+  property public long PixelBufferId { get; }
+
+[C-10] public interface PhotoReview.Shell.Rendering.IGpuImageCache  (assembly PhotoReview.Shell.Rendering)
+  method public PhotoReview.Shell.Rendering.IGpuImage GetOrUpload(PhotoReview.Imaging.Pixels.PixelBuffer pixels)
+  method public void Clear()
+  method public void Prefetch(PhotoReview.Imaging.Pixels.PixelBuffer pixels)
+  method public void Retain(System.Collections.Generic.IReadOnlyCollection<long> pixelBufferIds)
+  property public long BudgetBytes { get; set; }
+
+[C-11] public interface PhotoReview.Shell.Rendering.ITextLayout : System.IDisposable  (assembly PhotoReview.Shell.Rendering)
+  property public PhotoReview.App.Input.SizeD Size { get; }
+  property public string Text { get; }
+
+[C-11] public interface PhotoReview.Shell.Rendering.ITextRenderer  (assembly PhotoReview.Shell.Rendering)
+  method public PhotoReview.Shell.Rendering.ITextLayout CreateLayout(string text, PhotoReview.Shell.Rendering.TextStyle style, double maxWidth, PhotoReview.Shell.Rendering.TextTrimming trimming)
+
+[C-11] public sealed record PhotoReview.Shell.Rendering.TextStyle : System.IEquatable<PhotoReview.Shell.Rendering.TextStyle>  (assembly PhotoReview.Shell.Rendering)
+  ctor public (string FontFamily = "Segoe UI", double FontSizeDip = 12, bool Bold = false)
+  property public bool Bold { get; init; }
+  property public double FontSizeDip { get; init; }
+  property public string FontFamily { get; init; }
+
+[C-11] public enum PhotoReview.Shell.Rendering.TextTrimming  (assembly PhotoReview.Shell.Rendering)
+  None = 0
+  CharacterEllipsis = 1
+
+[C-11] public enum PhotoReview.Shell.Win32.Overlay.Easing  (assembly PhotoReview)
+  Linear = 0
+  QuadraticOut = 1
+
+[C-11] public interface PhotoReview.Shell.Win32.Overlay.IAnimator  (assembly PhotoReview)
+  method public void FadeTo(string elementId, float target, System.TimeSpan duration, PhotoReview.Shell.Win32.Overlay.Easing easing)
+  property public bool IsAnimating { get; }
+
+[C-11] public interface PhotoReview.Shell.Win32.Overlay.IOverlayElement  (assembly PhotoReview)
+  method public bool HitTest(PhotoReview.App.Input.PointD point)
+  method public void Arrange(in PhotoReview.Shell.Win32.Overlay.OverlayLayoutContext context)
+  method public void Render(PhotoReview.Shell.Rendering.IDrawContext dc)
+  property public PhotoReview.App.Input.RectD Bounds { get; }
+  property public bool IsVisible { get; }
+  property public float Opacity { get; }
+  property public string Id { get; }
+
+[C-11] public readonly record struct PhotoReview.Shell.Win32.Overlay.OverlayLayoutContext : System.IEquatable<PhotoReview.Shell.Win32.Overlay.OverlayLayoutContext>  (assembly PhotoReview)
+  ctor public (PhotoReview.App.Input.SizeD Client, double DpiScale, PhotoReview.Shell.Rendering.ITextRenderer Text)
+  property public PhotoReview.App.Input.SizeD Client { get; init; }
+  property public PhotoReview.Shell.Rendering.ITextRenderer Text { get; init; }
+  property public double DpiScale { get; init; }
+
+[C-12] public sealed record PhotoReview.App.Menus.ContextMenuBuildContext : System.IEquatable<PhotoReview.App.Menus.ContextMenuBuildContext>  (assembly PhotoReview.App.Shared)
+  ctor public (PhotoReview.Core.Settings.AppSettings Settings, bool HasImage, bool CanUndo, bool IsFit, double? EffectiveZoom, bool CanOpenInExternalEditor, bool CanCopyPath, bool IsCompareVisible)
+  property public PhotoReview.Core.Settings.AppSettings Settings { get; init; }
+  property public bool CanCopyPath { get; init; }
+  property public bool CanOpenInExternalEditor { get; init; }
+  property public bool CanUndo { get; init; }
+  property public bool HasImage { get; init; }
+  property public bool IsCompareVisible { get; init; }
+  property public bool IsFit { get; init; }
+  property public double? EffectiveZoom { get; init; }
+
+[C-12] public static class PhotoReview.App.Menus.ContextMenuModelBuilder  (assembly PhotoReview.App.Shared)
+  method public static System.Collections.Generic.IReadOnlyList<PhotoReview.App.Menus.MenuItemModel> Build(PhotoReview.App.Menus.ContextMenuBuildContext context)
+  method public static System.Collections.Generic.IReadOnlyList<PhotoReview.App.Menus.MenuItemModel> BuildToolsMenu(bool hasImages)
+
+[C-12] public enum PhotoReview.App.Menus.MenuItemKind  (assembly PhotoReview.App.Shared)
+  Command = 0
+  Toggle = 1
+  Submenu = 2
+  Separator = 3
+
+[C-12] public sealed record PhotoReview.App.Menus.MenuItemModel : System.IEquatable<PhotoReview.App.Menus.MenuItemModel>  (assembly PhotoReview.App.Shared)
+  ctor public (string Id, PhotoReview.App.Menus.MenuItemKind Kind, string Text, string? ShortcutText, bool IsEnabled, bool IsChecked, System.Collections.Generic.IReadOnlyList<PhotoReview.App.Menus.MenuItemModel> Children, string? AutomationName)
+  property public PhotoReview.App.Menus.MenuItemKind Kind { get; init; }
+  property public System.Collections.Generic.IReadOnlyList<PhotoReview.App.Menus.MenuItemModel> Children { get; init; }
+  property public bool IsChecked { get; init; }
+  property public bool IsEnabled { get; init; }
+  property public string Id { get; init; }
+  property public string Text { get; init; }
+  property public string? AutomationName { get; init; }
+  property public string? ShortcutText { get; init; }
+
+[C-12] public interface PhotoReview.Shell.Win32.Menus.IPopupMenuHost  (assembly PhotoReview)
+  method public string? Show(System.Collections.Generic.IReadOnlyList<PhotoReview.App.Menus.MenuItemModel> items, PhotoReview.App.Input.PointD screenPointDip)
+
+[C-13] public interface PhotoReview.App.Services.IZoomPromptService  (assembly PhotoReview.App.Shared)
+  method public int? PromptCustomZoom(int currentPercent)
+
+[C-13] public interface PhotoReview.Shell.WpfBridge.ISecondaryWindowHost  (assembly PhotoReview.Shell.WpfBridge)
+  method public bool ShowBatchReview(nint ownerHwnd, System.Collections.Generic.IReadOnlyList<PhotoReview.Core.Abstractions.BatchReviewItem> items)
+  method public bool ShowSettings(nint ownerHwnd, PhotoReview.Core.Abstractions.SettingsTarget target)
+  method public int? PromptCustomZoom(nint ownerHwnd, int currentPercent)
+  method public void ShowBenchmark(nint ownerHwnd, string? folder)
+  method public void ShowDiagnostics(nint ownerHwnd)
+  method public void ShowRecovery(nint ownerHwnd)
+  method public void ShowSkippedFiles(nint ownerHwnd, System.Collections.Generic.IReadOnlyList<PhotoReview.Core.Abstractions.SkippedEntry> entries)
+
+[C-13] public static class PhotoReview.Shell.WpfBridge.SecondaryWindowHostFactory  (assembly PhotoReview.Shell.WpfBridge)
+  method public static PhotoReview.Shell.WpfBridge.ISecondaryWindowHost Create(System.IServiceProvider services)
+
+[C-14] public interface PhotoReview.App.Windowing.IFullscreenController  (assembly PhotoReview.App.Shared)
+  method public void Enter(nint hwnd, PhotoReview.App.Windowing.WindowShowState current)
+  method public void Exit(nint hwnd)
+  property public (int Left, int Top, int Right, int Bottom)? NormalBounds { get; }
+  property public PhotoReview.App.Windowing.WindowShowState StateBefore { get; }
+
+[C-14] public interface PhotoReview.App.Windowing.IWindowPlacementStore  (assembly PhotoReview.App.Shared)
+  method public PhotoReview.App.Windowing.WindowPlacementData? Read(string placementPath)
+  method public PhotoReview.App.Windowing.WindowPlacementData? TakePrefetched(string placementPath)
+  method public System.Threading.Tasks.Task<PhotoReview.App.Windowing.WindowPlacementData?> Prefetch(string placementPath)
+  method public void Save(string placementPath, PhotoReview.App.Windowing.WindowPlacementData data)
+
+[C-14] public sealed record PhotoReview.App.Windowing.WindowPlacementData : System.IEquatable<PhotoReview.App.Windowing.WindowPlacementData>  (assembly PhotoReview.App.Shared)
+  ctor public (int Length, int Flags, int ShowCommand, int MinX, int MinY, int MaxX, int MaxY, int NormalLeft, int NormalTop, int NormalRight, int NormalBottom)
+  property public int Flags { get; init; }
+  property public int Length { get; init; }
+  property public int MaxX { get; init; }
+  property public int MaxY { get; init; }
+  property public int MinX { get; init; }
+  property public int MinY { get; init; }
+  property public int NormalBottom { get; init; }
+  property public int NormalLeft { get; init; }
+  property public int NormalRight { get; init; }
+  property public int NormalTop { get; init; }
+  property public int ShowCommand { get; init; }
+
+[C-14] public static class PhotoReview.App.Windowing.WindowPlacementRules  (assembly PhotoReview.App.Shared)
+  method public static PhotoReview.App.Windowing.WindowShowState PlanStateBeforeShow(int savedShowCommand)
+  method public static int NormalizeShowCommand(int showCommand)
+  method public static int ResolveShowCommand(int showCommand, PhotoReview.App.Windowing.WindowShowState? fullscreenRestoreState)
+
+[C-14] public enum PhotoReview.App.Windowing.WindowShowState  (assembly PhotoReview.App.Shared)
+  Normal = 0
+  Minimized = 1
+  Maximized = 2
+
+[C-15] public interface PhotoReview.Shell.Win32.Hosting.IShellWindow  (assembly PhotoReview)
+  event public System.EventHandler<System.ComponentModel.CancelEventArgs>? Closing
+  event public System.EventHandler? Activated
+  event public System.EventHandler? ClientSizeChanged
+  event public System.EventHandler? Closed
+  event public System.EventHandler? Deactivated
+  event public System.EventHandler? DpiChanged
+  method public PhotoReview.App.Input.PointD ScreenToClientDip(PhotoReview.App.Input.PointD screenPixel)
+  method public void AddMessageHandler(PhotoReview.Shell.Win32.Hosting.IWindowMessageHandler handler)
+  method public void CapturePointer()
+  method public void Close()
+  method public void Invalidate()
+  method public void ReleasePointer()
+  method public void SetCursor(PhotoReview.Shell.Win32.Hosting.ShellCursor cursor)
+  method public void SetTitle(string title)
+  property public PhotoReview.App.Input.SizeD ClientSizeDip { get; }
+  property public bool HasPointerCapture { get; }
+  property public bool IsActive { get; }
+  property public bool IsLoaded { get; }
+  property public double DpiScale { get; }
+  property public nint Hwnd { get; }
+
+[C-15] public interface PhotoReview.Shell.Win32.Hosting.IWindowMessageHandler  (assembly PhotoReview)
+  method public bool TryHandle(in PhotoReview.Shell.Win32.Hosting.WindowMessage message, out nint result)
+
+[C-15] public enum PhotoReview.Shell.Win32.Hosting.ShellCursor  (assembly PhotoReview)
+  Arrow = 0
+  SizeAll = 1
+  Wait = 2
+
+[C-15] public readonly record struct PhotoReview.Shell.Win32.Hosting.WindowMessage : System.IEquatable<PhotoReview.Shell.Win32.Hosting.WindowMessage>  (assembly PhotoReview)
+  ctor public (nint Hwnd, uint Msg, nint WParam, nint LParam)
+  property public nint Hwnd { get; init; }
+  property public nint LParam { get; init; }
+  property public nint WParam { get; init; }
+  property public uint Msg { get; init; }
+
+[C-16] public interface PhotoReview.App.Composition.IPresentationSinkFactory  (assembly PhotoReview.App.Shared)
+  method public PhotoReview.App.Coordinators.IPresentationSink Create(PhotoReview.App.Composition.MainViewModelSinkCallbacks callbacks)
+
+[C-16] public sealed record PhotoReview.App.Composition.MainViewModelSinkCallbacks : System.IEquatable<PhotoReview.App.Composition.MainViewModelSinkCallbacks>  (assembly PhotoReview.App.Shared)
+  ctor public (System.Action<object?, bool> SetCurrentImage, System.Action<string> SetStatusText, System.Action ApplyInitialViewMode, System.Action<string> OnPresented)
+  property public System.Action ApplyInitialViewMode { get; init; }
+  property public System.Action<object?, bool> SetCurrentImage { get; init; }
+  property public System.Action<string> OnPresented { get; init; }
+  property public System.Action<string> SetStatusText { get; init; }
+
+[C-16] public sealed record PhotoReview.App.Composition.SharedServiceOptions : System.IEquatable<PhotoReview.App.Composition.SharedServiceOptions>  (assembly PhotoReview.App.Shared)
+  ctor public (PhotoReview.Imaging.Decoding.IPlatformImageCodec Codec, System.Func<System.IServiceProvider, PhotoReview.Imaging.Decoding.IImageDecoder>? WpfFallbackDecoder, System.Func<System.IServiceProvider, PhotoReview.Imaging.Decoding.IImageDecoder> ThumbnailDecoder)
+  property public PhotoReview.Imaging.Decoding.IPlatformImageCodec Codec { get; init; }
+  property public System.Func<System.IServiceProvider, PhotoReview.Imaging.Decoding.IImageDecoder> ThumbnailDecoder { get; init; }
+  property public System.Func<System.IServiceProvider, PhotoReview.Imaging.Decoding.IImageDecoder>? WpfFallbackDecoder { get; init; }
+
+[C-16] public static class PhotoReview.App.Composition.SharedServiceRegistration  (assembly PhotoReview.App.Shared)
+  method public static Microsoft.Extensions.DependencyInjection.IServiceCollection AddPhotoReviewShared(this Microsoft.Extensions.DependencyInjection.IServiceCollection services, PhotoReview.App.Composition.SharedServiceOptions options)
+
+[C-16] public interface PhotoReview.App.Coordinators.IPresentationSink  (assembly PhotoReview.App.Shared)
+  method public void ApplyInitialViewMode()
+  method public void OnPresented(string path)
+  method public void SetCurrentImage(object? image, bool isFileChange = false)
+  method public void SetStatusText(string status)
+  method public void TracePresented(long token, string kind, long assignedTimestamp)
+
+[C-16] public sealed record PhotoReview.Shell.Win32.Startup.ShellStartupContext : System.IEquatable<PhotoReview.Shell.Win32.Startup.ShellStartupContext>  (assembly PhotoReview)
+  ctor public (System.Collections.Generic.IReadOnlyList<string> Arguments, string? InitialPath, string? LaunchFolder, System.Threading.Tasks.Task<PhotoReview.Core.Settings.AppSettings> Settings, System.Threading.Tasks.Task<PhotoReview.App.Windowing.WindowPlacementData?> Placement, long ProcessStartTimestamp)
+  property public System.Collections.Generic.IReadOnlyList<string> Arguments { get; init; }
+  property public System.Threading.Tasks.Task<PhotoReview.App.Windowing.WindowPlacementData?> Placement { get; init; }
+  property public System.Threading.Tasks.Task<PhotoReview.Core.Settings.AppSettings> Settings { get; init; }
+  property public long ProcessStartTimestamp { get; init; }
+  property public string? InitialPath { get; init; }
+  property public string? LaunchFolder { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.GoldenCheckpoint : System.IEquatable<PhotoReview.TestSupport.Golden.GoldenCheckpoint>  (assembly PhotoReview.TestSupport)
+  ctor public (int AfterStep, double Zoom, bool IsFit, double HorizontalOffset, double VerticalOffset, double ExtentWidth, double ExtentHeight, double ViewportWidth, double ViewportHeight, int DisplayZoomPercent)
+  property public bool IsFit { get; init; }
+  property public double ExtentHeight { get; init; }
+  property public double ExtentWidth { get; init; }
+  property public double HorizontalOffset { get; init; }
+  property public double VerticalOffset { get; init; }
+  property public double ViewportHeight { get; init; }
+  property public double ViewportWidth { get; init; }
+  property public double Zoom { get; init; }
+  property public int AfterStep { get; init; }
+  property public int DisplayZoomPercent { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.GoldenInputScript : System.IEquatable<PhotoReview.TestSupport.Golden.GoldenInputScript>  (assembly PhotoReview.TestSupport)
+  ctor public (string Name, PhotoReview.TestSupport.Golden.GoldenSetup Setup, System.Collections.Generic.IReadOnlyList<PhotoReview.TestSupport.Golden.GoldenInputStep> Steps, System.Collections.Generic.IReadOnlyList<PhotoReview.TestSupport.Golden.GoldenCheckpoint> Expected)
+  property public PhotoReview.TestSupport.Golden.GoldenSetup Setup { get; init; }
+  property public System.Collections.Generic.IReadOnlyList<PhotoReview.TestSupport.Golden.GoldenCheckpoint> Expected { get; init; }
+  property public System.Collections.Generic.IReadOnlyList<PhotoReview.TestSupport.Golden.GoldenInputStep> Steps { get; init; }
+  property public string Name { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.GoldenInputStep : System.IEquatable<PhotoReview.TestSupport.Golden.GoldenInputStep>  (assembly PhotoReview.TestSupport)
+  ctor public (string Kind, double X, double Y, int Delta, string? Key, string? Modifiers, int TimestampMs, string? Command)
+  property public double X { get; init; }
+  property public double Y { get; init; }
+  property public int Delta { get; init; }
+  property public int TimestampMs { get; init; }
+  property public string Kind { get; init; }
+  property public string? Command { get; init; }
+  property public string? Key { get; init; }
+  property public string? Modifiers { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.GoldenKeyName : System.IEquatable<PhotoReview.TestSupport.Golden.GoldenKeyName>  (assembly PhotoReview.TestSupport)
+  ctor public (string Name, int KeyValue, int VirtualKey)
+  property public int KeyValue { get; init; }
+  property public int VirtualKey { get; init; }
+  property public string Name { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.GoldenMenuCase : System.IEquatable<PhotoReview.TestSupport.Golden.GoldenMenuCase>  (assembly PhotoReview.TestSupport)
+  ctor public (string Name, string SettingsOverridesJson, System.Collections.Generic.IReadOnlyList<string> VisibleIdsInOrder)
+  property public System.Collections.Generic.IReadOnlyList<string> VisibleIdsInOrder { get; init; }
+  property public string Name { get; init; }
+  property public string SettingsOverridesJson { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.GoldenSetup : System.IEquatable<PhotoReview.TestSupport.Golden.GoldenSetup>  (assembly PhotoReview.TestSupport)
+  ctor public (double ClientWidth, double ClientHeight, double DpiScale, int ImagePixelWidth, int ImagePixelHeight, string SettingsOverridesJson)
+  property public double ClientHeight { get; init; }
+  property public double ClientWidth { get; init; }
+  property public double DpiScale { get; init; }
+  property public int ImagePixelHeight { get; init; }
+  property public int ImagePixelWidth { get; init; }
+  property public string SettingsOverridesJson { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.GoldenViewportCase : System.IEquatable<PhotoReview.TestSupport.Golden.GoldenViewportCase>  (assembly PhotoReview.TestSupport)
+  ctor public (string Name, PhotoReview.TestSupport.Golden.ViewportInputDto Input, PhotoReview.TestSupport.Golden.ViewportLayoutDto Expected)
+  property public PhotoReview.TestSupport.Golden.ViewportInputDto Input { get; init; }
+  property public PhotoReview.TestSupport.Golden.ViewportLayoutDto Expected { get; init; }
+  property public string Name { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.ViewportInputDto : System.IEquatable<PhotoReview.TestSupport.Golden.ViewportInputDto>  (assembly PhotoReview.TestSupport)
+  ctor public (double ClientWidth, double ClientHeight, double ScrollBarThickness, string ScrollBars, string Stretch, double ImageWidth, double ImageHeight, double MaxImageWidth, double MaxImageHeight, double BitmapWidth, double BitmapHeight)
+  property public double BitmapHeight { get; init; }
+  property public double BitmapWidth { get; init; }
+  property public double ClientHeight { get; init; }
+  property public double ClientWidth { get; init; }
+  property public double ImageHeight { get; init; }
+  property public double ImageWidth { get; init; }
+  property public double MaxImageHeight { get; init; }
+  property public double MaxImageWidth { get; init; }
+  property public double ScrollBarThickness { get; init; }
+  property public string ScrollBars { get; init; }
+  property public string Stretch { get; init; }
+
+[C-17] public sealed record PhotoReview.TestSupport.Golden.ViewportLayoutDto : System.IEquatable<PhotoReview.TestSupport.Golden.ViewportLayoutDto>  (assembly PhotoReview.TestSupport)
+  ctor public (double ViewportWidth, double ViewportHeight, double ExtentWidth, double ExtentHeight, bool HorizontalBarVisible, bool VerticalBarVisible, double ImageX, double ImageY, double ImageWidth, double ImageHeight, double MaxHorizontalOffset, double MaxVerticalOffset)
+  property public bool HorizontalBarVisible { get; init; }
+  property public bool VerticalBarVisible { get; init; }
+  property public double ExtentHeight { get; init; }
+  property public double ExtentWidth { get; init; }
+  property public double ImageHeight { get; init; }
+  property public double ImageWidth { get; init; }
+  property public double ImageX { get; init; }
+  property public double ImageY { get; init; }
+  property public double MaxHorizontalOffset { get; init; }
+  property public double MaxVerticalOffset { get; init; }
+  property public double ViewportHeight { get; init; }
+  property public double ViewportWidth { get; init; }
+
+[C-18] public static class PhotoReview.Core.Diagnostics.ShellPerfMarks  (assembly PhotoReview.Core)
+  field public const string D3dDeviceReady = "d3dDeviceReady"
+  field public const string FirstPresent = "firstPresent"
+  field public const string SwapChainReady = "swapChainReady"

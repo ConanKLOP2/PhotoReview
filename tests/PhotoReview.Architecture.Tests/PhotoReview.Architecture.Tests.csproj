@@ -21,6 +21,18 @@
     <ProjectReference Include="..\..\src\PhotoReview.Imaging.LibRaw\PhotoReview.Imaging.LibRaw.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.App\PhotoReview.App.csproj" />
+    <!-- NO-WPF-EXEC-PLAN (WP-01): ContractSurfaceTests + ShellRulesTests đọc các assembly mới bằng reflection. -->
+    <ProjectReference Include="..\..\src\PhotoReview.App.Shared\PhotoReview.App.Shared.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Shell.Interop\PhotoReview.Shell.Interop.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Shell.Rendering\PhotoReview.Shell.Rendering.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Shell.WpfBridge\PhotoReview.Shell.WpfBridge.csproj" />
+    <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- File duyệt hợp đồng (L-CONTRACT): đọc từ thư mục repo (RepoScan.Root), không copy ra output. -->
+    <None Include="Approved\**" />
   </ItemGroup>
 
   <ItemGroup>

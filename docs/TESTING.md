@@ -4,7 +4,7 @@ Detail behind [`AGENTS.md` > Tests](../AGENTS.md#tests): categories, parallel lo
 
 ## Test projects
 
-Five xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`, `Core.Tests`, `Imaging.Tests`, `Integration.Tests`, `App.Tests` (all under `tests/PhotoReview.*`). Two helper libraries are not test projects: `PhotoReview.TestSupport` (net10.0: `TempRoot`, `Wait`, `FakeMemoryProbe`, `RawCorpus`, ...) and `PhotoReview.TestSupport.Windows` (WPF-dependent fixtures such as `InMemoryRawHeaderSource`). Test-only fakes live there, not in `src/`.
+Seven xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`, `Core.Tests`, `Imaging.Tests`, `Integration.Tests`, `App.Tests`, plus (NO-WPF shell, WP-01) `Shell.Tests` (no WPF) and `Shell.Integration.Tests` (real `PhotoReview.exe`/HWND, `Category=UI`) (all under `tests/PhotoReview.*`). Frozen NO-WPF contract signatures: `Architecture.Tests/ContractSurfaceTests` vs `Approved/contracts.v1.txt` (regenerated only by its `Category=Manual` test, lead only). Two helper libraries are not test projects: `PhotoReview.TestSupport` (net10.0: `TempRoot`, `Wait`, `FakeMemoryProbe`, `RawCorpus`, ...) and `PhotoReview.TestSupport.Windows` (WPF-dependent fixtures such as `InMemoryRawHeaderSource`). Test-only fakes live there, not in `src/`.
 
 ## Categories
 
@@ -12,7 +12,7 @@ Five xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`, 
 
 ## Parallel local runs
 
-`tools/verify-all.ps1 -Parallel` runs the 5 test projects concurrently (one `dotnet test` process each) — ~2.1x speedup (170s -> 81s, default filter); doesn't change xUnit's in-assembly `[Collection("GlobalState")]` serialization. Add `-Hidden` to keep UI-test windows off the shared desktop.
+`tools/verify-all.ps1 -Parallel` runs the test projects concurrently (one `dotnet test` process each) — ~2.1x speedup (170s -> 81s, default filter); doesn't change xUnit's in-assembly `[Collection("GlobalState")]` serialization. Add `-Hidden` to keep UI-test windows off the shared desktop.
 
 ## Hidden desktop (local only)
 
@@ -48,7 +48,7 @@ The regular CI never fetches the RAW sample corpus (`tools/fetch-raw-samples.ps1
 
 ## Measuring coverage
 
-`powershell -ExecutionPolicy Bypass -File tools/coverage.ps1` (~6 min; `-SkipBuild`, `-Project Core` (short or full test-project names), `-OutDir <absolute or relative path>`, `-ReportOnly`, `-MinLines`, `-Top`; it exits non-zero when the merged cobertura has no packages or lines; a single `-Project` once produced an empty merge because one file was splatted as a bare string) runs each of the 5 test projects through `run-tests-hidden.ps1` (hidden desktop, `Category=UI` never skipped, CI filter, blame-hang 120s + 20 min session cap) with the VSTest **Code Coverage** collector, merges with `dotnet-coverage` and writes `merged.cobertura.xml`, `summary.json` and `coverage-report.md` (per assembly and per file, lowest first) to `work\coverage\` (git-ignored, never committed).
+`powershell -ExecutionPolicy Bypass -File tools/coverage.ps1` (~6 min; `-SkipBuild`, `-Project Core` (short or full test-project names), `-OutDir <absolute or relative path>`, `-ReportOnly`, `-MinLines`, `-Top`; it exits non-zero when the merged cobertura has no packages or lines; a single `-Project` once produced an empty merge because one file was splatted as a bare string) runs each test project through `run-tests-hidden.ps1` (hidden desktop, `Category=UI` never skipped, CI filter, blame-hang 120s + 20 min session cap) with the VSTest **Code Coverage** collector, merges with `dotnet-coverage` and writes `merged.cobertura.xml`, `summary.json` and `coverage-report.md` (per assembly and per file, lowest first) to `work\coverage\` (git-ignored, never committed).
 
 Why this path: the collector already ships in `Microsoft.NET.Test.Sdk` (no package added to any project, production or test); only the dev-time local tool `dotnet-coverage` (`dotnet-tools.json`) is new, and it only merges. `coverlet.collector` was not needed. Excluded: test/support/benchmark assemblies, `[GeneratedCode]`/`[CompilerGenerated]`/`[ExcludeFromCodeCoverage]`, `*.g.cs`/`*.g.i.cs`/`obj\`. The collector's cobertura has no branch data, so **Block %** (native xml of the same merge; an untaken branch leaves its block uncovered) is the branch-level metric. Native/Slow/Manual tests are not run, so P/Invoke-heavy code (`Platform.Windows`, LibRaw) is under-reported.
 

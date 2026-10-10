@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NO-WPF-EXEC-PLAN mục 3 (WP-01, NE-5 = a): cầu nạp muộn cửa sổ phụ WPF (Settings, Recovery, ...) cho shell, cùng tiến
+       trình. Project DUY NHẤT trong Shell.* được dùng WPF; Shell.Win32 chỉ tham chiếu nó từ Dialogs/WpfBridgeLoader.cs
+       (L-SHELL, WP-19b). WP-01: chỉ hợp đồng C-13 (ISecondaryWindowHost). Không IsAotCompatible (WPF không AOT được). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Platforms>AnyCPU;x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+  </ItemGroup>
+
+</Project>

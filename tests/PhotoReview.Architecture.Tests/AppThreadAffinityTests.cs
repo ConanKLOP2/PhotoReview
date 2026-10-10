@@ -43,12 +43,21 @@ public sealed class AppThreadAffinityTests
             "thread (ADR 0005). Await it instead:\n" + string.Join("\n", violations));
     }
 
+    // L-AFFINITY / N-5 (NO-WPF-EXEC-PLAN, bật từ WP-01): lớp dùng chung và shell Win32 cũng UI-thread affine
+    // (continuation quay về SynchronizationContext của UI thread Win32, C-04). Shell.Interop/Rendering không có await UI.
+    private static readonly string[] UiAffineDirs =
+    [
+        "src/PhotoReview.App",
+        "src/PhotoReview.App.Shared",
+        "src/PhotoReview.Shell.Win32",
+        "src/PhotoReview.Shell.WpfBridge",
+    ];
+
     private static List<string> FindViolations(Regex pattern)
     {
-        const string appDir = "src/PhotoReview.App";
-        Assert.NotEmpty(RepoScan.CsFiles(appDir));
+        foreach (var dir in UiAffineDirs) Assert.NotEmpty(RepoScan.CsFiles(dir));
 
-        return RepoScan.FindLineViolations(line => pattern.IsMatch(StripLineComment(line)), null, appDir);
+        return RepoScan.FindLineViolations(line => pattern.IsMatch(StripLineComment(line)), null, UiAffineDirs);
     }
 
     private static string StripLineComment(string line)

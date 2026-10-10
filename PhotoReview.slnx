@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/PhotoReview.App/PhotoReview.App.csproj" />
+    <Project Path="src/PhotoReview.App.Shared/PhotoReview.App.Shared.csproj" />
     <Project Path="src/PhotoReview.Benchmarking/PhotoReview.Benchmarking.csproj" />
     <Project Path="src/PhotoReview.Core/PhotoReview.Core.csproj" />
     <Project Path="src/PhotoReview.Imaging/PhotoReview.Imaging.csproj" />
@@ -10,6 +11,10 @@
     <Project Path="src/PhotoReview.Localization.Generator/PhotoReview.Localization.Generator.csproj" />
     <Project Path="src/PhotoReview.PerfAnalysis/PhotoReview.PerfAnalysis.csproj" />
     <Project Path="src/PhotoReview.Platform.Windows/PhotoReview.Platform.Windows.csproj" />
+    <Project Path="src/PhotoReview.Shell.Interop/PhotoReview.Shell.Interop.csproj" />
+    <Project Path="src/PhotoReview.Shell.Rendering/PhotoReview.Shell.Rendering.csproj" />
+    <Project Path="src/PhotoReview.Shell.Win32/PhotoReview.Shell.Win32.csproj" />
+    <Project Path="src/PhotoReview.Shell.WpfBridge/PhotoReview.Shell.WpfBridge.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj" />
@@ -17,6 +22,8 @@
     <Project Path="tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj" />
     <Project Path="tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj" />
     <Project Path="tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj" />
+    <Project Path="tests/PhotoReview.Shell.Integration.Tests/PhotoReview.Shell.Integration.Tests.csproj" />
+    <Project Path="tests/PhotoReview.Shell.Tests/PhotoReview.Shell.Tests.csproj" />
     <Project Path="tests/PhotoReview.TestSupport/PhotoReview.TestSupport.csproj" />
     <Project Path="tests/PhotoReview.TestSupport.Windows/PhotoReview.TestSupport.Windows.csproj" />
   </Folder>

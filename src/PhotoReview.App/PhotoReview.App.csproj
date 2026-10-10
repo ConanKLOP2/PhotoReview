@@ -33,6 +33,8 @@
     <ProjectReference Include="..\PhotoReview.Imaging.LibRaw\PhotoReview.Imaging.LibRaw.csproj" />
     <ProjectReference Include="..\PhotoReview.Imaging.TurboJpeg\PhotoReview.Imaging.TurboJpeg.csproj" />
     <ProjectReference Include="..\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
+    <!-- NO-WPF-EXEC-PLAN (WP-01): lớp dùng chung không-WPF; WP-07/WP-09 dời thêm kiểu sang đây (namespace giữ nguyên). -->
+    <ProjectReference Include="..\PhotoReview.App.Shared\PhotoReview.App.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
