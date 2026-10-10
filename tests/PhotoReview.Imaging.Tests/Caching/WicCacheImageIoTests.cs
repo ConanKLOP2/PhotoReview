@@ -164,5 +164,69 @@ public sealed class WicCacheImageIoTests
         Assert.Throws<ArgumentNullException>(() => WicImageEncoder.EncodePng(live, null!));
     }
 
+    [Fact(DisplayName = "WP-04: a one-pixel-high strip is still shrunk by a box that rounds its height back to 1 (Downscaled, width fitted)")]
+    public void Box_OnePixelStrip_IsShrunkByWidth()
+    {
+        using var pixels = LegacyWpfPreviewCache.PatternPixels(1000, 1, PixelLayout.Bgr32);
+        var png = EncodePng(pixels);
+
+        using var decoded = WicCacheImageReader.Decode(png, PixelLayout.Bgr32, new DecodeBox(500, 0), 0, 0, out var info);
+
+        Assert.Equal((500, 1), (decoded.Width, decoded.Height));
+        Assert.True(info.Downscaled);
+    }
+
+    [Fact(DisplayName = "WP-04: a disk thumbnail is fitted to 800 px wide, never upscaled, and reports WicDirect, orientation 1 and the PNG's own size")]
+    public async Task DiskThumbnail_FitsToMaxWidth_AndReportsBackendAndOrientation()
+    {
+        using var root = new TempRoot("WicThumbnailDecode");
+        var wide = Path.Combine(root.Dir("t"), "wide.png");
+        var small = Path.Combine(root.Dir("t"), "small.png");
+        using (var big = LegacyWpfPreviewCache.PatternPixels(1600, 400, PixelLayout.Bgr32))
+            await DiskCacheStore.WriteAtomicallyAsync(big, wide);
+        using (var little = LegacyWpfPreviewCache.PatternPixels(100, 50, PixelLayout.Bgr32))
+            await DiskCacheStore.WriteAtomicallyAsync(little, small);
+
+        var shrunk = ThumbnailCache.DecodeDiskThumbnail(wide, WpfCacheImageCodec.Instance);
+        Assert.Equal((800, 200), (shrunk.PixelWidth, shrunk.PixelHeight));
+        Assert.True(shrunk.Downscaled);
+        Assert.Equal((1600, 400), (shrunk.OriginalWidth, shrunk.OriginalHeight));
+        Assert.Equal(1, shrunk.Orientation);
+        Assert.Equal(PhotoReview.Core.Model.DecoderBackend.WicDirect, shrunk.ActualBackend);
+
+        var kept = ThumbnailCache.DecodeDiskThumbnail(small, WpfCacheImageCodec.Instance);
+        Assert.Equal((100, 50), (kept.PixelWidth, kept.PixelHeight));
+        Assert.False(kept.Downscaled);
+    }
+
+    [Fact(DisplayName = "WP-04: the atomic write replaces an entry that already exists and leaves no temp file")]
+    public async Task AtomicWrite_ReplacesExistingEntry()
+    {
+        using var root = new TempRoot("AtomicOverwrite");
+        var path = Path.Combine(root.Dir("c"), "entry.pv4");
+        await AtomicCacheFile.WriteAsync(path, s => s.Write([1, 2, 3]), log: null, CancellationToken.None);
+        await AtomicCacheFile.WriteAsync(path, s => s.Write([9, 8]), log: null, CancellationToken.None);
+
+        Assert.Equal(new byte[] { 9, 8 }, File.ReadAllBytes(path));
+        Assert.Single(Directory.GetFiles(root.Dir("c")));
+    }
+
+    [Fact(DisplayName = "WP-04: a write cancelled while the payload is being written never publishes the entry and removes its temp file")]
+    public async Task AtomicWrite_CancelledDuringPayload_PublishesNothing()
+    {
+        using var root = new TempRoot("AtomicCancel");
+        var path = Path.Combine(root.Dir("c"), "entry.pv4");
+        using var cts = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AtomicCacheFile.WriteAsync(path, s =>
+        {
+            s.Write([1, 2, 3]);
+            cts.Cancel();
+        }, log: null, cts.Token));
+
+        Assert.False(File.Exists(path));
+        Assert.Empty(Directory.GetFiles(root.Dir("c")));
+    }
+
     private sealed class FakeCom(int hresult) : COMException("fake", hresult);
 }
