@@ -52,7 +52,7 @@ internal static class ServiceFactories
     /// through the shared <paramref name="sourceReader"/>.
     /// </summary>
     public static IImageDecoder CreateWebpHeicDecoder(ISourceReader sourceReader, ILog? log, ReviewMetrics? metrics)
-        => new FallbackImageDecoder(new WicDirectDecoder(sourceReader), DecoderBackend.WicDirect,
+        => new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance, sourceReader), DecoderBackend.WicDirect,
             new WpfBitmapImageDecoder(sourceReader), log, metrics);
 
     /// <summary>

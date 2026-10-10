@@ -13,7 +13,7 @@ public sealed class WicDirectTests : IClassFixture<OrientationFixture>, IDisposa
 {
     private readonly string _tempDir;
     private readonly OrientationFixture _files;
-    private readonly WicDirectDecoder _wicDecoder = new();
+    private readonly WicDirectDecoder _wicDecoder = new(WpfBitmapSourceCodec.Instance);
 
     public WicDirectTests(OrientationFixture files)
     {

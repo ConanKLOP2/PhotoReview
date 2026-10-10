@@ -25,6 +25,11 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
         typeof(WicDirectDecoder).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)
         ?? throw new InvalidOperationException("WicDirectDecoder." + name + " was renamed or removed; update this test.");
 
+    // WP-03: the metadata half of WicDirectDecoder moved to WicExifReader.
+    private static MethodInfo ExifReaderMethod(string name) =>
+        typeof(WicExifReader).GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+        ?? throw new InvalidOperationException("WicExifReader." + name + " was renamed or removed; update this test.");
+
     // ---- ToIntSize / EnsureOutputFits ----
 
     [Theory]
@@ -256,7 +261,7 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
         {
             for (var i = 0; i < 24; i += 8) Marshal.WriteInt64(pvar, i, 0);
             fill(pvar);
-            return Private("ReadVariant").Invoke(null, [pvar]);
+            return ExifReaderMethod("ReadVariant").Invoke(null, [pvar]);
         }
         finally
         {
@@ -382,7 +387,7 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
             _ => null,
         };
 
-        return WicDirectDecoder.ReadMetadataValues(Query, read, exifIfdRoot: null, out _);
+        return WicExifReader.ReadMetadataValues(Query, read, exifIfdRoot: null, out _);
     }
 
     [Theory]
@@ -430,7 +435,7 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
     [Fact]
     public void ReadMetadataValues_OrientationNotRequested_IsNeverQueried()
     {
-        var orientation = WicDirectDecoder.ReadMetadataValues(
+        var orientation = WicExifReader.ReadMetadataValues(
             _ => throw new InvalidOperationException("must not be queried"), readOrientation: false, exifIfdRoot: null, out var exif);
 
         Assert.Equal(1, orientation);
@@ -463,7 +468,7 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
     [Fact]
     public void Decode_TiffWithExifMake_ReadsItThroughTheTiffIfdRoot()
     {
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(TiffWithExif("TiffMaker"), 0));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(TiffWithExif("TiffMaker"), 0));
 
         Assert.Equal("TiffMaker", decoded.Exif?.CameraMake);
     }
@@ -471,7 +476,7 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
     [Fact]
     public void Decode_JpegWithExifMake_ReadsItThroughTheJpegIfdRoot()
     {
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(JpegWithExif("JpegMaker"), 0));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(JpegWithExif("JpegMaker"), 0));
 
         Assert.Equal("JpegMaker", decoded.Exif?.CameraMake);
     }
@@ -481,7 +486,7 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
     {
         var path = FixtureGenerator.GeneratePng(_root.Combine("plain.png"), 32, 24);
 
-        var decoded = new WicDirectDecoder().Decode(new DecodeRequest(path, 0));
+        var decoded = new WicDirectDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, 0));
 
         Assert.Null(decoded.Exif);
     }
@@ -514,7 +519,7 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
     [Fact]
     public void Decode_ExifAdobeRgbColorSpace_IsTransformedToSrgb_WhileSrgbAndUntaggedAreNot()
     {
-        var decoder = new WicDirectDecoder();
+        var decoder = new WicDirectDecoder(WpfBitmapSourceCodec.Instance);
 
         var untagged = CenterPixel(decoder.Decode(new DecodeRequest(OrangeJpegWithExifColorSpace(null), 0)));
         var srgb = CenterPixel(decoder.Decode(new DecodeRequest(OrangeJpegWithExifColorSpace(1), 0)));

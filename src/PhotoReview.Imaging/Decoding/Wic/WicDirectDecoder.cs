@@ -1,8 +1,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Metadata;
+using PhotoReview.Imaging.Pixels;
 using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Imaging.Decoding.Wic;
@@ -14,15 +13,25 @@ namespace PhotoReview.Imaging.Decoding.Wic;
 /// </summary>
 public sealed class WicDirectDecoder : IImageDecoder
 {
-    private const string ExifOrientationQuery = "/app1/ifd/{ushort=274}";
-    private const string WindowsOrientationQuery = "System.Photo.Orientation";
+    private readonly IPlatformImageCodec _codec;
     private readonly ISourceReader _sourceReader;
 
+    /// <param name="codec">
+    /// C-02 platform codec (no default, so a wrong codec is never picked up by accident): the WIC pixels are copied once into
+    /// a <see cref="PixelBuffer"/> and handed to <see cref="IPlatformImageCodec.FromPixels"/> -- the WPF app passes
+    /// <see cref="WpfBitmapSourceCodec.Instance"/> (a frozen BitmapSource, as before), the Win32 shell
+    /// <see cref="PixelBufferImageCodec.Instance"/> (the buffer itself).
+    /// </param>
     /// <param name="sourceReader">
     /// Q-R29 option C-2 seam: null (every existing call site) uses <see cref="PhysicalSourceReader"/>,
     /// byte-for-byte the direct <see cref="FileStream"/> this decoder opened before the seam existed.
     /// </param>
-    public WicDirectDecoder(ISourceReader? sourceReader = null) => _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
+    public WicDirectDecoder(IPlatformImageCodec codec, ISourceReader? sourceReader = null)
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        _codec = codec;
+        _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
+    }
 
     /// <summary>Memory seam for the output-size guard (total available, current load); tests inject a small machine.</summary>
     internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = MemoryHeadroom.ReadGcMemoryInfo;
@@ -40,12 +49,13 @@ public sealed class WicDirectDecoder : IImageDecoder
         {
             try
             {
-                return DecodeFromStream(stream, request, MemoryInfo);
+                return DecodeFromStream(stream, request, _codec, MemoryInfo);
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException ex) when (ex is not ArgumentNullException)
             {
                 // WIC maps E_INVALIDARG (damaged metadata/header) to ArgumentException, which the fallback chain treats as a
                 // caller bug and does not catch. The argument checks of this method ran before the try, so this is a data fault.
+                // An ArgumentNullException is a programming error in our own code and is not relabelled as bad data (NOWPF-WP03).
                 throw AsInvalidData(ex);
             }
         }
@@ -105,7 +115,7 @@ public sealed class WicDirectDecoder : IImageDecoder
             // no longer need to fall back to WPF here.
             frame.GetSize(out uint origW, out uint origH);
             var (width, height) = ToIntSize(origW, origH);
-            int orientation = ReadExifOrientation(frame);
+            int orientation = WicExifReader.ReadOrientation(frame);
 
             return new ImageInfo(width, height, orientation);
         }
@@ -117,7 +127,8 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
-    private static WpfDecodedImage DecodeFromStream(Stream stream, DecodeRequest request, Func<(long TotalAvailable, long Load)> memoryInfo)
+    private static DecodedImage DecodeFromStream(Stream stream, DecodeRequest request, IPlatformImageCodec codec,
+        Func<(long TotalAvailable, long Load)> memoryInfo)
     {
         var factory = CreateFactory();
         using var managedStream = new ManagedIStream(stream);
@@ -151,11 +162,11 @@ public sealed class WicDirectDecoder : IImageDecoder
             if (request.ApplyOrientation && request.SourceOrientation.HasValue)
             {
                 orientation = request.SourceOrientation.Value;
-                ReadFrameMetadata(frame, false, ExifIfdRootOf(decoder), out exif);
+                WicExifReader.ReadFrameMetadata(frame, false, WicExifReader.ExifIfdRootOf(decoder), out exif);
             }
             else
             {
-                orientation = ReadFrameMetadata(frame, request.ApplyOrientation, ExifIfdRootOf(decoder), out exif);
+                orientation = WicExifReader.ReadFrameMetadata(frame, request.ApplyOrientation, WicExifReader.ExifIfdRootOf(decoder), out exif);
             }
             bool isTransposed = request.ApplyOrientation && ExifOrientation.IsTransposed(orientation);
 
@@ -241,32 +252,13 @@ public sealed class WicDirectDecoder : IImageDecoder
             var stride = checked((int)finalW * 4);
             var bufferSize = checked(stride * (int)finalH);
 
-            // Native scratch buffer: BitmapSource.Create copies it into its own WIC bitmap, so a
-            // managed array here would only add a large LOH allocation (GC pressure) per decode.
-            BitmapSource bitmap;
-            IntPtr buffer = Marshal.AllocHGlobal(bufferSize);
-            try
-            {
-                CopyPixelsGuarded(
-                    () => currentSource.CopyPixels(IntPtr.Zero, (uint)stride, (uint)bufferSize, buffer),
-                    colorChain.IsActive);
-                bitmap = BitmapSource.Create(
-                    (int)finalW,
-                    (int)finalH,
-                    96,
-                    96,
-                    opaque ? PixelFormats.Bgr32 : PixelFormats.Pbgra32,
-                    null,
-                    buffer,
-                    bufferSize,
-                    stride);
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
+            // WP-03: WIC writes straight into the native PixelBuffer (one copy); the codec then owns it. With the WPF codec
+            // that is the same single BitmapSource.Create copy into MIL as before (2 copies in all), with the pixel codec none.
+            var source = currentSource;
+            var pixels = AllocateAndFill((int)finalW, (int)finalH, opaque ? PixelLayout.Bgr32 : PixelLayout.Pbgra32,
+                buffer => source.CopyPixels(IntPtr.Zero, (uint)stride, (uint)bufferSize, buffer.Address), colorChain.IsActive);
 
-            bitmap.Freeze();
+            var platformImage = codec.FromPixels(pixels);
 
             // Perf: origW/origH (frame.GetSize) are already read above at zero extra cost; a
             // transposing orientation (5-8) swaps them, exactly mirroring what happened to the
@@ -274,7 +266,8 @@ public sealed class WicDirectDecoder : IImageDecoder
             int originalWidth = isTransposed ? (int)origH : (int)origW;
             int originalHeight = isTransposed ? (int)origW : (int)origH;
 
-            return new WpfDecodedImage(bitmap, downscaled, orientation, DecoderBackend.WicDirect, originalWidth, originalHeight, exif);
+            return new DecodedImage(platformImage, (int)finalW, (int)finalH, bufferSize, downscaled, orientation, DecoderBackend.WicDirect,
+                originalWidth, originalHeight, exif);
         }
         finally
         {
@@ -287,6 +280,26 @@ public sealed class WicDirectDecoder : IImageDecoder
             SafeReleaseCom(frame);
             SafeReleaseCom(decoder);
             SafeReleaseCom(factory);
+        }
+    }
+
+    /// <summary>
+    /// Allocates the native output buffer and lets <paramref name="copy"/> fill it (WIC's single CopyPixels). When the copy throws
+    /// (a lazily evaluated colour transform, a damaged stream) the buffer is disposed before the exception leaves, so a failed
+    /// decode never holds native memory until a finalizer runs. On success the caller owns the buffer.
+    /// </summary>
+    internal static PixelBuffer AllocateAndFill(int width, int height, PixelLayout layout, Action<PixelBuffer> copy, bool colorTransformActive)
+    {
+        var pixels = PixelBuffer.Allocate(width, height, layout);
+        try
+        {
+            CopyPixelsGuarded(() => copy(pixels), colorTransformActive);
+            return pixels;
+        }
+        catch
+        {
+            pixels.Dispose();
+            throw;
         }
     }
 
@@ -303,14 +316,21 @@ public sealed class WicDirectDecoder : IImageDecoder
     {
         // A negative length is an overflowed count, never a small buffer: it goes through the memory check like any huge one.
         if (bufferLength >= 0 && bufferLength < MemoryHeadroom.GuardThresholdBytes) return;
+        // Stride, size and the WIC/BitmapSource copy APIs are int-based: a buffer beyond int.MaxValue can never be filled, however
+        // much memory the machine has. Refused here as the clean admission error, not later as an OverflowException (which the
+        // fallback chain would take for a retryable backend failure and hand to WPF).
+        if (bufferLength > int.MaxValue || bufferLength < 0) throw OutputTooLarge(width, height, bufferLength);
         var (total, load) = memoryInfo();
         if (MemoryHeadroom.OutputHasHeadroom(bufferLength, total, load)) return;
-        throw UserFacingError.Localized(
-            new DecoderMemoryAdmissionException($"WicDirect output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
-            () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
+        throw OutputTooLarge(width, height, bufferLength);
     }
 
-    private static IWICImagingFactory CreateFactory()
+    private static DecoderMemoryAdmissionException OutputTooLarge(int width, int height, long bufferLength) =>
+        UserFacingError.Localized(
+            new DecoderMemoryAdmissionException($"WicDirect output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
+            () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
+
+    internal static IWICImagingFactory CreateFactory()
     {
         int hr = WicNativeMethods.WICCreateImagingFactory_Proxy(WicNativeMethods.WINCODEC_SDK_VERSION1, out IWICImagingFactory? factory);
         ThrowIfFactoryFailed(hr, factory is not null);
@@ -563,167 +583,6 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
-    /// <summary>IFD root of the EXIF block for JPEG/TIFF containers; null (no EXIF read) for anything else.</summary>
-    private static string? ExifIfdRootOf(IWICBitmapDecoder decoder)
-    {
-        try
-        {
-            decoder.GetContainerFormat(out Guid container);
-            if (container == WicGuids.GUID_ContainerFormatJpeg) return ExifQueryInterpreter.JpegIfdRoot;
-            if (container == WicGuids.GUID_ContainerFormatTiff) return ExifQueryInterpreter.TiffIfdRoot;
-            return null;
-        }
-        catch (COMException)
-        {
-            return null;
-        }
-    }
-
-    private static int ReadExifOrientation(IWICBitmapFrameDecode frame) =>
-        ReadFrameMetadata(frame, readOrientation: true, exifIfdRoot: null, out _);
-
-    /// <summary>
-    /// Reads the EXIF orientation (when <paramref name="readOrientation"/>) and, when <paramref name="exifIfdRoot"/> is
-    /// set, the photo-information fields through ONE metadata query reader of the frame being decoded -- the same
-    /// metadata block WIC parses for the orientation anyway, so no extra stream read. Never throws: any metadata
-    /// failure gives orientation 1 / no EXIF.
-    /// </summary>
-    private static int ReadFrameMetadata(IWICBitmapFrameDecode frame, bool readOrientation, string? exifIfdRoot, out ExifSummary? exif)
-    {
-        exif = null;
-        IWICMetadataQueryReader? reader = null;
-        IntPtr pvar = IntPtr.Zero;
-        try
-        {
-            frame.GetMetadataQueryReader(out reader);
-            pvar = Marshal.AllocHGlobal(PropVariantSize);
-            ZeroPropVariant(pvar);
-            var queryReader = reader;
-            var queryBuffer = pvar;
-            return ReadMetadataValues(name => QueryValue(queryReader, name, queryBuffer), readOrientation, exifIfdRoot, out exif);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // No metadata reader at all (or the buffer could not be set up).
-            exif = null;
-            return 1;
-        }
-        finally
-        {
-            if (pvar != IntPtr.Zero)
-            {
-                _ = PropVariantClear(pvar);
-                Marshal.FreeHGlobal(pvar);
-            }
-            SafeReleaseCom(reader);
-        }
-    }
-
-    /// <summary>
-    /// The orientation and the photo-information read are independent: a failure in one (a damaged EXIF field) must not
-    /// discard the other, or a photo whose orientation was read fine would silently show unrotated.
-    /// </summary>
-    internal static int ReadMetadataValues(Func<string, object?> query, bool readOrientation, string? exifIfdRoot, out ExifSummary? exif)
-    {
-        var orientation = 1;
-        exif = null;
-        if (readOrientation)
-        {
-            try
-            {
-                var value = ExifQueryInterpreter.AsInteger(query(ExifOrientationQuery));
-                if (value is not (>= 1 and <= 8))
-                    value = ExifQueryInterpreter.AsInteger(query(WindowsOrientationQuery));
-                if (value is >= 1 and <= 8) orientation = (int)value.Value;
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                orientation = 1;
-            }
-        }
-
-        if (exifIfdRoot is not null)
-        {
-            try
-            {
-                exif = ExifQueryInterpreter.Read(query, exifIfdRoot);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                exif = null;
-            }
-        }
-
-        return orientation;
-    }
-
-    private const int PropVariantSize = 24;
-
-    /// <summary>One metadata query into a managed value (see <see cref="ReadVariant"/>); null when absent or unreadable.</summary>
-    /// <remarks><paramref name="pvar"/> must be zeroed on entry; it is cleared and zeroed again before returning.</remarks>
-    private static object? QueryValue(IWICMetadataQueryReader reader, string name, IntPtr pvar)
-    {
-        try
-        {
-            return reader.GetMetadataByName(name, pvar) < 0 ? null : ReadVariant(pvar);
-        }
-        finally
-        {
-            _ = PropVariantClear(pvar);
-            ZeroPropVariant(pvar);
-        }
-    }
-
-    private static void ZeroPropVariant(IntPtr pvar)
-    {
-        for (var i = 0; i < PropVariantSize; i += 8) Marshal.WriteInt64(pvar, i, 0);
-    }
-
-    /// <summary>
-    /// PROPVARIANT to the managed shapes WPF's BitmapMetadata.GetQuery returns for the same tags (ushort, uint,
-    /// ulong-packed rational, string, first element of a vector), so <see cref="ExifQueryInterpreter"/> serves both.
-    /// </summary>
-    private static object? ReadVariant(IntPtr pvar)
-    {
-        const int data = 8;
-        const ushort vtVector = 0x1000;
-        var vt = (ushort)Marshal.ReadInt16(pvar);
-        switch (vt)
-        {
-            case 2: return Marshal.ReadInt16(pvar, data);              // VT_I2
-            case 3: return Marshal.ReadInt32(pvar, data);              // VT_I4
-            case 17: return Marshal.ReadByte(pvar, data);              // VT_UI1
-            case 18: return (ushort)Marshal.ReadInt16(pvar, data);     // VT_UI2
-            case 19: return (uint)Marshal.ReadInt32(pvar, data);       // VT_UI4
-            case 20: return Marshal.ReadInt64(pvar, data);             // VT_I8 (SRATIONAL)
-            case 21: return (ulong)Marshal.ReadInt64(pvar, data);      // VT_UI8 (RATIONAL)
-            case 30:                                                   // VT_LPSTR (EXIF ASCII)
-            {
-                var text = Marshal.ReadIntPtr(pvar, data);
-                return text == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(text);
-            }
-            case 31:                                                   // VT_LPWSTR
-            {
-                var text = Marshal.ReadIntPtr(pvar, data);
-                return text == IntPtr.Zero ? null : Marshal.PtrToStringUni(text);
-            }
-        }
-
-        if ((vt & vtVector) == 0) return null;
-        // CA* vector: { ULONG cElems; T* pElems } -- only the first element is used.
-        var count = Marshal.ReadInt32(pvar, data);
-        var elements = Marshal.ReadIntPtr(pvar, data + IntPtr.Size);
-        if (count <= 0 || elements == IntPtr.Zero) return null;
-        return (vt & ~vtVector) switch
-        {
-            18 => new[] { (ushort)Marshal.ReadInt16(elements) },
-            19 => new[] { (uint)Marshal.ReadInt32(elements) },
-            20 => new[] { Marshal.ReadInt64(elements) },
-            21 => new[] { (ulong)Marshal.ReadInt64(elements) },
-            _ => null,
-        };
-    }
-
     private static WICBitmapTransformOptions MapToTransformOptions(int orientation)
     {
         return orientation switch
@@ -739,14 +598,11 @@ public sealed class WicDirectDecoder : IImageDecoder
         };
     }
 
-    private static void SafeReleaseCom(object? comObj)
+    internal static void SafeReleaseCom(object? comObj)
     {
         if (comObj is not null && Marshal.IsComObject(comObj))
         {
             Marshal.ReleaseComObject(comObj);
         }
     }
-
-    [DllImport("ole32.dll", ExactSpelling = true)]
-    private static extern int PropVariantClear(IntPtr pvar);
 }

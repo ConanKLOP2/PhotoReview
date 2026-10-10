@@ -54,10 +54,10 @@ public sealed class DecoderMutationFuzzTests(ITestOutputHelper output)
     private static IEnumerable<(string Name, IImageDecoder Decoder)> Decoders()
     {
         yield return ("Wpf", new WpfBitmapImageDecoder());
-        yield return ("WicDirect", new WicDirectDecoder());
+        yield return ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance));
         yield return ("TurboJpeg", new TurboJpegDecoder());
         yield return ("Turbo->Wpf chain", new FallbackImageDecoder(new TurboJpegDecoder(), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder()));
-        yield return ("WicDirect->Wpf chain", new FallbackImageDecoder(new WicDirectDecoder(), DecoderBackend.WicDirect, new WpfBitmapImageDecoder()));
+        yield return ("WicDirect->Wpf chain", new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.WicDirect, new WpfBitmapImageDecoder()));
     }
 
     private void Run(int iterationsPerSeed, int rngSeed)

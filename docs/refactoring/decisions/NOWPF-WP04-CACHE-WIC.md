@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP04
-order: 412
+order: 422
 summary: |-
   WP-04 (NO-WPF-EXEC-PLAN, 2026-10-10): cache đĩa (JPEG q95, PNG) encode/decode bằng WIC trên PixelBuffer; định dạng file không đổi (byte-identical, đọc chéo hai chiều). Codec WPF là MẶC ĐỊNH khi không truyền codec (WP-06 phải bắt buộc). JPEG chậm hơn 17-30 % do hai bản chép của cầu WPF (chủ dự án quyết); ba thay đổi hành vi nhỏ, không nguy hiểm.
 ---
