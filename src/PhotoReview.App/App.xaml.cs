@@ -413,7 +413,7 @@ public partial class App : System.Windows.Application, IDisposable
     /// first layout from its saved placement. Null when no prediction is possible: the decode then starts when the
     /// window is shown (MainWindow.StartInitialDecode), as before.
     /// </summary>
-    private async Task<EarlyDecodePlan?> PrepareEarlyDecodeAsync(Task<WindowPlacementService.WindowPlacement?> placementLoad)
+    private async Task<EarlyDecodePlan?> PrepareEarlyDecodeAsync(Task<PhotoReview.App.Windowing.WindowPlacementData?> placementLoad)
     {
         try
         {
