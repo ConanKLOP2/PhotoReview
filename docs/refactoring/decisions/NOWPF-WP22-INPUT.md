@@ -57,7 +57,21 @@ Sửa nhỏ ngoài `Input/`: `ShellMainWindow.cs` (một dòng `RegisterFeatures
 
 ## 4. Đột biến
 
-MUTATION_PLACEHOLDER
+35 đột biến thủ công (mỗi cái: sửa một chỗ trong `Shell.Win32/Input` -> build -> chạy Shell.Tests `Input` rồi, nếu sống, Shell.Integration.Tests `Input`
+trên desktop ẩn): bit auto-repeat (bỏ qua / bit 29), pan mũi tên (bỏ điều kiện modifier / so sánh đang hiện), Space/Enter của nút,
+phím hệ thống không đi qua `System`, file action lặp khi giữ phím, đếm click nút giữa, nút giữa ngoài vùng nhìn / trên thanh cuộn,
+`OnWindowPreviewMouseDown`, di chuyển/nhả không cần capture, wheel trên overlay, nguồn dấu thời gian wheel ngang/dọc (TickCount <->
+MessageTime), cờ Ctrl của wheel, toạ độ không dấu, biên thời gian và slop double-click, scan code Shift phải, Alt luôn bật, đổi cài
+đặt không dựng lại phím tắt, điều hướng không dừng đà, zoom/deactivate không dừng đà, Close không làm gì, thả mở file cuối,
+DragEnter luôn Copy, ngưỡng kéo hằng số, K không lật, hwheel khi chưa load, KEYUP của phím khác bị nuốt, cờ MK_LBUTTON, dấu delta.
+- 29 bị diệt ngay; **6 sống sót ban đầu** và đã lấp: M02 (hằng bit repeat: test dùng chính hằng của mã -> đổi sang literal), M11/M32
+  (kéo/nhả NGOÀI chữ nhật ảnh khi còn capture: kịch bản cũ luôn nằm trong ảnh -> `Drag_ContinuesOutsideTheImageRectangle...`), M21
+  (test đổi phím tắt bấm cả phím cũ lẫn mới nên xanh dù không Rebuild -> bấm J, rồi I (phải không đổi), rồi J), M33 (thứ tự KEYUP), M27 (xem dưới).
+- 2 tương đương: M23 (`ExitFullscreen` -> `ToggleFullscreen`: router chỉ phát ExitFullscreen khi đang fullscreen nên hai lệnh giống nhau),
+  M27 (SM_CXDRAG không đổi theo DPI trên máy này nên hằng 4 giống hệt; vẫn có test `CreateViewportOptions` đọc DPI mỗi lần gọi).
+- M35 (`CursorScreenPixel` luôn null) không dựng được bản đột biến sạch (cảnh báo biến không dùng = lỗi build ở Release); hàm được
+  ghim bởi `CursorScreenPixel_IsTheCursorPosition_OrNullWhenWindowsCannotSayIt`.
+- Không phát hiện lỗi thật trong mã nguồn bởi đột biến; phát hiện hiệu năng: xem mục 5 và perf.
 
 ## 5. Việc còn lại / bàn giao
 
