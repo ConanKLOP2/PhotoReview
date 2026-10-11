@@ -1,8 +1,13 @@
+using System.Diagnostics;
+using System.Diagnostics.Tracing;
+using System.Reflection;
 using PhotoReview.App.Input;
+using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Pixels;
 using PhotoReview.Shell.Rendering;
 using PhotoReview.Shell.Win32;
+using PhotoReview.Shell.Win32.Startup;
 using PhotoReview.Shell.Win32.Viewing;
 
 namespace PhotoReview.Shell.Integration.Tests.Startup;
@@ -265,6 +270,219 @@ public sealed class ShellViewingTests
         Assert.True(WaitUntil(() => run.OnUi(() => main.GpuCacheClearCount) == 1), "cache GPU không bị xoá cùng cache RAM");
         Assert.True(WaitUntil(() => run.OnUi(() => main.Stats.Total) > framesBefore), "phải vẽ lại sau khi xoá cache");
         Assert.True(WaitUntil(() => run.OnUi(() => main.ImageCache!.Contains(main.Composer!.Current!.Id))), "ảnh hiện tại phải upload lại");
+        Stop(run);
+    }
+
+    // Kiểm thử đột biến thủ công WP-21 (mutB): các test dưới đây lấp những đột biến sống sót của bộ test trên. ----------------------
+
+    /// <summary>Ảnh >= <see cref="ShellMainWindow.DeferUploadBytes"/> (16 MiB): nâng cấp cùng ảnh phải upload trước rồi mới thay.</summary>
+    private static PixelBuffer BigImage() => PixelBuffer.Allocate(2304, 2304, PixelLayout.Pbgra32);
+
+    private static ShellPresentationHub HubOf(ShellMainWindow main) =>
+        (ShellPresentationHub)typeof(ShellMainWindow).GetField("_hub", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(main)!;
+
+    /// <summary>Vẽ (RenderNow) cho tới khi có thêm một khung (khung có thể bị hoãn tối đa vài lần); trả số khung đã vẽ.</summary>
+    private static long RenderUntilAFrameIsDrawn(ShellMainWindow main)
+    {
+        var before = main.Stats.Total;
+        for (var attempt = 0; attempt < 8 && main.Stats.Total == before; attempt++)
+        {
+            main.RenderNow();
+        }
+
+        return main.Stats.Total - before;
+    }
+
+    private static ShellRun StartSettled(string label, int count, out ShellMainWindow main)
+    {
+        var root = ShellRun.NewRoot(label);
+        var files = MakeFolder(root, count);
+        var run = ShellRun.Start(root, [files[0]]);
+        Assert.True(run.WaitForMain());
+        Assert.True(WaitUntil(() => run.Main!.FirstImagePresented), "ảnh đầu không được vẽ");
+        Assert.True(WaitUntil(() => IsSettled(run)));
+        main = run.Main!;
+        return run;
+    }
+
+    private sealed class RenderedCapture : EventListener
+    {
+        private readonly List<(string Name, long Token)> _events = [];
+
+        protected override void OnEventSourceCreated(EventSource eventSource)
+        {
+            if (eventSource.Name == "PhotoReview-Perf")
+            {
+                EnableEvents(eventSource, EventLevel.Informational);
+            }
+        }
+
+        protected override void OnEventWritten(EventWrittenEventArgs eventData)
+        {
+            if (eventData.EventName is "Rendered" or "Presented" or "RenderedFrame" && eventData.Payload is { Count: > 0 } payload)
+            {
+                lock (_events)
+                {
+                    _events.Add((eventData.EventName, Convert.ToInt64(payload[0], System.Globalization.CultureInfo.InvariantCulture)));
+                }
+            }
+        }
+
+        public int CountFor(long token)
+        {
+            lock (_events)
+            {
+                return _events.Count(e => e.Token == token);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Navigating_BackAndForth_FeedsTheDirectionToThePrefetcher()
+    {
+        using var run = StartSettled("view-dir", 4, out var main);
+        Assert.Equal(1, run.OnUi(() => main.Prefetcher!.Direction));
+
+        await OnUiAsync(run, async () =>
+        {
+            await main.ViewModel.NextAsync();
+            return true;
+        }).WaitAsync(Bound);
+        Assert.True(WaitUntil(() => CurrentPath(run).EndsWith("p01.jpg", StringComparison.OrdinalIgnoreCase)));
+        await OnUiAsync(run, async () =>
+        {
+            await main.ViewModel.PreviousAsync();
+            return true;
+        }).WaitAsync(Bound);
+        Assert.True(WaitUntil(() => CurrentPath(run).EndsWith("p00.jpg", StringComparison.OrdinalIgnoreCase)));
+
+        Assert.Equal(-1, run.OnUi(() => main.Prefetcher!.Direction));    // OnNavigationChanged phải gọi Navigated
+        Stop(run);
+    }
+
+    [Fact]
+    public void ClearCache_DropsEveryUnretainedGpuBitmap_NotOnlyTheCounter()
+    {
+        using var extra = PixelBuffer.Allocate(64, 64, PixelLayout.Pbgra32);   // trước run: giải phóng SAU khi shell đã đóng
+        using var run = StartSettled("view-clear2", 2, out var main);
+        run.OnUi(() => main.ImageCache!.GetOrUpload(extra));
+        Assert.True(run.OnUi(() => main.ImageCache!.Contains(extra.Id)));
+        var clears = run.OnUi(() => main.GpuCacheClearCount);
+
+        run.OnUi(() => main.ViewModel.PreviewService!.ClearCache());
+
+        Assert.True(WaitUntil(() => run.OnUi(() => main.GpuCacheClearCount) == clears + 1));
+        Assert.False(run.OnUi(() => main.ImageCache!.Contains(extra.Id)), "bitmap GPU phải bị xoá cùng cache RAM (INV-2)");
+        Stop(run);
+    }
+
+    [Fact]
+    public async Task CurrentImage_IsRetainedOnTheGpu_WhenTheCacheIsOverBudget()
+    {
+        using var filler = PixelBuffer.Allocate(64, 64, PixelLayout.Pbgra32);
+        using var run = StartSettled("view-retain", 3, out var main);
+        await OnUiAsync(run, async () =>
+        {
+            await main.ViewModel.NextAsync();
+            return true;
+        }).WaitAsync(Bound);
+        Assert.True(WaitUntil(() => CurrentPath(run).EndsWith("p01.jpg", StringComparison.OrdinalIgnoreCase)));
+        Assert.True(WaitUntil(() => IsSettled(run)));
+
+        var kept = run.OnUi(() =>
+        {
+            var cache = main.ImageCache!;
+            var current = main.Composer!.Current!;
+            var budget = cache.BudgetBytes;
+            cache.BudgetBytes = 0;                    // mọi thứ không được Retain/bảo vệ đều bị đuổi
+            cache.GetOrUpload(filler);
+            var contained = cache.Contains(current.Id);
+            cache.BudgetBytes = budget;
+            return contained;
+        });
+
+        Assert.True(kept, "ảnh đang hiện phải được Retain (UpdateRetained) nên LRU không đuổi nó");
+        Stop(run);
+    }
+
+    [Fact]
+    public void ImageChanging_ThatIsNotAFileChange_NeverStartsACrossfade()
+    {
+        // Hợp đồng của view model: ImageChanging chỉ phát cho lần đổi file; handler vẫn tự canh IsFileChange (nâng cấp cùng ảnh
+        // không được mờ). Gọi handler riêng tư trực tiếp vì không còn đường công khai nào phát sự kiện với false.
+        using var run = StartSettled("view-changing", 2, out var main);
+        run.OnUi(() =>
+        {
+            main.ViewModel.Settings.ImageTransition = ImageTransition.Fade;
+            main.ViewModel.Settings.ImageTransitionMs = 120;
+        });
+        var handler = typeof(ShellMainWindow).GetMethod("OnImageChanging", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var before = run.OnUi(() => main.Composer!.Crossfade.StartCount);
+
+        run.OnUi(() => handler.Invoke(main, [null, new ImageChangingEventArgs(false)]));
+        Assert.Equal(before, run.OnUi(() => main.Composer!.Crossfade.StartCount));
+
+        run.OnUi(() => handler.Invoke(main, [null, new ImageChangingEventArgs(true)]));   // đối chứng: đổi file thì có mờ
+        Assert.Equal(before + 1, run.OnUi(() => main.Composer!.Crossfade.StartCount));
+        Stop(run);
+    }
+
+    [Fact]
+    public void FrameDrawnWhileAnUpgradeIsStillUploading_DoesNotCountAsTheNewImagePresented()
+    {
+        using var big = BigImage();
+        using var capture = new RenderedCapture();
+        using var run = StartSettled("view-pending", 2, out var main);
+        var hub = HubOf(main);
+        var token = 7_000_000 + Random.Shared.NextInt64(1, 1_000_000);
+
+        // Một lượt UI: bản nâng cấp (cùng ảnh, lớn) vào hàng chờ upload dải; khung vẽ ngay sau đó vẫn là ảnh cũ.
+        var (pendingHeld, frames) = run.OnUi(() =>
+        {
+            hub.SetCurrentImage(big, isFileChange: false);
+            if (!ReferenceEquals(main.Composer!.Pending, big))
+            {
+                return (false, 0L);
+            }
+
+            hub.AddTrace(token, "preview", Stopwatch.GetTimestamp());
+            var drawn = RenderUntilAFrameIsDrawn(main);
+            return (ReferenceEquals(main.Composer.Pending, big), drawn);
+        });
+
+        Assert.True(pendingHeld, "tiền đề: bản nâng cấp phải còn chờ upload trong khung đó");
+        Assert.True(frames > 0, "tiền đề: phải có khung được vẽ");
+        Assert.Equal(0, capture.CountFor(token));            // khung chứa ảnh CŨ không được tính cho mốc của bản mới
+
+        Assert.True(WaitUntil(() => capture.CountFor(token) == 3), "sau khi bản mới thành ảnh chính, mốc phải được phát");
+        Assert.True(run.OnUi(() => ReferenceEquals(main.Composer!.Current, big)));
+        Stop(run);
+    }
+
+    [Fact]
+    public void AnUpgradeThatIsFullyUploadedWithoutTheCompletionEvent_IsPromotedByTheNextFrame()
+    {
+        using var big = BigImage();
+        using var run = StartSettled("view-promote", 2, out var main);
+        var hub = HubOf(main);
+
+        var (pendingHeld, frames, promoted) = run.OnUi(() =>
+        {
+            hub.SetCurrentImage(big, isFileChange: false);
+            if (!ReferenceEquals(main.Composer!.Pending, big))
+            {
+                return (false, 0L, false);
+            }
+
+            // Upload đồng bộ (không qua prefetch từng dải nên không có UploadCompleted): chỉ khung kế mới có thể chuyển nó.
+            main.ImageCache!.GetOrUpload(big);
+            var drawn = RenderUntilAFrameIsDrawn(main);
+            return (true, drawn, ReferenceEquals(main.Composer.Current, big) && main.Composer.Pending is null);
+        });
+
+        Assert.True(pendingHeld, "tiền đề: bản nâng cấp phải vào hàng chờ");
+        Assert.True(frames > 0, "tiền đề: phải có khung được vẽ");
+        Assert.True(promoted, "Present phải gọi TryPromotePending trước layout");
         Stop(run);
     }
 
