@@ -317,3 +317,205 @@ public sealed class DeferredTooltipsTests
         deferred.RelayMouse(0x0200, 0, 0);
     }
 }
+
+/// <summary>Cửa sổ giả cho <see cref="OverlayMessageHandler"/>: chỉ DPI có nghĩa, các hành động chỉ ghi lại.</summary>
+internal sealed class FakeShellWindow : PhotoReview.Shell.Win32.Hosting.IShellWindow
+{
+    public nint Hwnd => 0;
+
+    public double DpiScale { get; set; } = 1;
+
+    public SizeD ClientSizeDip => new(1000, 700);
+
+    public bool IsActive => true;
+
+    public bool IsLoaded => true;
+
+    public bool HasPointerCapture { get; private set; }
+
+    public event EventHandler? ClientSizeChanged { add { } remove { } }
+
+    public event EventHandler? DpiChanged { add { } remove { } }
+
+    public event EventHandler? Activated { add { } remove { } }
+
+    public event EventHandler? Deactivated { add { } remove { } }
+
+    public event EventHandler<System.ComponentModel.CancelEventArgs>? Closing { add { } remove { } }
+
+    public event EventHandler? Closed { add { } remove { } }
+
+    public void AddMessageHandler(PhotoReview.Shell.Win32.Hosting.IWindowMessageHandler handler)
+    {
+    }
+
+    public void Invalidate()
+    {
+    }
+
+    public void SetTitle(string title)
+    {
+    }
+
+    public void SetCursor(PhotoReview.Shell.Win32.Hosting.ShellCursor cursor)
+    {
+    }
+
+    public void CapturePointer() => HasPointerCapture = true;
+
+    public void ReleasePointer() => HasPointerCapture = false;
+
+    public PointD ScreenToClientDip(PointD screenPixel) => new(screenPixel.X / DpiScale, screenPixel.Y / DpiScale);
+
+    public void Close()
+    {
+    }
+}
+
+/// <summary>
+/// WP-23 (mutation gaps): các giá trị mà test cũ chỉ so với chính hằng số / dung sai golden 2 DIP, toạ độ DPI của handler thông
+/// điệp, và các điểm quan sát mà đột biến thủ công không bị bắt. Dùng <see cref="OverlayRig"/> (đồng hồ giả, chữ đo tất định).
+/// </summary>
+[Trait("Category", "HotPath")]
+public sealed class OverlayMutationGapTests
+{
+    private static OverlayRig NewRig(Action<PhotoReview.Core.Settings.AppSettings>? tweak = null)
+    {
+        var rig = new OverlayRig();
+        tweak?.Invoke(rig.Settings);
+        rig.Update(m => m with { HasImages = true });
+        return rig;
+    }
+
+    [Fact]
+    public void Toolbar_BoxAndButtonSpacingMatchTheXamlExactly()
+    {
+        using var rig = new OverlayRig();
+        ToolbarPanel bar = rig.Overlay.Toolbar;
+        Assert.Equal(8, bar.Bounds.X, 3);
+        Assert.Equal(8, bar.Bounds.Y, 3);
+        Assert.Equal(40, bar.Bounds.Height, 3); // 32 (nút ⋮) + Padding 4 + 4
+        Assert.Equal(14, bar.OpenFolder.Bounds.X, 3); // Margin 8 + Padding 6
+        Assert.Equal(12, bar.Tools.Bounds.Y, 3);
+        Assert.Equal(32, bar.Tools.Bounds.Height, 3);
+        Assert.Equal(34, bar.Tools.Bounds.Width, 3);
+        Assert.Equal(5, bar.Settings.Bounds.X - (bar.OpenFolder.Bounds.X + bar.OpenFolder.Bounds.Width), 3);
+        Assert.Equal(5, bar.Fit.Bounds.X - (bar.Settings.Bounds.X + bar.Settings.Bounds.Width), 3);
+        Assert.Equal(5, bar.Tools.Bounds.X - (bar.Fit.Bounds.X + bar.Fit.Bounds.Width), 3);
+        Assert.Equal(bar.Bounds.X + bar.Bounds.Width - 6, bar.Tools.Bounds.X + bar.Tools.Bounds.Width, 3); // Padding phải 6
+    }
+
+    [Fact]
+    public void FolderInfoPanel_IsCappedAt640Dip_AndTheExifLineSitsTwoDipBelowTheStatusLine()
+    {
+        using var rig = new OverlayRig();
+        rig.Update(m => m with
+        {
+            FolderInfoVisible = true,
+            FolderInfoText = new string('x', 400),
+            StatusPanelVisible = true,
+            FileInfoVisible = true,
+            StatusText = "a.jpg",
+            ExifVisible = true,
+            ExifText = "ISO 100",
+        });
+        rig.Overlay.Arrange(new SizeD(1000, 700), 1);
+        // FakeTextRenderer cắt "…" theo ký tự 6 DIP: floor((640 - 12) / 6) x 6 + 12 = 636 (đột biến 600 cho 600).
+        Assert.Equal(636, rig.Overlay.FolderInfo.Bounds.Width, 3);
+
+        StatusPanel status = rig.Overlay.Status;
+        Assert.Equal(2, status.Exif.Bounds.Y - (status.Status.Bounds.Y + status.Status.Bounds.Height), 3);
+    }
+
+    [Fact]
+    public void Toolbar_HotZoneIs24DipRegardlessOfTheConstant()
+    {
+        using OverlayRig rig = NewRig();
+        RectD box = rig.ToolbarBounds;
+        rig.MoveTo(new PointD(box.X + box.Width + 24, 20));
+        rig.Advance(5000);
+        Assert.True(rig.Overlay.Toolbar.IsHitTestVisible);
+
+        rig.MoveTo(new PointD(box.X + box.Width + 24.5, 20));
+        rig.Advance(1500);
+        Assert.False(rig.Overlay.Toolbar.IsHitTestVisible);
+
+        rig.MoveTo(new PointD(box.X - 24, box.Y - 24));
+        Assert.True(rig.Overlay.Toolbar.IsHitTestVisible);
+        rig.MoveTo(new PointD(box.X - 24.5, box.Y - 24));
+        rig.Advance(1500);
+        Assert.False(rig.Overlay.Toolbar.IsHitTestVisible);
+    }
+
+    [Fact]
+    public void Toolbar_ZeroDelayStillWaitsForALaterFrame_NotTheFrameAtTheSameInstant()
+    {
+        using OverlayRig rig = NewRig(s => s.ToolbarAutoHideDelayMs = 0);
+        rig.MoveTo(OverlayRig.FarAway);
+        rig.Clock.Tick(rig.Now); // khung ở đúng thời điểm đặt hẹn: WPF Math.Max(1, delay) -> chưa ẩn
+        Assert.True(rig.Overlay.Toolbar.IsHitTestVisible);
+        rig.Advance(1);
+        Assert.False(rig.Overlay.Toolbar.IsHitTestVisible);
+    }
+
+    [Fact]
+    public void InfoOverlay_StopsItsIdleTimer_WhenSomethingStartsKeepingItVisible()
+    {
+        using OverlayRig rig = NewRig();
+        int running = rig.Clock.SubscriberCount;
+        Assert.True(running >= 1); // đang đếm lui để ẩn
+        rig.Update(m => m with { CompareVisible = true });
+        Assert.True(rig.Clock.SubscriberCount < running, "vòng khung phải nghỉ khi không còn gì để ẩn");
+    }
+
+    [Fact]
+    public void Wheel_IsConsumedOverAVisiblePanel_AndPassedThroughElsewhere()
+    {
+        using OverlayRig rig = NewRig();
+        rig.Update(m => m with { ZoomIndicatorVisible = true, ZoomIndicatorText = "100%" });
+        rig.Overlay.Arrange(new SizeD(1000, 700), 1);
+        Assert.True(rig.Overlay.Wheel(OverlayRig.Center(rig.Overlay.ZoomIndicator)));
+        Assert.False(rig.Overlay.Wheel(new PointD(500, 350)));
+    }
+
+    [Fact]
+    public void Tooltips_ToolbarOffersNoneAsSoonAsItStopsReceivingTheMouse_EvenWhileStillFading()
+    {
+        using OverlayRig rig = NewRig();
+        rig.MoveTo(OverlayRig.FarAway);
+        rig.Advance(1500); // hết giờ: click xuyên ngay, opacity còn 1 ở khung đầu
+        Assert.False(rig.Overlay.Toolbar.IsHitTestVisible);
+        Assert.True(rig.Overlay.Toolbar.Opacity > 0f);
+
+        rig.Overlay.Render(new RecordingDrawContext(), new SizeD(1000, 700), 1);
+        Assert.Empty(rig.Tooltips!.Tools);
+    }
+
+    [Fact]
+    public void Tab_AutoRepeatDoesNotMoveTheFocus()
+    {
+        using OverlayRig rig = NewRig();
+        Assert.True(rig.Overlay.KeyDown(0x09, false, false));
+        Assert.Same(rig.Overlay.Toolbar.OpenFolder, rig.Overlay.Toolbar.FocusedButton);
+        Assert.True(rig.Overlay.KeyDown(0x09, false, isAutoRepeat: true)); // giữ Tab: không chạy tiếp qua các nút
+        Assert.Same(rig.Overlay.Toolbar.OpenFolder, rig.Overlay.Toolbar.FocusedButton);
+    }
+
+    [Fact]
+    public void MessageHandler_ConvertsPhysicalPixelsToDipsWithTheWindowDpi()
+    {
+        using OverlayRig rig = NewRig();
+        var window = new FakeShellWindow { DpiScale = 2 };
+        var handler = new OverlayMessageHandler(rig.Overlay, window, rig.Tooltips);
+        PointD fit = OverlayRig.Center(rig.Overlay.Toolbar.Fit);
+        nint lParam = (nint)(((int)Math.Round(fit.Y * 2) << 16) | ((int)Math.Round(fit.X * 2) & 0xFFFF));
+
+        Assert.False(handler.TryHandle(new PhotoReview.Shell.Win32.Hosting.WindowMessage(0, PhotoReview.Shell.Interop.WindowMessages.WmMouseMove, 0, lParam), out _));
+        Assert.True(rig.Overlay.Toolbar.Fit.IsHot);
+        Assert.False(rig.Overlay.Toolbar.Settings.IsHot);
+
+        Assert.True(handler.TryHandle(new PhotoReview.Shell.Win32.Hosting.WindowMessage(0, PhotoReview.Shell.Interop.WindowMessages.WmLButtonDown, 0, lParam), out _));
+        Assert.True(handler.TryHandle(new PhotoReview.Shell.Win32.Hosting.WindowMessage(0, PhotoReview.Shell.Interop.WindowMessages.WmLButtonUp, 0, lParam), out _));
+        Assert.Equal(["Fit"], rig.Commands.Calls);
+    }
+}

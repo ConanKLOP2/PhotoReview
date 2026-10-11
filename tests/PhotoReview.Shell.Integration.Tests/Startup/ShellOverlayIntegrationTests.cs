@@ -170,4 +170,76 @@ public sealed class ShellOverlayIntegrationTests
         Stop(run);
         Assert.Equal(before, Handlers());
     }
+    private static int HandlersOwnedByShellWindow(object source, string eventName)
+    {
+        for (Type? type = source.GetType(); type is not null; type = type.BaseType)
+        {
+            FieldInfo? field = type.GetField(eventName, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            if (field?.GetValue(source) is Delegate handlers)
+            {
+                return handlers.GetInvocationList().Count(d => d.Target is ShellMainWindow);
+            }
+        }
+
+        return 0;
+    }
+
+    [Fact]
+    public void Close_UnsubscribesFromTheSettingsStoreAndTheViewModel()
+    {
+        using ShellRun run = StartWithImage("ovl-unsub", out _);
+        SettingsStore store = run.OnUi(() => run.Main!.OverlaySettingsStore!);
+        var viewModel = run.Main!.ViewModel;
+        Assert.True(HandlersOwnedByShellWindow(store, "Changed") > 0, "overlay không nghe SettingsStore.Changed");
+        Assert.True(HandlersOwnedByShellWindow(viewModel, "PropertyChanged") > 0, "không tìm thấy handler PropertyChanged của cửa sổ");
+
+        Stop(run);
+        Assert.Equal(0, HandlersOwnedByShellWindow(store, "Changed"));
+        Assert.Equal(0, HandlersOwnedByShellWindow(viewModel, "PropertyChanged")); // cả handler của cửa sổ lẫn của overlay
+    }
+
+    [Fact]
+    public void LanguageSwitch_RefreshesTheViewModelTextTheOverlayShows()
+    {
+        using ShellRun run = StartWithImage("ovl-lang-vm", out _);
+        Localizer previous = Localizer.Current;
+        try
+        {
+            Localizer.SetCurrent(TestLocalization.English);
+            string englishFit = TestLocalization.English.Get("main.toolbar.fit");
+            Assert.True(WaitUntil(() => run.OnUi(() => run.Main!.Overlay!.Toolbar.Fit.Content) == englishFit));
+            string english = run.OnUi(() => run.Main!.ViewModel.FolderText);
+
+            Localizer.SetCurrent(TestLocalization.Vietnamese);
+            string vietnameseFit = TestLocalization.Vietnamese.Get("main.toolbar.fit");
+            Assert.True(WaitUntil(() => run.OnUi(() => run.Main!.Overlay!.Toolbar.Fit.Content) == vietnameseFit));
+            string vietnamese = run.OnUi(() => run.Main!.ViewModel.FolderText);
+
+            Assert.NotEqual(string.Empty, english);
+            Assert.NotEqual(english, vietnamese); // "N ảnh" tạo trong code: chỉ đổi khi RefreshLocalizedText chạy
+        }
+        finally
+        {
+            Localizer.SetCurrent(previous);
+        }
+
+        Stop(run);
+    }
+
+    [Fact]
+    public void ToolsMenuAnchor_IsInScreenDipsOfTheCurrentWindowDpi()
+    {
+        using ShellRun run = StartWithImage("ovl-origin-dpi", out _);
+        nint hwnd = run.Main!.Hwnd;
+        run.OnUi(() => run.Main!.Window.ProcessMessage(hwnd, WindowMessages.WmDpiChanged, 192, 0)); // 200 %, không có rect gợi ý
+        Assert.Equal(2.0, run.OnUi(() => run.Main!.Window.DpiScale), 3);
+
+        MethodInfo method = typeof(ShellMainWindow).GetMethod("ClientOriginOnScreenDip", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        PointD dip = run.OnUi(() => (PointD)method.Invoke(run.Main, null)!);
+        (int x, int y) = OverlayNative.ClientOriginOnScreen(hwnd);
+        Assert.True(x != 0 || y != 0, "cửa sổ ở gốc màn hình: phép thử không phân biệt được");
+        Assert.Equal(x / 2.0, dip.X, 3);
+        Assert.Equal(y / 2.0, dip.Y, 3);
+        Stop(run);
+    }
 }

@@ -122,6 +122,25 @@ public sealed unsafe class NativeTooltipHostTests : IDisposable
         Assert.Throws<ArgumentException>(() => new NativeTooltipHost(0));
     }
 
+    [Fact]
+    public void Sync_ConvertsDipBoundsToPhysicalPixelsWithTheDpiScale()
+    {
+        using var host = new NativeTooltipHost(_owner);
+        host.Sync([new OverlayTooltip("a", new RectD(10, 8, 40, 30), "x")], 1.5);
+
+        char* buffer = stackalloc char[512];
+        var info = new OverlayToolInfo
+        {
+            CbSize = (uint)sizeof(OverlayToolInfo),
+            Hwnd = _owner,
+            Id = 1,
+            Text = (nint)buffer,
+        };
+        OverlayNative.SendMessage(host.Handle, 0x0435 /* TTM_GETTOOLINFOW */, 0, (nint)(&info));
+
+        Assert.Equal((15, 12, 75, 57), (info.Left, info.Top, info.Right, info.Bottom));
+    }
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindow(nint hwnd);
