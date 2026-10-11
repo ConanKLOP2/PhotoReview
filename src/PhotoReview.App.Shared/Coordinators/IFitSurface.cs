@@ -1,3 +1,5 @@
+using PhotoReview.App.Viewport;
+
 
 namespace PhotoReview.App.Coordinators;
 
@@ -5,7 +7,7 @@ namespace PhotoReview.App.Coordinators;
 /// AR13b: what <see cref="FitViewController"/> needs from the main window's image view. The WPF adapter is
 /// <see cref="PhotoReview.App.Services.WpfImageSurface"/>; unit tests use a fake.
 /// </summary>
-internal interface IFitSurface
+public interface IFitSurface
 {
     /// <summary>ImageScroll's size inside its border (the space Fit fills).</summary>
     (double Width, double Height) ViewportSize { get; }

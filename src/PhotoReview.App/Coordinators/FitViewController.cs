@@ -1,5 +1,6 @@
 using PhotoReview.App.Input;
 using PhotoReview.App.ViewModels;
+using PhotoReview.App.Viewport;
 
 namespace PhotoReview.App.Coordinators;
 

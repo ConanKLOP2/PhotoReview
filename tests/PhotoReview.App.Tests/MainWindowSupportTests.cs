@@ -1,3 +1,4 @@
+using PhotoReview.App.Viewport;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;

@@ -61,6 +61,9 @@ CI (`ci.yml`), `tools/verify-all.ps1`, `tools/coverage.ps1` chạy thêm 2 proje
 3. **Không khoá trong v1:** C-07 (`IImageSurface`/`IFitSurface`/`ViewportSnapshot` là seam có sẵn, WP-07 sửa tại chỗ), phần thuần của
    `ExifOrientation` (C-03; `Normalize` chưa có, các thành viên WPF dời ở WP-03), `IClipboardService` (C-13, "dời" ở WP-09). Chúng vào
    file duyệt ở v1.1 do gói sở hữu đề xuất qua lead. `IDialogService`/`IFolderPicker` "giữ nguyên" nên không khoá.
+   **Hợp đồng v1.1 đã áp dụng (2026-10-11):** C-07 dời sang App.Shared và khoá (3 kiểu, `ViewportSnapshot` ở `App.Viewport`); C-09
+   `static abstract` -> `IRenderSurfaceFactory` (+ `D2DRenderSurfaceFactory`); C-03 khoá `ExifOrientation.IsTransposed`/`Normalize`
+   (khoá theo tên thành viên, nửa WPF chưa vào). `IClipboardService` vẫn chờ WP-09. File duyệt giữ tên `contracts.v1.txt`.
 4. **L-AFFINITY và L-SHARED bật ngay** (kế hoạch: WP-09/WP-14) vì rẻ và đúng ngay từ đầu; L-SHARED kiểm theo tên assembly tham chiếu
    (không theo namespace `System.Windows`, vì `ICommand` của MVVM nằm ở `System.Windows.Input` nhưng không phải WPF).
 5. **L-AOT không áp cho `Shell.WpfBridge`** (WPF không AOT được); áp cho App.Shared, Shell.Interop, Shell.Rendering, Shell.Win32.

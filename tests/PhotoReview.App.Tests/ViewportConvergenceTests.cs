@@ -1,3 +1,4 @@
+using PhotoReview.App.Viewport;
 using PhotoReview.App.ViewModels;
 
 namespace PhotoReview.App.Tests;

@@ -53,11 +53,18 @@ public interface IRenderSurface : IDisposable
 
     /// <summary>GpuImageCache phải xoá hết.</summary>
     event EventHandler? DeviceRecreated;
+}
 
-    static abstract IRenderSurface CreateForWindow(nint hwnd, RenderSurfaceOptions options);
+/// <summary>
+/// Hợp đồng v1.1 (thay hai thành viên <c>static abstract</c> của <see cref="IRenderSurface"/>, vốn cản fake và không dùng được
+/// làm type argument): nơi tạo bề mặt vẽ, tiêm qua DI. Triển khai thật: <c>D2DRenderSurfaceFactory</c> (WP-15).
+/// </summary>
+public interface IRenderSurfaceFactory
+{
+    IRenderSurface CreateForWindow(nint hwnd, RenderSurfaceOptions options);
 
     /// <summary>WARP, cho test.</summary>
-    static abstract IRenderSurface CreateOffscreen(int pixelWidth, int pixelHeight, double dpiScale);
+    IRenderSurface CreateOffscreen(int pixelWidth, int pixelHeight, double dpiScale);
 }
 
 public interface IDrawContext
