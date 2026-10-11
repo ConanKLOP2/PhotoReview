@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using PhotoReview.App.Input;
 using PhotoReview.Shell.Rendering;
 using PhotoReview.Shell.Tests.Viewport;

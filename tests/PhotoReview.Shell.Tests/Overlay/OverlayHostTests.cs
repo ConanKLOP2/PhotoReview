@@ -1,4 +1,4 @@
-﻿using PhotoReview.App.Input;
+using PhotoReview.App.Input;
 using PhotoReview.Shell.Rendering;
 using PhotoReview.Shell.Win32.Overlay;
 
