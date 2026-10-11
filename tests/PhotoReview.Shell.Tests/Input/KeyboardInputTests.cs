@@ -265,9 +265,9 @@ public sealed class KeyboardInputTests
         rig.KeyDown(Vk(KeyId.Right));
         Assert.True(rig.Send(WindowMessages.WmChar, 'x', 0).Handled);
         Assert.True(rig.Send(WindowMessages.WmSysChar, 'x', 0).Handled);
+        Assert.False(rig.Send(WindowMessages.WmKeyUp, Vk(KeyId.Left), 0).Handled); // phím khác nhả: không nuốt, không làm mất dấu
         Assert.True(rig.Send(WindowMessages.WmKeyUp, Vk(KeyId.Right), 0).Handled);
         Assert.False(rig.Send(WindowMessages.WmKeyUp, Vk(KeyId.Right), 0).Handled); // chỉ một lần
-        Assert.False(rig.Send(WindowMessages.WmKeyUp, Vk(KeyId.Left), 0).Handled);
     }
 
     [Theory]
