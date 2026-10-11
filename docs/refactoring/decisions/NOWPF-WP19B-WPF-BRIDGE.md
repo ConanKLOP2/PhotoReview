@@ -29,9 +29,11 @@ Câu hỏi của kế hoạch: WPF `Dispatcher` có sống được trong vòng 
 1. **Sống được.** `new Application { ShutdownMode = OnExplicitShutdown }` (không `Run`) trên UI thread của shell tạo Dispatcher WPF gắn thread đó. Dispatcher gửi WM_* vào cửa sổ ẩn của nó nên
    `DispatchMessage` trong `MessageLoop.Run` đủ để layout/render/timer WPF chạy. `Window.ShowDialog()` chạy vòng lặp WPF lồng riêng trên thread; trong lúc đó `Win32UiDispatcher` (WM_APP+1)
    vẫn được dispatch (đã ghi ở WP-14). Cửa sổ modal vô hiệu hoá cửa sổ chủ (WPF `EnableThreadWindows`), đóng bằng `PostMessage(WM_CLOSE)`.
-2. **Phím của cửa sổ modeless KHÔNG đi qua WndProc**: phải gọi `ComponentDispatcher.RaiseThreadMessage(ref MSG)` cho mỗi message (như `Dispatcher.Run`). Đã hiện thực bằng
-   `IRawMessageFilter` ở `MessageLoop` (cần `time`/`pt` của MSG mà `WindowMessage` của C-15 không mang; không đổi hợp đồng). Chỉ gọi khi có cửa sổ modeless (`HasModelessWindows`).
-   Kiểm: `PostMessage(WM_KEYDOWN, VK_TAB)` vào cửa sổ Benchmark -> `Keyboard.FocusedElement` đổi.
+2. **Phím của cửa sổ modeless**: thử nghiệm cho thấy phím thường (Tab, di chuyển focus) vẫn chạy qua WndProc của `HwndSource` ngay cả khi KHÔNG chuyển message cho
+   `ComponentDispatcher` (mutation bỏ hook sống sót với test "Tab đổi focus"). Hook vẫn được giữ vì `Dispatcher.Run` luôn làm vậy và các consumer của
+   `ComponentDispatcher.ThreadPreprocessMessage/ThreadFilterMessage` (nội dung interop/IKeyboardInputSink, accelerator) chỉ nhận message qua đường này. Đã hiện thực bằng
+   `IRawMessageFilter` ở `MessageLoop` (cần `time`/`pt` của MSG mà `WindowMessage` của C-15 không mang; không đổi hợp đồng), chỉ gọi khi có cửa sổ modeless (`HasModelessWindows`).
+   Kiểm: test Tab + quan sát `ComponentDispatcher.ThreadPreprocessMessage` thấy WM_KEYDOWN (đây là phép kiểm hợp đồng của cầu, giết mutation M01/M02).
 3. **`Application.Current` gắn với thread tạo nó** và chỉ có một cho cả tiến trình (không tạo lại được sau khi shutdown): một UI thread (đúng với shell) và KHÔNG `Shutdown()` khi đóng cửa sổ cuối;
    test dùng một UI thread chung cho cả tiến trình.
 4. **Tài nguyên/theme**: mỗi cửa sổ phụ tự merge `Themes/DarkControls.xaml` qua `Window.Resources` (pack URI trong assembly `App.WpfWindows`), không phụ thuộc `Application.Resources`
@@ -49,6 +51,16 @@ Chi tiết: [perf/2026-10-12-wp19b-wpf-bridge.md](../perf/2026-10-12-wp19b-wpf-b
 - Mở cửa sổ phụ qua cầu (build chưa R2R): lần đầu 470-690 ms (mốc 600), lần sau Diagnostics 100-160 ms, Settings 170-215 ms (mốc 150: **chưa đạt** cho Settings).
 - Số assembly WPF nạp trước/sau cửa sổ phụ đầu tiên (probe tiến trình sạch): 0 -> 6 (`PresentationCore`, `PresentationFramework`, `PresentationFramework-SystemXml`, `PresentationFramework.Aero2`,
   `System.Xaml`, `WindowsBase`) + `PhotoReview.App.WpfWindows`; assembly cầu nạp lúc đọc `Lazy.Value`.
+
+## 3b. Mutation thủ công (20 đột biến, sonnet-free: script `mutate.ps1` ở scratchpad, worktree riêng, build + test desktop ẩn)
+
+Đột biến: bỏ chuyển message cho ComponentDispatcher (M01, M02), không đếm/giảm số cửa sổ modeless (M03, M04), bỏ owner khi modal (M05) và khi zoom prompt (M16),
+Benchmark thành modal (M06), `Application` không `OnExplicitShutdown` (M07), bỏ kiểm thread affinity (M08), Dispose không đóng cửa sổ (M09) / không đặt `_disposed` (M10) /
+không gỡ bộ lọc (M12), nạp WPF ngay ở ctor host (M11) và `Lazy` thành eager (M15), `MessageLoop` bỏ nhánh raw (M13), `Win32ZoomPromptService` bỏ owner (M14),
+`MainWindow` hỏi mức cố định (M17) / bỏ áp kết quả (M18), `WpfDialogService.ShowBenchmark` modal (M19), bỏ focus ô editor ngoài (M20).
+Lượt đầu: 16/20 bị diệt; 4 sống sót không tương đương (M01, M02: Tab chạy cả khi không có hook; M17: mức hiện tại mặc định 100 trùng hằng; M20: không test factory) -> thêm
+quan sát `ComponentDispatcher.ThreadPreprocessMessage`, đặt `ClickZoomPercent = 175`, test `SettingsFactory_FocusesTheExternalEditorBoxOnlyForThatTarget`; M13 lỗi build ở lượt đầu
+(đột biến sửa lại). Lượt hai: 5/5 bị diệt -> 20/20.
 
 ## 4. Lệch khỏi thẻ / điểm cần nối
 
