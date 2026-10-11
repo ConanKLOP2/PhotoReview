@@ -13,83 +13,10 @@ namespace PhotoReview.Shell.Tests.Input;
 /// </summary>
 public sealed partial class DropTargetTests
 {
-    // ---- DROPFILES ----
-
-    private static nint BuildDropFiles(IReadOnlyList<string> files, bool wide = true)
-    {
-        var bytes = new List<byte>();
-        bytes.AddRange(BitConverter.GetBytes((uint)20));   // pFiles
-        bytes.AddRange(new byte[8]);                        // pt
-        bytes.AddRange(BitConverter.GetBytes(0));           // fNC
-        bytes.AddRange(BitConverter.GetBytes(wide ? 1 : 0)); // fWide
-        var encoding = wide ? Encoding.Unicode : Encoding.Latin1;
-        foreach (var file in files)
-        {
-            bytes.AddRange(encoding.GetBytes(file));
-            bytes.AddRange(new byte[wide ? 2 : 1]);
-        }
-
-        bytes.AddRange(new byte[wide ? 2 : 1]); // NUL kép
-        var handle = Kernel32.GlobalAlloc(WindowMessages.GmemMoveable | WindowMessages.GmemZeroInit, (nuint)bytes.Count);
-        var target = Kernel32.GlobalLock(handle);
-        Marshal.Copy(bytes.ToArray(), 0, target, bytes.Count);
-        Kernel32.GlobalUnlock(handle);
-        return handle;
-    }
-
-    [GeneratedComClass]
-    private sealed unsafe partial class FakeDataObject(IReadOnlyList<string>? files, bool wide = true, int getDataResult = 0) : IDataObject
-    {
-        public int GetDataCalls { get; private set; }
-
-        public int GetData(FormatEtc* format, StgMedium* medium)
-        {
-            GetDataCalls++;
-            if (getDataResult != 0 || files is null || format->ClipboardFormat != ClipboardFormats.HDrop)
-            {
-                return getDataResult != 0 ? getDataResult : OleErrors.DvEFormatEtc;
-            }
-
-            medium->Medium = Tymed.HGlobal;
-            medium->Handle = BuildDropFiles(files, wide);
-            medium->ReleaseUnknown = 0; // ReleaseStgMedium -> GlobalFree
-            return 0;
-        }
-
-        public int Reserved04GetDataHere(FormatEtc* format, StgMedium* medium) => OleErrors.DvEFormatEtc;
-
-        public int QueryGetData(FormatEtc* format) =>
-            files is not null && format->ClipboardFormat == ClipboardFormats.HDrop && format->Medium == Tymed.HGlobal ? 0 : OleErrors.DvEFormatEtc;
-
-        public int Reserved06GetCanonicalFormatEtc(FormatEtc* a, FormatEtc* b) => OleErrors.DvEFormatEtc;
-
-        public int SetData(FormatEtc* format, StgMedium* medium, int release) => OleErrors.DvEFormatEtc;
-
-        public int Reserved08EnumFormatEtc(uint direction, out nint enumerator)
-        {
-            enumerator = 0;
-            return OleErrors.DvEFormatEtc;
-        }
-
-        public int Reserved09DAdvise(FormatEtc* a, uint b, nint c, out uint d)
-        {
-            d = 0;
-            return OleErrors.DvEFormatEtc;
-        }
-
-        public int Reserved10DUnadvise(uint a) => OleErrors.DvEFormatEtc;
-
-        public int Reserved11EnumDAdvise(out nint a)
-        {
-            a = 0;
-            return OleErrors.DvEFormatEtc;
-        }
-    }
-
     [Fact]
     public void Files_ReadsAWideHDropList_InOrder()
     {
-        var data = new FakeDataObject([@"C:\a\one.jpg", @"D:\b b\two.png", @"E:\3.jpg"]);
+        var data = new FakeDropData([@"C:\a\one.jpg", @"D:\b b\two.png", @"E:\3.jpg"]);
         Assert.True(DropData.HasFiles(data));
         Assert.Equal([@"C:\a\one.jpg", @"D:\b b\two.png", @"E:\3.jpg"], DropData.Files(data));
     }
@@ -97,17 +24,17 @@ public sealed partial class DropTargetTests
     [Fact]
     public void Files_ReadsAnAnsiHDropList()
     {
-        var data = new FakeDataObject([@"C:\a\one.jpg", @"C:\two.jpg"], wide: false);
+        var data = new FakeDropData([@"C:\a\one.jpg", @"C:\two.jpg"], wide: false);
         Assert.Equal([@"C:\a\one.jpg", @"C:\two.jpg"], DropData.Files(data));
     }
 
     [Fact]
     public void Files_EmptyListFormatMissingOrGetDataFailing_AreEmpty()
     {
-        Assert.Empty(DropData.Files(new FakeDataObject([])));
-        Assert.False(DropData.HasFiles(new FakeDataObject(null)));
-        Assert.Empty(DropData.Files(new FakeDataObject(null)));
-        Assert.Empty(DropData.Files(new FakeDataObject([@"C:\x.jpg"], getDataResult: unchecked((int)0x80004005))));
+        Assert.Empty(DropData.Files(new FakeDropData([])));
+        Assert.False(DropData.HasFiles(new FakeDropData(null)));
+        Assert.Empty(DropData.Files(new FakeDropData(null)));
+        Assert.Empty(DropData.Files(new FakeDropData([@"C:\x.jpg"], getDataResult: unchecked((int)0x80004005))));
     }
 
     // ---- IDropTarget ----
@@ -135,7 +62,7 @@ public sealed partial class DropTargetTests
         var target = Create(new Sink());
         var effect = DropEffect.Move;
 
-        target.DragEnter(new FakeDataObject([@"C:\a.jpg"]), 0, default, ref effect);
+        target.DragEnter(new FakeDropData([@"C:\a.jpg"]), 0, default, ref effect);
         Assert.Equal(DropEffect.Copy, effect);
         effect = DropEffect.None;
         target.DragOver(0, default, ref effect);
@@ -146,7 +73,7 @@ public sealed partial class DropTargetTests
         target.DragOver(0, default, ref effect); // sau DragLeave: không còn gì được kéo
         Assert.Equal(DropEffect.None, effect);
 
-        target.DragEnter(new FakeDataObject(null), 0, default, ref effect);
+        target.DragEnter(new FakeDropData(null), 0, default, ref effect);
         Assert.Equal(DropEffect.None, effect);
         effect = DropEffect.Copy;
         target.DragOver(0, default, ref effect);
@@ -160,7 +87,7 @@ public sealed partial class DropTargetTests
         var target = Create(sink);
         var effect = DropEffect.None;
 
-        var hr = target.Drop(new FakeDataObject([@"C:\first.jpg", @"C:\second.jpg"]), 0, default, ref effect);
+        var hr = target.Drop(new FakeDropData([@"C:\first.jpg", @"C:\second.jpg"]), 0, default, ref effect);
         await Task.Yield();
 
         Assert.Equal(0, hr);
@@ -175,7 +102,7 @@ public sealed partial class DropTargetTests
         var target = Create(sink);
         var effect = DropEffect.Copy;
 
-        target.Drop(new FakeDataObject(null), 0, default, ref effect);
+        target.Drop(new FakeDropData(null), 0, default, ref effect);
 
         Assert.Equal(DropEffect.None, effect);
         Assert.Empty(sink.Opened);
@@ -189,7 +116,7 @@ public sealed partial class DropTargetTests
         var target = Create(sink);
         var effect = DropEffect.None;
 
-        target.Drop(new FakeDataObject([@"C:\x.jpg"]), 0, default, ref effect);
+        target.Drop(new FakeDropData([@"C:\x.jpg"]), 0, default, ref effect);
         await Task.Yield();
         await Task.Delay(1); // OpenFirstAsync đã chạy inline; chỉ để chắc chắn continuation
 
@@ -204,7 +131,7 @@ public sealed partial class DropTargetTests
         var target = Create(sink);
         var effect = DropEffect.None;
 
-        target.Drop(new FakeDataObject([@"C:\x.jpg"]), 0, default, ref effect);
+        target.Drop(new FakeDropData([@"C:\x.jpg"]), 0, default, ref effect);
         await Task.Yield();
 
         Assert.Empty(sink.Failures);
@@ -217,7 +144,7 @@ public sealed partial class DropTargetTests
         var target = new ShellDropTarget(sink.Open, sink.Failures.Add, files: _ => throw new InvalidOperationException("rpc"));
         var effect = DropEffect.None;
 
-        target.Drop(new FakeDataObject([@"C:\x.jpg"]), 0, default, ref effect);
+        target.Drop(new FakeDropData([@"C:\x.jpg"]), 0, default, ref effect);
 
         Assert.Single(sink.Failures);
         Assert.Equal(DropEffect.None, effect);
@@ -239,7 +166,7 @@ public sealed partial class DropTargetTests
             try
             {
                 var proxy = (IDropTarget)wrappers.GetOrCreateObjectForComInstance(raw, CreateObjectFlags.UniqueInstance);
-                var data = new FakeDataObject([@"C:\drag\a.jpg"]);
+                var data = new FakeDropData([@"C:\drag\a.jpg"]);
                 var effect = DropEffect.None;
                 Assert.Equal(0, proxy.DragEnter(data, 0, new PointL { X = 5, Y = 6 }, ref effect));
                 Assert.Equal(DropEffect.Copy, effect);
@@ -270,7 +197,7 @@ public sealed partial class DropTargetTests
     [Fact]
     public unsafe void Parse_StopsAtTheDoubleNul_AndHonoursTheListOffset()
     {
-        var handle = BuildDropFiles([@"C:\x", @"C:\y"]);
+        var handle = FakeDropData.BuildDropFiles([@"C:\x", @"C:\y"]);
         var block = (byte*)Kernel32.GlobalLock(handle);
         try
         {

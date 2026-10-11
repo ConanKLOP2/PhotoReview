@@ -399,3 +399,81 @@ internal sealed class InputRig : IDisposable
         Viewport.Dispose();
     }
 }
+
+/// <summary>IDataObject giả mang (hoặc không) danh sách file CF_HDROP trên HGLOBAL thật (kéo-thả).</summary>
+[System.Runtime.InteropServices.Marshalling.GeneratedComClass]
+internal sealed unsafe partial class FakeDropData(IReadOnlyList<string>? files, bool wide = true, int getDataResult = 0)
+    : PhotoReview.Shell.Interop.Shell.IDataObject
+{
+    public int GetDataCalls { get; private set; }
+
+    /// <summary>DROPFILES + danh sách chuỗi kết thúc NUL kép, trên HGLOBAL cấp bằng GlobalAlloc.</summary>
+    public static nint BuildDropFiles(IReadOnlyList<string> files, bool wide = true)
+    {
+        var bytes = new List<byte>();
+        bytes.AddRange(BitConverter.GetBytes((uint)20));    // pFiles
+        bytes.AddRange(new byte[8]);                         // pt
+        bytes.AddRange(BitConverter.GetBytes(0));            // fNC
+        bytes.AddRange(BitConverter.GetBytes(wide ? 1 : 0)); // fWide
+        var encoding = wide ? System.Text.Encoding.Unicode : System.Text.Encoding.Latin1;
+        foreach (var file in files)
+        {
+            bytes.AddRange(encoding.GetBytes(file));
+            bytes.AddRange(new byte[wide ? 2 : 1]);
+        }
+
+        bytes.AddRange(new byte[wide ? 2 : 1]);
+        var handle = Kernel32.GlobalAlloc(WindowMessages.GmemMoveable | WindowMessages.GmemZeroInit, (nuint)bytes.Count);
+        var target = Kernel32.GlobalLock(handle);
+        System.Runtime.InteropServices.Marshal.Copy(bytes.ToArray(), 0, target, bytes.Count);
+        Kernel32.GlobalUnlock(handle);
+        return handle;
+    }
+
+    public int GetData(PhotoReview.Shell.Interop.Shell.FormatEtc* format, PhotoReview.Shell.Interop.Shell.StgMedium* medium)
+    {
+        GetDataCalls++;
+        if (getDataResult != 0 || files is null || format->ClipboardFormat != PhotoReview.Shell.Interop.Shell.ClipboardFormats.HDrop)
+        {
+            return getDataResult != 0 ? getDataResult : PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+        }
+
+        medium->Medium = PhotoReview.Shell.Interop.Shell.Tymed.HGlobal;
+        medium->Handle = BuildDropFiles(files, wide);
+        medium->ReleaseUnknown = 0; // ReleaseStgMedium -> GlobalFree
+        return 0;
+    }
+
+    public int Reserved04GetDataHere(PhotoReview.Shell.Interop.Shell.FormatEtc* format, PhotoReview.Shell.Interop.Shell.StgMedium* medium) =>
+        PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+
+    public int QueryGetData(PhotoReview.Shell.Interop.Shell.FormatEtc* format) =>
+        files is not null && format->ClipboardFormat == PhotoReview.Shell.Interop.Shell.ClipboardFormats.HDrop
+            && format->Medium == PhotoReview.Shell.Interop.Shell.Tymed.HGlobal ? 0 : PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+
+    public int Reserved06GetCanonicalFormatEtc(PhotoReview.Shell.Interop.Shell.FormatEtc* a, PhotoReview.Shell.Interop.Shell.FormatEtc* b) =>
+        PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+
+    public int SetData(PhotoReview.Shell.Interop.Shell.FormatEtc* format, PhotoReview.Shell.Interop.Shell.StgMedium* medium, int release) =>
+        PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+
+    public int Reserved08EnumFormatEtc(uint direction, out nint enumerator)
+    {
+        enumerator = 0;
+        return PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+    }
+
+    public int Reserved09DAdvise(PhotoReview.Shell.Interop.Shell.FormatEtc* a, uint b, nint c, out uint d)
+    {
+        d = 0;
+        return PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+    }
+
+    public int Reserved10DUnadvise(uint a) => PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+
+    public int Reserved11EnumDAdvise(out nint a)
+    {
+        a = 0;
+        return PhotoReview.Shell.Interop.Shell.OleErrors.DvEFormatEtc;
+    }
+}

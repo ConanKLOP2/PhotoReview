@@ -39,6 +39,12 @@ internal sealed partial class ShellMainWindow : IShellInputHost
         CursorScreenPixel = InputNative.CursorScreenPixel,
     };
 
+    /// <summary>Đích kéo-thả đã đăng ký với OLE (test gọi Drop với data object giả); null sau khi cửa sổ đóng.</summary>
+    internal ShellDropTarget? DropTarget => _dropTarget;
+
+    /// <summary>Kho cài đặt mà cửa sổ nghe Changed (test lưu cài đặt để kiểm bảng phím tắt được dựng lại).</summary>
+    internal SettingsStore? SettingsStore => _options.SettingsStore;
+
     private void RegisterInput()
     {
         var settingsStore = _options.SettingsStore;
