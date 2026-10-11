@@ -348,7 +348,7 @@ public sealed class DWriteTextRendererTests
 
         renderer.Dispose();
 
-        // Wrapper Ä‘Ã£ FinalRelease: gá»i tiáº¿p pháº£i nÃ©m (rÃ² factory = váº«n gá»i Ä‘Æ°á»£c).
+        // Wrapper đã FinalRelease: gọi tiếp phải ném (rò factory = vẫn gọi được).
         Assert.ThrowsAny<Exception>(() => ((IDWriteFactory)factory).GetSystemFontCollection(out _, 0));
     }
 }

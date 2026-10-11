@@ -284,7 +284,7 @@ public sealed class OverlayLayoutTests
 
         panel.Arrange(Context(fake));
 
-        // Cao 23 (15 chá»¯ + 8 Ä‘á»‡m), lá» 8: y = 8 + (584 - 23) / 2.
+        // Cao 23 (15 chữ + 8 đệm), lề 8: y = 8 + (584 - 23) / 2.
         Assert.Equal(new RectD(8, 288.5, 62, 23), panel.Bounds);
     }
 
@@ -292,7 +292,7 @@ public sealed class OverlayLayoutTests
     public void MaxWidth_CapsTheDesiredWidth_EvenWhenAChildCannotShrink()
     {
         var fake = new FakeTextRenderer();
-        // NÃºt luÃ´n má»™t dÃ²ng khÃ´ng cáº¯t: 40 x 5 + 16 + 2 = 218 DIP báº¥t ká»ƒ chá»— cho phÃ©p.
+        // Nút luôn một dòng không cắt: 40 x 5 + 16 + 2 = 218 DIP bất kể chỗ cho phép.
         var button = new ButtonElement("B") { Content = new string('x', 40), Style = new TextStyle("Segoe UI", 10) };
         var panel = new PanelElement("P")
         {
@@ -347,7 +347,7 @@ public sealed class OverlayLayoutTests
         {
             Content = "BBBB",
             Style = new TextStyle("Segoe UI", 10),
-            Margin = new OverlayThickness(0, -10, 0, 0),   // lÃ¹i 10 DIP: chá»“ng lÃªn nÃºt dÆ°á»›i á»Ÿ y 15..25
+            Margin = new OverlayThickness(0, -10, 0, 0),   // lùi 10 DIP: chồng lên nút dưới ở y 15..25
         };
         var panel = new PanelElement("P")
         {
@@ -360,7 +360,7 @@ public sealed class OverlayLayoutTests
         var overlap = new PointD(2, 20);
         Assert.True(lower.HitTest(overlap));
         Assert.True(upper.HitTest(overlap));
-        Assert.Same(upper, panel.FindAt(overlap));   // pháº§n tá»­ thÃªm sau náº±m trÃªn
+        Assert.Same(upper, panel.FindAt(overlap));   // phần tử thêm sau nằm trên
     }
 
     [Fact]

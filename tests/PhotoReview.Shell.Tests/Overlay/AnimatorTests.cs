@@ -294,7 +294,7 @@ public sealed class AnimatorTests
     [Fact]
     public void FadeEnd_LandsExactlyOnTarget_NotOnAFloatRoundedInterpolation()
     {
-        // Má»‘c káº¿t thÃºc pháº£i gÃ¡n ÄÃšNG Ä‘Ã­ch: ná»™i suy 0,02 + (0,1 - 0,02) lÃ m trÃ²n float lá»‡ch 1 ulp so vá»›i 0,1.
+        // Mốc kết thúc phải gán ĐÚNG đích: nội suy 0,02 + (0,1 - 0,02) làm tròn float lệch 1 ulp so với 0,1.
         (Animator animator, FakeFrameClock clock, var targets) = Create();
         FakeOpacityTarget toolbar = targets["Toolbar"];
         toolbar.Opacity = 0.02f;
