@@ -48,6 +48,8 @@ internal sealed partial class ShellMainWindow
                 _viewport.UpdateLayout();
             }
 
+            // Khung ảnh đầu không chờ vblank (xem D2DRenderSurface.ImmediatePresent); sau đó Present(1) bình thường.
+            _surface.ImmediatePresent = !_firstImageDrawn;
             var context = _surface.BeginDrawContext();
             try
             {

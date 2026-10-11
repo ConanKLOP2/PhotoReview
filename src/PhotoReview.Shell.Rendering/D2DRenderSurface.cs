@@ -27,6 +27,13 @@ public sealed class D2DRenderSurface : IRenderSurface
         _ownerThreadId = Environment.CurrentManagedThreadId;
     }
 
+    /// <summary>
+    /// WP-20: Present không chờ vblank (sync 0) khi true. Shell bật nó tới khi khung có ảnh đầu tiên đã Present: đo thực tế
+    /// <c>Present(1)</c> của khung ảnh đầu chặn UI thread 250-500 ms trên GPU thật (máy dev, cửa sổ vừa bỏ cloak) trong khi sync 0
+    /// chỉ ~9 ms; ảnh tĩnh nên không có tearing nhìn thấy. Sau đó trở về <c>Present(1)</c> (pan mượt).
+    /// </summary>
+    public bool ImmediatePresent { get; set; }
+
     public event EventHandler? DeviceRecreated;
 
     public nint Hwnd => _resources.Hwnd;
@@ -186,7 +193,7 @@ public sealed class D2DRenderSurface : IRenderSurface
         }
 
         // AllowTearing: không chờ vblank (sync 0). Cờ DXGI_PRESENT_ALLOW_TEARING cần IDXGIFactory5 - chưa dùng (v1).
-        int hr = _resources.Present(_options.AllowTearing ? 0u : 1u);
+        int hr = _resources.Present(_options.AllowTearing || ImmediatePresent ? 0u : 1u);
         if (hr == DxgiConstants.StatusOccluded)
         {
             return PresentResult.Occluded;

@@ -1,4 +1,6 @@
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Imaging.Pixels;
 using PhotoReview.Core.Settings;
 using PhotoReview.Shell.Rendering;
 
@@ -10,6 +12,28 @@ namespace PhotoReview.Shell.Win32.Startup;
 /// </summary>
 internal static class ShellWarmup
 {
+    /// <summary>Dispatcher rỗng cho cache làm nóng (không prefetch nên không bao giờ được đăng việc).</summary>
+    private sealed class NoDispatcher : IUiDispatcher
+    {
+        public bool CheckAccess() => true;
+
+        public void Post(Action action) => action();
+
+        public void Post(Action action, UiPriority priority) => action();
+
+        public Task InvokeAsync(Action action)
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        public Task InvokeAsync(Action action, UiPriority priority) => InvokeAsync(action);
+
+        public ValueTask YieldAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask YieldAsync(UiPriority priority, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
     /// <summary>
     /// P-1: chạy đường parse config.json một lần trên mặc định, từ rất sớm (~100-150 ms chi phí một lần: metadata
     /// System.Text.Json của ~100 thuộc tính AppSettings + JIT converter), để <c>SettingsStore.Load</c> thật thấy metadata đã sẵn.
@@ -36,7 +60,15 @@ internal static class ShellWarmup
     {
         try
         {
-            using var warm = D2DRenderSurface.CreateOffscreenSurface(1, 1, 1.0, useHardware: true);
+            using var warm = D2DRenderSurface.CreateOffscreenSurface(1024, 768, 1.0, useHardware: true);
+            // Vẽ một ảnh nhỏ phóng to bằng đúng chế độ nội suy của ảnh đầu (HighQualityCubic): lần vẽ đầu tiên của hiệu ứng
+            // này tốn hàng trăm ms (khởi tạo hiệu ứng/shader của driver) và trước đây rơi vào lượt gán ảnh trên UI thread.
+            using var cache = new GpuImageCache(warm, new NoDispatcher());
+            using var pixels = PixelBuffer.Allocate(64, 64, PixelLayout.Bgr32);
+            var image = cache.GetOrUpload(pixels);
+            var context = warm.BeginDrawContext();
+            context.DrawImage(image, new PhotoReview.App.Input.RectD(0, 0, 1000, 700), null, ImageInterpolation.HighQualityCubic);
+            warm.EndDrawAndPresent();
             PhotoReviewPerf.StartupMark("graphicsWarm");
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
