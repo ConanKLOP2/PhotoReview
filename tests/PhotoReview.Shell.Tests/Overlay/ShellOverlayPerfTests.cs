@@ -17,7 +17,7 @@ namespace PhotoReview.Shell.Tests.Overlay;
 /// Đặt <c>PHOTOREVIEW_OVERLAY_PNG</c> = đường dẫn .png để ghi khung HUD (tiếng Việt, 1280x720, DPI 1,0) ra tệp.
 /// "submit" = Arrange + Render + EndDrawAndPresent (CPU); "done" = thêm chờ GPU xong.
 /// </summary>
-[Collection(OverlayLocalizationGroup.Name)]
+[Collection("OverlayLocalization")]
 [Trait("Category", "Manual")]
 public sealed class ShellOverlayPerfTests(ITestOutputHelper output)
 {

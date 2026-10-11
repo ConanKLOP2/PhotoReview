@@ -78,7 +78,7 @@ public sealed unsafe class NativeShellFolderDialogTests
     public void Show_ReturnsNullWhenTheDialogWindowIsClosed_ReturnsOnlyAfterItWasShown()
     {
         string? picked = "sentinel";
-        bool closedWindow = false;
+        using var finished = new ManualResetEventSlim();
         RunSta(() =>
         {
             uint threadId = GetCurrentThreadId();
@@ -88,15 +88,14 @@ public sealed unsafe class NativeShellFolderDialogTests
                 _ = Task.Run(() =>
                 {
                     var deadline = DateTime.UtcNow.AddSeconds(30);
-                    while (DateTime.UtcNow < deadline && !Volatile.Read(ref closedWindow))
+                    while (DateTime.UtcNow < deadline && !finished.Wait(100))
                     {
-                        Thread.Sleep(100);
                         EnumThreadWindows(threadId, &CloseVisible, 0);
                     }
                 });
             });
             picked = dialog.Show(0, "Chọn thư mục", null);
-            Volatile.Write(ref closedWindow, true);
+            finished.Set();
             return 0;
         });
 

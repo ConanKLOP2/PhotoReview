@@ -401,23 +401,22 @@ public sealed class ShellOverlayBehaviorTests
     }
 
     [Fact]
-    public async Task FailedAsyncCommand_IsReportedWithItsName()
+    public void FailedAsyncCommand_IsReportedWithItsName()
     {
         using OverlayRig rig = NewRig();
         rig.Commands.Fit = () => Task.FromException(new InvalidOperationException("boom"));
         ClickButton(rig, rig.Overlay.Toolbar.Fit);
-        await WaitUntilAsync(() => rig.Failures.Count == 1);
+        Assert.Single(rig.Failures); // task đã hoàn thành: continuation chạy đồng bộ
         Assert.Equal("boom", rig.Failures[0].Exception.Message);
         Assert.Equal(rig.Overlay.Toolbar.Fit.Content, rig.Failures[0].Name);
     }
 
     [Fact]
-    public async Task CancelledCommand_IsNotAFailure()
+    public void CancelledCommand_IsNotAFailure()
     {
         using OverlayRig rig = NewRig();
         rig.Commands.OpenFolder = () => Task.FromCanceled(new CancellationToken(true));
         ClickButton(rig, rig.Overlay.Toolbar.OpenFolder);
-        await Task.Delay(50);
         Assert.Empty(rig.Failures);
     }
 
@@ -722,14 +721,5 @@ public sealed class ShellOverlayBehaviorTests
         rig.Overlay.Update(new OverlayModel());
         rig.Overlay.SettingsChanged();
         Assert.Empty(rig.Commands.Calls);
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (!condition())
-        {
-            await Task.Delay(5, cts.Token);
-        }
     }
 }

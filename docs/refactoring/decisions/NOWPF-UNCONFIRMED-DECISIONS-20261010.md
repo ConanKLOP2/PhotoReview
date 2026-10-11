@@ -25,6 +25,9 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 | C-04 | Save sau khi Load ConfigVersion mới hơn: sao lưu `config.json.newer-<ts>` trước khi ghi v3 | giữ nguyên (mất trường lạ) | Revert PR | CHƯA XÁC NHẬN |
 | WP05-SCALE | Fine-scale dùng WIC Fant (người dùng ĐÃ chọn b, xác nhận) | PixelAreaResampler tự viết | WP-06 | ĐÃ XÁC NHẬN |
 | WP20-VISIBLE | Cửa sổ Win32 chỉ hiện SAU khi giữ khoá instance (không nháy cửa sổ ở bản thứ hai): thấy được ~306 ms, thẻ ghi <= 150 ms | (b) dựng+present canvas trong lúc đọc config, bỏ cloak sau khoá (~-55 ms); (c) bỏ cloak trước khoá (~150 ms, bản thứ hai nháy cửa sổ tối) | Đổi thứ tự trong ShellStartup.StartupCoreAsync | CHƯA XÁC NHẬN |
+| WP23-HOVER | Hover/nhấn nút toolbar bản Win32 dùng `Dark.ButtonHover`/`Dark.ButtonPressed` (đồng bộ DarkControls) | (b) giống bản WPF: chrome Aero2 mặc định (xanh nhạt `#BEE6FD` khi hover trên nền tối, vì `MainWindow.xaml` không merge DarkControls) | Đổi hai màu trong `ButtonElement.RenderCore` | CHƯA XÁC NHẬN |
+| WP23-TOOLS | Nút ⋮ mở menu Tools native (C-12, theo thẻ + NE-4) thay `Popup` sáu nút của XAML | (b) vẽ popup sáu nút bằng overlay | Thay `ShellOverlay.ShowToolsMenu` | CHƯA XÁC NHẬN |
+| WP23-VIEWLIST | Giữ nút "Xem danh sách" ở hàng cảnh báo tệp bị bỏ qua (thẻ WP-23 ghi "skipped") | (b) bỏ nút (shell không có đường mở danh sách bị bỏ qua) | Ẩn `StatusPanel.ViewList` | CHƯA XÁC NHẬN |
 
 ## Không làm mà không hỏi (vẫn cần người dùng)
 - NE-1/2/5/8 đã chốt trước đó. Chế độ chạy nền/khay, Native AOT (cài MSVC + SDK 4-5 GB), xoá dữ liệu người dùng, bất cứ thay đổi
