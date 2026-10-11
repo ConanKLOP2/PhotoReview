@@ -83,9 +83,14 @@ internal static class ShellPlacement
         }
     }
 
-    /// <summary>Ghi placement hiện tại. <paramref name="fullscreenRestoreState"/>: trạng thái trước F11 (null = không ở fullscreen).</summary>
+    /// <summary>
+    /// Ghi placement hiện tại. <paramref name="fullscreenRestoreState"/>: trạng thái trước F11 (null = không ở fullscreen).
+    /// <paramref name="fullscreenNormalBounds"/>: rect Normal (pixel vật lý) lúc vào F11 - F11 đặt cửa sổ thường lên cả monitor mà
+    /// không đổi trạng thái, nên GetWindowPlacement sẽ báo rect monitor đó; chỉ dùng khi đang F11 (như WindowPlacementService.Save).
+    /// </summary>
     public static bool Save(nint hwnd, string placementPath, IWindowPlacementStore store, IWindowPlacementNative native,
-        WindowShowState? fullscreenRestoreState = null, ILog? log = null)
+        WindowShowState? fullscreenRestoreState = null, ILog? log = null,
+        (int Left, int Top, int Right, int Bottom)? fullscreenNormalBounds = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(native);
@@ -96,10 +101,16 @@ internal static class ShellPlacement
                 return false;
             }
 
-            store.Save(placementPath, current with
+            var resolved = current with
             {
                 ShowCommand = WindowPlacementRules.ResolveShowCommand(current.ShowCommand, fullscreenRestoreState),
-            });
+            };
+            if (fullscreenRestoreState is not null && fullscreenNormalBounds is { } b)
+            {
+                resolved = resolved with { NormalLeft = b.Left, NormalTop = b.Top, NormalRight = b.Right, NormalBottom = b.Bottom };
+            }
+
+            store.Save(placementPath, resolved);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

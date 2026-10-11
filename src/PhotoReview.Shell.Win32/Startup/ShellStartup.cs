@@ -29,6 +29,9 @@ internal sealed record ShellStartupOptions
     /// <summary>Seam cloak DWM: (hwnd, cloaked) -> được chấp nhận. Null = <c>WindowsDwmCloak</c>.</summary>
     public Func<nint, bool, bool>? SetCloaked { get; init; }
 
+    /// <summary>WP-25: seam F11/monitor/DWM của cửa sổ chính (test giả lập màn hình thứ hai). Null = Win32 thật.</summary>
+    public ShellWindowingSeams? Windowing { get; init; }
+
     private static string InstancePrefixFromEnvironment() =>
         Environment.GetEnvironmentVariable("PHOTOREVIEW_SHELL_INSTANCE_PREFIX") is { Length: > 0 } value ? value : ShellInstanceNames.Prefix;
 
@@ -417,7 +420,7 @@ internal sealed class ShellStartup : IDisposable
         _main = new ShellMainWindow(window, dispatcher, _frameClock, viewModel, services.GetRequiredService<ViewportSizeSource>(), hub,
             _cloak, _placementStore, NativeWindowPlacement.Instance, displayClock, log, _mark,
             new ShellMainWindowOptions(_options.PreferWarp, _launch.Smoke ? null : placementFile, activate,
-                SettingsStore: store, ZoomPrompt: services.GetService<IZoomPromptService>()));
+                SettingsStore: store, ZoomPrompt: services.GetService<IZoomPromptService>(), Windowing: _options.Windowing));
         _forwardHandler = new ForwardedOpenHandler(_main, log);
         _main.AttachRenderer();
         _mark("mainWindowConstructed");

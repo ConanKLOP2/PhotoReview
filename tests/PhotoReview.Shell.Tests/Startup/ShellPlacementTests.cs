@@ -155,6 +155,46 @@ public sealed class ShellPlacementTests
     }
 
     [Fact]
+    public void Save_WhileFullscreen_StoresTheNormalRectFromBeforeF11NotTheMonitorRect()
+    {
+        // F11 đặt cửa sổ Normal lên cả monitor mà không đổi trạng thái: GetWindowPlacement báo rect monitor (WP-25, như
+        // WindowPlacementService.Save của bản WPF).
+        var native = new FakeNative { Current = Normal with { NormalLeft = 0, NormalTop = 0, NormalRight = 1920, NormalBottom = 1080 } };
+        var store = new FakeStore();
+
+        ShellPlacement.Save(5, "p", store, native, WindowShowState.Normal, fullscreenNormalBounds: (120, 90, 920, 590));
+
+        var data = store.Saved.Single().Data;
+        Assert.Equal((120, 90, 920, 590), (data.NormalLeft, data.NormalTop, data.NormalRight, data.NormalBottom));
+        Assert.Equal(1, data.ShowCommand);
+    }
+
+    [Fact]
+    public void Save_NotFullscreen_IgnoresTheNormalBoundsOverride()
+    {
+        var native = new FakeNative { Current = Normal };
+        var store = new FakeStore();
+
+        ShellPlacement.Save(5, "p", store, native, fullscreenRestoreState: null, fullscreenNormalBounds: (1, 2, 3, 4));
+
+        var data = store.Saved.Single().Data;
+        Assert.Equal((100, 80, 900, 600), (data.NormalLeft, data.NormalTop, data.NormalRight, data.NormalBottom));
+    }
+
+    [Fact]
+    public void Save_WhileFullscreenFromMaximized_StoresMaximizedWithTheRestoreRect()
+    {
+        var native = new FakeNative { Current = Maximized with { NormalLeft = -8, NormalTop = -8, NormalRight = 1928, NormalBottom = 1088 } };
+        var store = new FakeStore();
+
+        ShellPlacement.Save(5, "p", store, native, WindowShowState.Maximized, fullscreenNormalBounds: (50, 60, 850, 560));
+
+        var data = store.Saved.Single().Data;
+        Assert.Equal(3, data.ShowCommand);
+        Assert.Equal((50, 60, 850, 560), (data.NormalLeft, data.NormalTop, data.NormalRight, data.NormalBottom));
+    }
+
+    [Fact]
     public void Save_WhenThePlacementCannotBeRead_WritesNothing()
     {
         var store = new FakeStore();

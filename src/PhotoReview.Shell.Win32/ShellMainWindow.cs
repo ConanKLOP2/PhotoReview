@@ -24,8 +24,10 @@ namespace PhotoReview.Shell.Win32;
 /// <param name="SettingsStore">WP-22: kho cài đặt (phím tắt dựng lại khi Changed, lưu KeepZoom/ClickZoom); null = chỉ đọc cài đặt của view model.</param>
 /// <param name="ZoomPrompt">WP-22: hộp thoại zoom tuỳ chọn của phím CustomZoom; null = lệnh này không làm gì.</param>
 /// <param name="InputEnvironment">WP-22: seam đọc hệ thống của nhập liệu (test); null = Win32 thật.</param>
+/// <param name="Windowing">WP-25: seam F11/monitor/DWM của cửa sổ hoá (test); null = Win32 thật.</param>
 internal sealed record ShellMainWindowOptions(bool PreferWarp = false, string? PlacementFile = null, bool Activate = true,
-    SettingsStore? SettingsStore = null, IZoomPromptService? ZoomPrompt = null, ShellInputEnvironment? InputEnvironment = null);
+    SettingsStore? SettingsStore = null, IZoomPromptService? ZoomPrompt = null, ShellInputEnvironment? InputEnvironment = null,
+    ShellWindowingSeams? Windowing = null);
 
 /// <summary>
 /// Cửa sổ chính của shell Win32 (NO-WPF-EXEC-PLAN C-15/C-16, WP-20 giai đoạn A): sở hữu <see cref="ShellWindow"/> + bề mặt Direct2D +
@@ -123,6 +125,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
     private void RegisterFeatures()
     {
         RegisterInput(); // WP-22: chuột, phím, wheel, touchpad, kéo-thả
+        RegisterWindowing(); // WP-25: F11, đa màn hình, thanh tiêu đề tối, placement khi đóng
     }
 
     public ShellWindow Window => _window;
@@ -367,7 +370,8 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
     {
         if (_options.PlacementFile is { } file)
         {
-            ShellPlacement.Save(_window.Hwnd, file, _placementStore, _placementNative, fullscreenRestoreState: null, _log);
+            // R7-10: đóng khi đang F11 lưu trạng thái và rect Normal có TRƯỚC F11 (WP-25).
+            ShellPlacement.Save(_window.Hwnd, file, _placementStore, _placementNative, FullscreenRestoreState, _log, FullscreenRestoreBounds);
         }
     }
 
@@ -409,6 +413,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         _sizeSource.Get = static () => (0, 0);
         _cloak.Stop();
         _image = null;
+        DisposeWindowing(); // WP-25
         DisposeViewing(); // WP-21: trước cache (lớp ảnh giữ tham chiếu bitmap GPU)
         Interlocked.Exchange(ref _cache, null)?.Dispose();
         Interlocked.Exchange(ref _surface, null)?.Dispose();
