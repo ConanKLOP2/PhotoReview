@@ -38,7 +38,7 @@ internal static class ShellCompositionRoot
         services.AddSingleton<IUiScheduler>(host.Dispatcher);
         services.AddSingleton<IUiDispatcher>(host.Dispatcher);
         services.AddSingleton<IClipboardService>(_ => new Win32ClipboardService(host.OwnerWindow));
-        services.AddSingleton(_ => new FolderPicker(UnwiredShellFolderDialog.Instance, host.OwnerWindow));
+        services.AddSingleton(sp => new FolderPicker(sp.GetService<IShellFolderDialog>() ?? UnwiredShellFolderDialog.Instance, host.OwnerWindow));
         services.AddSingleton<IFolderPicker, ShellFolderPickerAdapter>();
         services.AddSingleton<IPresentationSinkFactory, ShellPresentationSinkFactory>();
         services.AddSingleton<IDialogService>(sp => new Win32DialogService(
@@ -65,6 +65,7 @@ internal static class ShellCompositionRoot
     private static void RegisterFeatures(IServiceCollection services)
     {
         _ = services;
+        services.AddShellOverlay(); // WP-23
     }
 }
 

@@ -419,6 +419,7 @@ internal sealed class ShellStartup : IDisposable
             new ShellMainWindowOptions(_options.PreferWarp, _launch.Smoke ? null : placementFile, activate));
         _forwardHandler = new ForwardedOpenHandler(_main, log);
         _main.AttachRenderer();
+        _main.AttachOverlay(services, _frameClock); // WP-23: HUD có mặt từ khung đầu
         _mark("mainWindowConstructed");
         _ = store;
 

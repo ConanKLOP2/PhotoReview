@@ -63,7 +63,30 @@ public class ButtonElement : OverlayElement
 
     public bool IsPressed { get; set; }
 
+    /// <summary>WP-23: bàn phím đang ở nút này (viền sáng như <c>IsKeyboardFocused</c> của DarkControls).</summary>
+    public bool IsFocused { get; set; }
+
+    /// <summary>WP-23: trạng thái bật của ToggleButton (nút Tools khi menu đang mở): nền như khi nhấn.</summary>
+    public bool IsChecked { get; set; }
+
     public ColorF Foreground { get; set; } = DarkPalette.TextBright;
+
+    /// <summary>WP-23: nền thường (mặc định <c>Dark.Button</c>; toolbar dùng <c>Dark.Input</c> như style của MainWindow.xaml).</summary>
+    public ColorF Background { get; set; } = DarkPalette.Button;
+
+    public ColorF BorderColor { get; set; } = DarkPalette.BorderStrong;
+
+    /// <summary>WP-23: <c>Width</c> của XAML (ngoài, gồm viền); NaN = theo nội dung.</summary>
+    public double FixedWidth { get; set; } = double.NaN;
+
+    /// <summary>WP-23: <c>Height</c> của XAML; NaN = theo nội dung (co giãn theo hàng khi Stretch).</summary>
+    public double FixedHeight { get; set; } = double.NaN;
+
+    /// <summary>WP-23: chữ tooltip (<c>ToolTip</c>); rỗng = không tooltip.</summary>
+    public string ToolTip { get; set; } = string.Empty;
+
+    /// <summary>WP-23: <c>AutomationProperties.Name</c> (UIA do gói khác nối).</summary>
+    public string AutomationName { get; set; } = string.Empty;
 
     public event EventHandler? Clicked;
 
@@ -87,21 +110,31 @@ public class ButtonElement : OverlayElement
         double textWidth = Math.Max(0, available.Width - Padding.Horizontal - chrome);
         EnsureLayout(context.Text, textWidth);
         SizeD text = _layout!.Size;
-        return new SizeD(text.Width + Padding.Horizontal + chrome, text.Height + Padding.Vertical + chrome);
+        double width = double.IsNaN(FixedWidth) ? text.Width + Padding.Horizontal + chrome : FixedWidth;
+        double height = double.IsNaN(FixedHeight) ? text.Height + Padding.Vertical + chrome : FixedHeight;
+        return new SizeD(width, height);
     }
 
     protected override void RenderCore(IDrawContext dc)
     {
-        ColorF background = !IsEnabled ? DarkPalette.Button
-            : IsPressed ? DarkPalette.ButtonPressed
+        ColorF background = !IsEnabled ? Background
+            : IsPressed || IsChecked ? DarkPalette.ButtonPressed
             : IsHot ? DarkPalette.ButtonHover
-            : DarkPalette.Button;
-        dc.FillRoundedRectangle(Bounds, CornerRadius, background);
+            : Background;
+        if (CornerRadius > 0)
+        {
+            dc.FillRoundedRectangle(Bounds, CornerRadius, background);
+        }
+        else
+        {
+            dc.FillRectangle(Bounds, background);
+        }
+
         if (BorderThickness > 0)
         {
             double half = BorderThickness / 2;
             var stroke = new RectD(Bounds.X + half, Bounds.Y + half, Math.Max(0, Bounds.Width - BorderThickness), Math.Max(0, Bounds.Height - BorderThickness));
-            dc.DrawRectangle(stroke, DarkPalette.BorderStrong, BorderThickness);
+            dc.DrawRectangle(stroke, IsFocused ? DarkPalette.Get("Dark.AccentHover") : BorderColor, BorderThickness);
         }
 
         if (_layout is null || _content.Length == 0)
