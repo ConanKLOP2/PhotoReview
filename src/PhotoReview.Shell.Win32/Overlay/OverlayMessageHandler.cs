@@ -12,6 +12,7 @@ namespace PhotoReview.Shell.Win32.Overlay;
 internal sealed class OverlayMessageHandler(ShellOverlay overlay, IShellWindow window, IOverlayTooltips? tooltips) : IWindowMessageHandler
 {
     private bool _trackingLeave;
+    private bool _releasing;
 
     public bool TryHandle(in WindowMessage message, out nint result)
     {
@@ -39,7 +40,7 @@ internal sealed class OverlayMessageHandler(ShellOverlay overlay, IShellWindow w
                 tooltips?.RelayMouse(message.Msg, message.WParam, message.LParam);
                 if (overlay.PointerDown(ClientPoint(message.LParam)))
                 {
-                    if (overlay.IsPressing)
+                    if (overlay.IsPointerDown)
                     {
                         window.CapturePointer();
                     }
@@ -50,7 +51,7 @@ internal sealed class OverlayMessageHandler(ShellOverlay overlay, IShellWindow w
                 return false;
 
             case WindowMessages.WmLButtonUp:
-                if (!overlay.IsPressing)
+                if (!overlay.IsPointerDown)
                 {
                     return false;
                 }
@@ -58,13 +59,22 @@ internal sealed class OverlayMessageHandler(ShellOverlay overlay, IShellWindow w
                 tooltips?.RelayMouse(message.Msg, message.WParam, message.LParam);
                 if (window.HasPointerCapture)
                 {
-                    window.ReleasePointer();
+                    // ReleaseCapture gửi WM_CAPTURECHANGED ngay: không coi đó là bị cướp capture (mất cú nhấn trước khi click).
+                    _releasing = true;
+                    try
+                    {
+                        window.ReleasePointer();
+                    }
+                    finally
+                    {
+                        _releasing = false;
+                    }
                 }
 
                 return overlay.PointerUp(ClientPoint(message.LParam));
 
             case WindowMessages.WmCaptureChanged:
-                if (overlay.IsPressing && message.LParam != message.Hwnd)
+                if (!_releasing && overlay.IsPointerDown && message.LParam != message.Hwnd)
                 {
                     overlay.PointerCancel();
                 }

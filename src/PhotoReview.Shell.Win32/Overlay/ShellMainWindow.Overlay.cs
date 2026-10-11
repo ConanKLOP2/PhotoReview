@@ -35,6 +35,9 @@ internal sealed partial class ShellMainWindow
     /// <summary>Bộ overlay (null trước <see cref="AttachOverlay"/> và sau dispose).</summary>
     internal ShellOverlay? Overlay => _overlay;
 
+    /// <summary>Kho cài đặt mà overlay đang nghe (test đổi cài đặt qua nó).</summary>
+    internal SettingsStore? OverlaySettingsStore => _overlaySettings;
+
     /// <summary>
     /// Lệnh Fit của nút toolbar. Gói input (WP-22) đặt bản dùng chung với <c>PointerInputController</c> (cùng
     /// <c>ViewportOperationVersion</c>); chưa đặt thì dùng <c>FitViewController</c> riêng trên <see cref="Viewport"/>.

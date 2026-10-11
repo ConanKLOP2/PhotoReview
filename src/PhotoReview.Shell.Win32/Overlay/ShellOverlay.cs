@@ -72,6 +72,7 @@ internal sealed class ShellOverlay : IDisposable
     private OverlayModel _model = new();
     private ButtonElement? _hot;
     private ButtonElement? _pressed;
+    private bool _pointerDown;
     private bool _toolbarMouseInsideHotZone = true; // "trong" cho tới khi chuột báo ngược lại (như bản WPF)
     private bool _toolbarWasKeptVisible = true;
     private bool _toolsOpen;
@@ -316,6 +317,7 @@ internal sealed class ShellOverlay : IDisposable
         }
 
         ClearKeyboardFocus();
+        _pointerDown = true;
         if (hit is ButtonElement { IsEnabled: true } button)
         {
             _pressed = button;
@@ -331,18 +333,21 @@ internal sealed class ShellOverlay : IDisposable
     /// </summary>
     public bool PointerUp(PointD point)
     {
-        if (_disposed || _pressed is null)
+        if (_disposed || !_pointerDown)
         {
             return false;
         }
 
-        ButtonElement button = _pressed;
-        _pressed = null;
-        button.IsPressed = false;
-        _options.RequestRender();
-        if (ReferenceEquals(_host.HitTest(point), button))
+        _pointerDown = false;
+        if (_pressed is { } button)
         {
-            button.Click();
+            _pressed = null;
+            button.IsPressed = false;
+            _options.RequestRender();
+            if (ReferenceEquals(_host.HitTest(point), button))
+            {
+                button.Click();
+            }
         }
 
         return true;
@@ -351,6 +356,7 @@ internal sealed class ShellOverlay : IDisposable
     /// <summary>Huỷ cú nhấn đang giữ (mất capture): không click.</summary>
     public void PointerCancel()
     {
+        _pointerDown = false;
         if (_pressed is not null)
         {
             _pressed.IsPressed = false;
@@ -359,8 +365,11 @@ internal sealed class ShellOverlay : IDisposable
         }
     }
 
-    /// <summary>Cú nhấn chuột trái đang do overlay giữ (cần capture chuột).</summary>
-    public bool IsPressing => _pressed is not null;
+    /// <summary>Cú nhấn chuột trái đang do overlay giữ (nút hoặc panel): cần capture chuột, và nhả cũng bị nuốt.</summary>
+    public bool IsPointerDown => _pointerDown;
+
+    /// <summary>Nút đang bị nhấn giữ (null khi cú nhấn rơi vào panel/không phải nút).</summary>
+    public ButtonElement? PressedButton => _pressed;
 
     /// <summary>Điểm có thuộc phần tử overlay nhận chuột (nút/panel hiện, không click xuyên)?</summary>
     public bool HitTest(PointD point) => !_disposed && _host.HitTest(point) is not null;
