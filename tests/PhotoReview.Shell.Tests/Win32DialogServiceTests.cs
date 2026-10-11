@@ -213,6 +213,16 @@ public sealed class Win32DialogServiceTests
 
     [Trait("Category", "HotPath")]
     [Fact]
+    public void Win32ClipboardService_IsTheShellImplementationOfTheSharedClipboardContract()
+    {
+        // WP-09 (C-13): the shell injects this into MainViewModel through DI, in place of the WPF clipboard.
+        var (service, _) = CreateClipboard(new FakeClipboard());
+
+        Assert.IsAssignableFrom<PhotoReview.App.Services.IClipboardService>(service);
+    }
+
+    [Trait("Category", "HotPath")]
+    [Fact]
     public void TrySetText_RetriesWhileClipboardIsBusy_ThenSucceeds()
     {
         var api = new FakeClipboard { OpenFailures = 2 };

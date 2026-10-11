@@ -10,7 +10,7 @@ public sealed class BuildInfoTests
     [Fact]
     public void AppAssembly_InformationalVersion_IsGitDerivedVersionPlusShortSha()
     {
-        var info = typeof(BuildInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        var info = typeof(PhotoReview.App.App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
 
         // 2.0.N or 2.0.N-dev.A, then +8-char sha, optional .dirty (Directory.Build.targets).
         Assert.Matches(new Regex(@"^\d+\.\d+\.\d+(-dev\.\d+)?\+[0-9a-f]{8}(\.dirty)?$", RegexOptions.CultureInvariant), info);
@@ -19,7 +19,7 @@ public sealed class BuildInfoTests
     [Fact]
     public void AppAssembly_BuildTime_IsLocalTimeWithOffset()
     {
-        var buildTime = typeof(BuildInfo).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+        var buildTime = typeof(PhotoReview.App.App).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .Single(a => a.Key == "BuildTime").Value;
 
         var parsed = DateTimeOffset.ParseExact(buildTime!, "yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture);

@@ -22,7 +22,7 @@
     <ProjectReference Include="..\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
   </ItemGroup>
 
-  <!-- Same global usings as PhotoReview.App.csproj: the files moved here from App (WP-09) keep their unqualified names. -->
+  <!-- Same global usings as the WPF app project: the files moved here from App (WP-09) keep their unqualified names. -->
   <ItemGroup>
     <Using Include="PhotoReview.Core.Settings" />
     <Using Include="PhotoReview.App.Services" />

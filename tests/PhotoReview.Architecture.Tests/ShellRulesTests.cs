@@ -59,6 +59,16 @@ public sealed class ShellRulesTests
             t => Assert.Equal("PhotoReview.Shell.Win32.Dialogs", t.Namespace));
     }
 
+    [Fact(DisplayName = "L-SHARED: the App.Shared project file enables no WPF/WinForms and references no App, Shell.* or Imaging.Wpf project")]
+    [Trait("Category", "Architecture")]
+    public void AppShared_ProjectFile_HasNoWpfOrAppReference()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoScan.Root, "src/PhotoReview.App.Shared/PhotoReview.App.Shared.csproj"));
+
+        foreach (var forbidden in new[] { "UseWPF", "UseWindowsForms", "PhotoReview.App.csproj", "PhotoReview.Shell.", "PhotoReview.Imaging.Wpf" })
+            Assert.DoesNotContain(forbidden, text, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact(DisplayName = "L-SHARED: PhotoReview.App.Shared references no WPF assembly, PhotoReview.App or PhotoReview.Shell.*")]
     [Trait("Category", "Architecture")]
     public void AppShared_DoesNotReferenceWpfAppOrShell()

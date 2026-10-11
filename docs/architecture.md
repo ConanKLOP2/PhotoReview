@@ -5,7 +5,8 @@ Tài liệu này mô tả cấu trúc sau đợt refactor, các luồng runtime 
 ## Các project và hướng phụ thuộc
 
 ```text
-PhotoReview.App (WPF composition root, View, ViewModel, coordinator)
+PhotoReview.App (WPF: App.xaml, MainWindow và các cửa sổ, adapter WPF của seam — IUiScheduler/IDialogService/IClipboardService/IPresentationSink)
+  ├─> PhotoReview.App.Shared (KHÔNG WPF, L-SHARED: ViewModels, Coordinators, Input, Composition/AddPhotoReviewShared, Localization, AppLog; WP-09)
   ├─> PhotoReview.Core (catalog, settings, session, file action, abstractions; net10.0, không WPF)
   ├─> PhotoReview.Imaging (decode, cache, preload; KHÔNG WPF từ WP-06: PixelBuffer + IPlatformImageCodec + WIC)
   ├─> PhotoReview.Imaging.Wpf (cầu WPF: WpfBitmapImageDecoder, WpfBitmapSourceCodec, WpfDecodedImage; WP-06)
@@ -18,12 +19,13 @@ PhotoReview.App (WPF composition root, View, ViewModel, coordinator)
 
 Imaging, Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg, Platform.Windows ─> Core
 Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg, Imaging.Wpf ─> Imaging
+App.Shared ─> Core, Imaging, Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg, Platform.Windows (không tham chiếu WPF, App hay Shell.*; kiểm theo assembly ở ShellRulesTests)
 Imaging.Wpf ─> Core (UseWPF=true; là assembly Imaging duy nhất dùng WPF, L-IMG trong Architecture.Tests)
 Core ─> PhotoReview.Localization.Generator (source generator, netstandard2.0)
 tools/PhotoReview.Benchmark.Cli ─> App, Benchmarking, Imaging*, Platform.Windows, PerfAnalysis
 ```
 
-`PhotoReview.Core` không phụ thuộc WPF. `MainWindow` giữ phần view/input; `MainViewModel`, coordinator và service điều phối hành vi. `App.xaml.cs` là composition root đăng ký dependency và nối implementation Windows/WPF vào abstraction.
+`PhotoReview.Core` không phụ thuộc WPF. `MainWindow` giữ phần view/input; `MainViewModel`, coordinator và service điều phối hành vi nằm ở `PhotoReview.App.Shared` (namespace giữ `PhotoReview.App.*`). **Composition (C-16, WP-09):** `SharedServiceRegistration.AddPhotoReviewShared(SharedServiceOptions)` đăng ký mọi thứ không phụ thuộc WPF (đường dẫn, file system, settings, session, journal, file action, decoder, cache, preload, ViewModel); `App.ConfigureServices` chỉ thêm phần WPF (`IUiScheduler`, `IDialogService`, `IFolderPicker`, `IClipboardService`, `IPresentationSinkFactory`) rồi gọi hàm chung với codec `WpfBitmapSourceCodec` và decoder fallback WPF. `MainViewModelCompositionRoot` lấy `IPresentationSinkFactory` và `IClipboardService` từ DI (không còn `new WpfPresentationSink`/`new WpfClipboardService` trong lõi). Shell Win32 gọi cùng hàm với `PixelBufferImageCodec` và `WpfFallbackDecoder = null` (WP-20).
 
 **AppHost (AR02a–d, xong):** `PhotoReview.App.Composition.AppHost.BuildServices(overrides)` là điểm vào duy nhất dựng `IServiceProvider` — gọi `App.ConfigureServices`, áp `overrides` (nếu có), rồi `BuildServiceProvider()`. `App.App_Startup`, `Benchmark.Cli` (AR02c) và test tích hợp (AR02b) đều dùng hàm này, chỉ khác override để thay `IPreloadController`, `IPresentationObserver` hay `IMoveOverride`. `MainWindow` chỉ có **một constructor DI** (AR02d); các trường public cũ đã thành thuộc tính chỉ-đọc (`Files`, `CurrentIndex`, `CompareSelectedPath`, `Metrics`, `IsFileActionInProgress`). Seam production: `ViewportSizeSource` (F3 — `MainWindow` gán `Get` về `GetViewportSize` ngay sau `InitializeComponent()`), `IPresentationObserver`/`NullPresentationObserver`, seam preload (`MainViewModelCompositionRoot` chỉ dựng `PreloadScheduler` thật khi không có `IPreloadController` nào được đăng ký) và `IMoveOverride` (`null` ở production).
 

@@ -12,7 +12,7 @@ public sealed class BuildInfoAssemblyGapTests
     [Fact]
     public void GetVersion_OfTheAppAssembly_IsItsInformationalVersion()
     {
-        var assembly = typeof(BuildInfo).Assembly;
+        var assembly = typeof(PhotoReview.App.App).Assembly;
         var expected = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
 
         Assert.Equal(expected, BuildInfo.GetVersion(assembly));
@@ -21,7 +21,7 @@ public sealed class BuildInfoAssemblyGapTests
     [Fact]
     public void Describe_OfTheAppAssembly_NamesTheVersionAndCommit()
     {
-        var assembly = typeof(BuildInfo).Assembly;
+        var assembly = typeof(PhotoReview.App.App).Assembly;
         var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
         var plus = informational.IndexOf('+', StringComparison.Ordinal);
 
