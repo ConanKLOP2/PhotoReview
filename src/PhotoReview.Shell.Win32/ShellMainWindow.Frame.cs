@@ -87,9 +87,16 @@ internal sealed partial class ShellMainWindow
         }
 
         _pacer.ObservePresent(mode, FrameStats.ToMs(presentTicks));
-        Stats.RecordSlow(FrameStats.ToMs(Stopwatch.GetTimestamp() - frameStart), FrameStats.ToMs(presentStartTicks - frameStart),
-            FrameStats.ToMs(_surface.LastEndDrawTicks), FrameStats.ToMs(_surface.LastPresentTicks),
-            $"mode={mode} result={result} img={_composer?.Current?.Width}x{_composer?.Current?.Height} fade={_composer?.Crossfade.IsActive}");
+        var endDrawMs = FrameStats.ToMs(_surface.LastEndDrawTicks);
+        var surfacePresentMs = FrameStats.ToMs(_surface.LastPresentTicks);
+        if (FrameStats.IsSlow(endDrawMs, surfacePresentMs))
+        {
+            // Chỉ khung chậm mới dựng chuỗi chẩn đoán (đường nóng không cấp phát).
+            Stats.RecordSlow(FrameStats.ToMs(Stopwatch.GetTimestamp() - frameStart), FrameStats.ToMs(presentStartTicks - frameStart),
+                endDrawMs, surfacePresentMs,
+                $"mode={mode} result={result} img={_composer?.Current?.Width}x{_composer?.Current?.Height} fade={_composer?.Crossfade.IsActive}");
+        }
+
         Stats.Record(Stopwatch.GetTimestamp() - frameStart, presentTicks);
         if (result == PresentResult.DeviceRecreated || result == PresentResult.Failed)
         {

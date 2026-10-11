@@ -32,9 +32,13 @@ internal sealed class FrameStats
     /// <summary>Khung chậm (Present &gt;= ngưỡng) gần nhất, kèm bóc tách: dữ liệu cho báo cáo hiệu năng.</summary>
     internal List<(double FrameMs, double DrawMs, double EndDrawMs, double PresentMs, string Note)> Slow { get; } = [];
 
+    /// <summary>True khi một khung với các thời gian này được tính là chậm (đáng ghi bóc tách).</summary>
+    internal static bool IsSlow(double endDrawMs, double presentMs) =>
+        presentMs >= BlockedThresholdMs || endDrawMs >= BlockedThresholdMs;
+
     internal void RecordSlow(double frameMs, double drawMs, double endDrawMs, double presentMs, string note)
     {
-        if (Slow.Count < 64 && (presentMs >= BlockedThresholdMs || endDrawMs >= BlockedThresholdMs))
+        if (Slow.Count < 64 && IsSlow(endDrawMs, presentMs))
         {
             Slow.Add((frameMs, drawMs, endDrawMs, presentMs, note));
         }

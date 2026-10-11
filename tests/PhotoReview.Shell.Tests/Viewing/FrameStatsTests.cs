@@ -66,6 +66,16 @@ public sealed class FrameStatsTests
         Assert.Equal((0, 0L, 0L), (stats.Count, stats.Total, stats.BlockedPresents));
     }
 
+    [Theory]
+    [InlineData(0.0, 0.0, false)]
+    [InlineData(7.9, 7.9, false)]
+    [InlineData(8.0, 0.0, true)]
+    [InlineData(0.0, 8.0, true)]
+    public void IsSlow_IsTrueWhenEitherEndDrawOrPresentReachesTheThreshold(double endDrawMs, double presentMs, bool expected)
+    {
+        Assert.Equal(expected, FrameStats.IsSlow(endDrawMs, presentMs));
+    }
+
     [Fact]
     public void Slow_KeepsOnlyBlockedFramesAndIsBounded()
     {
