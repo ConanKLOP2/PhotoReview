@@ -401,11 +401,13 @@ public sealed class SharedServiceRegistrationTests : IDisposable
         var sink = factory.Create(callbacks);
 
         Assert.IsType<WpfPresentationSink>(sink);
-        sink.SetCurrentImage("img", true);
-        sink.SetStatusText("s");
-        sink.ApplyInitialViewMode();
-        sink.OnPresented("p");
-        Assert.Equal(["image:img:True", "status:s", "initial", "presented:p"], log);
+        // Fields, not calls: a live Application's dispatcher (left by other tests of the process) would make the sink marshal.
+        object? Field(string name) => typeof(WpfPresentationSink).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(sink);
+        Assert.Same(callbacks.SetCurrentImage, Field("_onSetCurrentImage"));
+        Assert.Same(callbacks.SetStatusText, Field("_onSetStatusText"));
+        Assert.Same(callbacks.ApplyInitialViewMode, Field("_onApplyInitialViewMode"));
+        Assert.Same(callbacks.OnPresented, Field("_onPresented"));
+        Assert.Empty(log);
         var metricsField = typeof(WpfPresentationSink).GetField("_metrics", BindingFlags.Instance | BindingFlags.NonPublic)!;
         Assert.Same(metrics, metricsField.GetValue(sink));
         Assert.Throws<ArgumentNullException>(() => factory.Create(null!));
