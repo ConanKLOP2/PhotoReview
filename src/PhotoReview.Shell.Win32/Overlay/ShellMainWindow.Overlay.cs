@@ -60,7 +60,8 @@ internal sealed partial class ShellMainWindow
         }
 
         _overlayText = new DWriteTextRenderer();
-        var tooltips = new NativeTooltipHost(Hwnd);
+        // Tooltip native tạo SAU khung đầu (Background): tốn ~3-4 ms nạp comctl32 v6, chỉ cần khi chuột dừng trên nút.
+        var tooltips = new DeferredTooltips(() => new NativeTooltipHost(Hwnd), action => _dispatcher.Post(action, UiPriority.Background));
         var menus = services.GetService<IPopupMenuHost>() ?? new NativePopupMenuHost(() => Hwnd);
         _overlaySettings = services.GetService<SettingsStore>();
 
@@ -79,7 +80,6 @@ internal sealed partial class ShellMainWindow
         });
         _overlay = overlay;
         overlay.Update(OverlayModel.From(_viewModel));
-
         _overlayHandler = new OverlayMessageHandler(overlay, _window, tooltips);
         _window.InsertMessageHandlerFirst(_overlayHandler);
 

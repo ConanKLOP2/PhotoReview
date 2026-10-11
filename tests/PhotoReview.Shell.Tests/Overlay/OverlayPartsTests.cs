@@ -240,3 +240,80 @@ public sealed class OverlayPartsTests
         Assert.Equal(11, model.ExifFontSize);
     }
 }
+
+/// <summary>WP-23: tooltip tạo muộn (sau khung đầu) không mất vùng đã đăng ký và không làm sập khi tạo lỗi.</summary>
+[Trait("Category", "HotPath")]
+public sealed class DeferredTooltipsTests
+{
+    private static OverlayTooltip Tool(string id) => new(id, new RectD(1, 2, 3, 4), "chữ " + id);
+
+    [Fact]
+    public void NothingIsCreatedUntilThePostedActionRuns_ThenThePendingListIsApplied()
+    {
+        var created = new FakeTooltips();
+        Action? posted = null;
+        int creates = 0;
+        var deferred = new DeferredTooltips(() =>
+        {
+            creates++;
+            return created;
+        }, a => posted = a);
+
+        Assert.Equal(0, creates);
+        deferred.Sync([Tool("a")], 1.25);
+        deferred.Sync([Tool("a"), Tool("b")], 1.5); // bản gần nhất thắng
+        deferred.RelayMouse(0x0200, 0, 0);
+        Assert.Equal(0, created.SyncCount);
+        Assert.Empty(created.Relayed);
+
+        posted!();
+        Assert.Equal(1, creates);
+        Assert.True(deferred.IsCreated);
+        Assert.Equal(["a", "b"], created.Tools.Select(t => t.Id));
+        Assert.Equal(1.5, created.Dpi);
+
+        deferred.Sync([Tool("c")], 2);
+        Assert.Equal(["c"], created.Tools.Select(t => t.Id));
+        deferred.RelayMouse(0x0200, 0, 0);
+        Assert.Single(created.Relayed);
+
+        posted!(); // chạy lại không tạo thêm
+        Assert.Equal(1, creates);
+    }
+
+    [Fact]
+    public void DisposedBeforeCreation_NeverCreates_DisposeReleasesTheControl()
+    {
+        Action? posted = null;
+        int creates = 0;
+        var early = new DeferredTooltips(() =>
+        {
+            creates++;
+            return new FakeTooltips();
+        }, a => posted = a);
+        early.Dispose();
+        posted!();
+        Assert.Equal(0, creates);
+        early.Sync([Tool("a")], 1);
+
+        var created = new FakeTooltips();
+        Action? post2 = null;
+        var late = new DeferredTooltips(() => created, a => post2 = a);
+        post2!();
+        late.Dispose();
+        Assert.True(created.Disposed);
+        late.Dispose();
+    }
+
+    [Fact]
+    public void CreationFailure_LeavesNoTooltipsWithoutThrowing()
+    {
+        Action? posted = null;
+        var deferred = new DeferredTooltips(() => throw new InvalidOperationException("no comctl"), a => posted = a);
+        deferred.Sync([Tool("a")], 1);
+        posted!();
+        Assert.False(deferred.IsCreated);
+        deferred.Sync([Tool("b")], 1);
+        deferred.RelayMouse(0x0200, 0, 0);
+    }
+}
