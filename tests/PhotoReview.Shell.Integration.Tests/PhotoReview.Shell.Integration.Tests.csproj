@@ -28,6 +28,8 @@
   <ItemGroup>
     <!-- WP-14: UI thread thật (dispatcher + vòng lặp) dùng chung với Shell.Tests. -->
     <Compile Include="..\PhotoReview.Shell.Tests\Hosting\UiThread.cs" Link="Hosting\UiThread.cs" />
+    <!-- WP-22: host/đồng hồ khung giả dùng chung cho replay G-INPUT bằng thông điệp thật. -->
+    <Compile Include="..\PhotoReview.Shell.Tests\Input\InputTestSupport.cs" Link="Input\InputTestSupport.cs" />
   </ItemGroup>
 
 </Project>
