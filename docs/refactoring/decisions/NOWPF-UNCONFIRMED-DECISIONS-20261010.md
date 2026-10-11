@@ -24,6 +24,7 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 | B-06 | Thêm hậu kiểm "nguồn đã biến mất" cho Recycle đơn như bản nhóm (fail + không commit nếu file còn) | giữ nguyên | Revert PR | CHƯA XÁC NHẬN |
 | C-04 | Save sau khi Load ConfigVersion mới hơn: sao lưu `config.json.newer-<ts>` trước khi ghi v3 | giữ nguyên (mất trường lạ) | Revert PR | CHƯA XÁC NHẬN |
 | WP05-SCALE | Fine-scale dùng WIC Fant (người dùng ĐÃ chọn b, xác nhận) | PixelAreaResampler tự viết | WP-06 | ĐÃ XÁC NHẬN |
+| WP20-VISIBLE | Cửa sổ Win32 chỉ hiện SAU khi giữ khoá instance (không nháy cửa sổ ở bản thứ hai): thấy được ~306 ms, thẻ ghi <= 150 ms | (b) dựng+present canvas trong lúc đọc config, bỏ cloak sau khoá (~-55 ms); (c) bỏ cloak trước khoá (~150 ms, bản thứ hai nháy cửa sổ tối) | Đổi thứ tự trong ShellStartup.StartupCoreAsync | CHƯA XÁC NHẬN |
 
 ## Không làm mà không hỏi (vẫn cần người dùng)
 - NE-1/2/5/8 đã chốt trước đó. Chế độ chạy nền/khay, Native AOT (cài MSVC + SDK 4-5 GB), xoá dữ liệu người dùng, bất cứ thay đổi

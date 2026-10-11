@@ -81,11 +81,24 @@ placement TRƯỚC `ShowWindow`; reconcile SAU khoá và SAU khi hiện, TRƯỚ
 
 ## 5. Số đo ảnh đầu (chi tiết: [perf/2026-10-12-wp20-startup-shell.md](../perf/2026-10-12-wp20-startup-shell.md))
 
-PLACEHOLDER-PERF
+Lô cuối, 10 vòng xen kẽ với WPF, R2R, file 11,7 MB (thứ 1300 của F4): **ảnh đầu median 493 ms [480-928]** (WPF 757 ms [738-1272]), cửa sổ hiện 260 ms,
+cửa sổ thấy được 306 ms (WPF 759 ms). NW-5 (<= 600 ms) đạt; thẻ ghi <= 450 ms: hụt ~40 ms (decode JPEG ~210 ms + đọc config ~140 ms nằm trên đường găng).
+Phát hiện: Present(1) của khung ảnh đầu chặn UI thread 250-500 ms trên GPU thật lúc đo (sync 0: 9 ms); đã giảm thiểu bằng
+D2DRenderSurface.ImmediatePresent cho tới ảnh đầu, WP-21 cần kiểm các khung sau (chi tiết trong file perf).
 
 ## 6. Đột biến
 
-PLACEHOLDER-MUTATION
+35 đột biến thủ công (sonnet, worktree riêng, mỗi cái: sửa một chỗ -> build -> chạy Shell.Tests + Shell.Integration.Tests): single-instance (M1-M8: khoá,
+bỏ qua TryAcquire, forward rỗng, prefix, decode trước khoá, không thoát, forward lúc đang khởi động, đóng-đua), DPI (M9-M11), placement (M12-M17), thứ tự
+khởi tạo/dispose (M18-M25: surface/cache, container/cửa sổ, cloak, reveal sớm, reconcile trước khoá/trong smoke, mã thoát), đối số (M26-M29), mất thiết bị
+và vẽ (M30-M35).
+- 22 bị diệt ngay bởi test có sẵn; **11 sống sót ban đầu** (M7, M10, M11, M14, M15, M17, M19, M21, M30, M34, M35) và đã được lấp bằng 11 test tích hợp mới
+  (ShellStartupTests): forward tới lúc đang khởi động, DPI đổi cùng cỡ DIP, cỡ ngoài 1200x800, placement áp khi cửa sổ còn ẩn, lưu placement hiện tại khi
+  đóng, smoke không đụng placement, cửa sổ giải phóng trước container, cloak trước ShowWindow thật, mất thiết bị tự yêu cầu vẽ lại (nuốt WM_PAINT), đóng
+  hoãn khi file action giữ cổng, ảnh đầu vẽ ngay lượt gán. Mỗi test đỏ khi áp mutant, xanh ở bản gốc.
+- 2 tương đương: M18 (dispose surface trước cache: refcount COM giữ bitmap hợp lệ, cần seam surface giả), M25 (_forcedExit: PostQuitMessage lấy mã cuối cùng; đường
+  hiện có luôn dispose cửa sổ trước Quit nên mã dư thừa phòng thủ; đã ghim mã thoát 1 và 7 bằng hai test).
+- Không phát hiện lỗi thật trong mã nguồn.
 
 ## 7. Việc còn lại / bàn giao cho WP-21..26
 
