@@ -153,7 +153,7 @@ public sealed class PointerInputTests
         rig.Drain();
         Assert.Equal(520, rig.Viewport.HorizontalOffset, 6);
 
-        rig.Mouse(LUp, -20, 300); // nhả ngoài ảnh: phải kết thúc pan và nhả capture
+        rig.Mouse(LUp, -600, 300); // offset 520: ảnh bắt đầu ở x = -520, nên -600 là ngoài ảnh; nhả ở đó vẫn phải nhả capture
         Assert.False(rig.Window.HasPointerCapture);
 
         rig.MessageTime = 100_000; // không phải double-click của lần nhấn trước
