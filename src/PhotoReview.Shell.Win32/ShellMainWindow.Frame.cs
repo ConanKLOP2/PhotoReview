@@ -3,6 +3,7 @@ using PhotoReview.App.Input;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Imaging.Pixels;
 using PhotoReview.Shell.Rendering;
+using PhotoReview.Shell.Win32.Viewing;
 
 namespace PhotoReview.Shell.Win32;
 
@@ -35,9 +36,19 @@ internal sealed partial class ShellMainWindow
             return; // thu nhỏ: không có gì để vẽ; khung sau khi khôi phục sẽ vẽ
         }
 
+        // WP-21: nhịp khung - Present không được chặn UI thread (FramePacer). Ảnh đầu: Immediate tới khi đã vẽ.
+        var awaitingFirstImage = !_firstImageDrawn;
+        var mode = _pacer.ModeFor(_viewModel.Viewer.IsFullscreen, awaitingFirstImage);
+        if (!awaitingFirstImage && _surface.HasFrameLatencyWaitHandle && _pacer.ShouldDefer(_surface.WaitForNextFrame(0)))
+        {
+            _window.Invalidate(); // swap chain chưa nhận khung mới: để nhịp sau, không chặn
+            return;
+        }
+
         PresentResult result;
         var frameStart = Stopwatch.GetTimestamp();
         var presentTicks = 0L;
+        var presentStartTicks = 0L;
         try
         {
             if (_surface.PixelWidth != width || _surface.PixelHeight != height)
@@ -54,8 +65,7 @@ internal sealed partial class ShellMainWindow
                 _viewport.UpdateLayout();
             }
 
-            // Khung ảnh đầu không chờ vblank (xem D2DRenderSurface.ImmediatePresent); sau đó Present(1) bình thường.
-            _surface.ImmediatePresent = !_firstImageDrawn;
+            _surface.ImmediatePresent = mode == PresentMode.Immediate;
             var context = _surface.BeginDrawContext();
             try
             {
@@ -65,6 +75,7 @@ internal sealed partial class ShellMainWindow
             finally
             {
                 var presentStart = Stopwatch.GetTimestamp();
+                presentStartTicks = presentStart;
                 result = _surface.EndDrawAndPresent();
                 presentTicks = Stopwatch.GetTimestamp() - presentStart;
             }
@@ -75,6 +86,10 @@ internal sealed partial class ShellMainWindow
             return;
         }
 
+        _pacer.ObservePresent(mode, FrameStats.ToMs(presentTicks));
+        Stats.RecordSlow(FrameStats.ToMs(Stopwatch.GetTimestamp() - frameStart), FrameStats.ToMs(presentStartTicks - frameStart),
+            FrameStats.ToMs(_surface.LastEndDrawTicks), FrameStats.ToMs(_surface.LastPresentTicks),
+            $"mode={mode} result={result} img={_composer?.Current?.Width}x{_composer?.Current?.Height} fade={_composer?.Crossfade.IsActive}");
         Stats.Record(Stopwatch.GetTimestamp() - frameStart, presentTicks);
         if (result == PresentResult.DeviceRecreated || result == PresentResult.Failed)
         {

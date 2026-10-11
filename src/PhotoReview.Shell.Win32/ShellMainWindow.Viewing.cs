@@ -27,8 +27,13 @@ internal sealed partial class ShellMainWindow
     private EventHandler? _onCacheCleared;
     private PhotoReview.Imaging.Caching.PreviewImageService? _clearSource;
 
+    private readonly FramePacer _pacer = new();
+
     /// <summary>Thời gian từng khung (tổng + Present) để đo độ chặn của <c>Present</c>.</summary>
     internal FrameStats Stats { get; } = new();
+
+    /// <summary>Chính sách nhịp khung (Immediate khi cửa sổ thường; VSync + chờ waitable khi phủ màn hình).</summary>
+    internal FramePacer Pacer => _pacer;
 
     internal PresentationComposer? Composer => _composer;
 
@@ -41,6 +46,7 @@ internal sealed partial class ShellMainWindow
         _viewModel.ImageChanging += OnImageChanging;
         _viewModel.Compare.PropertyChanged += OnCompareChanged;
         _viewModel.PropertyChanged += OnNavigationChanged;
+        _pacer.Degraded += (_, _) => _log.Warn("Present(1) blocked the UI thread; the shell now presents without waiting for vblank (WP-21).");
         _clearSource = _viewModel.PreviewService;
         if (_clearSource is not null)
         {

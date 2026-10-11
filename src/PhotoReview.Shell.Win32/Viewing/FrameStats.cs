@@ -29,6 +29,17 @@ internal sealed class FrameStats
 
     internal static double ToMs(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
 
+    /// <summary>Khung chậm (Present &gt;= ngưỡng) gần nhất, kèm bóc tách: dữ liệu cho báo cáo hiệu năng.</summary>
+    internal List<(double FrameMs, double DrawMs, double EndDrawMs, double PresentMs, string Note)> Slow { get; } = [];
+
+    internal void RecordSlow(double frameMs, double drawMs, double endDrawMs, double presentMs, string note)
+    {
+        if (Slow.Count < 64 && (presentMs >= BlockedThresholdMs || endDrawMs >= BlockedThresholdMs))
+        {
+            Slow.Add((frameMs, drawMs, endDrawMs, presentMs, note));
+        }
+    }
+
     internal void Record(long frameTicks, long presentTicks)
     {
         var frame = ToMs(frameTicks);
