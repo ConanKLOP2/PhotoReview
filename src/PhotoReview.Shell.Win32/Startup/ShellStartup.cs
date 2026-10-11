@@ -416,11 +416,11 @@ internal sealed class ShellStartup : IDisposable
 
         _main = new ShellMainWindow(window, dispatcher, _frameClock, viewModel, services.GetRequiredService<ViewportSizeSource>(), hub,
             _cloak, _placementStore, NativeWindowPlacement.Instance, displayClock, log, _mark,
-            new ShellMainWindowOptions(_options.PreferWarp, _launch.Smoke ? null : placementFile, activate));
+            new ShellMainWindowOptions(_options.PreferWarp, _launch.Smoke ? null : placementFile, activate,
+                SettingsStore: store, ZoomPrompt: services.GetService<IZoomPromptService>()));
         _forwardHandler = new ForwardedOpenHandler(_main, log);
         _main.AttachRenderer();
         _mark("mainWindowConstructed");
-        _ = store;
 
         // Khung đầu NGAY (canvas): cửa sổ được bỏ cloak sau Present đầu thay vì chờ ảnh (thẻ: cửa sổ thấy được <= 150 ms).
         _main.RenderNow();
