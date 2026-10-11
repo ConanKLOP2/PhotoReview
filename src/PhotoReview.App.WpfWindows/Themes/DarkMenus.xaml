@@ -15,7 +15,7 @@
         covers all four Role values so it stays correct if a Menu is ever added.
     -->
     <ResourceDictionary.MergedDictionaries>
-        <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/>
+        <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkPalette.xaml"/>
     </ResourceDictionary.MergedDictionaries>
 
     <Style TargetType="ContextMenu">

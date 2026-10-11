@@ -9,8 +9,9 @@ namespace PhotoReview.Architecture.Tests;
 /// </summary>
 public sealed class XamlThemeRulesTests
 {
-    private const string AppDir = "src/PhotoReview.App";
-    private const string ThemesDir = "src/PhotoReview.App/Themes/";
+    // WP-19b: the secondary windows and Themes/ moved to PhotoReview.App.WpfWindows; MainWindow.xaml stays in PhotoReview.App.
+    private static readonly string[] XamlDirs = ["src/PhotoReview.App", "src/PhotoReview.App.WpfWindows"];
+    private const string ThemesDir = "src/PhotoReview.App.WpfWindows/Themes/";
     private const string AllowlistFile = "tests/PhotoReview.Architecture.Tests/xaml-hex-allowlist.txt";
 
     // #RGB, #ARGB, #RRGGBB and #AARRGGBB literals.
@@ -25,7 +26,9 @@ public sealed class XamlThemeRulesTests
         var root = RepoScan.Root;
         var allowed = ReadAllowlist(Path.Combine(root, AllowlistFile));
         var violations = new List<string>();
-        foreach (var file in Directory.GetFiles(Path.Combine(root, AppDir), "*.xaml", SearchOption.AllDirectories))
+        var files = XamlDirs.SelectMany(dir => Directory.GetFiles(Path.Combine(root, dir), "*.xaml", SearchOption.AllDirectories)).ToList();
+        Assert.Contains(files, f => RepoScan.Relative(f).StartsWith(ThemesDir, StringComparison.Ordinal)); // Themes/ must be scanned (not vacuous)
+        foreach (var file in files)
         {
             var relative = RepoScan.Relative(file);
             if (relative.Contains("/obj/", StringComparison.Ordinal) ||

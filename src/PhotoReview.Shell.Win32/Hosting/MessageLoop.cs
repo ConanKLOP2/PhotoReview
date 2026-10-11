@@ -16,6 +16,15 @@ internal interface IMessageFilter
 }
 
 /// <summary>
+/// WP-19b: bộ lọc cần cả <c>time</c>/<c>pt</c> của MSG (WindowMessage của C-15 không mang): <c>ComponentDispatcher</c> của WPF.
+/// Khi filter implement interface này, <see cref="MessageLoop"/> gọi nó thay cho <see cref="IMessageFilter.PreFilterMessage"/>.
+/// </summary>
+internal interface IRawMessageFilter : IMessageFilter
+{
+    bool PreFilterRawMessage(in Msg message);
+}
+
+/// <summary>
 /// Vòng lặp của UI thread shell (NO-WPF-EXEC-PLAN thẻ WP-14). Mỗi lượt, theo thứ tự:
 /// <list type="number">
 /// <item>xả việc Send/Normal/Render của <see cref="Win32UiDispatcher"/> (trước input kế tiếp và trước khi vẽ);</item>
@@ -194,7 +203,10 @@ internal sealed unsafe class MessageLoop
         var windowMessage = new WindowMessage(message.Hwnd, message.Message, message.WParam, message.LParam);
         foreach (var filter in filters)
         {
-            if (filter.PreFilterMessage(in windowMessage))
+            var handled = filter is IRawMessageFilter raw
+                ? raw.PreFilterRawMessage(in message)
+                : filter.PreFilterMessage(in windowMessage);
+            if (handled)
             {
                 return true;
             }

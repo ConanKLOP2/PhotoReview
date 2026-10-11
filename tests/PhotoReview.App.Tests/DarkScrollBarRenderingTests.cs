@@ -94,11 +94,11 @@ public sealed class DarkScrollBarRenderingTests
         var root = new Border { Width = 220, Height = 170, Background = Brushes.White };
         root.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
-            Source = new Uri("/PhotoReview.App;component/Themes/DarkPalette.xaml", UriKind.Relative),
+            Source = new Uri("/PhotoReview.App.WpfWindows;component/Themes/DarkPalette.xaml", UriKind.Relative),
         });
         root.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
-            Source = new Uri("/PhotoReview.App;component/Themes/DarkScrollBars.xaml", UriKind.Relative),
+            Source = new Uri("/PhotoReview.App.WpfWindows;component/Themes/DarkScrollBars.xaml", UriKind.Relative),
         });
 
         var scroll = new ScrollViewer

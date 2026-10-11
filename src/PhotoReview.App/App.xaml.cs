@@ -41,6 +41,7 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<IDialogService, PhotoReview.App.Services.WpfDialogService>();
         services.AddSingleton<PhotoReview.App.Coordinators.IFolderPicker, PhotoReview.App.Services.WpfFolderPicker>();
         services.AddSingleton<IClipboardService, PhotoReview.App.Services.WpfClipboardService>();
+        services.AddSingleton<PhotoReview.App.Services.IZoomPromptService>(_ => new PhotoReview.App.Services.WpfZoomPromptService(() => Current?.MainWindow));
         services.AddSingleton<IPresentationSinkFactory, PhotoReview.App.Services.WpfPresentationSinkFactory>();
 
         // 2. The shared graph: codec = WPF bitmap codec, INV-12 fallback decoder = the WPF decoder, over the one source reader.
@@ -55,7 +56,8 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<SettingsStore>(),
             sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>(),
             sp.GetRequiredService<IAppPaths>(),
-            sp.GetRequiredService<IDisplayClock>()));
+            sp.GetRequiredService<IDisplayClock>(),
+            sp.GetService<PhotoReview.App.Services.IZoomPromptService>()));
     }
 
     /// <summary>Test seam (null in production): extra registrations layered over the production graph in <see cref="StartupCoreAsync"/>.</summary>

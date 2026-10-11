@@ -3,13 +3,13 @@
     <!--
         Shared dark control styles for dialog windows (Settings, Action profiles, ...).
         Merge into a Window's resources:
-            <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkControls.xaml"/>
+            <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkControls.xaml"/>
         The default (Aero) templates of GroupBox/Button/ComboBox/ScrollBar draw light chrome that
         clashes with the dark window background, so those get small templates of their own.
     -->
     <ResourceDictionary.MergedDictionaries>
-        <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/>
-        <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkScrollBars.xaml"/>
+        <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkPalette.xaml"/>
+        <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkScrollBars.xaml"/>
     </ResourceDictionary.MergedDictionaries>
 
     <Style TargetType="TextBlock">

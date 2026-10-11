@@ -37,6 +37,8 @@
     <ProjectReference Include="..\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
     <!-- NO-WPF-EXEC-PLAN (WP-01): lớp dùng chung không-WPF; WP-07/WP-09 dời thêm kiểu sang đây (namespace giữ nguyên). -->
     <ProjectReference Include="..\PhotoReview.App.Shared\PhotoReview.App.Shared.csproj" />
+    <!-- WP-19b: cua so phu WPF + Themes + TrExtension dung chung voi shell Win32 (nap muon qua Shell.WpfBridge). -->
+    <ProjectReference Include="..\PhotoReview.App.WpfWindows\PhotoReview.App.WpfWindows.csproj" />
   </ItemGroup>
 
   <ItemGroup>
