@@ -314,6 +314,63 @@ public sealed class SharedServiceRegistrationTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => ServiceFactories.CreateWebpHeicDecoder(PhysicalSourceReader.Instance, null!, null, null, null));
     }
 
+    // ---- mutation-test additions (WP-09) ----
+
+    private static object? PrivateField(object instance, string name) =>
+        instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(instance);
+
+    [Fact]
+    public void ThumbnailCache_AndPreviewImageService_AreComposedWithTheOptionsCodec_NotAHardWiredOne()
+    {
+        var codec = new CountingCodec();
+        using var provider = Host(Options(codec)).BuildServiceProvider();
+
+        Assert.Same(codec, PrivateField(provider.GetRequiredService<ThumbnailCache>(), "_platformCodec"));
+        Assert.Same(codec, PrivateField(provider.GetRequiredService<PreviewImageService>(), "_platformCodec"));
+    }
+
+    [Fact]
+    public void SettingsStore_IsComposedWithTheForcedStartupErrorLogger()
+    {
+        using var provider = Host(Options()).BuildServiceProvider();
+
+        var logger = (Delegate)PrivateField(provider.GetRequiredService<SettingsStore>(), "_onStartupError")!;
+
+        Assert.Equal(((Delegate)(Action<string, Exception>)AppLog.ErrorForced).Method, logger.Method);
+    }
+
+    [Fact]
+    public void SinkCallbacks_SetCurrentImage_RaisesImageChangingOnlyForAFileChange()
+    {
+        var sinks = new HostSinkFactory();
+        using var provider = Host(Options(), sinks).BuildServiceProvider();
+        var vm = provider.GetRequiredService<MainViewModel>();
+        var raised = new List<bool>();
+        vm.ImageChanging += (_, e) => raised.Add(e.IsFileChange);
+
+        sinks.Callbacks!.SetCurrentImage(null, false);
+        Assert.Empty(raised);
+        sinks.Callbacks.SetCurrentImage(null, true);
+
+        Assert.Equal([true], raised);
+    }
+
+    [Fact]
+    public void ViewerState_IsTransient_SoEveryMainViewModelOwnsItsOwnViewer()
+    {
+        using var provider = Host(Options()).BuildServiceProvider();
+
+        Assert.NotSame(provider.GetRequiredService<ViewerState>(), provider.GetRequiredService<ViewerState>());
+        Assert.NotSame(provider.GetRequiredService<MainViewModel>().Viewer, provider.GetRequiredService<MainViewModel>().Viewer);
+    }
+
+    [Fact]
+    public void UnavailableClipboardService_ReportsEveryWriteAsFailed()
+    {
+        Assert.False(UnavailableClipboardService.Instance.TrySetText("anything"));
+        Assert.False(UnavailableClipboardService.Instance.TrySetText(string.Empty));
+    }
+
     // ---- the WPF host's own registrations (App.ConfigureServices) ----
 
     [Fact]
