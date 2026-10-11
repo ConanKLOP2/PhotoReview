@@ -1,6 +1,9 @@
+using System.IO;
 using System.Reflection;
 using PhotoReview.App;
 using PhotoReview.App.Services;
+using PhotoReview.Core.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.Integration.Tests.Infrastructure;
 
 namespace PhotoReview.Integration.Tests;
@@ -34,11 +37,13 @@ public sealed class ZoomPromptSeamTests
         await StaTestHost.RunAsync(async () =>
         {
             var window = TestAppHost.CreateMainWindow(initialPath: null, new TestHostHooks { ZoomPrompt = prompt });
+            window.Settings.ClickZoomPercent = 175; // not the default, so "current level" cannot be satisfied by a constant
             var before = window.Settings.ClickZoomPercent;
 
             await InvokeCustomZoom(window);
 
-            Assert.Equal([before], prompt.Asked);
+            Assert.Equal([175], prompt.Asked);
+            Assert.Equal(175, before);
             Assert.Equal(250, window.Settings.ClickZoomPercent); // SetZoomAlsoSetsClickLevel is on by default
             window.Close();
         });
@@ -58,6 +63,25 @@ public sealed class ZoomPromptSeamTests
             Assert.Single(prompt.Asked);
             Assert.Equal(before, window.Settings.ClickZoomPercent);
             window.Close();
+        });
+    }
+
+    [Theory]
+    [InlineData(SettingsTarget.ExternalEditor, true)]
+    [InlineData(SettingsTarget.Default, false)]
+    public async Task SettingsFactory_FocusesTheExternalEditorBoxOnlyForThatTarget(SettingsTarget target, bool expected)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var paths = new PhotoReview.Core.AppPaths(Path.Combine(Path.GetTempPath(), "PhotoReview-Test-" + Guid.NewGuid().ToString("N")));
+            var store = new SettingsStore(paths, new PhotoReview.Core.IO.PhysicalFileSystem(), PhotoReview.Core.Diagnostics.NullLog.Instance);
+            var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+            services.AddSingleton(store);
+            var window = SecondaryWindowFactory.CreateSettings(services.BuildServiceProvider(), target);
+
+            var settings = Assert.IsType<SettingsWindow>(window);
+            Assert.Equal(expected, settings.FocusExternalEditorOnLoad);
+            return Task.CompletedTask;
         });
     }
 }

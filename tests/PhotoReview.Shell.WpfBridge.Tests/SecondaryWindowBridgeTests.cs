@@ -88,7 +88,15 @@ public sealed class SecondaryWindowBridgeTests(ITestOutputHelper output)
             return Keyboard.Focus(box) is not null ? Describe(Keyboard.FocusedElement) : "none";
         });
 
+        // Bridge contract: every message the shell loop pumps reaches ComponentDispatcher while a modeless window is open.
+        var seen = new List<int>();
+        System.Windows.Interop.ThreadMessageEventHandler observe = (ref System.Windows.Interop.MSG m, ref bool _) => seen.Add(m.message);
+        await harness.Ui.InvokeAsync(() => System.Windows.Interop.ComponentDispatcher.ThreadPreprocessMessage += observe);
+
         BridgeHarness.PostKey(hwnd, 0x09 /* VK_TAB */);
+        await TestSupport.Wait.UntilAsync(() => harness.Ui.InvokeAsync(() => seen.Contains(0x0100)).GetAwaiter().GetResult(),
+            "WM_KEYDOWN reached ComponentDispatcher.ThreadPreprocessMessage");
+        await harness.Ui.InvokeAsync(() => System.Windows.Interop.ComponentDispatcher.ThreadPreprocessMessage -= observe);
         string? second = null;
         await TestSupport.Wait.UntilAsync(() =>
         {
