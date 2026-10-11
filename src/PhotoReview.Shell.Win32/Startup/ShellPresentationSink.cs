@@ -1,5 +1,3 @@
-using PhotoReview.App.Composition;
-using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Shell.Win32.Startup;
@@ -88,32 +86,4 @@ internal sealed class ShellPresentationHub
         PhotoReviewPerf.Log.Presented(token, kind);
         PhotoReviewPerf.Log.RenderedFrame(token, PhotoReviewPerf.Ms(assignedTimestamp));
     }
-}
-
-/// <summary>Sink tối thiểu của startup shell (WP-20): chuyển callback của view model và đẩy ảnh sang hub.</summary>
-internal sealed class ShellPresentationSink(ShellPresentationHub hub, MainViewModelSinkCallbacks callbacks) : IPresentationSink
-{
-    private readonly ShellPresentationHub _hub = hub ?? throw new ArgumentNullException(nameof(hub));
-    private readonly MainViewModelSinkCallbacks _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
-
-    public void SetCurrentImage(object? image, bool isFileChange = false)
-    {
-        // Thứ tự như WPF: view model cập nhật ViewerState (kích thước nguồn) TRƯỚC, rồi bề mặt mới đổi ảnh và layout.
-        _callbacks.SetCurrentImage(image, isFileChange);
-        _hub.SetCurrentImage(image, isFileChange);
-    }
-
-    public void SetStatusText(string status) => _callbacks.SetStatusText(status);
-
-    public void ApplyInitialViewMode() => _callbacks.ApplyInitialViewMode();
-
-    public void OnPresented(string path) => _callbacks.OnPresented(path);
-
-    public void TracePresented(long token, string kind, long assignedTimestamp) => _hub.AddTrace(token, kind, assignedTimestamp);
-}
-
-/// <summary>C-16: <see cref="IPresentationSinkFactory"/> của shell Win32 (WP-21 thay bằng <c>Win32PresentationSink</c>).</summary>
-internal sealed class ShellPresentationSinkFactory(ShellPresentationHub hub) : IPresentationSinkFactory
-{
-    public IPresentationSink Create(MainViewModelSinkCallbacks callbacks) => new ShellPresentationSink(hub, callbacks);
 }

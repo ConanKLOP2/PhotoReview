@@ -279,6 +279,7 @@ internal sealed unsafe class DeviceResources : IDisposable
         IDxgiAdapter adapter = ComInterop.Wrap<IDxgiAdapter>(adapterRaw);
         try
         {
+            ReadAdapterDescription(adapter);
             ComInterop.Check(adapter.GetParent(GraphicsGuids.IidDxgiFactory2, out nint factoryRaw));
             IDxgiFactory2 factory = ComInterop.Wrap<IDxgiFactory2>(factoryRaw);
             try
@@ -314,6 +315,23 @@ internal sealed unsafe class DeviceResources : IDisposable
         ComInterop.Check(swapChain2.SetMaximumFrameLatency((uint)_maxFrameLatency));
         _waitHandle = swapChain2.GetFrameLatencyWaitableObject();
     }
+
+    /// <summary>Tên + VendorId của adapter đang vẽ (DXGI_ADAPTER_DESC: Description[128] WCHAR, rồi VendorId); chẩn đoán.</summary>
+    private void ReadAdapterDescription(IDxgiAdapter adapter)
+    {
+        byte* desc = stackalloc byte[512];
+        if (adapter.Reserved08GetDesc((nint)desc) < 0)
+        {
+            return;
+        }
+
+        string name = new((char*)desc);
+        uint vendor = *(uint*)(desc + 256);
+        AdapterDescription = $"{name} (vendor 0x{vendor:X4})";
+    }
+
+    /// <summary>Adapter mà thiết bị D3D đang chạy trên đó (rỗng với offscreen); chẩn đoán.</summary>
+    public string AdapterDescription { get; private set; } = string.Empty;
 
     private void CreateTarget()
     {

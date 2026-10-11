@@ -25,6 +25,8 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 | C-04 | Save sau khi Load ConfigVersion mới hơn: sao lưu `config.json.newer-<ts>` trước khi ghi v3 | giữ nguyên (mất trường lạ) | Revert PR | CHƯA XÁC NHẬN |
 | WP05-SCALE | Fine-scale dùng WIC Fant (người dùng ĐÃ chọn b, xác nhận) | PixelAreaResampler tự viết | WP-06 | ĐÃ XÁC NHẬN |
 | WP20-VISIBLE | Cửa sổ Win32 chỉ hiện SAU khi giữ khoá instance (không nháy cửa sổ ở bản thứ hai): thấy được ~306 ms, thẻ ghi <= 150 ms | (b) dựng+present canvas trong lúc đọc config, bỏ cloak sau khoá (~-55 ms); (c) bỏ cloak trước khoá (~150 ms, bản thứ hai nháy cửa sổ tối) | Đổi thứ tự trong ShellStartup.StartupCoreAsync | CHƯA XÁC NHẬN |
+| WP21-PRESENT | Cửa sổ thường luôn `Present(0)` (không xé hình: DWM ghép trọn khung; đo `Present(1)` chặn P50 222 ms mọi khung); F11 `Present(1)` + chờ waitable không chặn, tự hạ cấp nếu chặn. Nâng cấp preview -> full upload nền rồi mới thay | (b) giữ `Present(1)` cả cửa sổ thường (tearing-free chắc chắn nhưng UI thread chặn); (c) luôn `Present(0)` kể cả F11 (xé hình ở independent flip) | `FramePacer.ModeFor` một hàm | CHƯA XÁC NHẬN |
+| WP21-STALL | Khung đơn lẻ sau khoảng nghỉ 100-450 ms có thể bị `EndDraw` chặn ~0,5 s trên máy dev (nguyên nhân gốc chưa rõ): chấp nhận, đo lại trên máy thật của người dùng (`PresentationPerfReportTests`) | (b) luồng render riêng; (c) present qua DirectComposition; (d) khung giữ ấm | Không có gì để hoàn tác | CHƯA XÁC NHẬN |
 
 ## Không làm mà không hỏi (vẫn cần người dùng)
 - NE-1/2/5/8 đã chốt trước đó. Chế độ chạy nền/khay, Native AOT (cài MSVC + SDK 4-5 GB), xoá dữ liệu người dùng, bất cứ thay đổi

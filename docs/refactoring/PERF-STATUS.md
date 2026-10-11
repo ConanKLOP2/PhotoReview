@@ -50,3 +50,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-11 -- WP-17 chữ DirectWrite + overlay: layout miss P50 0,10 ms, hit ~0, khung 5 panel submit P50 0,47 / P95 1,4 ms (GPU thật, tải nền ~23 %); G-OVL lệch 0,017 DIP](perf/2026-10-11-wp17-text-overlay.md)
 - [2026-10-12 -- WP-20 startup shell (PhotoReview.exe Win32): first image R2R median vs the WPF app, window-visible milestones](perf/2026-10-12-wp20-startup-shell.md)
 - [2026-10-12 -- WP-22 shell input: key->handler/layout 0.14/0.18 ms p50, key->frame ~260 ms (Present(1) blocks, WP-21)](perf/2026-10-12-wp22-input.md)
+- [2026-10-12 -- WP-21 trình bày ảnh Win32: Present(1) chặn UI thread P50 222 ms mọi khung -> Present(0) ~1,2 ms; pan 60 Hz P95 5 ms; khung đơn lẻ sau nghỉ 100-450 ms vẫn có thể chặn ~0,5 s (EndDraw, chưa rõ nguyên nhân, CHƯA XÁC NHẬN)](perf/2026-10-12-wp21-presentation.md)
