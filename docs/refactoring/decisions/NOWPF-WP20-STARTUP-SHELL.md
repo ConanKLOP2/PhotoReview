@@ -68,13 +68,15 @@ placement TRƯỚC `ShowWindow`; reconcile SAU khoá và SAU khi hiện, TRƯỚ
 ## 4. Kiểm chứng
 
 - Build `PhotoReview.slnx` Release: 0 cảnh báo / 0 lỗi.
-- `Shell.Tests` (unit, không HWND): `ShellLaunchTests` (9), `StartupCloakTests` (7), `ShellPlacementTests` (20), `DpiAwarenessBootstrapTests` (4),
+- `Shell.Tests` (unit, không HWND): `ShellLaunchTests` (9), `StartupCloakTests` (7), `ShellPlacementTests` (18), `DpiAwarenessBootstrapTests` (4),
   `ForwardedOpenHandlerTests` (6), `ShellPresentationHubTests` (6), `ShellCompositionRootTests` (4), `ShellSharedGraphTests` (1: JPEG qua đồ thị
   dùng chung ra `PixelBuffer`).
 - `Shell.Integration.Tests` (`ShellStartup` THẬT trong tiến trình test, HWND trên desktop ẩn, WARP, dữ liệu tạm): ảnh đầu + thứ tự mốc, decode
   sớm sau khoá, cloak, placement Normal/Maximized (áp trước show, lưu khi đóng), reconcile (thứ tự + hộp thoại Recovery), forward bản thứ hai
   (thoát 0, không dựng cửa sổ, bản đầu mở file được forward), log tắt không file, smoke, mất thiết bị rồi vẽ lại, đóng sạch không rò.
-- Tiến trình thật: `PhotoReview.exe --smoke` (đã có từ WP-01) và probe R2R (mục 5).
+- Tiến trình thật (`ShellProcessTests` + `ShellSmokeTests`): `PhotoReview.exe` với JPEG -> `RenderedFrame` trong CSV perf, đóng bằng WM_CLOSE
+  thoát 0, lưu placement, không `app.log`; bản thứ hai (cùng prefix) thoát 0 và bản đầu mở file được forward (`Assign` thứ hai); `--smoke` thoát 0.
+  Probe R2R: mục 5.
 - Đột biến thủ công: mục 6.
 
 ## 5. Số đo ảnh đầu (chi tiết: [perf/2026-10-12-wp20-startup-shell.md](../perf/2026-10-12-wp20-startup-shell.md))
