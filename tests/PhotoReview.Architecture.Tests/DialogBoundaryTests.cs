@@ -38,6 +38,10 @@ public sealed class DialogBoundaryTests
         // WPF Window -- the "*Window" name just collides with this rule's naming heuristic.
         ("src/PhotoReview.App.WpfWindows/SettingsWindow.xaml.cs", "new PreloadWindow("),
         ("src/PhotoReview.Imaging/PreloadWindow.cs", "new PreloadWindow("),
+        // WP-20: the Win32 shell's composition root (ShellStartup) is the one place its main window (ShellWindow) and
+        // ShellMainWindow are constructed - the shell equivalent of App.xaml.cs. Everything else asks IDialogService.
+        ("src/PhotoReview.Shell.Win32/Startup/ShellStartup.cs", "new ShellWindow("),
+        ("src/PhotoReview.Shell.Win32/Startup/ShellStartup.cs", "new ShellMainWindow("),
     ];
 
     [Fact(DisplayName = "Rule AR19: app windows are constructed only in Services/SecondaryWindowFactory.cs (WP-19b), Services/WpfDialogService.cs and App.xaml.cs (plus the explicit allowlist)")]

@@ -26,4 +26,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- WP-20: JPEG nhúng sẵn dùng chung với Shell.Integration.Tests (test dựng đồ thị DI giải mã ra PixelBuffer). -->
+    <Compile Include="..\PhotoReview.Shell.Integration.Tests\Startup\TestJpeg.cs" Link="Startup\TestJpeg.cs" />
+  </ItemGroup>
+
 </Project>

@@ -12,7 +12,8 @@ internal sealed record ShellWindowOptions(
     double WidthDip = 1024,
     double HeightDip = 720,
     double MinWidthDip = 320,
-    double MinHeightDip = 240);
+    double MinHeightDip = 240,
+    bool SizeIsOuter = false);
 
 /// <summary>
 /// C-15 trên Win32 (NO-WPF-EXEC-PLAN mục 5, thẻ WP-14): cửa sổ top-level PerMonitorV2, WndProc
@@ -202,10 +203,14 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
     }
 
     /// <summary>Hiện cửa sổ; <paramref name="activate"/> = false không lấy focus (test, smoke).</summary>
-    internal void Show(bool activate)
+    internal void Show(bool activate) =>
+        Show(activate ? WindowMessages.SwShowNormal : WindowMessages.SwShowNoActivate);
+
+    /// <summary>WP-20: <c>ShowWindow</c> với lệnh SW_* tuỳ ý (vd. SW_SHOWMAXIMIZED theo placement đã lưu).</summary>
+    internal void Show(int showCommand)
     {
         VerifyAccess();
-        User32.ShowWindow(_hwnd, activate ? WindowMessages.SwShowNormal : WindowMessages.SwShowNoActivate);
+        User32.ShowWindow(_hwnd, showCommand);
         WndProcThunk.RethrowPending();
     }
 
@@ -298,7 +303,8 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
     private void ApplyInitialSize()
     {
         var rect = NativeRect.Create(0, 0, ToPixels(_options.WidthDip), ToPixels(_options.HeightDip));
-        if (User32.AdjustWindowRectExForDpi(&rect, WindowMessages.WsOverlappedWindow, false, 0, _dpi))
+        // SizeIsOuter (WP-20): Width/Height của cửa sổ WPF là cỡ NGOÀI (gồm khung), nên 1200x800 của MainWindow.xaml giữ nguyên.
+        if (_options.SizeIsOuter || User32.AdjustWindowRectExForDpi(&rect, WindowMessages.WsOverlappedWindow, false, 0, _dpi))
         {
             User32.SetWindowPos(_hwnd, 0, 0, 0, NativeRect.Width(rect), NativeRect.Height(rect),
                 WindowMessages.SwpNoMove | WindowMessages.SwpNoZOrder | WindowMessages.SwpNoActivate);
