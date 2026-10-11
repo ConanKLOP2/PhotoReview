@@ -53,6 +53,19 @@ public sealed partial class WicGeneratedComTests : IDisposable
         Assert.Equal(0u, (uint)Marshal.Release(raw)); // only our reference was left; it was the last one
     }
 
+    [Fact(DisplayName = "Wrap of a pointer that is not the requested interface fails and still gives every reference back")]
+    public void Wrap_WrongInterface_ThrowsAndReleasesImmediately()
+    {
+        var raw = NewRawScaler();
+        Marshal.AddRef(raw); // ours: the scaler is not an IWICStream, so the QueryInterface of the cast fails
+        var before = WicCom.OutstandingOnThisThread;
+
+        Assert.ThrowsAny<InvalidCastException>(() => WicCom.Wrap<IWICStream>(raw));
+
+        Assert.Equal(before, WicCom.OutstandingOnThisThread);
+        Assert.Equal(0u, (uint)Marshal.Release(raw)); // no wrapper is left holding the object until a finalizer
+    }
+
     [Fact(DisplayName = "Release is idempotent and tolerates null and managed objects")]
     public void Release_NullManagedAndRepeated_AreNoOps()
     {
