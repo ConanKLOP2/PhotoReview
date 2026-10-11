@@ -394,14 +394,14 @@ public sealed class ShellStartupTests
         Assert.True(User32.GetWindowRect(main.Hwnd, &outer));
         var dpi = run.OnUi(() => main.Window.DpiScale);
         // Width/Height 1200x800 của MainWindow.xaml là cỡ NGOÀI (gồm khung) trong WPF: bản Win32 giữ đúng cỡ đó.
-        // Trên máy có vùng làm việc nhỏ hơn cỡ mặc định (runner CI) vị trí bị kẹp vào vùng làm việc: chỉ khi vùng làm việc
-        // đủ lớn mới khẳng định đúng cỡ mặc định; còn lại cửa sổ phải nằm gọn trong vùng làm việc.
+        // Trên máy có màn hình nhỏ hơn cỡ mặc định (runner CI 1024x768) cửa sổ bị kẹp vào khung màn hình: chỉ khi màn hình
+        // đủ lớn mới khẳng định đúng cỡ mặc định; còn lại cửa sổ không được vượt khung màn hình quá viền vô hình.
         var monitor = User32.MonitorFromWindow(main.Hwnd, 2 /* MONITOR_DEFAULTTONEAREST */);
         var info = new MonitorInfo { Size = (uint)sizeof(MonitorInfo) };
         Assert.True(User32.GetMonitorInfo(monitor, &info));
         int wantW = (int)Math.Round(ShellMainWindow.DefaultWidthDip * dpi);
         int wantH = (int)Math.Round(ShellMainWindow.DefaultHeightDip * dpi);
-        int workW = info.Work.Right - info.Work.Left, workH = info.Work.Bottom - info.Work.Top;
+        int workW = info.Monitor.Right - info.Monitor.Left, workH = info.Monitor.Bottom - info.Monitor.Top;
         int gotW = outer.Right - outer.Left, gotH = outer.Bottom - outer.Top;
         // GetWindowRect gồm cả viền đổi cỡ vô hình (~8 px mỗi bên): dung sai một viền ở mỗi cạnh khi bị kẹp.
         const int InvisibleFrameSlack = 24;
