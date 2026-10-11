@@ -140,6 +140,31 @@ public sealed class PointerInputTests
     }
 
     [Fact]
+    public void Drag_ContinuesOutsideTheImageRectangle_WhileTheImageHoldsTheCapture()
+    {
+        using var rig = new InputRig(configure: s => s.KineticPanEnabled = false);
+        ActualSize(rig);
+        rig.Viewport.ScrollTo(0, 0); // ảnh bắt đầu đúng ở mép trái: x < 0 nằm NGOÀI chữ nhật ảnh
+        rig.Drain();
+        Assert.Equal(0, rig.Input.Surface.ImageOrigin.X);
+
+        rig.Mouse(LDown, 500, 300);
+        rig.Mouse(Move, -20, 300, MkL); // ngoài ảnh nhưng đang capture: vẫn pan
+        rig.Drain();
+        Assert.Equal(520, rig.Viewport.HorizontalOffset, 6);
+
+        rig.Mouse(LUp, -20, 300); // nhả ngoài ảnh: phải kết thúc pan và nhả capture
+        Assert.False(rig.Window.HasPointerCapture);
+
+        rig.MessageTime = 100_000; // không phải double-click của lần nhấn trước
+        rig.Mouse(LDown, 500, 300);
+        rig.Window.ReleasePointer(); // mất capture mà không có WM_CAPTURECHANGED: không còn theo dõi ngoài ảnh
+        rig.Mouse(Move, -600, 300, MkL); // offset 520 -> ảnh bắt đầu ở x = -520: -600 nằm ngoài
+        rig.Drain();
+        Assert.Equal(520, rig.Viewport.HorizontalOffset, 6);
+    }
+
+    [Fact]
     public void Move_WithoutCapture_OverTheMargin_IsIgnored_ButOverTheImageIsTracked()
     {
         using var rig = new InputRig(configure: s => s.KineticPanEnabled = false);
