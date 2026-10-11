@@ -346,28 +346,30 @@ public sealed class ScrollBarWpfParityTests(ITestOutputHelper output)
         return new WpfBox(true, barRect, trackRect, thumbRect);
     }
 
-    // ---- nạp Themes/DarkScrollBars.xaml thật ----
+    // ---- nạp Themes/DarkScrollBars.xaml thật (từ bản sao của file nguồn, KHÔNG tạo Application) ----
 
+    /// <summary>
+    /// Nạp đúng hai file XAML của app (<c>DarkPalette.xaml</c>, <c>DarkScrollBars.xaml</c>; csproj sao chép chúng ra thư mục test).
+    /// Không tạo <see cref="Application"/>: process test này còn chứa các test của cầu cửa sổ phụ (WP-19b) tự sở hữu Application trên
+    /// luồng của shell, và một Application sinh ra ở luồng khác sẽ làm chúng hỏng. Khối MergedDictionaries (URI pack) được ghép tay.
+    /// </summary>
     private static ResourceDictionary LoadTheme()
     {
-        if (Application.Current is null)
+        var themes = System.IO.Path.Combine(AppContext.BaseDirectory, "Themes");
+        ResourceDictionary palette;
+        using (var stream = System.IO.File.OpenRead(System.IO.Path.Combine(themes, "DarkPalette.xaml")))
         {
-            try
-            {
-                _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-            }
-            catch (InvalidOperationException)
-            {
-                // Một test khác vừa tạo Application: dùng chung.
-            }
+            palette = (ResourceDictionary)System.Windows.Markup.XamlReader.Load(stream);
         }
 
-        return new ResourceDictionary
-        {
-            Source = new Uri("pack://application:,,,/PhotoReview.App.WpfWindows;component/Themes/DarkScrollBars.xaml", UriKind.Absolute),
-        };
+        var text = System.IO.File.ReadAllText(System.IO.Path.Combine(themes, "DarkScrollBars.xaml"));
+        text = System.Text.RegularExpressions.Regex.Replace(text,
+            @"<ResourceDictionary\.MergedDictionaries>.*?</ResourceDictionary\.MergedDictionaries>", string.Empty,
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        var theme = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(text);
+        theme.MergedDictionaries.Add(palette);
+        return theme;
     }
-
     private static class Sta
     {
         public static void Run(Action action)

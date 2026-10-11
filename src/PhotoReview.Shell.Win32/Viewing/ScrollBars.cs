@@ -98,6 +98,9 @@ internal sealed class ShellScrollBars : IWindowMessageHandler, IDisposable
     /// <summary>Đang giữ chuột trên rãnh (lặp trang).</summary>
     public bool IsPaging => _paging;
 
+    /// <summary>Số khung đã vẽ thanh cuộn (khung không có thanh nào không tính): test/chẩn đoán.</summary>
+    internal long DrawnFrames { get; private set; }
+
     /// <summary>Hình học hiện tại (theo layout và offset của <see cref="ViewportController"/>).</summary>
     public ScrollBarLayout CurrentLayout => ScrollBarGeometry.Compute(_window.ClientSizeDip, _viewport.Layout,
         _viewport.HorizontalOffset, _viewport.VerticalOffset, _options.Metrics);
@@ -412,6 +415,7 @@ internal sealed class ShellScrollBars : IWindowMessageHandler, IDisposable
             return;
         }
 
+        DrawnFrames++;
         if (!_isCompareVisible())
         {
             DrawBars(context, layout);

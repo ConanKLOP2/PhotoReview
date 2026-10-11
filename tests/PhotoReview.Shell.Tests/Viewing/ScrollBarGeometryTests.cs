@@ -117,6 +117,25 @@ public sealed class ScrollBarGeometryTests
     }
 
     [Fact]
+    public void OverlayPolicy_DrawsBarsOverTheImage_WithoutShrinkingTheViewport_AndHiddenPolicyDrawsNone()
+    {
+        // NE-3 (b)/(c) chưa chọn (mặc định (a)), nhưng chính sách của engine vẫn phải cho hình học đúng nếu đổi sau này.
+        ViewportLayout Layout(ScrollBarPolicy policy) => ViewportLayoutEngine.Compute(new ViewportInput(1000, 600, 10, policy,
+            ViewerStretchMode.None, 3000, 2000, double.PositiveInfinity, double.PositiveInfinity, 3000, 2000));
+
+        var overlayLayout = Layout(ScrollBarPolicy.Overlay);
+        Assert.Equal(1000, overlayLayout.ViewportWidth, 9);
+        var overlay = ScrollBarGeometry.Compute(new SizeD(1000, 600), overlayLayout, 0, 0, Metrics);
+        Assert.Equal(new RectD(990, 0, 10, 590), overlay.Vertical.Bar);   // cùng chỗ với chế độ chiếm chỗ: cạnh phải/dưới
+        Assert.Equal(new RectD(0, 590, 990, 10), overlay.Horizontal.Bar);
+        // Viewport rộng hơn (1000): con trượt tính theo viewport 1000 / extent 3000.
+        Assert.Equal(986 * 1000 / 3000.0, overlay.Horizontal.Thumb.Width, 6);
+
+        var hidden = ScrollBarGeometry.Compute(new SizeD(1000, 600), Layout(ScrollBarPolicy.Hidden), 0, 0, Metrics);
+        Assert.False(hidden.AnyVisible);
+    }
+
+    [Fact]
     public void ThumbIsHidden_WhenTheTrackHasNoRoomForIt_ButTheBarStillShows()
     {
         // Thanh dọc cao 14 - 10 = 4 DIP: rãnh 0.

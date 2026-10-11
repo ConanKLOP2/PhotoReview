@@ -421,6 +421,21 @@ public sealed class ShellScrollBarsTests
     }
 
     [Fact]
+    public void WhileTheTrackIsHeld_AThumbThatArrivesUnderTheCursorIsNotHovered_UntilTheButtonIsReleased()
+    {
+        using var rig = new ScrollBarRig();
+        rig.Down(995, 500);
+        rig.TickAt(500); // trang hai: con trượt tới con trỏ
+        var thumb = rig.Layout.Vertical.Thumb;
+        Assert.True(500 >= thumb.Y && 500 < thumb.Bottom);
+
+        // RepeatButton đang giữ chuột (capture): con trượt không "IsMouseOver".
+        Assert.Equal(ScrollBarColors.Thumb, rig.Draw().Rounded[0].Color);
+        rig.Up(995, 500);
+        Assert.Equal(ScrollBarColors.ThumbHover, rig.Draw().Rounded[0].Color);
+    }
+
+    [Fact]
     public void Colors_AreTheThumbColorsOfDarkScrollBarsXaml()
     {
         Assert.Equal(new ColorF(0x4A / 255f, 0x4A / 255f, 0x4A / 255f, 1f), ScrollBarColors.Thumb);
