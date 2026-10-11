@@ -2,7 +2,7 @@
 id: NOWPF-WP23
 order: 833
 summary: |-
-  WP-23 (đợt 3 NO-WPF, 2026-10-12): overlay HUD của shell Win32, không đổi bản WPF. `ShellOverlay` (cây của MainWindow.xaml: ToolbarPanel z cao + InfoOverlayHost chứa StatusPanel/FolderInfoPanel/ZoomIndicatorPanel/CapturePairBadge, thêm `LayerElement`), nút theo style XAML (nền Dark.Input, viền Dark.BorderToolbar, ⋮ 34x32), chuỗi `Tr` đổi trực tiếp khi `Localizer.CurrentChanged`, auto-hide đúng `ToolbarAutoHidePolicy`/`InfoOverlayAutoHidePolicy` (fade vào 150/ra 200 ms bằng `Animator`, hot zone 24, click xuyên ngay khi bắt đầu ẩn) chạy theo `IFrameClock` (`FrameDelayTimer`), hover/nhấn/click, Tab/Space/Enter, nút ⋮ -> menu Tools native (C-12), tooltip native `tooltips_class32`, nối `MainViewModel` + `SettingsStore`, hộp thoại chọn thư mục native `IFileOpenDialog` thay `UnwiredShellFolderDialog`. Golden G-OVL trên shell: 60 ca (toolbar + 4 panel x 3 cửa sổ x 2 DPI x 2 cỡ chữ) lệch tối đa 0,017 DIP; toolbar 210,75 x 40. Khung HUD đầy đủ GPU P50 0,34 / P95 0,47 ms CPU; khởi động +~10 ms. Mutation: xem mục 5.
+  WP-23 (đợt 3 NO-WPF, 2026-10-12): overlay HUD của shell Win32, không đổi bản WPF. `ShellOverlay` (cây của MainWindow.xaml: ToolbarPanel z cao + InfoOverlayHost chứa StatusPanel/FolderInfoPanel/ZoomIndicatorPanel/CapturePairBadge, thêm `LayerElement`), nút theo style XAML (nền Dark.Input, viền Dark.BorderToolbar, ⋮ 34x32), chuỗi `Tr` đổi trực tiếp khi `Localizer.CurrentChanged`, auto-hide đúng `ToolbarAutoHidePolicy`/`InfoOverlayAutoHidePolicy` (fade vào 150/ra 200 ms bằng `Animator`, hot zone 24, click xuyên ngay khi bắt đầu ẩn) chạy theo `IFrameClock` (`FrameDelayTimer`), hover/nhấn/click, Tab/Space/Enter, nút ⋮ -> menu Tools native (C-12), tooltip native `tooltips_class32`, nối `MainViewModel` + `SettingsStore`, hộp thoại chọn thư mục native `IFileOpenDialog` thay `UnwiredShellFolderDialog`. Golden G-OVL trên shell: 60 ca (toolbar + 4 panel x 3 cửa sổ x 2 DPI x 2 cỡ chữ) lệch tối đa 0,017 DIP; toolbar 210,75 x 40. Khung HUD đầy đủ GPU P50 0,34 / P95 0,47 ms CPU; khởi động +~10 ms. Mutation 41 (24 bị bắt, 17 sống sót đã lấp).
 ---
 
 # NOWPF-WP23 - overlay HUD, toolbar, status, auto-hide (2026-10-12)
@@ -57,7 +57,7 @@ Số đo: [perf/2026-10-12-wp23-overlay-hud.md](../perf/2026-10-12-wp23-overlay-
 8. **Fit**: `ShellMainWindow.FitHandler` (hook). WP-22 nên đặt nó bằng bản dùng chung với `PointerInputController` (cùng `ViewportOperationVersion`);
    chưa đặt thì dùng `FitViewController` riêng trên `ViewportController` (hội tụ 3 lượt, như `FitViewController` của WPF).
 9. **Tooltip native** (thẻ chọn native): cần comctl32 v6 (exe có manifest; test kích hoạt manifest nhúng như `Win32DialogServiceTests`), chữ dài
-   ngắt dòng ở 420 DIP, chỉ cho phần tử đang hiện và nhận chuột. Vùng: 4 nút toolbar (`ToolTip`), dòng EXIF (toàn văn khi bị cắt "…"),
+   ngắt dòng ở 420 DIP, chỉ cho phần tử đang hiện và nhận chuột. Vùng: 4 nút toolbar (`ToolTip`), dòng EXIF (toàn văn),
    huy hiệu cặp ảnh. Tạo SAU khung đầu (Background) vì nạp comctl32 v6 tốn 3-4 ms.
 10. **Chọn thư mục native**: `IFileOpenDialog` modal trên luồng STA của UI, huỷ -> null (hành vi `WpfFolderPicker`: thư mục khởi đầu chỉ dùng
     khi tồn tại). Dùng cho nút 📂, mục "Mở thư mục", Move/Copy to folder (cùng `IFolderPicker`).
@@ -92,7 +92,16 @@ tooltip tạo muộn + làm nóng DirectWrite trên pool).
 
 ## 5. Đột biến
 
-MUTATION_PLACEHOLDER
+41 đột biến thủ công (sub-agent sonnet, worktree riêng; mỗi cái: sửa một chỗ -> build -> `Shell.Tests` Overlay + `Shell.Integration.Tests` overlay): bố cục
+(Padding/FixedHeight/Margin/MaxWidth/badge), thời gian (fade 150/200, hot zone, `Math.Max(1,..)`, độ trễ toolbar vs overlay thông tin, đếm lại, `<` vs `<=`),
+địa phương hoá (bỏ từng dòng `ApplyLocalization`, `RefreshLocalizedText`, huỷ đăng ký sự kiện tĩnh), DPI (chuột, tooltip, neo menu, vùng native),
+hit-test (click xuyên, lớp, nhả ngoài nút, bánh xe), tooltip (Exif, ẩn, tạo muộn), dọn (timer, tooltip, store, view model), Tools/Tab/auto-repeat.
+- 24 bị bắt ngay bởi test có sẵn; **17 sống sót, không tương đương, đã lấp** bằng 13 test mới (`OverlayMutationGapTests`,
+  `NativeTooltipHostTests.Sync_ConvertsDipBoundsToPhysicalPixelsWithTheDpiScale`, 3 test tích hợp) và chạy lại: đột biến đỏ, mã gốc xanh.
+- Nguyên nhân chính của sống sót: golden dung sai 2 DIP bỏ lọt lệch 1 DIP (Padding, Margin, chiều cao nút) -> test so chính xác; hằng số tự so
+  với chính nó (hot zone); không quan sát được vòng khung nghỉ (đã thêm `SubscriberCount`); dây nối cửa sổ thật (DPI chuột, neo menu, huỷ đăng ký).
+- Không phát hiện lỗi thật trong mã nguồn. Ghi chú: `WM_DPICHANGED` gửi từ thread khác bằng `SendMessage` không đổi `DpiScale` (test dùng
+  `ProcessMessage` trên UI thread; chưa điều tra).
 
 ## 6. Việc còn lại / bàn giao
 
