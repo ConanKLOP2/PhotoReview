@@ -32,7 +32,7 @@ internal sealed partial class ShellMainWindow : IShellInputHost
     /// Ngưỡng kéo (SM_CXDRAG theo DPI cửa sổ) và vị trí con trỏ thật cho <see cref="ViewportController"/> (thẻ WP-16 để lại cho
     /// WP-22 nối interop). Hai hàm đọc DPI hiện tại mỗi lần gọi nên đổi màn hình khác DPI vẫn đúng.
     /// </summary>
-    private static ViewportControllerOptions CreateViewportOptions(ShellWindow window, IDisplayClock? displayClock) => new()
+    internal static ViewportControllerOptions CreateViewportOptions(IShellWindow window, IDisplayClock? displayClock) => new()
     {
         DisplayClock = displayClock,
         DragMetricsPixels = () => InputNative.DragMetricsPixels(InputNative.DpiOf(window.DpiScale)),

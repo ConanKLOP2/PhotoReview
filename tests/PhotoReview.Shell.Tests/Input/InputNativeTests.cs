@@ -119,4 +119,23 @@ public sealed partial class InputNativeTests
     {
         Assert.Equal(0xFFFF, InputNative.LowWord((nint)0x1_FFFF));
     }
+
+    [Theory]
+    [InlineData(1.0, 96)]
+    [InlineData(1.5, 144)]
+    [InlineData(2.0, 192)]
+    public void ViewportOptions_DragMetricsFollowTheWindowDpi_AndThePointerIsTheRealCursor(double scale, int dpi)
+    {
+        var window = new FakeShellWindow { DpiScale = scale };
+        var options = PhotoReview.Shell.Win32.ShellMainWindow.CreateViewportOptions(window, displayClock: null);
+
+        var expected = (PhotoReview.Shell.Interop.User32.GetSystemMetricsForDpi(68, (uint)dpi),
+            PhotoReview.Shell.Interop.User32.GetSystemMetricsForDpi(69, (uint)dpi));
+
+        Assert.Equal(expected, options.DragMetricsPixels());
+        window.DpiScale = 1.0; // la đọc lại mỗi lần gọi (đổi màn hình khác DPI)
+        Assert.Equal((PhotoReview.Shell.Interop.User32.GetSystemMetricsForDpi(68, 96), PhotoReview.Shell.Interop.User32.GetSystemMetricsForDpi(69, 96)),
+            options.DragMetricsPixels());
+        Assert.Equal(InputNative.CursorScreenPixel(), options.CursorScreenPixel());
+    }
 }
