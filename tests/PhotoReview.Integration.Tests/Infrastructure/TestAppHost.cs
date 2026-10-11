@@ -62,6 +62,9 @@ internal static class TestAppHost
                 services.AddSingleton<PhotoReview.Core.Abstractions.IAppPaths>(_ => new PlacementFileOverride(PhotoReview.Core.AppPaths.FromEnvironment(), placementFile));
             if (hooks?.DisablePreload == true)
                 services.AddSingleton<IPreloadController>(new NoOpPreloadController());
+            // WP-19b (C-13): the custom-zoom prompt is a seam; unset keeps the production WpfZoomPromptService (a real modal dialog).
+            if (hooks?.ZoomPrompt is { } zoomPrompt)
+                services.AddSingleton<IZoomPromptService>(zoomPrompt);
         });
 
         var window = sp.GetRequiredService<MainWindow>();
@@ -110,6 +113,9 @@ internal sealed class TestHostHooks
 
     /// <summary>Raised once an image has finished presenting on screen.</summary>
     public Action<string>? OnPresented { get; init; }
+
+    /// <summary>WP-19b: alternate <see cref="IZoomPromptService"/> (the "Click zoom level" &gt; "Custom..." dialog).</summary>
+    public IZoomPromptService? ZoomPrompt { get; init; }
 
     /// <summary>Overrides the physical file-move step; (source, destination).</summary>
     public Func<string, string, Task>? MoveOverride { get; init; }

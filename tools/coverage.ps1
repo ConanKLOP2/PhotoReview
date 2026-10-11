@@ -64,7 +64,7 @@ $merged = Join-Path $OutDir 'merged.cobertura.xml'
 $mergedXml = Join-Path $OutDir 'merged.coverage.xml'
 $rawDir = Join-Path $OutDir 'raw'
 
-$allProjects = @('Architecture.Tests', 'Core.Tests', 'Imaging.Tests', 'Integration.Tests', 'App.Tests', 'Shell.Tests', 'Shell.Integration.Tests') |
+$allProjects = @('Architecture.Tests', 'Core.Tests', 'Imaging.Tests', 'Integration.Tests', 'App.Tests', 'Shell.Tests', 'Shell.Integration.Tests', 'Shell.WpfBridge.Tests') |
     ForEach-Object { "PhotoReview.$_" }
 if ($Project.Count -gt 0) {
     # Accept 'Core', 'Core.Tests' or 'PhotoReview.Core.Tests'.

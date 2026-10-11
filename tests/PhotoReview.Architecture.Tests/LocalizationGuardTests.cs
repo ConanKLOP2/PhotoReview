@@ -74,7 +74,7 @@ public sealed class LocalizationGuardTests
     {
         var root = RepoScan.Root;
         var actual = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        foreach (var file in SourceFiles(root, "src/PhotoReview.App", "*.xaml"))
+        foreach (var file in XamlSourceFiles(root))
         {
             var count = FindXamlLiteralText(XDocument.Load(file)).Count;
             if (count > 0) actual[Relative(root, file)] = count;
@@ -89,7 +89,7 @@ public sealed class LocalizationGuardTests
         var root = RepoScan.Root;
         var english = ParseCatalog(Path.Combine(root, LanguagesDir, "en.json"));
         var missing = new List<string>();
-        foreach (var file in SourceFiles(root, "src/PhotoReview.App", "*.xaml"))
+        foreach (var file in XamlSourceFiles(root))
         {
             foreach (var key in ExtractTrKeys(File.ReadAllText(file)))
             {
@@ -319,6 +319,10 @@ public sealed class LocalizationGuardTests
             string.Join("\n", warnings));
         return catalog;
     }
+
+    /// <summary>WP-19b: XAML lives in PhotoReview.App (MainWindow) and PhotoReview.App.WpfWindows (secondary windows, Themes).</summary>
+    private static IEnumerable<string> XamlSourceFiles(string root)
+        => SourceFiles(root, "src/PhotoReview.App", "*.xaml").Concat(SourceFiles(root, "src/PhotoReview.App.WpfWindows", "*.xaml"));
 
     private static IEnumerable<string> SourceFiles(string root, string relativeDir, string pattern)
     {

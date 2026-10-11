@@ -33,10 +33,10 @@ public sealed class DialogBoundaryTests
     /// </summary>
     private static readonly (string File, string Construction)[] AllowedElsewhere =
     [
-        ("src/PhotoReview.App/SettingsWindow.xaml.cs", "new ActionProfilesWindow("),
+        ("src/PhotoReview.App.WpfWindows/SettingsWindow.xaml.cs", "new ActionProfilesWindow("),
         // feat/preload-window-setting: PreloadWindow is a value type (forward/backward preload lookahead), not a
         // WPF Window -- the "*Window" name just collides with this rule's naming heuristic.
-        ("src/PhotoReview.App/SettingsWindow.xaml.cs", "new PreloadWindow("),
+        ("src/PhotoReview.App.WpfWindows/SettingsWindow.xaml.cs", "new PreloadWindow("),
         ("src/PhotoReview.Imaging/PreloadWindow.cs", "new PreloadWindow("),
         // WP-20: the Win32 shell's composition root (ShellStartup) is the one place its main window (ShellWindow) and
         // ShellMainWindow are constructed - the shell equivalent of App.xaml.cs. Everything else asks IDialogService.
@@ -44,13 +44,14 @@ public sealed class DialogBoundaryTests
         ("src/PhotoReview.Shell.Win32/Startup/ShellStartup.cs", "new ShellMainWindow("),
     ];
 
-    [Fact(DisplayName = "Rule AR19: app windows are constructed only in Services/WpfDialogService.cs and App.xaml.cs (plus the explicit allowlist)")]
+    [Fact(DisplayName = "Rule AR19: app windows are constructed only in Services/SecondaryWindowFactory.cs (WP-19b), Services/WpfDialogService.cs and App.xaml.cs (plus the explicit allowlist)")]
     [Trait("Category", "Architecture")]
     public void WindowConstruction_OnlyIn_WpfDialogServiceOrAppComposition()
     {
         var violations = RepoScan.FindLineViolations(
             line => NewWindow.IsMatch(line),
             relative => relative.EndsWith("Services/WpfDialogService.cs", StringComparison.Ordinal)
+                || relative.EndsWith("Services/SecondaryWindowFactory.cs", StringComparison.Ordinal)
                 || relative.EndsWith("PhotoReview.App/App.xaml.cs", StringComparison.Ordinal),
             "src");
         violations.RemoveAll(violation => AllowedElsewhere.Any(allowed =>

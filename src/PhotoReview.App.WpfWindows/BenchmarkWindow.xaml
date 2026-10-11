@@ -8,7 +8,7 @@
         Background="{DynamicResource Dark.Window}" Foreground="{DynamicResource Dark.WindowText}">
     <Window.Resources>
       <ResourceDictionary>
-        <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkControls.xaml"/></ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkControls.xaml"/></ResourceDictionary.MergedDictionaries>
         <Style TargetType="DataGrid">
             <Setter Property="Background" Value="{DynamicResource Dark.Window}"/>
             <Setter Property="Foreground" Value="{DynamicResource Dark.WindowText}"/>

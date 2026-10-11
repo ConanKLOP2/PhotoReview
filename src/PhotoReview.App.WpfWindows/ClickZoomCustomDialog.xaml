@@ -5,7 +5,7 @@
         Title="{loc:Tr dialog.clickZoomCustom.title}" Width="360" Height="190" MinWidth="320" MinHeight="190"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
         Background="{DynamicResource Dark.Window}" Foreground="{DynamicResource Dark.WindowText}">
-    <Window.Resources><ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkControls.xaml"/></Window.Resources>
+    <Window.Resources><ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkControls.xaml"/></Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

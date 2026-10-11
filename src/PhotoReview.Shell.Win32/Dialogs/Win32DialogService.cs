@@ -21,6 +21,9 @@ internal interface ISecondaryWindowPort
     void ShowSkippedFiles(nint ownerHwnd, IReadOnlyList<SkippedEntry> entries);
 
     bool ShowBatchReview(nint ownerHwnd, IReadOnlyList<BatchReviewItem> items);
+
+    /// <summary>WP-19b: zoom tuỳ chọn (<c>IZoomPromptService</c>); null khi huỷ.</summary>
+    int? PromptCustomZoom(nint ownerHwnd, int currentPercent);
 }
 
 /// <summary>

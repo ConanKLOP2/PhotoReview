@@ -250,7 +250,8 @@ $testProjects = @(
     'PhotoReview.Integration.Tests',
     'PhotoReview.App.Tests',
     'PhotoReview.Shell.Tests',
-    'PhotoReview.Shell.Integration.Tests'
+    'PhotoReview.Shell.Integration.Tests',
+    'PhotoReview.Shell.WpfBridge.Tests'
 )
 
 function Get-XunitTestArgs([string]$TestProject) {

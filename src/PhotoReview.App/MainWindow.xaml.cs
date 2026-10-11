@@ -47,6 +47,8 @@ public partial class MainWindow : Window
     public ReviewMetrics Metrics => _viewModel.Metrics;
     public bool IsFileActionInProgress => _viewModel.IsFileActionInProgress;
 
+    private readonly IZoomPromptService _zoomPrompt;
+
     public MainViewModel ViewModel => _viewModel;
     public AppSettings Settings => _settings;
 
@@ -55,8 +57,9 @@ public partial class MainWindow : Window
     /// </summary>
     internal string? PlacementFile { get; private set; }
 
-    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IAppPaths? appPaths = null, IDisplayClock? displayClock = null)
+    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IAppPaths? appPaths = null, IDisplayClock? displayClock = null, IZoomPromptService? zoomPrompt = null)
     {
+        _zoomPrompt = zoomPrompt ?? new WpfZoomPromptService(() => this);
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         ArgumentNullException.ThrowIfNull(viewport);
@@ -1065,10 +1068,11 @@ public partial class MainWindow : Window
     /// <summary>Q-R43: shared by the "Custom…" menu item and the CustomZoom keyboard shortcut.</summary>
     private async Task OpenClickZoomCustomDialogAsync()
     {
-        var dialog = new ClickZoomCustomDialog(_settings.ClickZoomPercent) { Owner = this };
-        if (dialog.ShowDialog() == true)
+        // WP-19b (C-13): the prompt goes through IZoomPromptService (the shell Win32 uses its own implementation).
+        var percent = _zoomPrompt.PromptCustomZoom(_settings.ClickZoomPercent);
+        if (percent is { } chosen)
         {
-            await ApplyZoomMenuSelectionAsync(dialog.Value);
+            await ApplyZoomMenuSelectionAsync(chosen);
         }
     }
 

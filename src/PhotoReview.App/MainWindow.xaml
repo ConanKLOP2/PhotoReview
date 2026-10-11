@@ -4,17 +4,17 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:PhotoReview.App"
-        xmlns:converters="clr-namespace:PhotoReview.App.Converters"
-        xmlns:loc="clr-namespace:PhotoReview.App.Localization"
+        xmlns:converters="clr-namespace:PhotoReview.App.Converters;assembly=PhotoReview.App.WpfWindows"
+        xmlns:loc="clr-namespace:PhotoReview.App.Localization;assembly=PhotoReview.App.WpfWindows"
         mc:Ignorable="d"
         Icon="pack://application:,,,/Assets/PhotoReview.ico"
         Title="{Binding FolderTitle}" Height="800" Width="1200" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="{DynamicResource Dark.Backdrop}" AllowDrop="True" PreviewKeyDown="Window_KeyDown" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed" MouseMove="Window_MouseMove">
     <Window.Resources>
         <ResourceDictionary>
         <ResourceDictionary.MergedDictionaries>
-            <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/>
-            <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkScrollBars.xaml"/>
-            <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkMenus.xaml"/>
+            <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkPalette.xaml"/>
+            <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkScrollBars.xaml"/>
+            <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkMenus.xaml"/>
         </ResourceDictionary.MergedDictionaries>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <converters:ViewerStretchModeConverter x:Key="StretchConverter" />

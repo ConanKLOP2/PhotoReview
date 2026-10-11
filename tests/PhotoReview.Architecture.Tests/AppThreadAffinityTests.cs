@@ -49,6 +49,7 @@ public sealed class AppThreadAffinityTests
     [
         "src/PhotoReview.App",
         "src/PhotoReview.App.Shared",
+        "src/PhotoReview.App.WpfWindows",
         "src/PhotoReview.Shell.Win32",
         "src/PhotoReview.Shell.WpfBridge",
     ];

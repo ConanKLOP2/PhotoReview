@@ -7,7 +7,7 @@
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkControls.xaml"/>
+                <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkControls.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>

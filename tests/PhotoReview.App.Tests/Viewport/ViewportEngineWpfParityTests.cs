@@ -293,7 +293,7 @@ public sealed class ViewportEngineWpfParityTests(ITestOutputHelper output)
             }
         }
         RedirectPackUriResourceAssembly();
-        return new ResourceDictionary { Source = new Uri("/PhotoReview.App;component/Themes/DarkScrollBars.xaml", UriKind.Relative) };
+        return new ResourceDictionary { Source = new Uri("/PhotoReview.App.WpfWindows;component/Themes/DarkScrollBars.xaml", UriKind.Relative) };
     }
 
     /// <summary>Bản sao của DarkScrollBarRenderingTests.RedirectPackUriResourceAssembly (private ở đó; xem lý do trong file ấy).</summary>
