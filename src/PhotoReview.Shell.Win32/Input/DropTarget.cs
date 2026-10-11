@@ -115,7 +115,6 @@ internal sealed partial class ShellDropTarget : IDropTarget, IDisposable
     private readonly Func<IDataObject, IReadOnlyList<string>> _files;
     private readonly Func<IDataObject, bool> _hasFiles;
     private nint _hwnd;
-    private bool _oleInitialized;
     private bool _dragHasFiles;
 
     public ShellDropTarget(Func<string, Task> openPath, Action<Exception> onFailure,
@@ -135,8 +134,8 @@ internal sealed partial class ShellDropTarget : IDropTarget, IDisposable
             throw new InvalidOperationException("The drop target is already registered.");
         }
 
-        var hr = Ole32.OleInitialize(0);
-        _oleInitialized = hr is 0 or 1; // S_OK / S_FALSE (đã khởi tạo): đều cần OleUninitialize tương ứng
+        // S_OK / S_FALSE (đã khởi tạo) / RPC_E_CHANGED_MODE: RegisterDragDrop bên dưới tự báo nếu OLE không dùng được.
+        _ = Ole32.OleInitialize(0);
         var unknown = ComWrappers.GetOrCreateComInterfaceForObject(this, CreateComInterfaceFlags.None);
         try
         {
@@ -244,10 +243,7 @@ internal sealed partial class ShellDropTarget : IDropTarget, IDisposable
             _hwnd = 0;
         }
 
-        if (_oleInitialized)
-        {
-            _oleInitialized = false;
-            Ole32.OleUninitialize();
-        }
+        // KHÔNG gọi OleUninitialize: OLE của thread UI sống tới hết tiến trình (cửa sổ khác trong cùng tiến trình có thể đang
+        // dùng nó), và trên runner CI bản có OleUninitialize làm thread UI không thoát được lúc đóng (các cửa sổ tạo sau đó treo ở OleInitialize).
     }
 }

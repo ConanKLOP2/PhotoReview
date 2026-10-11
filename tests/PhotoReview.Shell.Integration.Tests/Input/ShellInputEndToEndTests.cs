@@ -73,7 +73,7 @@ public sealed partial class ShellInputEndToEndTests
     {
         run.RequestClose();
         // Có thể đang giải mã ảnh lớn ở nền (runner CI 2 nhân + WARP): chờ lâu hơn bound mặc định, vẫn có giới hạn.
-        Assert.True(run.WaitForExit(TimeSpan.FromSeconds(90)), "shell không thoát sau WM_CLOSE");
+        Assert.True(run.WaitForExit(TimeSpan.FromSeconds(90)), "shell không thoát sau WM_CLOSE: " + Diag(run));
         Assert.Null(run.Error);
         Assert.Equal(0, run.ExitCode);
     }
