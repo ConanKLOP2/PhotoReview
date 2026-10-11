@@ -27,7 +27,7 @@ public sealed class DecoderConcurrencyTests
         [
             ("Wpf", new WpfBitmapImageDecoder()),
             ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance)),
-            ("TurboJpeg", new TurboJpegDecoder()),
+            ("TurboJpeg", new TurboJpegDecoder(WpfBitmapSourceCodec.Instance)),
         ];
         var box = new DecodeBox(24, 24);
 

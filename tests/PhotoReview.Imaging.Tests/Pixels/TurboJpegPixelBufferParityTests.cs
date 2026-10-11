@@ -27,7 +27,7 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         catch (UnauthorizedAccessException) { }
     }
 
-    private static readonly TurboJpeg.TurboJpegDecoder Legacy = new();
+    private static readonly TurboJpeg.TurboJpegDecoder Legacy = new(WpfBitmapSourceCodec.Instance);
     private static readonly TurboJpeg.TurboJpegDecoder Pixels = new(PixelBufferImageCodec.Instance);
 
     /// <summary>Ten source sizes: tiny, single row/column, odd, MCU-unaligned and a few "real" ones.</summary>

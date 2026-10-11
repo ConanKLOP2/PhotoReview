@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Metadata;
 
-namespace PhotoReview.Imaging.Decoding;
+namespace PhotoReview.Imaging.Wpf;
 
 /// <summary>
 /// Reads the photo-information EXIF fields from the <see cref="BitmapMetadata"/> of a frame the WPF decoder has

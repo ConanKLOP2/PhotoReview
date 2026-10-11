@@ -138,10 +138,12 @@ public partial class App : System.Windows.Application, IDisposable
                 (_, standardDecoder) => new FormatRoutingDecoder(
                     new WebpHeicRoutingDecoder(standardDecoder, webpHeicDecoder,
                         () => settingsStore.Current.WebpHeicSupportEnabled, () => WicCodecAvailability.Current, log),
-                    Composition.ServiceFactories.CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache),
+                    Composition.ServiceFactories.CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache,
+                        WpfBitmapSourceCodec.Instance),
                     () => settingsStore.Current.RawSupportEnabled));
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
+            WpfBitmapSourceCodec.Instance,
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
             log: sp.GetService<ILog>()));
         services.AddSingleton<SourceBytesCachePolicy>(sp =>
@@ -176,6 +178,7 @@ public partial class App : System.Windows.Application, IDisposable
                 sp.GetRequiredService<ReviewMetrics>(),
                 () => ctx.IsOriginalLoadingMode(),
                 () => ctx.TargetDecodeBox(),
+                WpfBitmapSourceCodec.Instance,
                 capacityBytes: settingsStore.Current.ImageCacheCapacityBytes,
                 diskCacheDirectory: sp.GetRequiredService<IAppPaths>().PreviewCacheDir,
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
@@ -187,7 +190,7 @@ public partial class App : System.Windows.Application, IDisposable
                 // only affects the "allowed X-90%" text logged when the requested percent is clamped.
                 preloadWindow: PreloadWindow.FromSettings(settingsStore.Current),
                 sourceReader: sp.GetRequiredService<ISourceReader>(),
-                rawFullDecoder: LibRawAvailability.Probe(out _) ? new LibRawDecoder() : null,
+                rawFullDecoder: LibRawAvailability.Probe(out _) ? new LibRawDecoder(WpfBitmapSourceCodec.Instance) : null,
                 isRawFullDecodeEnabled: () => settingsStore.Current.RawSupportEnabled
                     && settingsStore.Current.RawFullDecode == PhotoReview.Core.Model.RawFullDecode.OnZoom);
         });

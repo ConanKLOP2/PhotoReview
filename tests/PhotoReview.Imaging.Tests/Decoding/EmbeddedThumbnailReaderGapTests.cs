@@ -38,7 +38,7 @@ public sealed class EmbeddedThumbnailReaderGapTests : IDisposable
         File.WriteAllBytes(path, EmbeddedThumbnailJpegFixture.CreateWithThumbnail(mainSize: 480, thumbnailSize: 160));
 
         using var holder = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
-        var image = EmbeddedThumbnailReader.TryRead(path);
+        var image = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
 
         Assert.NotNull(image);
         Assert.Equal(160, image.PixelWidth);
@@ -51,6 +51,6 @@ public sealed class EmbeddedThumbnailReaderGapTests : IDisposable
         File.WriteAllBytes(path, EmbeddedThumbnailJpegFixture.CreateWithThumbnail(mainSize: 480, thumbnailSize: 160));
 
         using var holder = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
-        Assert.NotNull(EmbeddedThumbnailReader.TryRead(path));
+        Assert.NotNull(EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
     }
 }

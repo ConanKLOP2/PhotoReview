@@ -23,7 +23,7 @@ public sealed class MemoryBufferDecodeTests
         {
             ("Wpf", new WpfBitmapImageDecoder()),
             ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance)),
-            ("TurboJpeg", new TurboJpegDecoder()),
+            ("TurboJpeg", new TurboJpegDecoder(WpfBitmapSourceCodec.Instance)),
         };
         foreach (var (name, decoder) in decoders)
         {

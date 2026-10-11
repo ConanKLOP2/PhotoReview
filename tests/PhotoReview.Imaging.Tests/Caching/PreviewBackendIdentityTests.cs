@@ -174,7 +174,7 @@ public sealed class PreviewBackendIdentityTests : IAsyncLifetime
         IImageDecoderFactory factory,
         bool disableDisk = false,
         ReviewMetrics? metrics = null) =>
-        new(metrics ?? new ReviewMetrics(), () => false, () => 2,
+        new(metrics ?? new ReviewMetrics(), () => false, () => 2, WpfBitmapSourceCodec.Instance,
             capacityBytes: 1024 * 1024,
             diskCacheDirectory: disk,
             disableDiskCacheOverride: disableDisk,

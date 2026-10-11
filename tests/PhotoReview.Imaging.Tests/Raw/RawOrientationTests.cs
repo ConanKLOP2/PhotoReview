@@ -224,7 +224,7 @@ public sealed class RawOrientationTests
             return; // WIC cannot open this camera's preview JPEG, so there is no independent oracle for it
         }
 
-        Assert.Equal(ExifOrientation.Read(frame.Metadata as BitmapMetadata), info.Orientation);
+        Assert.Equal(WpfExifOrientation.Read(frame.Metadata as BitmapMetadata), info.Orientation);
     }
 
     /// <summary>
@@ -274,7 +274,7 @@ public sealed class RawOrientationTests
             return; // WIC cannot open this camera preview JPEG, so there is no independent oracle for it
         }
 
-        Assert.Equal(8, ExifOrientation.Read(frame.Metadata as BitmapMetadata));
+        Assert.Equal(8, WpfExifOrientation.Read(frame.Metadata as BitmapMetadata));
         Assert.Equal(8, ReadContainer(rewritten, ".raf").Orientation);
     }
 

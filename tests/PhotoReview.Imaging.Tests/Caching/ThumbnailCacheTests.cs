@@ -41,14 +41,14 @@ public sealed class ThumbnailCacheTests : IDisposable
     [Fact(DisplayName = "Constructor validates arguments")]
     public void ConstructorValidatesArguments()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ThumbnailCache(_diskDir, maxRamBytes: 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ThumbnailCache(_diskDir, maxDiskBytes: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxDiskBytes: 0));
     }
 
     [Fact(DisplayName = "GetAsync returns IDecodedImage and serves from RAM on second call")]
     public async Task GetAsyncReturnsDecodedImageAndCachesInRam()
     {
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var first = await cache.GetAsync(_jpegWithThumbnailPath, null);
         Assert.NotNull(first);
@@ -64,10 +64,10 @@ public sealed class ThumbnailCacheTests : IDisposable
     {
         ThumbnailCacheFiles.Write(_diskDir, _jpegWithThumbnailPath, ValidPng1x1);
         var readerCalls = 0;
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, embeddedThumbnailReader: (path, ct) =>
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 16 * 1024 * 1024, embeddedThumbnailReader: (path, ct) =>
         {
             Interlocked.Increment(ref readerCalls);
-            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
+            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
         });
 
         var image = await cache.GetAsync(_jpegWithThumbnailPath, null);
@@ -80,7 +80,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     [Fact(DisplayName = "ClearMemory drops RAM cache entries")]
     public async Task ClearMemoryDropsRamCache()
     {
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var first = await cache.GetAsync(_jpegWithThumbnailPath, null);
         cache.ClearMemory();
@@ -94,7 +94,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     {
         // The embedded thumbnail (16px) and the main frame (64px) are deliberately different
         // sizes: if this ever fell back to a full source decode, PixelWidth would be 64, not 16.
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var thumbnail = await cache.GetAsync(_jpegWithThumbnailPath, null);
 
@@ -122,7 +122,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     public async Task CorruptCachedThumbnailThatCannotBeDeleted_LogsTheFailedDelete()
     {
         var log = new RecordingLog();
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, log: log);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 16 * 1024 * 1024, log: log);
         var cached = ThumbnailCacheFiles.Write(_diskDir, _jpegWithThumbnailPath, ValidPng1x1);
 
         // Corrupt the file, then hold it open without FileShare.Delete: reading still works (and fails to decode), deleting cannot.
@@ -137,13 +137,13 @@ public sealed class ThumbnailCacheTests : IDisposable
     public async Task GetAsyncNeverPerformsAFullSourceDecodeOnMiss()
     {
         var readerCalls = 0;
-        using var cache = new ThumbnailCache(
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             _diskDir,
             maxRamBytes: 16 * 1024 * 1024,
             embeddedThumbnailReader: (path, ct) =>
             {
                 Interlocked.Increment(ref readerCalls);
-                return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
+                return Task.FromResult(EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
             });
 
         await cache.GetAsync(_jpegWithThumbnailPath, null);
@@ -154,7 +154,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     [Fact(DisplayName = "A source with no embedded EXIF thumbnail produces no thumbnail (not a full decode fallback)")]
     public async Task GetAsyncReturnsNullWhenSourceHasNoEmbeddedThumbnail()
     {
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var thumbnail = await cache.GetAsync(_jpegWithoutThumbnailPath, null);
 
@@ -164,7 +164,7 @@ public sealed class ThumbnailCacheTests : IDisposable
     [Fact(DisplayName = "A non-JPEG source (no EXIF thumbnails at all) produces no thumbnail")]
     public async Task GetAsyncReturnsNullForNonJpegSource()
     {
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var thumbnail = await cache.GetAsync(_imagePath, null); // .png fixture from the constructor
 
@@ -175,13 +175,13 @@ public sealed class ThumbnailCacheTests : IDisposable
     public async Task GetAsyncWithKnownStat_KeysByThatVersion()
     {
         var readerCalls = 0;
-        using var cache = new ThumbnailCache(
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             _diskDir,
             maxRamBytes: 16 * 1024 * 1024,
             embeddedThumbnailReader: (path, ct) =>
             {
                 Interlocked.Increment(ref readerCalls);
-                return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
+                return Task.FromResult(EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
             });
         var info = new FileInfo(_jpegWithThumbnailPath);
         var current = new PhotoReview.Core.Abstractions.FileStat(info.Length, info.LastWriteTimeUtc);

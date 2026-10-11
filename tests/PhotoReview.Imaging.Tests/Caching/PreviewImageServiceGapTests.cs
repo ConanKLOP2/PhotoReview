@@ -60,7 +60,7 @@ public sealed class PreviewImageServiceGapTests : IAsyncLifetime, IDisposable
 
     private PreviewImageService CreateService(GatedDecoder decoder, ReviewMetrics metrics, string? diskDirectory)
     {
-        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(metrics, () => false, () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDirectory ?? _root.Dir("unused-cache"), disableDiskCacheOverride: diskDirectory is null, decoder: decoder);
         _services.Add(service);
         return service;

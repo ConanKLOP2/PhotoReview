@@ -31,7 +31,7 @@ public sealed class ThumbnailCacheDiskTests : IDisposable
         var free = Path.Combine(_diskDir, "free.png");
         File.WriteAllBytes(free, [4, 5, 6]);
         using var hold = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None);
-        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var ex = Record.Exception(cache.ClearDisk);
 

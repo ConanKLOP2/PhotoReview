@@ -25,7 +25,7 @@ public sealed class PreviewCacheFileConcurrencyTests : IDisposable
         var path = _root.Combine("entry.pv4");
         // Two shapes whose header fields, dimensions and backend all differ: a torn read would mix them.
         var shapes = new[] { Image(8, 6, 1, DecoderBackend.Wpf), Image(16, 12, 6, DecoderBackend.TurboJpeg) };
-        await PreviewCacheFile.WriteAtomicallyAsync(shapes[0], path);
+        await PreviewCacheFile.WriteAtomicallyAsync(shapes[0], WpfBitmapSourceCodec.Instance, path);
         using var barrier = new Barrier(7);
         var stop = 0;
         var failures = new ConcurrentBag<string>();
@@ -36,7 +36,7 @@ public sealed class PreviewCacheFileConcurrencyTests : IDisposable
             barrier.SignalAndWait();
             for (var i = 0; i < 40; i++)
             {
-                try { await PreviewCacheFile.WriteAtomicallyAsync(shapes[(w + i) % 2], path); }
+                try { await PreviewCacheFile.WriteAtomicallyAsync(shapes[(w + i) % 2], WpfBitmapSourceCodec.Instance, path); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* destination held open by a reader: the write is skipped */ }
             }
         })).ToArray();

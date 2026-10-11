@@ -115,7 +115,7 @@ public sealed class LibRawCorruptFileHandleTests
         using var temp = new TempRoot("libraw-corrupt-info");
         var path = temp.File("junk.cr2", Junk());
 
-        Assert.Throws<InvalidDataException>(() => new LibRawDecoder().ReadInfo(path));
+        Assert.Throws<InvalidDataException>(() => new LibRawDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path));
 
         File.Delete(path); // throws IOException when LibRaw still holds the handle
         Assert.False(File.Exists(path));

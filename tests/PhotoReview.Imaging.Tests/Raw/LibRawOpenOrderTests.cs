@@ -16,7 +16,7 @@ public sealed class LibRawOpenOrderTests
     {
         if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
         var stages = new List<string>();
-        var decoder = new LibRawDecoder(stages.Add);
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stages.Add);
 
         Assert.ThrowsAny<Exception>(() => decoder.Decode(new DecodeRequest(@"Z:\definitely-missing\file.orf", DecodeBox.Unbounded)));
 
@@ -31,7 +31,7 @@ public sealed class LibRawOpenOrderTests
             RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is not { } path) return;
         var stages = new List<string>();
 
-        _ = new LibRawDecoder(stages.Add).Decode(new DecodeRequest(path, new DecodeBox(160, 120)));
+        _ = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stages.Add).Decode(new DecodeRequest(path, new DecodeBox(160, 120)));
 
         Assert.Equal(["configured", "opened", "unpacked", "processed", "handle-closed", "source-released", "bitmap-created"], stages);
     }
@@ -42,7 +42,7 @@ public sealed class LibRawOpenOrderTests
         if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
             RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is not { } path) return;
         var stages = new List<string>();
-        var decoder = new LibRawDecoder(stages.Add) { MemoryInfo = () => (TotalAvailable: 1_000_000, Load: 0) };
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stages.Add) { MemoryInfo = () => (TotalAvailable: 1_000_000, Load: 0) };
 
         var error = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
 
@@ -55,11 +55,11 @@ public sealed class LibRawOpenOrderTests
     {
         if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
             RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is not { } path) return;
-        var size = new LibRawDecoder(null).ReadInfo(path);
+        var size = new LibRawDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path);
         // Exactly the old estimate (8 + 3 B/px + the full-size bitmap): it fits a total of that size only while the raw buffer is ignored.
         var withoutRawBuffer = (long)size.Width * size.Height * (8 + 3 + 4);
         var stages = new List<string>();
-        var decoder = new LibRawDecoder(stages.Add) { MemoryInfo = () => (TotalAvailable: withoutRawBuffer, Load: 0) };
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stages.Add) { MemoryInfo = () => (TotalAvailable: withoutRawBuffer, Load: 0) };
 
         var error = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
 
@@ -72,10 +72,10 @@ public sealed class LibRawOpenOrderTests
     {
         if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
             RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is not { } path) return;
-        var size = new LibRawDecoder(null).ReadInfo(path);
+        var size = new LibRawDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path);
         // Generous: raw buffers are at most 2 B per sensor pixel for this Bayer file; the sensor is at most ~10% larger than the output.
         var total = (long)size.Width * size.Height * (8 + 3 + 4 + 3);
-        var decoder = new LibRawDecoder(null) { MemoryInfo = () => (TotalAvailable: total, Load: 0) };
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => (TotalAvailable: total, Load: 0) };
 
         var decoded = decoder.Decode(new DecodeRequest(path, new DecodeBox(240, 180)));
 

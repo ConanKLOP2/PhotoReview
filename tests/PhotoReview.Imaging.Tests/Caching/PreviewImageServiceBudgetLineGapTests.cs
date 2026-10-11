@@ -75,7 +75,7 @@ public sealed class PreviewImageServiceBudgetLineGapTests : IDisposable
         var previous = Environment.GetEnvironmentVariable(name);
         var reader = new RecordingReader();
         var path = _root.File(Path.Combine("images", "a.jpg"), 1, 2, 3, 4);
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: _root.Dir("cache"), disableDiskCacheOverride: true, decoder: new FakeDecoder(), sourceReader: reader);
         try
         {

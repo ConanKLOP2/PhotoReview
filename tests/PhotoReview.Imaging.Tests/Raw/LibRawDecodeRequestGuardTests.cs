@@ -11,7 +11,7 @@ namespace PhotoReview.Imaging.Tests.Raw;
 public sealed class LibRawDecodeRequestGuardTests
 {
     private static LibRawDecoder DecoderWhoseBodyMustNotRun(Action onBody) =>
-        new() { CoreOverride = (_, _, _) => { onBody(); throw new InvalidOperationException("the decode body must not run"); } };
+        new(WpfBitmapSourceCodec.Instance) { CoreOverride = (_, _, _) => { onBody(); throw new InvalidOperationException("the decode body must not run"); } };
 
     [Fact(DisplayName = "An un-oriented decode is refused as NotSupported without entering the gate or running the decode body")]
     public void Decode_ApplyOrientationFalse_IsRefusedBeforeTheGateAndTheBody()
@@ -45,7 +45,7 @@ public sealed class LibRawDecodeRequestGuardTests
     {
         var slotsBefore = LibRawDecoder.FullDecodeSlotsAvailable; Assert.Equal(1, slotsBefore);
         int? slotsInBody = null;
-        var decoder = new LibRawDecoder
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance)
         {
             CoreOverride = (_, _, _) =>
             {

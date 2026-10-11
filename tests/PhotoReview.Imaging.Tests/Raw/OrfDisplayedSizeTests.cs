@@ -58,8 +58,8 @@ public sealed class OrfDisplayedSizeTests
         var path = RawCorpus.TryGetFile(fileName);
         if (path is null) return;
 
-        var reader = new RawDecoder(new LibRawDecoder()).ReadInfo(path);
-        var librawInfo = new LibRawDecoder().ReadInfo(path);
+        var reader = new RawDecoder(new LibRawDecoder(WpfBitmapSourceCodec.Instance)).ReadInfo(path);
+        var librawInfo = new LibRawDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path);
 
         Assert.Equal((width, height), (reader.Width, reader.Height));
         Assert.Equal((width, height), (librawInfo.Width, librawInfo.Height));
@@ -73,9 +73,9 @@ public sealed class OrfDisplayedSizeTests
         var path = RawCorpus.TryGetFile("Olympus - E-P3 - 16bit (4_3).ORF");
         if (path is null) return;
 
-        var reader = new RawDecoder(new LibRawDecoder()).ReadInfo(path);
+        var reader = new RawDecoder(new LibRawDecoder(WpfBitmapSourceCodec.Instance)).ReadInfo(path);
         // A bounded box still reports the full decoded size; E-P3 is a 12 MP sensor, the lightest ORF of the corpus.
-        var decoded = new LibRawDecoder().Decode(new PhotoReview.Imaging.Decoding.DecodeRequest(path, new DecodeBox(64, 64)));
+        var decoded = new LibRawDecoder(WpfBitmapSourceCodec.Instance).Decode(new PhotoReview.Imaging.Decoding.DecodeRequest(path, new DecodeBox(64, 64)));
 
         Assert.Equal((4056, 3040), (decoded.OriginalWidth, decoded.OriginalHeight));
         Assert.Equal((decoded.OriginalWidth, decoded.OriginalHeight), (reader.Width, reader.Height));

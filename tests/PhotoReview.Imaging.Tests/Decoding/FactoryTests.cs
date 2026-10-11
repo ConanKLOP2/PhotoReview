@@ -172,7 +172,7 @@ public sealed class FactoryTests : IDisposable
         var service = new PreviewImageService(
             metrics,
             () => true,
-            () => 0,
+            () => 0, WpfBitmapSourceCodec.Instance,
             diskCacheDirectory: Path.Combine(_tempDir, "cache"),
             currentBackend: () => currentBackend,
             decoderFactory: factory);

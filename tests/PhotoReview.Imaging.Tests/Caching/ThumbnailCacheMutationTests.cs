@@ -37,14 +37,14 @@ public sealed class ThumbnailCacheMutationTests : IDisposable
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var reads = 0;
-        using var cache = new ThumbnailCache(_root.Dir("disk"), embeddedThumbnailReader: async (path, token) =>
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _root.Dir("disk"), embeddedThumbnailReader: async (path, token) =>
         {
             if (Interlocked.Increment(ref reads) == 1)
             {
                 entered.SetResult();
                 await release.Task;
             }
-            return EmbeddedThumbnailReader.TryRead(path);
+            return EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
         });
 
         var pending = cache.GetAsync(source, null);
@@ -65,7 +65,7 @@ public sealed class ThumbnailCacheMutationTests : IDisposable
         var disk = _root.Dir("disk-clear");
         var png = _root.File(Path.Combine("disk-clear", "a.png"), 1, 2, 3);
         var other = _root.File(Path.Combine("disk-clear", "b.txt"), 1);
-        using var cache = new ThumbnailCache(disk);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, disk);
 
         cache.ClearDisk();
 
@@ -79,7 +79,7 @@ public sealed class ThumbnailCacheMutationTests : IDisposable
     {
         var disk = _root.Dir("disk-denied");
         var log = new RecordingLog();
-        using var cache = new ThumbnailCache(disk, log: log);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, disk, log: log);
         await cache.StartupCleanup.WaitAsync(Timeout);
         var info = new DirectoryInfo(disk);
         var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);

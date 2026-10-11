@@ -67,7 +67,7 @@ public sealed class Cr3BmffHardeningTests
                 try
                 {
                     File.WriteAllBytes(tmp, bytes);
-                    var decoded = new TurboJpegDecoder().ReadInfo(tmp);
+                    var decoded = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(tmp);
                     Assert.Equal((preview.Width, preview.Height), (decoded.PixelWidth, decoded.PixelHeight));
                 }
                 finally

@@ -13,7 +13,7 @@ public sealed class PreviewDecodeRawFullKeyGuardTests
         var path = Path.Combine(root.Dir("images"), "a.png");
         File.WriteAllBytes(path, TestImages.PreviewPng);
         var metrics = new ReviewMetrics();
-        var service = new PreviewImageService(metrics, () => false, () => 512, capacityBytes: 16L * 1024 * 1024,
+        var service = new PreviewImageService(metrics, () => false, () => 512, WpfBitmapSourceCodec.Instance, capacityBytes: 16L * 1024 * 1024,
             diskCacheDirectory: root.Dir("disk-cache"));
         try
         {

@@ -84,8 +84,8 @@ public sealed class PreviewImageServicePixelCodecTests : IDisposable
     {
         var disk = _root.Dir("disk-foreign");
         var log = new RecordingLog();
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 4, capacityBytes: 1024 * 1024, diskCacheDirectory: disk,
-            disableDiskCacheOverride: false, decoder: new ForeignDecoder(), log: log, platformCodec: PixelBufferImageCodec.Instance));
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 4, PixelBufferImageCodec.Instance, capacityBytes: 1024 * 1024, diskCacheDirectory: disk,
+            disableDiskCacheOverride: false, decoder: new ForeignDecoder(), log: log));
         await service.GetPreviewAsync(_source);
         await service.ShutdownPersistWorkersAsync();
 
@@ -100,8 +100,8 @@ public sealed class PreviewImageServicePixelCodecTests : IDisposable
     }
 
     private static PreviewImageService CreateService(string disk, IImageDecoder decoder, IPlatformImageCodec? platformCodec, ReviewMetrics metrics) =>
-        new(metrics, () => false, () => 4, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: disk,
-            disableDiskCacheOverride: false, decoder: decoder, platformCodec: platformCodec);
+        new(metrics, () => false, () => 4, platformCodec ?? WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: disk,
+            disableDiskCacheOverride: false, decoder: decoder);
 
     private sealed class PixelDecoder(PixelLayout layout, bool opaque) : IImageDecoder
     {

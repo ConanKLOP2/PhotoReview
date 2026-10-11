@@ -18,7 +18,7 @@ public sealed class LibRawAdmissionSeamTests
     private static readonly DecodeRequest Request = new(@"C:\nowhere\x.dng", new DecodeBox(100, 100));
 
     private static LibRawDecoder DecoderWithMemory(long total, long load = 0) =>
-        new() { MemoryInfo = () => (total, load) };
+        new(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => (total, load) };
 
     private static FullDecodeGate.Lease NewLease() =>
         new FullDecodeGate(LibRawDecoder.MaxQueuedPreloadDecodes).Enter(SourceReadPriority.Viewer, CancellationToken.None);
@@ -88,7 +88,7 @@ public sealed class LibRawAdmissionSeamTests
     public void Decode_ThrowingOperationCanceledAfterTheGateWasEntered_ReleasesTheSlot()
     {
         var entered = false;
-        var decoder = new LibRawDecoder
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance)
         {
             CoreOverride = (_, _, _) =>
             {

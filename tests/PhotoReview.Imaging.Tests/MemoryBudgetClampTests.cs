@@ -45,7 +45,7 @@ public sealed class MemoryBudgetClampTests
         Assert.True(physical > 0);
         var dir = Path.Combine(Path.GetTempPath(), "PhotoReview-Clamp-" + Guid.NewGuid().ToString("N"));
         var source = new SourceBytesCache(long.MaxValue / 2);
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 100,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 100, WpfBitmapSourceCodec.Instance,
             capacityBytes: long.MaxValue / 2, diskCacheDirectory: dir, disableDiskCacheOverride: true, sourceBytesCache: source);
 
         try
@@ -76,7 +76,7 @@ public sealed class MemoryBudgetClampTests
     {
         var dir = Path.Combine(Path.GetTempPath(), "PhotoReview-Clamp-" + Guid.NewGuid().ToString("N"));
         var log = new CapturingLog();
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 100,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 100, WpfBitmapSourceCodec.Instance,
             capacityBytes: long.MaxValue / 2, diskCacheDirectory: dir, disableDiskCacheOverride: true, log: log);
         try
         {

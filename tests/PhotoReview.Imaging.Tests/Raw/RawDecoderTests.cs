@@ -186,7 +186,7 @@ public sealed class RawDecoderTests
         File.WriteAllBytes(path, largeFile);
         var bytesCache = new SourceBytesCache(16 * 1024 * 1024);
         var metrics = new ReviewMetrics();
-        var service = new PreviewImageService(metrics, () => false, () => new DecodeBox(320, 240),
+        var service = new PreviewImageService(metrics, () => false, () => new DecodeBox(320, 240), WpfBitmapSourceCodec.Instance,
             capacityBytes: 64 * 1024 * 1024, diskCacheDirectory: Path.Combine(root, "preview-cache"),
             diskCacheCapacityBytes: 0, disableDiskCacheOverride: true,
             decoder: new RawDecoder(new WpfBitmapImageDecoder(), sourceBytesCache: bytesCache), sourceBytesCache: bytesCache);

@@ -193,7 +193,7 @@ public static class BenchmarkWorkloadRunner
                 catch (UnauthorizedAccessException) { }
                 // An unsupported/corrupt-format result is also what a decoder sees when the file vanishes mid-read.
                 catch (NotSupportedException) { }
-                catch (System.IO.FileFormatException) { }
+                catch (FormatException) { }
                 // The correctness check must match what each operation promises: move/delete
                 // must remove the source, copy must leave it in place.
                 var sourceExistsAfter = File.Exists(temp);

@@ -41,17 +41,17 @@ public sealed class ThumbnailCache : IDisposable
 
     public string DiskDirectory => _diskDirectory;
 
+    /// <param name="platformCodec">C-02 codec (required, WP-06): makes the platform image of a disk/embedded thumbnail.</param>
     public ThumbnailCache(
+        IPlatformImageCodec platformCodec,
         string? diskDirectory = null,
         long maxRamBytes = 1L * 1024 * 1024 * 1024,
         long maxDiskBytes = DefaultMaxDiskBytes,
         ILog? log = null,
-        Func<string, CancellationToken, Task<IDecodedImage?>>? embeddedThumbnailReader = null,
-        IPlatformImageCodec? platformCodec = null)
+        Func<string, CancellationToken, Task<IDecodedImage?>>? embeddedThumbnailReader = null)
     {
-        // WP-04: disk thumbnails decode with WIC into pixels; the codec makes the platform image (null = the WPF bridge until
-        // WP-06 makes it a required dependency).
-        _platformCodec = platformCodec ?? WpfCacheImageCodec.Instance;
+        // WP-04/WP-06: disk thumbnails decode with WIC into pixels; the codec makes the platform image.
+        _platformCodec = platformCodec ?? throw new ArgumentNullException(nameof(platformCodec));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRamBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDiskBytes);
         _diskDirectory = diskDirectory ?? Path.Combine(
@@ -117,11 +117,11 @@ public sealed class ThumbnailCache : IDisposable
         return AwaitAndCacheAsync(key, lazy, cancellationToken);
     }
 
-    private static Task<IDecodedImage?> DefaultReadEmbeddedThumbnailAsync(string path, CancellationToken cancellationToken)
+    private Task<IDecodedImage?> DefaultReadEmbeddedThumbnailAsync(string path, CancellationToken cancellationToken)
         => Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return EmbeddedThumbnailReader.TryRead(path);
+            return EmbeddedThumbnailReader.TryRead(path, _platformCodec);
         }, cancellationToken);
 
     public void ClearMemory()

@@ -289,7 +289,7 @@ internal static class RawSurvey
 
 
         // WIC probe
-        var wic = new WicDirectDecoder(WpfBitmapSourceCodec.Instance);
+        var wic = new WicDirectDecoder(PhotoReview.Imaging.Wpf.WpfBitmapSourceCodec.Instance);
         bool wicReadSuccess = false;
         int wicInfoW = 0, wicInfoH = 0, wicInfoOrient = 1;
         string? wicInfoErr = null;

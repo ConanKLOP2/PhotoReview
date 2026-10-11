@@ -63,13 +63,13 @@ public sealed class DecodingHelpersMutationTests : IDisposable
     {
         var metadata = RoundTripMetadata(container, (ushort)tag);
 
-        Assert.Equal(expected, ExifOrientation.Read(metadata));
+        Assert.Equal(expected, WpfExifOrientation.Read(metadata));
     }
 
     [Fact]
     public void Read_WithoutMetadata_IsOne()
     {
-        Assert.Equal(1, ExifOrientation.Read(null));
+        Assert.Equal(1, WpfExifOrientation.Read(null));
     }
 
     // ---- freeze guards (a bitmap that cannot be frozen must be left alone, not throw) ----
@@ -90,7 +90,7 @@ public sealed class DecodingHelpersMutationTests : IDisposable
     {
         var bitmap = LockedBitmap();
 
-        var result = ExifOrientation.Apply(bitmap, orientation);
+        var result = WpfExifOrientation.Apply(bitmap, orientation);
 
         Assert.Same(bitmap, result);
         Assert.False(result.IsFrozen);
@@ -101,7 +101,7 @@ public sealed class DecodingHelpersMutationTests : IDisposable
     {
         var bitmap = new WriteableBitmap(4, 3, 96, 96, PixelFormats.Bgra32, null);
 
-        var result = ExifOrientation.Apply(bitmap, 1);
+        var result = WpfExifOrientation.Apply(bitmap, 1);
 
         Assert.Same(bitmap, result);
         Assert.True(result.IsFrozen);
@@ -270,7 +270,7 @@ public sealed class DecodingHelpersMutationTests : IDisposable
     {
         var path = JpegWithThumbnail(orientation: null, thumbColor: Colors.Blue);
 
-        var image = EmbeddedThumbnailReader.TryRead(path);
+        var image = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
 
         Assert.NotNull(image);
         var bitmap = Assert.IsAssignableFrom<BitmapSource>(image.PlatformImage);
@@ -289,7 +289,7 @@ public sealed class DecodingHelpersMutationTests : IDisposable
     {
         var path = JpegWithThumbnail(orientation: 6);
 
-        var image = EmbeddedThumbnailReader.TryRead(path);
+        var image = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
 
         Assert.NotNull(image);
         Assert.Equal((8, 16), (image.PixelWidth, image.PixelHeight));
@@ -304,19 +304,19 @@ public sealed class DecodingHelpersMutationTests : IDisposable
         var path = _root.Combine("plain.jpg");
         FixtureGenerator.GenerateGradientJpeg(path, 48, 32);
 
-        Assert.Null(EmbeddedThumbnailReader.TryRead(path));
+        Assert.Null(EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
     }
 
     [Fact]
     public void TryRead_MissingFile_IsNull()
     {
-        Assert.Null(EmbeddedThumbnailReader.TryRead(_root.Combine("missing.jpg")));
+        Assert.Null(EmbeddedThumbnailReader.TryRead(_root.Combine("missing.jpg"), WpfBitmapSourceCodec.Instance));
     }
 
     [Fact]
     public void TryRead_PathOfADirectory_IsNull()
     {
-        Assert.Null(EmbeddedThumbnailReader.TryRead(_root.Dir("a-folder")));
+        Assert.Null(EmbeddedThumbnailReader.TryRead(_root.Dir("a-folder"), WpfBitmapSourceCodec.Instance));
     }
 
     [Fact]
@@ -326,9 +326,9 @@ public sealed class DecodingHelpersMutationTests : IDisposable
         var text = FixtureGenerator.GenerateTextFile(_root.Combine("text.jpg"));
         var empty = FixtureGenerator.GenerateZeroByteFile(_root.Combine("empty.jpg"));
 
-        Assert.Null(EmbeddedThumbnailReader.TryRead(garbage));
-        Assert.Null(EmbeddedThumbnailReader.TryRead(text));
-        Assert.Null(EmbeddedThumbnailReader.TryRead(empty));
+        Assert.Null(EmbeddedThumbnailReader.TryRead(garbage, WpfBitmapSourceCodec.Instance));
+        Assert.Null(EmbeddedThumbnailReader.TryRead(text, WpfBitmapSourceCodec.Instance));
+        Assert.Null(EmbeddedThumbnailReader.TryRead(empty, WpfBitmapSourceCodec.Instance));
     }
 
     [Fact]
@@ -340,7 +340,7 @@ public sealed class DecodingHelpersMutationTests : IDisposable
         for (var length = 0; length < bytes.Length; length += length < 700 ? 1 : 9)
         {
             File.WriteAllBytes(path, bytes.AsSpan(0, length).ToArray());
-            var result = EmbeddedThumbnailReader.TryRead(path); // null or an image, never an exception
+            var result = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance); // null or an image, never an exception
             if (length == 0) Assert.Null(result);
         }
     }

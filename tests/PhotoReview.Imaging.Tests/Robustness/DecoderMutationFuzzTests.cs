@@ -55,8 +55,8 @@ public sealed class DecoderMutationFuzzTests(ITestOutputHelper output)
     {
         yield return ("Wpf", new WpfBitmapImageDecoder());
         yield return ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance));
-        yield return ("TurboJpeg", new TurboJpegDecoder());
-        yield return ("Turbo->Wpf chain", new FallbackImageDecoder(new TurboJpegDecoder(), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder()));
+        yield return ("TurboJpeg", new TurboJpegDecoder(WpfBitmapSourceCodec.Instance));
+        yield return ("Turbo->Wpf chain", new FallbackImageDecoder(new TurboJpegDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder()));
         yield return ("WicDirect->Wpf chain", new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.WicDirect, new WpfBitmapImageDecoder()));
     }
 

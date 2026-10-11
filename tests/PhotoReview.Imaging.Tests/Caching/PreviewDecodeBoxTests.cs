@@ -117,7 +117,7 @@ public sealed class PreviewDecodeBoxTests : IAsyncLifetime
     public async Task WidthOnlyConstructor_KeepsHeightUnconstrained()
     {
         var decoder = new RecordingDecoder();
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 2208,
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 2208, WpfBitmapSourceCodec.Instance,
             capacityBytes: 1024 * 1024, diskCacheDirectory: Path.Combine(_root, "width"),
             disableDiskCacheOverride: true, decoder: decoder));
 
@@ -141,7 +141,7 @@ public sealed class PreviewDecodeBoxTests : IAsyncLifetime
         bool disableDisk = false,
         bool isOriginal = false,
         ReviewMetrics? metrics = null) =>
-        new(metrics ?? new ReviewMetrics(), () => isOriginal, box,
+        new(metrics ?? new ReviewMetrics(), () => isOriginal, box, WpfBitmapSourceCodec.Instance,
             capacityBytes: 1024 * 1024,
             diskCacheDirectory: disk,
             disableDiskCacheOverride: disableDisk,

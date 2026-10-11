@@ -42,8 +42,8 @@ public sealed class InvalidOrientationValueTests
         {
             ("Wpf", new WpfBitmapImageDecoder()),
             ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance)),
-            ("TurboJpeg", new TurboJpegDecoder()),
-            ("Turbo->Wpf", new FallbackImageDecoder(new TurboJpegDecoder(), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder())),
+            ("TurboJpeg", new TurboJpegDecoder(WpfBitmapSourceCodec.Instance)),
+            ("Turbo->Wpf", new FallbackImageDecoder(new TurboJpegDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder())),
         };
         foreach (var (name, decoder) in decoders)
         {

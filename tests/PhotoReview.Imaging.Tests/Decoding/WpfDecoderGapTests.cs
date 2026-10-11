@@ -137,6 +137,6 @@ public sealed class WpfDecoderGapTests : IDisposable
         using var stream = File.OpenRead(path);
         var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(stream, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
 
-        Assert.Equal(1, ExifOrientation.Read(decoder.Frames[0].Metadata as System.Windows.Media.Imaging.BitmapMetadata));
+        Assert.Equal(1, WpfExifOrientation.Read(decoder.Frames[0].Metadata as System.Windows.Media.Imaging.BitmapMetadata));
     }
 }

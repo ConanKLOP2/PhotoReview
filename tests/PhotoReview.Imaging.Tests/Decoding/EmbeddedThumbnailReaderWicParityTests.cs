@@ -75,7 +75,7 @@ public sealed class EmbeddedThumbnailReaderWicParityTests : IDisposable
     {
         var path = JpegWithThumbnail(16, 8, 6);
 
-        var image = EmbeddedThumbnailReader.TryRead(path);
+        var image = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
 
         Assert.NotNull(image);
         var bitmap = Assert.IsAssignableFrom<BitmapSource>(image.PlatformImage);
@@ -130,8 +130,8 @@ public sealed class EmbeddedThumbnailReaderWicParityTests : IDisposable
         converted.CopyPixels(buffer, width * 4, 0);
         var materialized = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, buffer, width * 4);
         materialized.Freeze();
-        var orientation = ExifOrientation.Read(frame.Metadata as BitmapMetadata);
-        var oriented = ExifOrientation.Apply(materialized, orientation);
+        var orientation = WpfExifOrientation.Read(frame.Metadata as BitmapMetadata);
+        var oriented = WpfExifOrientation.Apply(materialized, orientation);
         var transposed = ExifOrientation.IsTransposed(orientation);
         return new Legacy(oriented, orientation, transposed ? frame.PixelHeight : frame.PixelWidth,
             transposed ? frame.PixelWidth : frame.PixelHeight);

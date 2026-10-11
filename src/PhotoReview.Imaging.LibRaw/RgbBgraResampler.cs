@@ -1,7 +1,5 @@
 using System.IO;
 using PhotoReview.Imaging.Pixels;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace PhotoReview.Imaging.LibRaw;
 
@@ -73,15 +71,6 @@ internal static class RgbBgraResampler
             buffer.Dispose();
             throw;
         }
-    }
-
-    /// <summary>Copies the buffer into a frozen Bgr32 <see cref="BitmapSource"/>; the buffer stays owned by the caller. <paramref name="beforeCopy"/> runs right before the copy (test seam).</summary>
-    internal static BitmapSource ToBitmap(BgraBuffer buffer, Action? beforeCopy = null)
-    {
-        beforeCopy?.Invoke();
-        var bitmap = BitmapSource.Create(buffer.Width, buffer.Height, 96, 96, PixelFormats.Bgr32, null, buffer.Pointer, buffer.Length, buffer.Stride);
-        if (bitmap.CanFreeze) bitmap.Freeze();
-        return bitmap;
     }
 
     /// <summary>

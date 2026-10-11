@@ -43,7 +43,7 @@ public sealed class TurboJpegHardeningTests : IDisposable
     {
         var path = _root.File("empty.jpg");
 
-        var ex = Assert.Throws<NotSupportedException>(() => new TurboJpegDecoder().Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+        var ex = Assert.Throws<NotSupportedException>(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
 
         Assert.True(DecodeFailureSourceBytes.TryGet(ex, out var bytes));
         Assert.Equal(0, bytes.Length);
@@ -56,7 +56,7 @@ public sealed class TurboJpegHardeningTests : IDisposable
         var cut = jpeg.AsSpan(0, jpeg.Length * 6 / 10).ToArray();
         var path = _root.File("cut.jpg", cut);
 
-        var ex = Assert.Throws<InvalidDataException>(() => new TurboJpegDecoder().Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+        var ex = Assert.Throws<InvalidDataException>(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
 
         Assert.True(DecodeFailureSourceBytes.TryGet(ex, out var bytes));
         Assert.Equal(cut.Length, bytes.Length);
@@ -131,7 +131,7 @@ public sealed class TurboJpegHardeningTests : IDisposable
     public void HugeDeclaredSize_OnSmallMachine_IsRefusedBeforeAllocation()
     {
         var bomb = WithClaimedSize(SmallJpeg(), 20000, 20000);
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => (1 * Gb, 0) };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => (1 * Gb, 0) };
 
         var message = Message(() => decoder.Decode(new DecodeRequest("bomb.jpg", DecodeBox.Unbounded, bytes: bomb)));
 
@@ -142,7 +142,7 @@ public sealed class TurboJpegHardeningTests : IDisposable
     public void LegitimateLargeOriginal_OnNormalMachine_PassesTheGuard()
     {
         var big = WithClaimedSize(SmallJpeg(), 12000, 9000);
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => (16 * Gb, 4 * Gb) };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => (16 * Gb, 4 * Gb) };
 
         // The pixel data is a 64x48 stub, so the decode itself fails later - but not at the memory guard.
         var message = Message(() => decoder.Decode(new DecodeRequest("big.jpg", DecodeBox.Unbounded, bytes: big)));
@@ -193,7 +193,7 @@ public sealed class TurboJpegHardeningTests : IDisposable
     [Fact(DisplayName = "Control: a valid 64-scan progressive JPEG decodes")]
     public void ProgressiveWithFewScans_Decodes()
     {
-        var image = new TurboJpegDecoder().Decode(new DecodeRequest("p.jpg", DecodeBox.Unbounded, bytes: ProgressiveGray(0)));
+        var image = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("p.jpg", DecodeBox.Unbounded, bytes: ProgressiveGray(0)));
 
         Assert.Equal((8, 8), (image.PixelWidth, image.PixelHeight));
     }
@@ -201,5 +201,5 @@ public sealed class TurboJpegHardeningTests : IDisposable
     [Fact(DisplayName = "A progressive JPEG with 512 scans (> 500) is a controlled InvalidDataException, not a long decode")]
     public void ProgressiveWithTooManyScans_IsRefused() =>
         Assert.Throws<InvalidDataException>(() =>
-            new TurboJpegDecoder().Decode(new DecodeRequest("p512.jpg", DecodeBox.Unbounded, bytes: ProgressiveGray(7))));
+            new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("p512.jpg", DecodeBox.Unbounded, bytes: ProgressiveGray(7))));
 }

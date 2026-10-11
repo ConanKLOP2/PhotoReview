@@ -29,7 +29,7 @@ public sealed class PreviewImageServiceGapTests2 : IAsyncLifetime
     private PreviewImageService CreateService(IImageDecoder decoder) => _service = new PreviewImageService(
         new ReviewMetrics(),
         () => false,
-        () => new DecodeBox(100, 100),
+        () => new DecodeBox(100, 100), WpfBitmapSourceCodec.Instance,
         capacityBytes: 64L * 1024 * 1024,
         diskCacheDirectory: Path.Combine(_root, "cache"),
         disableDiskCacheOverride: true,

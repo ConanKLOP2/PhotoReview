@@ -24,7 +24,7 @@ public sealed class InitialImagePrewarmTests : IDisposable
     {
         _dir = Path.Combine(Path.GetTempPath(), "PhotoReview_Prewarm_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dir);
-        _previews = new PreviewImageService(new ReviewMetrics(), () => false, () => Viewport, capacityBytes: 64L * 1024 * 1024,
+        _previews = new PreviewImageService(new ReviewMetrics(), () => false, () => Viewport, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: Path.Combine(_dir, "cache"), disableDiskCacheOverride: true, decoder: _decoder);
     }
 

@@ -27,7 +27,7 @@ public sealed class DecoderContractRegressionTests : IDisposable
         string path = Path.Combine(_tempDir, "oriented.jpg");
         FixtureGenerator.GenerateJpegWithOrientation(path, 64, 48, orientation: 6);
 
-        var decoded = new TurboJpegDecoder().Decode(
+        var decoded = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(
             new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: true));
 
         Assert.Equal(DecoderBackend.TurboJpeg, decoded.ActualBackend);
@@ -65,7 +65,7 @@ public sealed class DecoderContractRegressionTests : IDisposable
         var sentinel = new FileFormatException("sentinel: fallback's own final failure");
         var fallback = new CountingDecoder(new ThrowingDecoder(sentinel));
         var decoder = new FallbackImageDecoder(
-            new TurboJpegDecoder(), DecoderBackend.TurboJpeg,
+            new TurboJpegDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.TurboJpeg,
             fallback);
 
         var thrown = Assert.Throws<FileFormatException>(() => decoder.Decode(new DecodeRequest(path, 0)));
@@ -83,7 +83,7 @@ public sealed class DecoderContractRegressionTests : IDisposable
         File.WriteAllBytes(path, completeJpeg[..(completeJpeg.Length / 2)]);
         var fallback = new CountingDecoder(new WpfBitmapImageDecoder());
         var decoder = new FallbackImageDecoder(
-            new TurboJpegDecoder(), DecoderBackend.TurboJpeg,
+            new TurboJpegDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.TurboJpeg,
             fallback);
 
         IDecodedImage decoded = decoder.Decode(new DecodeRequest(path, 0));

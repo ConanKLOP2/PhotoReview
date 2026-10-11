@@ -20,7 +20,7 @@ namespace PhotoReview.Imaging.Tests.Decoding;
 public sealed class DecoderErrorLocalizationTests : IDisposable
 {
     private readonly TempRoot _root = new("decoder-errors");
-    private readonly TurboJpegDecoder _turbo = new();
+    private readonly TurboJpegDecoder _turbo = new(WpfBitmapSourceCodec.Instance);
 
     public void Dispose() => _root.Dispose();
 

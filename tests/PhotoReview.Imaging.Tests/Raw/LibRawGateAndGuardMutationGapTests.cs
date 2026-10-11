@@ -75,7 +75,7 @@ public sealed class LibRawGateAndGuardMutationGapTests
     public void AdmitDecode_AnUnknownImageSizeUnderMemoryPressure_IsAdmittedWithoutAnEstimate(int width, int height)
     {
         // Memory load above the total: even a zero estimate would be refused if the guard were consulted.
-        var decoder = new LibRawDecoder { MemoryInfo = () => (TotalAvailable: 100, Load: 1_000) };
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => (TotalAvailable: 100, Load: 1_000) };
         using var lease = new FullDecodeGate(LibRawDecoder.MaxQueuedPreloadDecodes).Enter(SourceReadPriority.Viewer, CancellationToken.None);
 
         decoder.AdmitDecode(new FakeProbe(width, height), new DecodeRequest(@"C:\nowhere\x.dng", new DecodeBox(100, 100)), lease);
@@ -163,7 +163,7 @@ public sealed class LibRawGateAndGuardMutationGapTests
     {
         using var holding = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
-        var holder = new LibRawDecoder
+        var holder = new LibRawDecoder(WpfBitmapSourceCodec.Instance)
         {
             CoreOverride = (_, _, token) =>
             {
@@ -172,7 +172,7 @@ public sealed class LibRawGateAndGuardMutationGapTests
                 return new StubImage();
             },
         };
-        var instant = new LibRawDecoder { CoreOverride = (_, _, _) => new StubImage() };
+        var instant = new LibRawDecoder(WpfBitmapSourceCodec.Instance) { CoreOverride = (_, _, _) => new StubImage() };
 
         var running = Task.Factory.StartNew(() => holder.Decode(new DecodeRequest(@"C:\nowhere\a.dng", DecodeBox.Unbounded)), TaskCreationOptions.LongRunning);
         Assert.True(holding.Wait(Bound));

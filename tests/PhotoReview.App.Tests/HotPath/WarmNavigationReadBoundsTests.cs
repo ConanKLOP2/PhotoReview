@@ -120,12 +120,12 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         var previewService = new PreviewImageService(
             metrics,
             () => previewContext.IsOriginalLoadingMode(),
-            () => previewContext.TargetDecodeWidth(),
+            () => previewContext.TargetDecodeWidth(), WpfBitmapSourceCodec.Instance,
             capacityBytes: 64 * 1024 * 1024,
             currentBackend: () => previewContext.CurrentBackend(),
             disableDiskCacheOverride: true);
 
-        var thumbnailCache = new ThumbnailCache(
+        var thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(tempDir, "thumbs"),
             maxRamBytes: 16 * 1024 * 1024);
 

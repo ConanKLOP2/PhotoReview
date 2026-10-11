@@ -12,7 +12,7 @@ public sealed class TurboJpegTests : IClassFixture<OrientationFixture>, IDisposa
 {
     private readonly string _tempDir;
     private readonly OrientationFixture _files;
-    private readonly TurboJpegDecoder _turboDecoder = new();
+    private readonly TurboJpegDecoder _turboDecoder = new(WpfBitmapSourceCodec.Instance);
 
     public TurboJpegTests(OrientationFixture files)
     {

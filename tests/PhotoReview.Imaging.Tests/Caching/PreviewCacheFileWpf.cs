@@ -6,7 +6,7 @@ namespace PhotoReview.Imaging.Tests.Caching;
 
 /// <summary>
 /// WP-04: cầu nối test giữ hình dạng API cũ (BitmapSource) cho các test cache viết trước WP-04. Chỉ chuyển kiểu qua codec WPF
-/// (<see cref="WpfCacheImageCodec"/>, đúng đường app WPF đi) rồi gọi thẳng API PixelBuffer của <see cref="PreviewCacheFile"/>:
+/// (<see cref="WpfBitmapSourceCodec"/>, đúng đường app WPF đi) rồi gọi thẳng API PixelBuffer của <see cref="PreviewCacheFile"/>:
 /// mọi kiểm tra (alpha Q-R7, orientation, header) vẫn là của mã sản phẩm.
 /// </summary>
 internal static class PreviewCacheFileWpf
@@ -18,7 +18,7 @@ internal static class PreviewCacheFileWpf
         int originalHeight, string cachePath, bool opacityVerified = false, ExifSummary? exif = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
-        using var lease = WpfCacheImageCodec.Instance.ToPixels(bitmap);
+        using var lease = WpfBitmapSourceCodec.Instance.ToPixels(bitmap);
         await PreviewCacheFile.WriteAtomicallyAsync(lease.Pixels, actualBackend, orientation, originalWidth, originalHeight, cachePath,
             opacityVerified, exif, cancellationToken).ConfigureAwait(false);
     }
@@ -26,7 +26,7 @@ internal static class PreviewCacheFileWpf
     public static ReadResult Read(string cachePath)
     {
         var entry = PreviewCacheFile.Read(cachePath);
-        var bitmap = (BitmapSource)WpfCacheImageCodec.Instance.FromPixels(entry.Pixels);
+        var bitmap = (BitmapSource)WpfBitmapSourceCodec.Instance.FromPixels(entry.Pixels);
         return new ReadResult(bitmap, entry.ActualBackend, entry.Orientation, entry.FileBytes, entry.OriginalWidth, entry.OriginalHeight, entry.Exif);
     }
 }

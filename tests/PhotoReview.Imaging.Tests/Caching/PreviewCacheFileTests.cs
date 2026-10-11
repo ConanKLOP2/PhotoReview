@@ -36,7 +36,7 @@ public sealed class PreviewCacheFileTests : IDisposable
     // so convert it to the opaque format real decoders produce for opaque sources.
     private static BitmapSource AsOpaque(BitmapSource bitmap)
     {
-        if (!PreviewCacheFile.HasAlpha(new WpfDecodedImage(bitmap))) return bitmap;
+        if (!WpfBitmapSourceCodec.HasAlpha(new WpfDecodedImage(bitmap))) return bitmap;
         var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgr32, null, 0);
         converted.Freeze();
         return converted;
@@ -83,8 +83,8 @@ public sealed class PreviewCacheFileTests : IDisposable
         var source = CreatePhotoLikeBitmap(220, 160);
         var path = CachePath();
 
-        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.TurboJpeg, orientation: 6), path);
-        var result = PreviewCacheFile.ReadAsDecodedImage(path);
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.TurboJpeg, orientation: 6), WpfBitmapSourceCodec.Instance, path);
+        var result = PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance);
 
         Assert.Equal(DecoderBackend.TurboJpeg, result.ActualBackend);
         Assert.Equal(6, result.Orientation);
@@ -109,8 +109,8 @@ public sealed class PreviewCacheFileTests : IDisposable
         var path = CachePath();
 
         await PreviewCacheFile.WriteAtomicallyAsync(
-            ToDecodedImage(source, DecoderBackend.WicDirect, orientation: 1, originalWidth: 4400, originalHeight: 3200), path);
-        var result = PreviewCacheFile.ReadAsDecodedImage(path);
+            ToDecodedImage(source, DecoderBackend.WicDirect, orientation: 1, originalWidth: 4400, originalHeight: 3200), WpfBitmapSourceCodec.Instance, path);
+        var result = PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance);
 
         Assert.Equal(source.PixelWidth, result.PixelWidth);
         Assert.Equal(source.PixelHeight, result.PixelHeight);
@@ -125,7 +125,7 @@ public sealed class PreviewCacheFileTests : IDisposable
         // format decision (see PreviewCacheFormatBenchmarkTests) actually holds for a real write.
         var source = CreatePhotoLikeBitmap(512, 384);
         var path = CachePath();
-        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), WpfBitmapSourceCodec.Instance, path);
 
         var pngPath = Path.Combine(_tempDir, "reference.png");
         FixtureGenerator.SavePng(source, pngPath, is32Bit: true);
@@ -138,13 +138,13 @@ public sealed class PreviewCacheFileTests : IDisposable
     {
         var source = FixtureGenerator.CreateGradientCheckerboard(32, 32);
         var path = CachePath();
-        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), WpfBitmapSourceCodec.Instance, path);
 
         var bytes = File.ReadAllBytes(path);
         bytes[4] = unchecked((byte)(PreviewCacheFile.CurrentVersion + 1)); // offset 4 = version byte
         File.WriteAllBytes(path, bytes);
 
-        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance));
     }
 
     [Fact(DisplayName = "A legacy v5 entry (possibly alpha-flattened) is rejected so it gets re-decoded")]
@@ -152,13 +152,13 @@ public sealed class PreviewCacheFileTests : IDisposable
     {
         var source = FixtureGenerator.CreateGradientCheckerboard(32, 32);
         var path = CachePath();
-        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), WpfBitmapSourceCodec.Instance, path);
 
         var bytes = File.ReadAllBytes(path);
         bytes[4] = 5; // offset 4 = version byte; v5 is what pre-IMG-01 builds wrote
         File.WriteAllBytes(path, bytes);
 
-        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance));
         Assert.True(PreviewCacheFile.CurrentVersion > 5);
     }
 
@@ -167,13 +167,13 @@ public sealed class PreviewCacheFileTests : IDisposable
     {
         var source = FixtureGenerator.CreateGradientCheckerboard(32, 32);
         var path = CachePath();
-        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), WpfBitmapSourceCodec.Instance, path);
 
         var bytes = File.ReadAllBytes(path);
         bytes[0] = (byte)'X';
         File.WriteAllBytes(path, bytes);
 
-        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance));
     }
 
     [Fact(DisplayName = "A truncated file (header only, no payload) is rejected instead of decoding garbage")]
@@ -181,12 +181,12 @@ public sealed class PreviewCacheFileTests : IDisposable
     {
         var source = FixtureGenerator.CreateGradientCheckerboard(32, 32);
         var path = CachePath();
-        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), WpfBitmapSourceCodec.Instance, path);
 
         var bytes = File.ReadAllBytes(path);
         File.WriteAllBytes(path, bytes[..24]); // v5 header only (24 bytes), no JPEG payload
 
-        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance));
     }
 
     [Fact(DisplayName = "Writing a bitmap with an alpha channel is rejected (JPEG cannot carry it)")]
@@ -198,7 +198,7 @@ public sealed class PreviewCacheFileTests : IDisposable
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             PreviewCacheFile.WriteAtomicallyAsync(
-                new WpfDecodedImage(alpha, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 4, originalHeight: 4), path));
+                new WpfDecodedImage(alpha, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 4, originalHeight: 4), WpfBitmapSourceCodec.Instance, path));
         Assert.False(File.Exists(path));
     }
 
@@ -226,8 +226,8 @@ public sealed class PreviewCacheFileTests : IDisposable
     [InlineData(2200, 3)]
     public void IsFullyOpaque_AllOpaque_True(int width, int height)
     {
-        Assert.True(WpfCacheImageCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, (_, _) => 255)));
-        Assert.True(WpfCacheImageCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, (_, _) => 255)));
+        Assert.True(WpfBitmapSourceCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, (_, _) => 255)));
+        Assert.True(WpfBitmapSourceCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, (_, _) => 255)));
     }
 
     [Theory(DisplayName = "IsFullyOpaque: one non-opaque pixel anywhere (first, middle, last, vector tail) makes it not cacheable")]
@@ -240,17 +240,17 @@ public sealed class PreviewCacheFileTests : IDisposable
     public void IsFullyOpaque_OneTransparentPixel_False(int width, int height, int tx, int ty)
     {
         byte AlphaAt(int x, int y) => x == tx && y == ty ? (byte)254 : (byte)255;
-        Assert.False(WpfCacheImageCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, AlphaAt)));
-        Assert.False(WpfCacheImageCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, AlphaAt)));
+        Assert.False(WpfBitmapSourceCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, AlphaAt)));
+        Assert.False(WpfBitmapSourceCodec.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, AlphaAt)));
     }
 
     [Fact(DisplayName = "IsFullyOpaque: opaque formats skip the scan, translucent palettes are rejected")]
     public void IsFullyOpaque_NonAlphaFormats()
     {
-        Assert.True(WpfCacheImageCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr32, null, new byte[64], 16)));
-        Assert.True(WpfCacheImageCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr24, null, new byte[48], 12)));
+        Assert.True(WpfBitmapSourceCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr32, null, new byte[64], 16)));
+        Assert.True(WpfBitmapSourceCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr24, null, new byte[48], 12)));
         var translucent = new BitmapPalette([Colors.Red, Color.FromArgb(10, 0, 0, 0)]);
-        Assert.False(WpfCacheImageCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, translucent, new byte[4], 1)));
+        Assert.False(WpfBitmapSourceCodec.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, translucent, new byte[4], 1)));
     }
 
     [Fact(DisplayName = "A fully opaque Pbgra32 bitmap is written and reads back with the same colours (premultiplied == straight)")]
@@ -260,8 +260,8 @@ public sealed class PreviewCacheFileTests : IDisposable
         var path = CachePath();
 
         await PreviewCacheFile.WriteAtomicallyAsync(
-            new WpfDecodedImage(source, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 32, originalHeight: 32), path);
-        var read = (BitmapSource)PreviewCacheFile.ReadAsDecodedImage(path).PlatformImage;
+            new WpfDecodedImage(source, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 32, originalHeight: 32), WpfBitmapSourceCodec.Instance, path);
+        var read = (BitmapSource)PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance).PlatformImage;
         var expected = new byte[32 * 32 * 4];
         source.CopyPixels(expected, 32 * 4, 0);
         var actual = new byte[32 * 32 * 4];
@@ -283,7 +283,7 @@ public sealed class PreviewCacheFileTests : IDisposable
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             PreviewCacheFile.WriteAtomicallyAsync(
-                new WpfDecodedImage(alpha, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 16, originalHeight: 16), path));
+                new WpfDecodedImage(alpha, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 16, originalHeight: 16), WpfBitmapSourceCodec.Instance, path));
         Assert.False(File.Exists(path));
     }
 
@@ -291,12 +291,12 @@ public sealed class PreviewCacheFileTests : IDisposable
     public void HasAlpha_ClassifiesFormats()
     {
         var px = new byte[4 * 4 * 4];
-        Assert.True(PreviewCacheFile.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgra32, null, px, 16))));
-        Assert.False(PreviewCacheFile.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr32, null, px, 16))));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgra32, null, px, 16))));
+        Assert.False(WpfBitmapSourceCodec.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr32, null, px, 16))));
         var translucent = new BitmapPalette([System.Windows.Media.Color.FromArgb(0, 0, 0, 0), System.Windows.Media.Colors.White]);
         var opaque = new BitmapPalette([System.Windows.Media.Colors.Black, System.Windows.Media.Colors.White]);
-        Assert.True(PreviewCacheFile.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, translucent, new byte[4], 1))));
-        Assert.False(PreviewCacheFile.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, opaque, new byte[4], 1))));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, translucent, new byte[4], 1))));
+        Assert.False(WpfBitmapSourceCodec.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, opaque, new byte[4], 1))));
     }
 
     [Fact(DisplayName = "Reading an entry yields a render-native, opaque Bgr32 bitmap")]
@@ -307,9 +307,9 @@ public sealed class PreviewCacheFileTests : IDisposable
         // format BitmapImage happens to decode a JPEG frame as.
         var source = FixtureGenerator.CreateGradientCheckerboard(48, 32);
         var path = CachePath();
-        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), WpfBitmapSourceCodec.Instance, path);
 
-        var result = PreviewCacheFile.ReadAsDecodedImage(path);
+        var result = PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance);
 
         var resultBitmap = Assert.IsAssignableFrom<BitmapSource>(result.PlatformImage);
         Assert.Equal(PixelFormats.Bgr32, resultBitmap.Format);
@@ -328,8 +328,8 @@ public sealed class PreviewCacheFileTests : IDisposable
     {
         var source = FixtureGenerator.CreateGradientCheckerboard(32, 24);
         var path = Path.Combine(_tempDir, $"{nameof(OrientationRoundTrips)}-{orientation}.pv4");
-        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation), WpfBitmapSourceCodec.Instance, path);
 
-        Assert.Equal(orientation, PreviewCacheFile.ReadAsDecodedImage(path).Orientation);
+        Assert.Equal(orientation, PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance).Orientation);
     }
 }

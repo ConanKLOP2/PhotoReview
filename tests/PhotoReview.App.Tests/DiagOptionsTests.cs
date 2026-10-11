@@ -231,7 +231,7 @@ public sealed class DiagOptionsTests : IDisposable
         // instead of being served from the first instance's in-memory or on-disk cache --
         // that's the only code path (PreviewImageService.DecodeFromSource) that still checks
         // PHOTOREVIEW_DIAG_PREREAD, now that the obsolete static DecodeSource is gone.
-        var withoutPreReadService = new PreviewImageService(metrics, () => true, () => 0,
+        var withoutPreReadService = new PreviewImageService(metrics, () => true, () => 0, WpfBitmapSourceCodec.Instance,
             diskCacheDirectory: _root.Dir("preread-default-cache"));
         try
         {
@@ -241,7 +241,7 @@ public sealed class DiagOptionsTests : IDisposable
 
             Environment.SetEnvironmentVariable(PreReadVar, "1");
             DiagOptions.ResetForTests();
-            var withPreReadService = new PreviewImageService(metrics, () => true, () => 0,
+            var withPreReadService = new PreviewImageService(metrics, () => true, () => 0, WpfBitmapSourceCodec.Instance,
                 diskCacheDirectory: _root.Dir("preread-enabled-cache"));
             try
             {

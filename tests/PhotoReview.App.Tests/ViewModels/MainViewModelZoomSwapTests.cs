@@ -44,7 +44,7 @@ public sealed partial class MainViewModelZoomSwapTests : IDisposable
         _sessionStore = new SessionStore(appPaths, fileSystem);
         _settingsStore = new SettingsStore(appPaths, fileSystem, new NullLog());
         _settingsStore.Save(_settings);
-        _thumbnailCache = new ThumbnailCache(
+        _thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 16 * 1024 * 1024);
     }
 
@@ -338,7 +338,7 @@ public sealed partial class MainViewModelZoomSwapTests : IDisposable
         var previewService = new PreviewImageService(
             metrics,
             () => _settings.LoadingMode == LoadingMode.Original,
-            () => new DecodeBox(1920, 1080),
+            () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024,
             disableDiskCacheOverride: true,
             decoder: decoder,

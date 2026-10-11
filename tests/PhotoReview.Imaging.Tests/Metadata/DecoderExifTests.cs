@@ -33,7 +33,7 @@ public sealed class DecoderExifTests : IDisposable
     {
         "Wpf" => new WpfBitmapImageDecoder(),
         "WicDirect" => new WicDirectDecoder(WpfBitmapSourceCodec.Instance),
-        _ => new TurboJpegDecoder(),
+        _ => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance),
     };
 
     private string Write(byte[] bytes, string name)
@@ -159,7 +159,7 @@ public sealed class DecoderExifTests : IDisposable
         var frame = System.Windows.Media.Imaging.BitmapDecoder.Create(stream,
             System.Windows.Media.Imaging.BitmapCreateOptions.DelayCreation, System.Windows.Media.Imaging.BitmapCacheOption.None).Frames[0];
         var metadata = (System.Windows.Media.Imaging.BitmapMetadata)frame.Metadata;
-        _ = ExifOrientation.Read(metadata); // the query the WPF decoder already made before this feature
+        _ = WpfExifOrientation.Read(metadata); // the query the WPF decoder already made before this feature
         var queries = Stopwatch.StartNew();
         for (var i = 0; i < rounds; i++) last = WpfExifReader.Read(metadata);
         queries.Stop();

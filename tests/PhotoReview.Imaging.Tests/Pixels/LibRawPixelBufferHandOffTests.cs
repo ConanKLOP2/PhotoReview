@@ -30,7 +30,7 @@ public sealed class LibRawPixelBufferHandOffTests
     {
         using var forWpf = Resampled(sw, sh, tw, th, channels);
         using var forCodec = Resampled(sw, sh, tw, th, channels);
-        var legacy = Assert.IsType<WpfDecodedImage>(new LibRawDecoder().HandOff(forWpf, downscaled: true, sw, sh, () => true));
+        var legacy = Assert.IsType<WpfDecodedImage>(new LibRawDecoder(WpfBitmapSourceCodec.Instance).HandOff(forWpf, downscaled: true, sw, sh, () => true));
         var stages = new List<string>();
 
         var image = Assert.IsType<DecodedImage>(new LibRawDecoder(PixelBufferImageCodec.Instance, stages.Add).HandOff(forCodec, downscaled: true, sw, sh, () => true));
@@ -86,7 +86,7 @@ public sealed class LibRawPixelBufferHandOffTests
         var stages = new List<string>();
         using var staging = Resampled(4, 4, 4, 4, 3);
 
-        _ = new LibRawDecoder(stages.Add).HandOff(staging, false, 4, 4, () => false);
+        _ = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stages.Add).HandOff(staging, false, 4, 4, () => false);
 
         Assert.Equal(["source-held", "bitmap-created"], stages);
     }
@@ -170,7 +170,7 @@ public sealed class LibRawPixelBufferNativeParityTests
         var box = boxWidth == 0 ? DecodeBox.Unbounded : new DecodeBox(boxWidth, boxHeight);
         var request = new DecodeRequest(path, box);
 
-        var expected = Assert.IsType<WpfDecodedImage>(new LibRawDecoder().Decode(request));
+        var expected = Assert.IsType<WpfDecodedImage>(new LibRawDecoder(WpfBitmapSourceCodec.Instance).Decode(request));
         var actual = Assert.IsType<DecodedImage>(new LibRawDecoder(PixelBufferImageCodec.Instance).Decode(request));
 
         var buffer = Assert.IsType<PixelBuffer>(actual.PlatformImage);

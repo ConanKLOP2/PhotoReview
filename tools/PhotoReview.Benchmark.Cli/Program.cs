@@ -35,7 +35,8 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     foreach (var profile in profiles)
     {
         Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");
-        await using var imageExecutor = new BenchmarkImageExecutor(profile, files);
+        await using var imageExecutor = new BenchmarkImageExecutor(profile, files,
+            PhotoReview.Imaging.Wpf.WpfBitmapSourceCodec.Instance, decoder: new PhotoReview.Imaging.Wpf.WpfBitmapImageDecoder());
         var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
         // Same profile application as the WPF benchmark window: logging-on/logging-off must differ (PERF-01).
         using var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled);

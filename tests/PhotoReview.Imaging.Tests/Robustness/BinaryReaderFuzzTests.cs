@@ -266,7 +266,7 @@ public sealed class BinaryReaderFuzzTests : IDisposable
     public void Fuzz_TurboJpegReadInfo_FailsOnlyCleanly()
     {
         var seed = ExifTestData.EncodeJpegWithExif(24, 16, orientation: 6);
-        var decoder = new TurboJpegDecoder();
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
         var path = Path.Combine(_root.Path, "mutant.jpg");
         var stats = BinaryFuzz.Run("TurboJpeg ReadInfo",
             // ReadInfo goes through a file, so this corpus is thinner than the in-memory ones.

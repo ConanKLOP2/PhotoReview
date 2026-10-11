@@ -49,7 +49,7 @@ public sealed class ErrorHandlingReviewDecodingTests : IDisposable
     public void SourceBytes_AttachedOnlyForFallbackableFailure()
     {
         var notJpeg = _root.File("not.jpg", [1, 2, 3, 4, 5, 6, 7, 8]); // NotSupportedException: fallbackable
-        var ex = Assert.ThrowsAny<Exception>(() => new TurboJpegDecoder().Decode(new DecodeRequest(notJpeg, TargetWidth: 0)));
+        var ex = Assert.ThrowsAny<Exception>(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(notJpeg, TargetWidth: 0)));
         Assert.True(FallbackImageDecoder.IsFallbackable(ex));
         Assert.True(DecodeFailureSourceBytes.TryGet(ex, out var bytes));
         Assert.Equal(8, bytes.Length);
@@ -69,7 +69,7 @@ public sealed class ErrorHandlingReviewDecodingTests : IDisposable
             break;
         }
         var path = _root.File("bomb2.jpg", jpeg);
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => throw new InvalidOperationException("probe failed") };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => throw new InvalidOperationException("probe failed") };
 
         var ex = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
 
@@ -86,7 +86,7 @@ public sealed class ErrorHandlingReviewDecodingTests : IDisposable
         // Available memory SMALLER than the file: only the source-size guard can produce this rejection (the all-zero file would
         // otherwise fail later in the decode with a different NotSupportedException).
         var probed = 0;
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => { probed++; return (MemoryHeadroom.GuardThresholdBytes / 2, 0); } };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => { probed++; return (MemoryHeadroom.GuardThresholdBytes / 2, 0); } };
 
         var ex = Assert.Throws<NotSupportedException>(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
 

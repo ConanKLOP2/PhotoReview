@@ -27,7 +27,7 @@ public sealed class ViewerDecodePriorityTests : IAsyncLifetime
             File.WriteAllBytes(path, [1, 2, 3, (byte)i]);
             return path;
         }).ToArray();
-        _service = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        _service = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: _root.Dir("cache"), disableDiskCacheOverride: true, decoder: _decoder);
     }
 

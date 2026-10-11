@@ -110,7 +110,7 @@ public sealed class TurboJpegSyntheticFormatTests(ITestOutputHelper output)
     {
         var flavour = Resolve(name);
         var jpeg = Compress(flavour);
-        var turbo = new TurboJpeg.TurboJpegDecoder();
+        var turbo = new TurboJpeg.TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
         var wpf = new WpfBitmapImageDecoder();
         var chains = new (string Name, IImageDecoder Decoder)[]
         {
@@ -153,7 +153,7 @@ public sealed class TurboJpegSyntheticFormatTests(ITestOutputHelper output)
         var jpeg = Compress(new Flavour("box", width, height, Subsamp: 2));
         var decoders = new (string Name, IImageDecoder Decoder)[]
         {
-            ("TurboJpeg", new TurboJpeg.TurboJpegDecoder()),
+            ("TurboJpeg", new TurboJpeg.TurboJpegDecoder(WpfBitmapSourceCodec.Instance)),
             ("Wpf", new WpfBitmapImageDecoder()),
             ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance)),
         };

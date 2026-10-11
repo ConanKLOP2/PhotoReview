@@ -172,7 +172,7 @@ public sealed class WicDirectDecoderPixelParityTests : IClassFixture<WicDirectDe
         var format = layout == PixelLayout.Bgr32 ? PixelFormats.Bgr32 : PixelFormats.Pbgra32;
         BitmapSource converted = new FormatConvertedBitmap(frame, format, null, 0);
         converted.Freeze();
-        return ExifOrientation.Apply(converted, orientation);
+        return WpfExifOrientation.Apply(converted, orientation);
     }
 
     /// <summary>Thirty synthetic images, written once per test class.</summary>

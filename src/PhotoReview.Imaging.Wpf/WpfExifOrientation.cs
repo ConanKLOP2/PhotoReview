@@ -3,14 +3,13 @@ using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-namespace PhotoReview.Imaging.Decoding;
+namespace PhotoReview.Imaging.Wpf;
 
 /// <summary>
-/// WP-03: the WPF half of <see cref="ExifOrientation"/> (members that take or return WPF types). Temporary home inside
-/// PhotoReview.Imaging so every existing caller (WPF decoder, TurboJpeg, tests) keeps compiling unchanged; WP-06 moves these
-/// members to <c>PhotoReview.Imaging.Wpf</c> (as <c>WpfExifOrientation</c>) and drops <c>UseWPF</c> from Imaging.
+/// The WPF half of <see cref="ExifOrientation"/> (members that take or return WPF types; WP-06 moved them here from the partial
+/// class in PhotoReview.Imaging, which is now WPF-free). Pixel rotation without WPF is <see cref="Pixels.PixelOps.ApplyOrientation"/>.
 /// </summary>
-public static partial class ExifOrientation
+public static class WpfExifOrientation
 {
     /// <summary>
     /// Reads the EXIF orientation tag from image metadata.
@@ -19,13 +18,13 @@ public static partial class ExifOrientation
     public static int Read(BitmapMetadata? metadata)
     {
         if (metadata is null) return 1;
-        var orientation = TryReadQuery(metadata, ExifOrientationQuery);
+        var orientation = TryReadQuery(metadata, ExifOrientation.ExifOrientationQuery);
         return orientation is >= 1 and <= 8 ? (int)orientation : ReadFallback(metadata);
     }
 
     private static int ReadFallback(BitmapMetadata metadata)
     {
-        var orientation = TryReadQuery(metadata, WindowsOrientationQuery);
+        var orientation = TryReadQuery(metadata, ExifOrientation.WindowsOrientationQuery);
         return orientation is >= 1 and <= 8 ? (int)orientation : 1;
     }
 
@@ -39,7 +38,7 @@ public static partial class ExifOrientation
     {
         try
         {
-            return metadata.ContainsQuery(query) ? Metadata.ExifQueryInterpreter.AsInteger(metadata.GetQuery(query)) : null;
+            return metadata.ContainsQuery(query) ? PhotoReview.Imaging.Metadata.ExifQueryInterpreter.AsInteger(metadata.GetQuery(query)) : null;
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException
             or OverflowException or InvalidCastException or FormatException or IOException or COMException)

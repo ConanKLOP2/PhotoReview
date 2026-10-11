@@ -78,13 +78,6 @@ public static class PreviewCacheFile
     internal readonly record struct ReadResult(PixelBuffer Pixels, DecoderBackend ActualBackend, int Orientation, long FileBytes, int OriginalWidth, int OriginalHeight,
         ExifSummary? Exif = null);
 
-    /// <summary>
-    /// Encodes an already-decoded preview, taking its pixels through the WPF bridge codec (WP-04 temporary default: the WPF
-    /// app's previews are BitmapSources; WP-06 removes this overload when the codec becomes a required dependency).
-    /// </summary>
-    public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, CancellationToken cancellationToken = default)
-        => WriteAtomicallyAsync(image, WpfCacheImageCodec.Instance, cachePath, cancellationToken);
-
     /// <summary>Encodes an already-decoded preview whose platform image <paramref name="codec"/> understands (C-02).</summary>
     public static async Task WriteAtomicallyAsync(IDecodedImage image, IPlatformImageCodec codec, string cachePath, CancellationToken cancellationToken = default)
     {
@@ -94,9 +87,6 @@ public static class PreviewCacheFile
         await WriteAtomicallyAsync(lease.Pixels, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath,
             exif: image.Exif, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-
-    /// <summary>Reads an entry back as an <see cref="IDecodedImage"/> through the WPF bridge codec (see the write overload).</summary>
-    public static IDecodedImage ReadAsDecodedImage(string cachePath) => ReadAsDecodedImage(cachePath, WpfCacheImageCodec.Instance);
 
     /// <summary>Reads an entry back as an <see cref="IDecodedImage"/> whose platform image comes from <paramref name="codec"/>.</summary>
     public static IDecodedImage ReadAsDecodedImage(string cachePath, IPlatformImageCodec codec)
@@ -274,16 +264,6 @@ public static class PreviewCacheFile
         {
             ArrayPool<byte>.Shared.Return(payloadBuffer);
         }
-    }
-
-    /// <summary>
-    /// True when <paramref name="image"/> can carry transparency (an alpha-capable pixel format, or a palette with a
-    /// non-opaque colour) -- such previews go through the JPEG cache only once every pixel is verified opaque (Q-R7).
-    /// </summary>
-    public static bool HasAlpha(IDecodedImage image)
-    {
-        ArgumentNullException.ThrowIfNull(image);
-        return WpfCacheImageCodec.CanCarryAlpha(image.PlatformImage);
     }
 
     private static byte[] BuildHeader(DecoderBackend actualBackend, int orientation, int width, int height, int originalWidth, int originalHeight)

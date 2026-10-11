@@ -244,7 +244,7 @@ public sealed class LibRawSeamGapTests
     [Fact]
     public void Decode_OutOfMemoryInTheDecodeBody_BecomesAnInvalidOperation()
     {
-        var decoder = new LibRawDecoder { CoreOverride = (_, _, _) => throw new OutOfMemoryException() };
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance) { CoreOverride = (_, _, _) => throw new OutOfMemoryException() };
 
         var ex = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest("x.cr3", 100)));
 

@@ -162,7 +162,7 @@ public sealed class LibRawManagedLogicTests
 
         Assert.Throws<OperationCanceledException>(() => LibRawDecoder.ReadJpegThumbnail(@"Z:\missing.orf", cts.Token));
         Assert.Throws<OperationCanceledException>(() =>
-            new LibRawDecoder().Decode(new DecodeRequest(@"Z:\missing.cr2", DecodeBox.Unbounded), cts.Token));
+            new LibRawDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(@"Z:\missing.cr2", DecodeBox.Unbounded), cts.Token));
     }
 
     // ---- white-balance layout proof over a fake memory block (the setters write where a LibRaw with the given layout would) ----

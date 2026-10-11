@@ -1,6 +1,6 @@
 using System.Windows.Media.Imaging;
 
-namespace PhotoReview.Imaging.Decoding;
+namespace PhotoReview.Imaging.Wpf;
 
 /// <summary>
 /// WPF-specific implementation of <see cref="IDecodedImage"/> wrapping a frozen <see cref="BitmapSource"/>.

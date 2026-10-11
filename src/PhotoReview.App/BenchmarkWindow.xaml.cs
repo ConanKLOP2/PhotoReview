@@ -198,7 +198,8 @@ public partial class BenchmarkWindow : Window, IDisposable
                     RunProgress.Value = p.Total == 0 ? 0 : (double)p.Completed / p.Total;
                     StatusText.Text = Tr.BenchmarkStatusProgress(currentIndex, profiles.Length, p.ProfileId, p.Completed, p.Total, BenchmarkText.ProgressMessage(p.Message));
                 });
-                var executor = new BenchmarkImageExecutor(profile, files);
+                var executor = new BenchmarkImageExecutor(profile, files, WpfBitmapSourceCodec.Instance,
+                    decoder: new WpfBitmapImageDecoder());
                 var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
                 // DetailedLogging distinguishes the logging-on/logging-off profiles: without
                 // toggling AppLog around the run, both profiles measured identical (whatever

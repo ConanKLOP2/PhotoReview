@@ -53,7 +53,7 @@ public sealed class LibRawDecoderTests
             Assert.Empty(RequiredRawExtensions.Except(formats)); // every required format must be present (Subset(required, formats) was inverted)
         }
 
-        var decoder = new LibRawDecoder();
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance);
         using var memorySampler = new PrivateMemorySampler();
         var measurements = new List<string>();
         foreach (var path in files)
@@ -172,7 +172,7 @@ public sealed class LibRawDecoderTests
         var path = RawCorpus.TryGetFile("Canon - EOS 7D - sRAW2 (sRAW) (3_2).CR2");
         if (path is null) return;
 
-        var decoder = new LibRawDecoder();
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance);
         using var memorySampler = new PrivateMemorySampler();
         var samples = new List<long>();
         for (var index = 0; index < 200; index++)
@@ -223,7 +223,7 @@ public sealed class LibRawDecoderTests
         Assert.True(RawOrientationPatcher.TryWriteOrientation(bytes, extension, info, 6), $"{fileName} has no orientation tag to rewrite");
         using var temp = new PhotoReview.TestSupport.TempRoot("libraw-portrait");
         var path = temp.File(fileName, bytes);
-        var decoder = new LibRawDecoder();
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance);
 
         var readInfo = decoder.ReadInfo(path);
         var decoded = decoder.Decode(new DecodeRequest(path, new DecodeBox(640, 480)));
@@ -313,7 +313,7 @@ public sealed class LibRawDecoderTests
     public void Decode_RejectsRequestThatWouldLeaveOrientationUnapplied()
     {
         var error = Assert.Throws<NotSupportedException>(() =>
-            new LibRawDecoder().Decode(new DecodeRequest("unused.cr2", DecodeBox.Unbounded, applyOrientation: false)));
+            new LibRawDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("unused.cr2", DecodeBox.Unbounded, applyOrientation: false)));
 
         Assert.Contains("always applies", error.Message, StringComparison.Ordinal);
     }

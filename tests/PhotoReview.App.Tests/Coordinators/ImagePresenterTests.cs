@@ -58,12 +58,12 @@ public sealed partial class ImagePresenterTests : IDisposable
         _previewService = new PreviewImageService(
             _metrics,
             () => _previewContext.IsOriginalLoadingMode(),
-            () => _previewContext.TargetDecodeBox(),
+            () => _previewContext.TargetDecodeBox(), WpfBitmapSourceCodec.Instance,
             capacityBytes: 64 * 1024 * 1024,
             currentBackend: () => _previewContext.CurrentBackend(),
             disableDiskCacheOverride: true);
 
-        _thumbnailCache = new ThumbnailCache(
+        _thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "thumbs"),
             maxRamBytes: 16 * 1024 * 1024);
 
@@ -547,7 +547,7 @@ public sealed partial class ImagePresenterTests : IDisposable
         // win the race against the preview, so if the preview is ever shown it's because the
         // race logic picked it, not because the thumbnail was slow "by luck".
         var neverCompletes = new TaskCompletionSource<IDecodedImage?>();
-        using var thumbnailCache = new ThumbnailCache(
+        using var thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "never-thumbs"),
             embeddedThumbnailReader: (_, _) => neverCompletes.Task);
 
@@ -594,7 +594,7 @@ public sealed partial class ImagePresenterTests : IDisposable
         using var gatedDecoder = new GatedDecoder(previewImage);
         var previewService = CreatePreviewService(gatedDecoder);
 
-        using var thumbnailCache = new ThumbnailCache(
+        using var thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "fast-thumbs"),
             embeddedThumbnailReader: (_, _) => Task.FromResult<IDecodedImage?>(thumbnailImage));
 
@@ -632,7 +632,7 @@ public sealed partial class ImagePresenterTests : IDisposable
         using var gatedDecoder = new GatedDecoder(previewImage);
         var previewService = CreatePreviewService(gatedDecoder);
 
-        using var thumbnailCache = new ThumbnailCache(
+        using var thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "fast-thumbs-crossfade"),
             embeddedThumbnailReader: (_, _) => Task.FromResult<IDecodedImage?>(thumbnailImage));
 
@@ -686,7 +686,7 @@ public sealed partial class ImagePresenterTests : IDisposable
         var previewService = CreatePreviewService(gatedDecoder);
 
         var thumbnailFaulted = new TaskCompletionSource();
-        using var thumbnailCache = new ThumbnailCache(
+        using var thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "faulting-thumbs"),
             embeddedThumbnailReader: (_, _) =>
             {
@@ -752,7 +752,7 @@ public sealed partial class ImagePresenterTests : IDisposable
         using var decoder = new FaultingGatedDecoder("marker-r2-f29");
         var previewService = CreatePreviewService(decoder);
         // The thumbnail wins the race and, while it is being read, a newer navigation supersedes this one.
-        using var thumbnailCache = new ThumbnailCache(
+        using var thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "supersede-thumbs"),
             embeddedThumbnailReader: (_, _) =>
             {

@@ -32,7 +32,7 @@ public sealed class CacheTempFileAndDiskProbeTests : IDisposable
         File.WriteAllBytes(entry, [1]);
         File.SetLastWriteTimeUtc(entry, DateTime.UtcNow - TimeSpan.FromHours(2));
 
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir);
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir);
         try
         {
             await service.StartupCleanup.WaitAsync(TimeSpan.FromSeconds(10));
@@ -51,7 +51,7 @@ public sealed class CacheTempFileAndDiskProbeTests : IDisposable
         var stale = Temp(dir, "a.png", TimeSpan.FromHours(2));
         var fresh = Temp(dir, "b.png", TimeSpan.Zero);
 
-        using var cache = new ThumbnailCache(dir);
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, dir);
         await cache.StartupCleanup.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.False(File.Exists(stale));
@@ -62,7 +62,7 @@ public sealed class CacheTempFileAndDiskProbeTests : IDisposable
     public async Task ClearDisk_DeletesTempFiles()
     {
         var dir = _root.Dir("clear");
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir);
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir);
         try
         {
             await service.StartupCleanup.WaitAsync(TimeSpan.FromSeconds(10));
@@ -83,8 +83,8 @@ public sealed class CacheTempFileAndDiskProbeTests : IDisposable
         var source = Path.Combine(_root.Dir("src"), "opaque.png");
         File.WriteAllBytes(source, TestImages.OpaquePng); // opaque: alpha previews are never persisted
         var dir = _root.Dir("probe");
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir);
-        var disabled = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir);
+        var disabled = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir,
             disableDiskCacheOverride: true);
         try
         {

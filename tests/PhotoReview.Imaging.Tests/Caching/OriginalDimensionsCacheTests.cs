@@ -30,7 +30,7 @@ public sealed class OriginalDimensionsCacheTests : IAsyncLifetime
     public async Task GetOriginalDimensions_ManyDistinctKeys_StaysWithinCapacity()
     {
         _service = new PreviewImageService(
-            new ReviewMetrics(), () => false, () => 100,
+            new ReviewMetrics(), () => false, () => 100, WpfBitmapSourceCodec.Instance,
             capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: Path.Combine(_root, "cache"),
             disableDiskCacheOverride: true, decoder: new StubDecoder(), currentBackend: () => DecoderBackend.Wpf,
             originalDimensionsCapacity: 100);

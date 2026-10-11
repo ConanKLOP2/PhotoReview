@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 
-namespace PhotoReview.Imaging.Decoding;
+namespace PhotoReview.Imaging.Wpf;
 
 /// <summary>
 /// WPF <see cref="BitmapSource"/> helpers used at the decoder boundary.

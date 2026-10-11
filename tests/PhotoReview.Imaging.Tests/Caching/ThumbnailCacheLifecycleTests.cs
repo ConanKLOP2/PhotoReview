@@ -16,11 +16,11 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
         var source = _root.File("a.jpg", EmbeddedThumbnailJpegFixture.CreateWithThumbnail(48, 16));
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var cache = new ThumbnailCache(_root.Dir("disk"), embeddedThumbnailReader: async (path, token) =>
+        var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _root.Dir("disk"), embeddedThumbnailReader: async (path, token) =>
         {
             entered.SetResult();
             await release.Task;
-            return EmbeddedThumbnailReader.TryRead(path);
+            return EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
         });
 
         var pending = cache.GetAsync(source, null);
@@ -40,11 +40,11 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
         var source = _root.File("b.jpg", EmbeddedThumbnailJpegFixture.CreateWithThumbnail(48, 16));
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var cache = new ThumbnailCache(_root.Dir("disk2"), embeddedThumbnailReader: async (path, token) =>
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _root.Dir("disk2"), embeddedThumbnailReader: async (path, token) =>
         {
             entered.TrySetResult();
             await release.Task;
-            return EmbeddedThumbnailReader.TryRead(path);
+            return EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
         });
         using var cts = new CancellationTokenSource();
 
@@ -63,10 +63,10 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
     {
         var source = _root.File("c.jpg", EmbeddedThumbnailJpegFixture.CreateWithThumbnail(48, 16));
         var calls = 0;
-        using var cache = new ThumbnailCache(_root.Dir("disk3"), embeddedThumbnailReader: (path, token) =>
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _root.Dir("disk3"), embeddedThumbnailReader: (path, token) =>
         {
             if (Interlocked.Increment(ref calls) == 1) throw new IOException("transient");
-            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
+            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
         });
 
         await Assert.ThrowsAsync<IOException>(() => cache.GetAsync(source, null));
@@ -84,10 +84,10 @@ public sealed class ThumbnailCacheLifecycleTests : IDisposable
     {
         var source = _root.File(name, [0x49, 0x49, 0x2A, 0x00]);
         var calls = 0;
-        using var cache = new ThumbnailCache(_root.Dir("disk-raw"), embeddedThumbnailReader: (path, token) =>
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _root.Dir("disk-raw"), embeddedThumbnailReader: (path, token) =>
         {
             Interlocked.Increment(ref calls);
-            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
+            return Task.FromResult(EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
         });
 
         var image = await cache.GetAsync(source, null);

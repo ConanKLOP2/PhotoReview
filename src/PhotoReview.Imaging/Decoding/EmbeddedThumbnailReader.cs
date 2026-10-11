@@ -27,13 +27,6 @@ public static class EmbeddedThumbnailReader
         width > 0 && height > 0 && (long)width * height <= MaxThumbnailPixels;
 
     /// <summary>
-    /// WP-03 bridge for the one caller outside this package's files (<see cref="Caching.ThumbnailCache"/>, WP-04's zone) and the
-    /// existing tests: the WPF app's codec (<see cref="WpfBitmapSourceCodec"/>), i.e. a frozen BitmapSource as before. WP-04
-    /// injects the thumbnail decoder/codec and removes this overload.
-    /// </summary>
-    public static IDecodedImage? TryRead(string path) => TryRead(path, WpfBitmapSourceCodec.Instance);
-
-    /// <summary>
     /// Returns the source's embedded EXIF thumbnail with orientation applied, or null if the
     /// source has none (wrong format, missing APP1 thumbnail, or any read/decode failure --
     /// all treated the same: nothing to show yet, the full preview decode is already in flight).

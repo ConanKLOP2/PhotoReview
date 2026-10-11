@@ -99,7 +99,7 @@ public sealed class ExifOrientationPureTests : IDisposable
             metadata = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad).Frames[0].Metadata as BitmapMetadata;
         }
 
-        var wpfOrientation = ExifOrientation.Read(metadata);
+        var wpfOrientation = WpfExifOrientation.Read(metadata);
         var wpfExif = WpfExifReader.Read(metadata);
         var decoded = new WicDirectDecoder(PixelBufferImageCodec.Instance).Decode(new DecodeRequest(path, new DecodeBox(16, 16)));
         ((IDisposable)decoded.PlatformImage).Dispose();

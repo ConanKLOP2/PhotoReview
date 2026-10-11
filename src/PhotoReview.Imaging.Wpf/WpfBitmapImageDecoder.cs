@@ -3,7 +3,7 @@ using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Metadata;
 
-namespace PhotoReview.Imaging.Decoding;
+namespace PhotoReview.Imaging.Wpf;
 
 /// <summary>
 /// WPF WIC-based default image decoder.
@@ -46,7 +46,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             // checks of this method ran before the try, so this is a data fault.
             throw WicDirectDecoder.AsInvalidData(ex, "WPF");
         }
-        var orientation = ReadOrientationOrDefault(() => ExifOrientation.Read(frame.Metadata as BitmapMetadata));
+        var orientation = ReadOrientationOrDefault(() => WpfExifOrientation.Read(frame.Metadata as BitmapMetadata));
         return new ImageInfo(frame.PixelWidth, frame.PixelHeight, orientation);
     }
 
@@ -159,7 +159,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
                     var metadata = frame.Metadata as BitmapMetadata;
                     if (request.ApplyOrientation)
                     {
-                        orientation = request.SourceOrientation ?? ExifOrientation.Read(metadata);
+                        orientation = request.SourceOrientation ?? WpfExifOrientation.Read(metadata);
                     }
                     // Photo information line: same header frame, same metadata block -- no extra read.
                     exif = WpfExifReader.Read(metadata);
@@ -240,7 +240,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         bitmap.Freeze();
 
         return (request.ApplyOrientation && orientation > 1)
-            ? ExifOrientation.Apply(bitmap, orientation)
+            ? WpfExifOrientation.Apply(bitmap, orientation)
             : bitmap;
     }
 

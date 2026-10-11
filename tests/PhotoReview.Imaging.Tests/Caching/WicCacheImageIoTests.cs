@@ -187,14 +187,14 @@ public sealed class WicCacheImageIoTests
         using (var little = LegacyWpfPreviewCache.PatternPixels(100, 50, PixelLayout.Bgr32))
             await DiskCacheStore.WriteAtomicallyAsync(little, small);
 
-        var shrunk = ThumbnailCache.DecodeDiskThumbnail(wide, WpfCacheImageCodec.Instance);
+        var shrunk = ThumbnailCache.DecodeDiskThumbnail(wide, WpfBitmapSourceCodec.Instance);
         Assert.Equal((800, 200), (shrunk.PixelWidth, shrunk.PixelHeight));
         Assert.True(shrunk.Downscaled);
         Assert.Equal((1600, 400), (shrunk.OriginalWidth, shrunk.OriginalHeight));
         Assert.Equal(1, shrunk.Orientation);
         Assert.Equal(PhotoReview.Core.Model.DecoderBackend.WicDirect, shrunk.ActualBackend);
 
-        var kept = ThumbnailCache.DecodeDiskThumbnail(small, WpfCacheImageCodec.Instance);
+        var kept = ThumbnailCache.DecodeDiskThumbnail(small, WpfBitmapSourceCodec.Instance);
         Assert.Equal((100, 50), (kept.PixelWidth, kept.PixelHeight));
         Assert.False(kept.Downscaled);
     }
