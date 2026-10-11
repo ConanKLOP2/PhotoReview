@@ -379,7 +379,7 @@ internal static class LegacyWicDirect
                             transform.GetClosestSize(ref nativeW, ref nativeH);
                             if (nativeW >= targetW && nativeH >= targetH && (nativeW < origW || nativeH < origH))
                             {
-                                factory.CreateBitmapScaler(out var pre);
+                                factory.CreateBitmapScaler(out IWICBitmapScaler pre);
                                 chain.Add(pre);
                                 pre.Initialize(current, nativeW, nativeH, WICBitmapInterpolationMode.Fant);
                                 current = (IWICBitmapSource)pre;
@@ -390,7 +390,7 @@ internal static class LegacyWicDirect
                         }
                     }
 
-                    factory.CreateBitmapScaler(out var scaler);
+                    factory.CreateBitmapScaler(out IWICBitmapScaler scaler);
                     chain.Add(scaler);
                     scaler.Initialize(current, targetW, targetH, WICBitmapInterpolationMode.HighQualityCubic);
                     current = (IWICBitmapSource)scaler;
@@ -400,14 +400,14 @@ internal static class LegacyWicDirect
 
             current.GetPixelFormat(out Guid sourceFormat);
             var opaque = WicDirectDecoder.IsOpaqueFormat(sourceFormat);
-            factory.CreateFormatConverter(out var converter);
+            factory.CreateFormatConverter(out IWICFormatConverter converter);
             chain.Add(converter);
             var output = opaque ? WicGuids.GUID_WICPixelFormat32bppBGR : WicGuids.GUID_WICPixelFormat32bppPBGRA;
             converter.Initialize(current, ref output, WICBitmapDitherType.None, IntPtr.Zero, 0.0, WICBitmapPaletteType.Custom);
             current = (IWICBitmapSource)converter;
             if (request.ApplyOrientation && orientation > 1)
             {
-                factory.CreateBitmapFlipRotator(out var rotator);
+                factory.CreateBitmapFlipRotator(out IWICBitmapFlipRotator rotator);
                 chain.Add(rotator);
                 rotator.Initialize(current, orientation switch
                 {

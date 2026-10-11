@@ -56,7 +56,7 @@ internal static class WicPixelScaler
             var format = WicImageEncoder.SourceFormat(source.Layout);
             factory.CreateBitmapFromMemory((uint)source.Width, (uint)source.Height, ref format, (uint)source.Stride,
                 (uint)source.ByteCount, source.Address, out var bitmapPointer);
-            bitmap = WicImageEncoder.TakeObject<IWICBitmapSource>(bitmapPointer);
+            bitmap = WicCom.Wrap<IWICBitmapSource>(bitmapPointer);
             factory.CreateBitmapScaler(out scaler);
             scaler.Initialize(bitmap, (uint)width, (uint)height, WICBitmapInterpolationMode.Fant);
 

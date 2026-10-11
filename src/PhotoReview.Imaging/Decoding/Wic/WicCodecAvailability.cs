@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.Imaging.Decoding.Wic;
@@ -33,7 +34,7 @@ public sealed record WicCodecSupport(bool WebP, bool HeifContainer, bool HevcDec
 /// Media Foundation for an HEVC video decoder (<c>MFTEnumEx</c>). Runs once per process, lazily, on the first WebP/HEIC
 /// path or Settings visit -- never on the startup path. A codec installed while the app runs is seen after a restart.
 /// </summary>
-public static class WicCodecAvailability
+public static partial class WicCodecAvailability
 {
     /// <summary>GUID_ContainerFormatWebp (wincodec.h).</summary>
     public static readonly Guid ContainerFormatWebp = new("e094b0e2-67f2-45b3-b0ea-115337ca7cf3");
@@ -89,54 +90,68 @@ public static class WicCodecAvailability
 
     internal static IReadOnlyList<DecoderEntry> EnumerateDecoders()
     {
-        int hr = WicNativeMethods.WICCreateImagingFactory_Proxy(WicNativeMethods.WINCODEC_SDK_VERSION1, out IWICImagingFactory? factory);
-        if (hr < 0 || factory is null) throw Marshal.GetExceptionForHR(hr < 0 ? hr : unchecked((int)0x80004005), new IntPtr(-1))!;
+        int hr = WicNativeMethods.WICCreateImagingFactory_Proxy(WicNativeMethods.WINCODEC_SDK_VERSION1, out nint rawFactory);
+        if (hr < 0 || rawFactory == 0)
+        {
+            if (rawFactory != 0) Marshal.Release(rawFactory);
+            throw Marshal.GetExceptionForHR(hr < 0 ? hr : unchecked((int)0x80004005), new IntPtr(-1))!;
+        }
 
+        var factory = WicCom.Wrap<IWICImagingFactory>(rawFactory);
         var result = new List<DecoderEntry>();
-        IntPtr enumPtr = IntPtr.Zero;
         IEnumUnknown? enumerator = null;
         try
         {
-            factory.CreateComponentEnumerator(WicDecoderComponent, WicComponentEnumerateDefault, out enumPtr);
-            enumerator = (IEnumUnknown)Marshal.GetObjectForIUnknown(enumPtr);
-            while (enumerator.Next(1, out object? item, out uint fetched) == 0 && fetched == 1)
-            {
-                try
-                {
-                    if (item is IWICBitmapCodecInfo info)
-                    {
-                        info.GetContainerFormat(out Guid container);
-                        result.Add(new DecoderEntry(container, ReadString(info.GetFriendlyName), ReadString(info.GetFileExtensions)));
-                    }
-                }
-                catch (COMException)
-                {
-                    // One broken third-party codec registration must not hide the others.
-                }
-                finally
-                {
-                    if (item is not null && Marshal.IsComObject(item)) Marshal.ReleaseComObject(item);
-                }
-            }
+            factory.CreateComponentEnumerator(WicDecoderComponent, WicComponentEnumerateDefault, out nint enumPtr);
+            enumerator = WicCom.Wrap<IEnumUnknown>(enumPtr);
+            CollectDecoders(enumerator, result);
         }
         finally
         {
-            if (enumerator is not null) Marshal.ReleaseComObject(enumerator);
-            if (enumPtr != IntPtr.Zero) Marshal.Release(enumPtr);
-            Marshal.ReleaseComObject(factory);
+            WicCom.Release(enumerator);
+            WicCom.Release(factory);
         }
 
         return result;
     }
 
-    private delegate void StringGetter(uint cch, IntPtr buffer, out uint actual);
+    /// <summary>Reads every component the enumerator hands out; each IUnknown reference <c>Next</c> returns is released, one broken registration is skipped.</summary>
+    internal static void CollectDecoders(IEnumUnknown enumerator, List<DecoderEntry> result)
+    {
+        while (enumerator.Next(1, out nint item, out uint fetched) == 0 && fetched == 1)
+        {
+            IWICBitmapCodecInfo? info = null;
+            try
+            {
+                // Not every enumerated component is a codec info: QueryInterface instead of a cast keeps "no" cheap (E_NOINTERFACE).
+                var codecInfoIid = typeof(IWICBitmapCodecInfo).GUID;
+                if (Marshal.QueryInterface(item, in codecInfoIid, out nint infoPointer) >= 0 && infoPointer != 0)
+                {
+                    info = WicCom.Wrap<IWICBitmapCodecInfo>(infoPointer);
+                    info.GetContainerFormat(out Guid container);
+                    result.Add(new DecoderEntry(container, ReadString(info.GetFriendlyName), ReadString(info.GetFileExtensions)));
+                }
+            }
+            catch (COMException)
+            {
+                // One broken third-party codec registration must not hide the others.
+            }
+            finally
+            {
+                WicCom.Release(info);
+                if (item != 0) Marshal.Release(item);
+            }
+        }
+    }
+
+    private delegate void StringGetter(uint cch, nint buffer, out uint actual);
 
     private static string ReadString(StringGetter getter)
     {
         IntPtr buffer = IntPtr.Zero;
         try
         {
-            getter(0, IntPtr.Zero, out uint length);
+            getter(0, 0, out uint length);
             if (length is 0 or > 4096) return string.Empty;
             buffer = Marshal.AllocHGlobal((int)length * sizeof(char));
             getter(length, buffer, out _);
@@ -166,7 +181,7 @@ public static class WicCodecAvailability
     internal static bool HasMediaFoundationDecoder(Guid videoSubtype)
     {
         var input = new MftRegisterTypeInfo { MajorType = MediaTypeVideo, SubType = videoSubtype };
-        int hr = MFTEnumEx(MftCategoryVideoDecoder, MftEnumFlags, ref input, IntPtr.Zero, out IntPtr activates, out uint count);
+        int hr = MFTEnumEx(MftCategoryVideoDecoder, MftEnumFlags, ref input, 0, out nint activates, out uint count);
         if (hr < 0) Marshal.ThrowExceptionForHR(hr, new IntPtr(-1));
         try
         {
@@ -191,44 +206,43 @@ public static class WicCodecAvailability
         public Guid SubType;
     }
 
-    [DllImport("mfplat.dll", ExactSpelling = true)]
-    private static extern int MFTEnumEx(Guid guidCategory, uint flags, ref MftRegisterTypeInfo inputType, IntPtr outputType,
-        out IntPtr pppMftActivate, out uint pnumMftActivate);
+    [LibraryImport("mfplat.dll")]
+    private static partial int MFTEnumEx(Guid guidCategory, uint flags, ref MftRegisterTypeInfo inputType, nint outputType,
+        out nint pppMftActivate, out uint pnumMftActivate);
+}
 
-    [ComImport]
-    [Guid("00000100-0000-0000-C000-000000000046")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IEnumUnknown
-    {
-        [PreserveSig]
-        int Next(uint celt, [MarshalAs(UnmanagedType.IUnknown)] out object? rgelt, out uint pceltFetched);
-        [PreserveSig]
-        int Skip(uint celt);
-        void Reset();
-        void Clone(out IEnumUnknown ppenum);
-    }
+// IEnumUnknown (objidl.h): Next hands out raw IUnknown pointers, each one reference the caller releases.
+[GeneratedComInterface]
+[Guid("00000100-0000-0000-C000-000000000046")]
+internal partial interface IEnumUnknown
+{
+    [PreserveSig]
+    int Next(uint celt, out nint rgelt, out uint pceltFetched);                       // [3]
+    [PreserveSig]
+    int Skip(uint celt);                                                              // [4]
+    void Reset();                                                                     // [5]
+    void Clone(out nint ppenum);                                                      // [6]
+}
 
-    // IWICBitmapCodecInfo (wincodec.h); the IWICComponentInfo slots this probe never calls are placeholders that only keep
-    // the vtable order right.
-    [ComImport]
-    [Guid("E87A44C4-B76E-4C47-8B09-298EB12A2714")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IWICBitmapCodecInfo
-    {
-        void GetComponentType(out uint pType);
-        void GetCLSID(out Guid pclsid);
-        void GetSigningStatus(out uint pStatus);
-        void GetAuthor(uint cchAuthor, IntPtr wzAuthor, out uint pcchActual);
-        void GetVendorGUID(out Guid pguidVendor);
-        void GetVersion(uint cchVersion, IntPtr wzVersion, out uint pcchActual);
-        void GetSpecVersion(uint cchSpecVersion, IntPtr wzSpecVersion, out uint pcchActual);
-        void GetFriendlyName(uint cchFriendlyName, IntPtr wzFriendlyName, out uint pcchActual);
-        void GetContainerFormat(out Guid pguidContainerFormat);
-        void GetPixelFormats(uint cFormats, IntPtr pguidPixelFormats, out uint pcActual);
-        void GetColorManagementVersion(uint cchColorManagementVersion, IntPtr wzColorManagementVersion, out uint pcchActual);
-        void GetDeviceManufacturer(uint cchDeviceManufacturer, IntPtr wzDeviceManufacturer, out uint pcchActual);
-        void GetDeviceModels(uint cchDeviceModels, IntPtr wzDeviceModels, out uint pcchActual);
-        void GetMimeTypes(uint cchMimeTypes, IntPtr wzMimeTypes, out uint pcchActual);
-        void GetFileExtensions(uint cchFileExtensions, IntPtr wzFileExtensions, out uint pcchActual);
-    }
+// IWICBitmapCodecInfo (wincodec.h); the IWICComponentInfo slots this probe never calls are placeholders that only keep
+// the vtable order right.
+[GeneratedComInterface]
+[Guid("E87A44C4-B76E-4C47-8B09-298EB12A2714")]
+internal partial interface IWICBitmapCodecInfo
+{
+    void GetComponentType(out uint pType);
+    void GetCLSID(out Guid pclsid);
+    void GetSigningStatus(out uint pStatus);
+    void GetAuthor(uint cchAuthor, nint wzAuthor, out uint pcchActual);
+    void GetVendorGUID(out Guid pguidVendor);
+    void GetVersion(uint cchVersion, nint wzVersion, out uint pcchActual);
+    void GetSpecVersion(uint cchSpecVersion, nint wzSpecVersion, out uint pcchActual);
+    void GetFriendlyName(uint cchFriendlyName, nint wzFriendlyName, out uint pcchActual);
+    void GetContainerFormat(out Guid pguidContainerFormat);
+    void GetPixelFormats(uint cFormats, nint pguidPixelFormats, out uint pcActual);
+    void GetColorManagementVersion(uint cchColorManagementVersion, nint wzColorManagementVersion, out uint pcchActual);
+    void GetDeviceManufacturer(uint cchDeviceManufacturer, nint wzDeviceManufacturer, out uint pcchActual);
+    void GetDeviceModels(uint cchDeviceModels, nint wzDeviceModels, out uint pcchActual);
+    void GetMimeTypes(uint cchMimeTypes, nint wzMimeTypes, out uint pcchActual);
+    void GetFileExtensions(uint cchFileExtensions, nint wzFileExtensions, out uint pcchActual);
 }

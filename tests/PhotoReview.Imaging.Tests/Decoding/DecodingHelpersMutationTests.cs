@@ -347,6 +347,11 @@ public sealed class DecodingHelpersMutationTests : IDisposable
 
     // ---- ManagedIStream write side ----
 
+    private static unsafe void Write(ManagedIStream com, byte[] data, int cb, nint pcbWritten)
+    {
+        fixed (byte* p = data) com.Write(p, cb, pcbWritten);
+    }
+
     [Fact]
     public void ManagedIStream_Write_WritesAndReportsTheCountThroughThePointer()
     {
@@ -356,11 +361,11 @@ public sealed class DecodingHelpersMutationTests : IDisposable
         try
         {
             Marshal.WriteInt32(pcb, -1);
-            com.Write([1, 2, 3, 4, 5], 3, pcb);
+            Write(com, [1, 2, 3, 4, 5], 3, pcb);
 
             Assert.Equal(3, Marshal.ReadInt32(pcb));
             Assert.Equal(new byte[] { 1, 2, 3 }, stream.ToArray());
-            com.Write([9], 1, IntPtr.Zero);
+            Write(com, [9], 1, IntPtr.Zero);
             Assert.Equal(new byte[] { 1, 2, 3, 9 }, stream.ToArray());
         }
         finally { Marshal.FreeHGlobal(pcb); }
@@ -373,7 +378,7 @@ public sealed class DecodingHelpersMutationTests : IDisposable
         var com = new ManagedIStream(stream);
         com.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => com.Write([1], 1, IntPtr.Zero));
+        Assert.Throws<ObjectDisposedException>(() => Write(com, [1], 1, IntPtr.Zero));
         Assert.Throws<ObjectDisposedException>(() => com.SetSize(4));
     }
 
