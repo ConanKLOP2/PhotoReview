@@ -64,6 +64,21 @@ public sealed partial class MainViewModelAdvancedTests
         Assert.Equal(2, clip.Calls);
     }
 
+
+    [Fact]
+    public async Task Copy_WithoutAnInjectedClipboard_ReportsUnavailableInsteadOfTouchingTheRealClipboard()
+    {
+        // WP-09: the view model has no hidden dependency on the WPF clipboard any more; a host that injects none gets "unavailable".
+        var (vm, _) = await OpenSingleImageFolderAsync("copy_unavailable");
+
+        vm.CopyFileName();
+        Assert.Equal(Tr.StatusClipboardCopyFailed, vm.StatusText);
+        vm.CopyFullPathname();
+        Assert.Equal(Tr.StatusClipboardCopyFailed, vm.StatusText);
+        var injected = vm.Clipboard;
+        Assert.False(injected.TrySetText("x"));
+    }
+
     [Fact]
     public void Copy_NoImageOpen_IsDisabledAndDoesNotTouchClipboard()
     {

@@ -54,16 +54,16 @@ internal static class MainViewModelCompositionRoot
         }
 
         MainViewModel? vm = null;
-        var sink = new WpfPresentationSink(
-            onSetCurrentImage: (_, isFileChange) => vm?.NotifyCurrentImageChanged(isFileChange),
-            onSetStatusText: _ => vm?.NotifyPresentationChanged(),
+        // WP-09 (C-16): the sink comes from the host's factory (WPF: WpfPresentationSink; Win32: Win32PresentationSink).
+        var sink = sp.GetRequiredService<IPresentationSinkFactory>().Create(new MainViewModelSinkCallbacks(
+            SetCurrentImage: (_, isFileChange) => vm?.NotifyCurrentImageChanged(isFileChange),
+            SetStatusText: _ => vm?.NotifyPresentationChanged(),
             // PR-B: default (no scroll placement) used until MainWindow wires WpfPresentationSink.ApplyInitialViewModeOverride
             // to PointerInputController.ApplyInitialViewAsync (which does Fit width/Fit height placement -- the pointer
             // controller owns the surface, built after the ViewModel/sink here). Tests that build a MainViewModel
             // without a MainWindow keep getting a correct zoom/mode change, just without the scroll placement.
-            onApplyInitialViewMode: () => ApplyInitialView(vm, viewport, settingsStore),
-            onPresented: observer.OnPresented,
-            metrics: sp.GetRequiredService<ReviewMetrics>());
+            ApplyInitialViewMode: () => ApplyInitialView(vm, viewport, settingsStore),
+            OnPresented: observer.OnPresented));
 
         var presenter = new ImagePresenter(
             catalog, clock, preview, thumbs, preloadController, compare, hash,
@@ -82,7 +82,8 @@ internal static class MainViewModelCompositionRoot
             preloadController: preloadController, naturalComparer: natural,
             metrics: sp.GetRequiredService<ReviewMetrics>(),
             uiScheduler: sp.GetRequiredService<IUiScheduler>(),
-            folderPicker: sp.GetService<IFolderPicker>());
+            folderPicker: sp.GetService<IFolderPicker>(),
+            clipboard: sp.GetRequiredService<IClipboardService>());
 
         return vm;
     }

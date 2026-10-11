@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using PhotoReview.App.Services;
 using PhotoReview.Shell.Interop;
 
 namespace PhotoReview.Shell.Win32.Dialogs;
@@ -19,10 +20,10 @@ internal interface IClipboardApi
 /// giữ clipboard thì thử lại 5 x 20 ms như bản WPF (<c>SetDataObject(copy: true)</c>); vẫn bận thì trả false, không ném.
 /// </summary>
 /// <remarks>
-/// Cùng hình dạng với <c>PhotoReview.App.Services.IClipboardService</c> (<c>bool TrySetText(string)</c>); interface đó còn ở
-/// project App tới khi WP-09 dời sang App.Shared - lúc đó lớp này chỉ cần khai báo thêm <c>: IClipboardService</c>.
+/// Cài đặt <c>PhotoReview.App.Services.IClipboardService</c> (C-13, dời sang App.Shared ở WP-09) cho shell Win32; bản WPF dùng
+/// <c>WpfClipboardService</c>. Hai bản được tiêm qua DI vào <c>MainViewModel</c> (composition root dùng chung).
 /// </remarks>
-internal sealed class Win32ClipboardService
+internal sealed class Win32ClipboardService : IClipboardService
 {
     internal const int Attempts = 5;
     internal const int RetryDelayMilliseconds = 20;

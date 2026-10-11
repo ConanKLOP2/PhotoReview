@@ -9,7 +9,7 @@ namespace PhotoReview.App.Services;
 /// start right after config.json is read instead of when the window is shown (~450 ms later). The prediction only picks
 /// the decode box: when it is wrong the presenter's own request (keyed by the real viewport) decodes again, as before.
 /// </summary>
-internal static class InitialViewportPredictor
+internal static partial class InitialViewportPredictor
 {
     /// <summary>A rectangle in physical pixels (Win32 RECT layout).</summary>
     internal readonly record struct PixelRect(int Left, int Top, int Right, int Bottom)
@@ -101,29 +101,31 @@ internal static class InitialViewportPredictor
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint { public int X, Y; }
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromRect(in Rect rect, uint flags);
+    // WP-09 / L-AOT: source-generated P/Invoke (LibraryImport); the same user32/shcore entry points the DllImport declarations had
+    // (GetMonitorInfo was CharSet.Unicode = the W entry).
+    [LibraryImport("user32.dll")]
+    private static partial IntPtr MonitorFromRect(in Rect rect, uint flags);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
+    [LibraryImport("user32.dll")]
+    private static partial IntPtr MonitorFromPoint(NativePoint point, uint flags);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+    private static partial bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 
-    [DllImport("user32.dll")]
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool AdjustWindowRectExForDpi(ref Rect rect, uint style, [MarshalAs(UnmanagedType.Bool)] bool menu, uint exStyle, uint dpi);
+    private static partial bool AdjustWindowRectExForDpi(ref Rect rect, uint style, [MarshalAs(UnmanagedType.Bool)] bool menu, uint exStyle, uint dpi);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetThreadDpiAwarenessContext();
+    [LibraryImport("user32.dll")]
+    private static partial IntPtr GetThreadDpiAwarenessContext();
 
-    [DllImport("user32.dll")]
-    private static extern int GetAwarenessFromDpiAwarenessContext(IntPtr context);
+    [LibraryImport("user32.dll")]
+    private static partial int GetAwarenessFromDpiAwarenessContext(IntPtr context);
 
-    [DllImport("user32.dll")]
-    private static extern uint GetDpiForSystem();
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDpiForSystem();
 
-    [DllImport("shcore.dll")]
-    private static extern int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY);
+    [LibraryImport("shcore.dll")]
+    private static partial int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY);
 }

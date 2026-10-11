@@ -1,6 +1,8 @@
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding.Wic;
+using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.LibRaw;
 using PhotoReview.Imaging.TurboJpeg;
 
@@ -26,27 +28,33 @@ internal static class DecoderProviders
     /// level (visible only with diagnostics on) instead of forcing an error entry into the log at every startup.
     /// Null = treated as needed (the previous behaviour).
     /// </param>
+    /// <param name="codec">WP-06/WP-09: the platform codec (C-02) every decoder here hands its pixels to (WPF app: WpfBitmapSourceCodec).</param>
+    /// <param name="wpfDecoder">
+    /// The <see cref="DecoderBackend.Wpf"/> provider (INV-12 fallback of the other backends) supplied by the host. Null (Win32 shell, NE-8):
+    /// no Wpf provider is listed and <c>ImageDecoderFactory</c> maps the saved "Wpf" setting onto WicDirect.
+    /// </param>
     public static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> Create(ISourceReader sourceReader,
-        Func<bool>? isLibRawNeeded = null)
-        => Create(sourceReader, isLibRawNeeded, LibRawAvailability.Probe, TurboJpegAvailability.Probe, App.LogStartupErrorForced, AppLog.Info);
+        IPlatformImageCodec codec, Func<IImageDecoder>? wpfDecoder, Func<bool>? isLibRawNeeded = null)
+        => Create(sourceReader, codec, wpfDecoder, isLibRawNeeded, LibRawAvailability.Probe, TurboJpegAvailability.Probe,
+            AppLog.ErrorForced, AppLog.Info);
 
     internal delegate bool LibRawProbe(out string? reason);
 
     internal delegate bool TurboJpegProbe(out string? reason);
 
     internal static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> Create(ISourceReader sourceReader,
+        IPlatformImageCodec codec, Func<IImageDecoder>? wpfDecoder,
         Func<bool>? isLibRawNeeded, LibRawProbe libRawProbe, TurboJpegProbe turboJpegProbe,
         Action<string, Exception> logForcedError, Action<string> logInfo)
     {
-        var providers = new List<(DecoderBackend, Func<IImageDecoder>)>
-        {
-            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder(sourceReader)),
-            (DecoderBackend.WicDirect, () => new WicDirectDecoder(WpfBitmapSourceCodec.Instance, sourceReader))
-        };
+        ArgumentNullException.ThrowIfNull(codec);
+        var providers = new List<(DecoderBackend, Func<IImageDecoder>)>();
+        if (wpfDecoder is not null) providers.Add((DecoderBackend.Wpf, wpfDecoder));
+        providers.Add((DecoderBackend.WicDirect, () => new WicDirectDecoder(codec, sourceReader)));
 
         if (turboJpegProbe(out string? reason))
         {
-            Func<IImageDecoder> createTurboJpeg = () => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
+            Func<IImageDecoder> createTurboJpeg = () => new TurboJpegDecoder(codec);
             providers.Add((DecoderBackend.TurboJpeg, createTurboJpeg));
         }
         else
@@ -58,7 +66,7 @@ internal static class DecoderProviders
 
         if (libRawProbe(out string? libRawReason))
         {
-            providers.Add((DecoderBackend.LibRaw, () => new LibRawDecoder(WpfBitmapSourceCodec.Instance)));
+            providers.Add((DecoderBackend.LibRaw, () => new LibRawDecoder(codec)));
         }
         else if (isLibRawNeeded?.Invoke() ?? true)
         {

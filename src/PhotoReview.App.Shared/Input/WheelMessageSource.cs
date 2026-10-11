@@ -8,7 +8,7 @@ namespace PhotoReview.App.Input;
 /// tilted wheel; WPF has no MouseHWheel event). Only valid while the message is being dispatched (WPF raises its wheel events
 /// synchronously inside that dispatch).
 /// </summary>
-internal static class WheelMessageSource
+internal static partial class WheelMessageSource
 {
     /// <summary>WM_MOUSEHWHEEL.</summary>
     public const int WmMouseHWheel = 0x020E;
@@ -22,9 +22,10 @@ internal static class WheelMessageSource
         public int OriginId;
     }
 
-    [DllImport("user32.dll")]
+    // WP-09 / L-AOT: source-generated P/Invoke (same user32 entry point as the former DllImport).
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCurrentInputMessageSource(out InputMessageSource source);
+    private static partial bool GetCurrentInputMessageSource(out InputMessageSource source);
 
     /// <summary>The device hint of the message being dispatched; <see cref="WheelDeviceHint.Unknown"/> when Windows does not say.</summary>
     public static WheelDeviceHint Current()

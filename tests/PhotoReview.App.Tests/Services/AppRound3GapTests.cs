@@ -342,7 +342,7 @@ public sealed class AppRound3FormatterGapTests
     [Fact]
     public void DecoderProviders_RegistersTurboJpegWhenItsProbeSucceeds()
     {
-        var providers = DecoderProviders.Create(PhysicalSourceReader.Instance, () => false, NoLibRaw, TurboJpegPresent, (_, _) => { }, _ => { });
+        var providers = DecoderProviders.Create(PhysicalSourceReader.Instance, WpfBitmapSourceCodec.Instance, () => new WpfBitmapImageDecoder(PhysicalSourceReader.Instance), () => false, NoLibRaw, TurboJpegPresent, (_, _) => { }, _ => { });
 
         Assert.Contains(providers, p => p.Item1 == DecoderBackend.TurboJpeg);
     }

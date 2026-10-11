@@ -408,7 +408,7 @@ internal sealed partial class SoakSession
                 var settingsStore = p.GetRequiredService<SettingsStore>();
                 var sourceBytesCache = p.GetRequiredService<SourceBytesCachePolicy>().Cache;
                 return new ImageDecoderFactory(
-                    DecoderProviders.Create(sourceReader,
+                    DecoderProviders.Create(sourceReader, WpfBitmapSourceCodec.Instance, () => new WpfBitmapImageDecoder(sourceReader),
                         () => settingsStore.Current.RawSupportEnabled || settingsStore.Current.DecoderBackend == DecoderBackend.LibRaw),
                     p.GetService<ILog>(),
                     p.GetService<PhotoReview.Core.Diagnostics.ReviewMetrics>(),

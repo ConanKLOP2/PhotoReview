@@ -301,7 +301,7 @@ public sealed class ToolScriptEncodingTests : IDisposable
     private static readonly string[] ReleaseFiles =
     [
         "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
-        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
+        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.Shared.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll", "turbojpeg.dll",
         "libraw.dll", "LibRaw-LICENSE.LGPL", "LibRaw-LICENSE.CDDL", "LibRaw-SOURCE.zip", "LibRaw-NOTICE.txt", "THIRD-PARTY-NOTICES.md",
         "Languages\\en.json", "Languages\\vi.json",
@@ -505,7 +505,7 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
     private static readonly string[] ReleaseFileNames =
     [
         "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
-        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
+        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.Shared.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll",
         "Languages\\en.json", "Languages\\vi.json",
     ];

@@ -225,26 +225,31 @@ public sealed class LayerDependencyTests
         Assert.Contains("UseWPF", File.ReadAllText(Path.Combine(RepoScan.Root, "src/PhotoReview.Imaging.Wpf/PhotoReview.Imaging.Wpf.csproj")));
     }
 
-    [Fact(DisplayName = "Rule 6: ViewModels do not depend on System.Windows (K-2)")]
+    // WP-09 (NO-WPF-EXEC-PLAN L-SHARED): Rule 6 (K-2, "ViewModels do not use the System.Windows namespace") is replaced by a rule per
+    // assembly. The type-level check was both too weak (System.Windows.Input.ICommand is not WPF) and too narrow (only one namespace);
+    // L-SHARED (ShellRulesTests.AppShared_DoesNotReferenceWpfAppOrShell) forbids App.Shared any WPF assembly reference. This rule pins
+    // WHERE the WPF-free layers live, so none of them can drift back into the WPF assembly.
+    [Fact(DisplayName = "Rule 6 -> L-SHARED: ViewModels, Input and the coordinators live in App.Shared; only FullscreenWindowPlacer stays in App")]
     [Trait("Category", "Architecture")]
-    public void ViewModels_DoNotDependOn_SystemWindows()
+    public void PureUiLayers_LiveInAppShared_NotInTheWpfAssembly()
     {
-        // K-2 constraint: Will be enabled after T46a introduces PhotoReview.App.ViewModels
-        var appTypes = Types.InAssembly(typeof(PhotoReview.App.App).Assembly);
-        var vmTypes = appTypes.That().ResideInNamespace("PhotoReview.App.ViewModels");
+        var wpfAppTypes = typeof(PhotoReview.App.App).Assembly.GetTypes()
+            .Where(t => t.Namespace is "PhotoReview.App.ViewModels" or "PhotoReview.App.Input" or "PhotoReview.App.Coordinators"
+                or "PhotoReview.App.Composition")
+            .Where(t => !t.Name.StartsWith('<'))
+            .Select(t => $"{t.Namespace}.{t.Name}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
-        // When ViewModels namespace exists, verify it doesn't depend on System.Windows
-        var typesList = vmTypes.GetTypes();
-        if (typesList.Any())
-        {
-            var result = vmTypes
-                .ShouldNot()
-                .HaveDependencyOn("System.Windows")
-                .GetResult();
+        // The only WPF-bound members of those namespaces: the fullscreen placement adapter (Win32 interop over a WPF Window)
+        // and AppHost (the WPF app's composition entry that calls App.ConfigureServices).
+        Assert.Equal(
+            ["PhotoReview.App.Composition.AppHost", "PhotoReview.App.Coordinators.FullscreenWindowPlacer"],
+            wpfAppTypes);
 
-            Assert.True(
-                result.IsSuccessful,
-                $"ViewModels have forbidden System.Windows dependency: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
-        }
+        var sharedAssembly = typeof(PhotoReview.App.Input.PointD).Assembly;
+        Assert.Equal("PhotoReview.App.Shared", sharedAssembly.GetName().Name);
+        Assert.Contains(sharedAssembly.GetTypes(), t => t.FullName == "PhotoReview.App.ViewModels.MainViewModel");
+        Assert.Contains(sharedAssembly.GetTypes(), t => t.FullName == "PhotoReview.App.Composition.MainViewModelCompositionRoot");
     }
 }

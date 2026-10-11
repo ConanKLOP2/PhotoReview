@@ -27,7 +27,7 @@ internal static class ServiceFactories
 
     /// <param name="codec">
     /// WP-05/WP-06: required. LibRaw's last-resort decoder writes straight into a <c>PixelBuffer</c> that this codec takes over
-    /// (WPF app: <see cref="WpfBitmapSourceCodec"/>; Win32 shell: its pixel codec).
+    /// (WPF app: <c>WpfBitmapSourceCodec</c>; Win32 shell: its pixel codec).
     /// </param>
     public static RawDecoder CreateRawDecoder(IImageDecoder standardDecoder, ISourceReader sourceReader,
         SourceBytesCache? sourceBytesCache, IPlatformImageCodec codec)
@@ -52,11 +52,18 @@ internal static class ServiceFactories
     /// <summary>
     /// Q-FMT-WEBP-HEIC: the decoder chain every WebP/HEIC path takes, whatever backend the user picked -- WicDirect (colour
     /// management, EXIF orientation, premultiplied alpha, DCT/codec pre-scaling) with the usual WPF fallback, both reading
-    /// through the shared <paramref name="sourceReader"/>.
+    /// through the shared <paramref name="sourceReader"/>. <paramref name="wpfFallback"/> is null on a host without the WPF
+    /// decoder (Win32 shell, NE-8): WicDirect then stands alone.
     /// </summary>
-    public static IImageDecoder CreateWebpHeicDecoder(ISourceReader sourceReader, ILog? log, ReviewMetrics? metrics)
-        => new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance, sourceReader), DecoderBackend.WicDirect,
-            new WpfBitmapImageDecoder(sourceReader), log, metrics);
+    public static IImageDecoder CreateWebpHeicDecoder(ISourceReader sourceReader, IPlatformImageCodec codec,
+        IImageDecoder? wpfFallback, ILog? log, ReviewMetrics? metrics)
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        var wic = new WicDirectDecoder(codec, sourceReader);
+        return wpfFallback is null
+            ? wic
+            : new FallbackImageDecoder(wic, DecoderBackend.WicDirect, wpfFallback, log, metrics);
+    }
 
     /// <summary>
     /// The preload's source-bytes prefetch. Q-FMT-WEBP-HEIC: a WebP/HEIC file the router will refuse (switch off, or no Windows

@@ -66,7 +66,8 @@ public sealed class AppLogAndServiceGapTests
     private static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> CreateProviders(
         DecoderProviders.TurboJpegProbe turboJpeg, DecoderProviders.LibRawProbe libRaw, Func<bool>? libRawNeeded,
         List<(string Message, Exception Error)> forced, List<string> info) =>
-        DecoderProviders.Create(null!, libRawNeeded, libRaw, turboJpeg,
+        DecoderProviders.Create(null!, WpfBitmapSourceCodec.Instance, () => new WpfBitmapImageDecoder(PhysicalSourceReader.Instance),
+            libRawNeeded, libRaw, turboJpeg,
             (message, error) => forced.Add((message, error)), info.Add);
 
     private static bool Fails(out string? reason, string? text)
