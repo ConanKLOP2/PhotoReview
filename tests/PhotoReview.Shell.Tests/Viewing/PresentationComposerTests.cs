@@ -485,6 +485,28 @@ public sealed class PresentationComposerTests : IDisposable
     }
 
     [Fact]
+    public void SettleClock_AsksForTheHighQualityFrame_ExactlyWhenSettleMsHaveElapsed()
+    {
+        var image = Image(1000, 667);
+        _composer.Set(image);
+        Draw(out _, Inputs(box: new RectD(10, 10, 100, 66.7)));
+        Draw(out _, Inputs(box: new RectD(40, 10, 100, 66.7)));     // chuyển động tại _now
+        Assert.True(_composer.IsSettleArmed);
+        var before = _invalidations;
+
+        _now += 119;
+        _clock.Tick(_now);                                          // còn 1 ms: vẫn đang chuyển động, chưa xin khung
+        Assert.Equal(before, _invalidations);
+
+        _now += 1;                                                  // đúng 120 ms = SettleMs: đã đứng yên
+        _clock.Tick(_now);
+        Assert.Equal(before + 1, _invalidations);
+
+        var settled = Draw(out var context, Inputs(box: new RectD(40, 10, 100, 66.7)));
+        Assert.False(settled.Degraded);                             // cùng ranh giới với Draw: không còn "đang chuyển động"
+        Assert.Equal(ImageInterpolation.HighQualityCubic, context.Images[0].Interpolation);
+    }
+    [Fact]
     public void LightDownscaleWhileMoving_KeepsHighQuality_AndNeverArmsTheSettleClock()
     {
         var image = Image(200, 133);

@@ -162,6 +162,29 @@ public sealed class GpuImageCacheTests : IDisposable
     }
 
     [Fact]
+    public void Prefetch_RaisesUploadCompletedOnce_OnlyAfterTheLastStripe_AndTheImageIsThenFullyUploaded()
+    {
+        using GpuImageCache cache = Cache(budget: 10_000, stripeBytes: 80);   // 2 dòng / dải, ảnh 9 dòng = 5 dải
+        PixelBuffer px = Image(10, 9);
+        var completed = new List<long>();
+        cache.UploadCompleted += completed.Add;
+
+        cache.Prefetch(px);
+        Assert.False(cache.IsFullyUploaded(px.Id));                           // mới có texture rỗng
+        for (int stripe = 0; stripe < 4; stripe++)
+        {
+            Assert.True(_dispatcher.RunOne());
+            Assert.Empty(completed);
+            Assert.False(cache.IsFullyUploaded(px.Id));
+        }
+
+        Assert.True(_dispatcher.RunOne());                                    // dải cuối
+
+        Assert.Equal([px.Id], completed);
+        Assert.True(cache.IsFullyUploaded(px.Id));
+        Assert.Equal(0, _dispatcher.PendingCount);
+    }
+    [Fact]
     public void Prefetch_UploadsInBackgroundStripes_NotSynchronously()
     {
         using GpuImageCache cache = Cache(budget: 10_000, stripeBytes: 80);   // stride 40 -> 2 dòng / dải
