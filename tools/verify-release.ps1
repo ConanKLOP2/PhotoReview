@@ -16,6 +16,7 @@ $required = @(
     'PhotoReview.App.runtimeconfig.json',
     'PhotoReview.Core.dll',
     'PhotoReview.Imaging.dll',
+    'PhotoReview.Imaging.Wpf.dll',
     'PhotoReview.Platform.Windows.dll',
     'PhotoReview.Benchmarking.dll',
     'PhotoReview.PerfAnalysis.dll',

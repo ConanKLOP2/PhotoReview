@@ -78,8 +78,8 @@ public sealed class WicPixelScalerTests
         Assert.Equal(50, px[0]);
     }
 
-    [Fact(DisplayName = "WicPixelScaler is close to WPF's ScaleTransform (the pass the legacy TurboJPEG path used)")]
-    public void Resize_IsCloseToWpfScaleTransform()
+    [Fact(DisplayName = "WicPixelScaler equals WPF's ScaleTransform byte for byte (the pass the legacy TurboJPEG path used)")]
+    public void Resize_EqualsWpfScaleTransform()
     {
         using var source = PixelAssert.CreatePattern(120, 90, PixelLayout.Bgr32, seed: 8);
         var bitmap = PixelAssert.ToBitmapSource(source);
@@ -90,7 +90,7 @@ public sealed class WicPixelScalerTests
         using var scaled = WicPixelScaler.Resize(source, 40, 30);
 
         Assert.Equal((reference.Width, reference.Height), (scaled.Width, scaled.Height));
-        Assert.True(PixelAssert.MeanAbsoluteError(reference, scaled) <= 6.0);
+        PixelAssert.Equal(reference, scaled); // byte for byte: WPF's ScaleTransform is the same WIC Fant scaler
     }
 
     [Fact(DisplayName = "WicPixelScaler same size is an independent copy")]
@@ -169,6 +169,33 @@ public sealed class Wp06RequiredCodecTests : IDisposable
         await Assert.ThrowsAsync<ArgumentNullException>(() => DiskCacheStore.WriteAtomicallyAsync(image, null!, Path.Combine(_dir, "a.png")));
         Assert.Throws<ArgumentNullException>(() => PreviewCacheFile.ReadAsDecodedImage(Path.Combine(_dir, "a.pv4"), null!));
         Assert.Throws<ArgumentNullException>(() => EmbeddedThumbnailReader.TryRead(Path.Combine(_dir, "a.jpg"), null!));
+    }
+
+    [Fact(DisplayName = "PreviewImageService refuses a null codec even when a decoder is supplied (no late NullReference)")]
+    public void PreviewImageService_NullCodec_WithExplicitDecoder_Throws() =>
+        Assert.Throws<ArgumentNullException>(() => new PreviewImageService(new ReviewMetrics(), () => false, () => new DecodeBox(100, 0), null!,
+            diskCacheDirectory: _dir, decoder: new PhotoReview.Imaging.Decoding.Wic.WicDirectDecoder(PixelBufferImageCodec.Instance)));
+
+    [Fact(DisplayName = "ThumbnailCache hands the embedded thumbnail to the INJECTED codec")]
+    public async Task ThumbnailCache_EmbeddedThumbnail_UsesTheInjectedCodec()
+    {
+        var source = Path.Combine(_dir, "t.jpg");
+        File.WriteAllBytes(source, EmbeddedThumbnailJpegFixture.CreateWithThumbnail(mainSize: 48, thumbnailSize: 16));
+        using var cache = new ThumbnailCache(new TaggingCodec(), Path.Combine(_dir, "thumbs"), maxRamBytes: 16 * 1024 * 1024);
+
+        var image = await cache.GetAsync(source, null);
+
+        Assert.NotNull(image);
+        Assert.IsType<TaggedImage>(image!.PlatformImage);
+    }
+
+    private sealed record TaggedImage(PixelBuffer Pixels);
+
+    private sealed class TaggingCodec : IPlatformImageCodec
+    {
+        public string Name => "tagging";
+        public object FromPixels(PixelBuffer pixels) => new TaggedImage(pixels);
+        public PixelLease ToPixels(object platformImage) => new(((TaggedImage)platformImage).Pixels, owned: false);
     }
 
     [Fact(DisplayName = "PreviewImageService without a decoder or factory decodes with WIC Direct through the injected codec")]
