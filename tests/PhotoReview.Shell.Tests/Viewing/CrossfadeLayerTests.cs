@@ -177,6 +177,24 @@ public sealed class CrossfadeLayerTests : IDisposable
     }
 
     [Fact]
+    public void OutgoingBufferDisposedMidFade_IsReleasedBeforeTheContextIsTouched()
+    {
+        var outgoing = Image();
+        _layer.Start(outgoing, Frame, ImageInterpolation.Linear, TimeSpan.FromMilliseconds(200));
+        _clock.Tick(10_000);
+        _clock.Tick(10_050);
+
+        outgoing.Dispose();
+        var context = new RecordingImageContext();
+
+        Assert.False(_layer.Draw(_cache, context, Viewport));
+
+        // Nhánh "buffer đã giải phóng" nhả ảnh ngay: không có PushClip/PopClip hay DrawImage nào được phát cho ảnh chết.
+        Assert.Empty(context.Calls);
+        Assert.Null(_layer.OutgoingBufferId);
+        Assert.False(_layer.IsActive);
+    }
+    [Fact]
     public void Cancel_ReleasesTheOutgoingImageAndTheClock()
     {
         _layer.Start(Image(), Frame, ImageInterpolation.Linear, TimeSpan.FromMilliseconds(200));
