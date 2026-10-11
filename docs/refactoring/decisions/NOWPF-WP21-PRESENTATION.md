@@ -81,12 +81,24 @@ của DWM/iGPU trên build Windows 26300 và cũng ảnh hưởng bản WPF như
   compare viền/ô/lề, che ảnh chính, orientation 2/3/6/8, ảnh 17000x1200 chia tile không đường nối, mất thiết bị giữa lúc mờ).
 - `Shell.Integration.Tests` (`ShellStartup` thật, desktop ẩn, WARP): `ShellViewingTests` - điều hướng từng bước, điều hướng dồn dập 100 lần (INV-1: ảnh cuối = ảnh của chỉ số
   cuối), crossfade bật/tự kết thúc, compare mở thẳng + chọn ô theo toạ độ + thoát, mất thiết bị giữa lúc mờ, xoá cache xoá cả cache GPU, ảnh đầu.
-- Kiểm toàn bộ: Architecture 105, Shell 580+, Shell.Integration 56, Core 3154, Imaging 4178 (+1 flaky WIC đã biết, chạy lại xanh), App 2403, Integration 1142 (+1 flaky
+- Kiểm toàn bộ: Architecture 105, Shell 595, Shell.Integration 64, Core 3154, Imaging 4178 (+1 flaky WIC đã biết, chạy lại xanh), App 2403, Integration 1142 (+1 flaky
   `AppForwardedOpenTests.A3` timeout 30 s dưới tải, chạy lại xanh), WpfBridge 21.
 
 ## 6. Đột biến
 
-(điền sau khi các agent đột biến xong)
+40 đột biến thủ công (2 agent sonnet, worktree riêng, mỗi cái: sửa một chỗ -> build -> chạy Shell.Tests Viewing/GpuImageCache + ShellViewingTests -> trả lại):
+- Nhóm A (crossfade/composer/compare/chính sách nội suy/cache, 20 + 1 biến thể): hủy tween cũ, opacity đầu, easing, nhả ảnh đã giải phóng, clip viewport, thứ tự lớp,
+  hoãn nâng cấp khi đổi file, bỏ `_pending`, hạn chót, nhận diện chuyển động, đóng băng khung đã vẽ, lề/viền/màu chọn/hit-test compare, canvas panel, ngưỡng thu nhỏ,
+  đồng hồ settle, `IsFullyUploaded`, `UploadCompleted`. 17 bị bắt ngay; 2 sống sót đã lấp (`OutgoingBufferDisposedMidFade_IsReleasedBeforeTheContextIsTouched`,
+  `SettleClock_AsksForTheHighQualityFrame_ExactlyWhenSettleMsHaveElapsed`); thêm test cache `Prefetch_RaisesUploadCompletedOnce_...`; 1 tương đương (điều kiện
+  `!IsReleased` phòng thủ: mọi đường giải phóng đều xoá entry cùng lệnh).
+- Nhóm B (prefetch/sink/pacer/cửa sổ, 20): hướng + thử lại + prefetch trùng, thứ tự sink, đếm cross-thread, trace, VSync/hoãn/hạ cấp, hiệu ứng khi nâng cấp/None,
+  xoá cache GPU, mốc RenderedFrame, `TryPromotePending` ở Present, `Retain`, layout theo ảnh mới, chọn ô compare, prefetch khi điều hướng. 11 bị bắt ngay; 9 sống sót
+  đã lấp (`RetryPassesOfAnOlderNavigation_DoNotEvenStartABackgroundLookup`, `Win32Sink_TracePresented_ReachesTheHub...`,
+  `ImageChanging_ThatIsNotAFileChange_NeverStartsACrossfade`, `ClearCache_DropsEveryUnretainedGpuBitmap_NotOnlyTheCounter`,
+  `FrameDrawnWhileAnUpgradeIsStillUploading_DoesNotCountAsTheNewImagePresented`, `AnUpgradeThatIsFullyUploadedWithoutTheCompletionEvent_IsPromotedByTheNextFrame`,
+  `CurrentImage_IsRetainedOnTheGpu_WhenTheCacheIsOverBudget`, `Navigating_BackAndForth_FeedsTheDirectionToThePrefetcher`). Mỗi test mới đỏ khi áp đột biến, xanh ở bản gốc.
+- Không phát hiện lỗi thật trong mã nguồn.
 
 ## 7. Việc còn lại / bàn giao
 

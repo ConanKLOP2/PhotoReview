@@ -102,6 +102,23 @@ public sealed class ShellPresentationHubTests
     }
 
     [Fact]
+    public void Win32Sink_TracePresented_ReachesTheHubAndIsEmittedWithTheFrameThatHasTheImage()
+    {
+        using var capture = new Capture();
+        var hub = new ShellPresentationHub();
+        var sink = new PhotoReview.Shell.Win32.Viewing.Win32PresentationSink(hub,
+            new MainViewModelSinkCallbacks((_, _) => { }, _ => { }, () => { }, _ => { }));
+        var token = NewToken();
+        sink.SetCurrentImage(new object(), isFileChange: false);
+
+        sink.TracePresented(token, "preview", Stopwatch.GetTimestamp());
+        Assert.Empty(capture.NamesFor(token));            // chưa có khung nào chứa ảnh
+
+        hub.NoteFramePresented(containedImage: true);
+        Assert.Equal(["Rendered", "Presented", "RenderedFrame"], capture.NamesFor(token));
+    }
+
+    [Fact]
     public void ImageChanged_IsRaisedWithTheNewImageAndTheFileChangeFlag()
     {
         var hub = new ShellPresentationHub();

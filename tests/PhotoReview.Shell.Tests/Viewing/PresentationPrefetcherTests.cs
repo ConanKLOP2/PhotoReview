@@ -112,6 +112,22 @@ public sealed class PresentationPrefetcherTests : IDisposable
     }
 
     [Fact]
+    public void RetryPassesOfAnOlderNavigation_DoNotEvenStartABackgroundLookup()
+    {
+        // Lượt cũ còn tra cache (stat file trên thread nền) rồi mới bị Apply bỏ là việc thừa: phải bị chặn ngay từ lượt thử lại.
+        _prefetcher.Navigated(5, 10);
+        var staleRetry = _host.Scheduled[0].Action;
+        _prefetcher.Navigated(6, 10);
+        var runsBefore = _host.BackgroundRuns;
+        var lookupBefore = _host.LastLookup;
+
+        staleRetry();
+
+        Assert.Equal(runsBefore, _host.BackgroundRuns);
+        Assert.Same(lookupBefore, _host.LastLookup);
+    }
+
+    [Fact]
     public void AlreadyOnTheGpu_IsNotUploadedTwice()
     {
         var neighbour = Cached(6);
