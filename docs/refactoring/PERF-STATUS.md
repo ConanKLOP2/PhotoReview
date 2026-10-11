@@ -44,3 +44,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-10 -- WP-04 cache đĩa bằng WIC (JPEG +17..30 %, PNG ngang/nhanh hơn; mutation 23/24)](perf/2026-10-10-wp04-cache-wic.md)
 - [2026-10-10 -- WP-03 WIC decode ra PixelBuffer: 24 MP -> 1920 px, new so với master -1.8 % gộp / +2.9 % lượt yên (trong ngưỡng 5 %)](perf/2026-10-10-wp03-wic-decode.md)
 - [2026-10-10 -- WP-05 TurboJpeg ra PixelBuffer (fine-scale vs WIC Fant)](perf/2026-10-10-wp05-native-pixelbuffer.md)
+- [2026-10-11 -- WP-12 WIC sang [GeneratedComInterface]: decode P50 -1,7 %/+1,6 % (nền nhiễu +1,9 %), cache JPEG encode -5,7 %, decode -6,2 %, không hồi quy > 5 %; mutation 25/25](perf/2026-10-11-wp12-wic-generated-com.md)
