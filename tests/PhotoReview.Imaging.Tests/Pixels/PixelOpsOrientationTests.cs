@@ -25,7 +25,7 @@ public sealed class PixelOpsOrientationTests
     public void ApplyOrientation_MatchesWpfTransformedBitmap_ByteForByte(int orientation, int width, int height, PixelLayout layout)
     {
         using var original = PixelAssert.CreatePattern(width, height, layout, seed: (orientation * 1000) + width + height);
-        var reference = ExifOrientation.Apply(PixelAssert.ToBitmapSource(original), orientation);
+        var reference = WpfExifOrientation.Apply(PixelAssert.ToBitmapSource(original), orientation);
 
         using var actual = PixelOps.ApplyOrientation(PixelAssert.Clone(original), orientation);
 

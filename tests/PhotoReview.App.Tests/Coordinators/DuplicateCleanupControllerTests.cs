@@ -38,7 +38,7 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
 
         var metrics = new ReviewMetrics();
         var preview = new PreviewImageService(
-            metrics, () => false, () => new DecodeBox(1920, 0), capacityBytes: 16 * 1024 * 1024,
+            metrics, () => false, () => new DecodeBox(1920, 0), WpfBitmapSourceCodec.Instance, capacityBytes: 16 * 1024 * 1024,
             diskCacheDirectory: previewDir, sourceBytesCache: sourceBytes);
         var controller = new DuplicateCleanupController(
             new GenerationClock(), new ReviewCatalog(), fileActionService: null, hashService: null,
@@ -91,7 +91,7 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
         catalog.Reset([keep, removed]);
         var fs = new PhysicalFileSystem();
         var fileActions = new FileActionService(new OperationJournal(new AppPaths(_root), fs, new SystemClock()), fs, new SystemClock(), new DeletingRecycleBin());
-        var preview = new PreviewImageService(new ReviewMetrics(), () => false, () => new DecodeBox(1920, 0), capacityBytes: 16 * 1024 * 1024);
+        var preview = new PreviewImageService(new ReviewMetrics(), () => false, () => new DecodeBox(1920, 0), WpfBitmapSourceCodec.Instance, capacityBytes: 16 * 1024 * 1024);
         var sink = new ReloadingSink { SupersedeReload = supersedeReload };
         var preload = new RecordingPreload();
         var controller = new DuplicateCleanupController(

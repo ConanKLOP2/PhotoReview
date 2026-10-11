@@ -26,14 +26,17 @@ internal static class ServiceFactories
             () => settingsStore.Current.AllowPermanentDeleteWithoutRecycleBin, fileActionGate);
 
     /// <param name="codec">
-    /// WP-05: null (the WPF app today) keeps LibRaw's last-resort decoder on the WPF <c>BitmapSource</c> path; the Win32 shell passes
-    /// its codec so that decoder writes straight into a <c>PixelBuffer</c>.
+    /// WP-05/WP-06: required. LibRaw's last-resort decoder writes straight into a <c>PixelBuffer</c> that this codec takes over
+    /// (WPF app: <see cref="WpfBitmapSourceCodec"/>; Win32 shell: its pixel codec).
     /// </param>
     public static RawDecoder CreateRawDecoder(IImageDecoder standardDecoder, ISourceReader sourceReader,
-        SourceBytesCache? sourceBytesCache, IPlatformImageCodec? codec = null)
-        => CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache,
+        SourceBytesCache? sourceBytesCache, IPlatformImageCodec codec)
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        return CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache,
             LibRawAvailability.Probe, () => new LibRawPreviewFallback(),
-            () => codec is null ? new LibRawDecoder() : new LibRawDecoder(codec));
+            () => new LibRawDecoder(codec));
+    }
 
     internal static RawDecoder CreateRawDecoder(IImageDecoder standardDecoder, ISourceReader sourceReader,
         SourceBytesCache? sourceBytesCache, DecoderProviders.LibRawProbe libRawProbe,

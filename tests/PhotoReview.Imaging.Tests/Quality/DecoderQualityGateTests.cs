@@ -23,7 +23,7 @@ public sealed class DecoderQualityGateTests : IDisposable
     private readonly string _tempDir;
     private readonly WpfBitmapImageDecoder _wpfDecoder = new();
     private readonly WicDirectDecoder _wicDecoder = new(WpfBitmapSourceCodec.Instance);
-    private readonly TurboJpegDecoder _turboDecoder = new();
+    private readonly TurboJpegDecoder _turboDecoder = new(WpfBitmapSourceCodec.Instance);
     private readonly ImageDecoderFactory _factory = new(
         [
             (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),

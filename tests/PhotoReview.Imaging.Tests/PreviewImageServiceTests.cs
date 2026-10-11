@@ -32,7 +32,7 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
         _previewPath = Path.Combine(folder, "preview-a.png");
         File.WriteAllBytes(_previewPath, TestImages.PreviewPng);
         var diskCache = _root.Dir("disk-cache");
-        _service = Track(new PreviewImageService(_metrics, () => false, () => 512, capacityBytes: 64L * 1024 * 1024,
+        _service = Track(new PreviewImageService(_metrics, () => false, () => 512, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskCache), diskCache);
     }
 
@@ -123,7 +123,7 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
         // removes that race entirely and keeps the assertion exact.
         var diskCache = _root.Dir("disk-cache-eviction");
         var metrics = new ReviewMetrics();
-        var service = Track(new PreviewImageService(metrics, () => true, () => 512, diskCacheDirectory: diskCache), diskCache);
+        var service = Track(new PreviewImageService(metrics, () => true, () => 512, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskCache), diskCache);
 
         await service.GetPreviewAsync(_previewPath);
         service.EvictCachedPath(_previewPath);
@@ -136,7 +136,7 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
     {
         var diskCache = _root.Dir("disk-cache-eviction-downscaled");
         var metrics = new ReviewMetrics();
-        var service = Track(new PreviewImageService(metrics, () => false, () => 512, diskCacheDirectory: diskCache), diskCache);
+        var service = Track(new PreviewImageService(metrics, () => false, () => 512, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskCache), diskCache);
 
         await service.GetPreviewAsync(_previewPath);
         // Wait for background persistence to finish writing to disk cache
@@ -164,7 +164,7 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
     public void OriginalLoadingModeDecodesAtFullSize()
     {
         var originalDiskCache = _root.Dir("disk-cache-original");
-        var originalModeService = Track(new PreviewImageService(_metrics, () => true, () => 512,
+        var originalModeService = Track(new PreviewImageService(_metrics, () => true, () => 512, WpfBitmapSourceCodec.Instance,
             diskCacheDirectory: originalDiskCache), originalDiskCache);
         Assert.True(originalModeService.IsOriginalLoadingMode()
             && originalModeService.GetCurrentCacheKey(_previewPath).IsOriginal
@@ -272,7 +272,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
     {
         var metrics = new ReviewMetrics();
         var diskDirectory = _root.Dir("disk-cache-" + Guid.NewGuid().ToString("N"));
-        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(metrics, () => false, () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
         var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_preloadFiles), long.MaxValue,
@@ -375,7 +375,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
     {
         var metrics = new ReviewMetrics();
         var diskDirectory = _root.Dir("disk-cache-single");
-        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(metrics, () => false, () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
         using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_singleFiles), long.MaxValue,
@@ -399,7 +399,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
 
         var metrics = new ReviewMetrics();
         var diskDirectory = _root.Dir("disk-cache-batch");
-        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(metrics, () => false, () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
 
@@ -481,7 +481,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task DownscaledPreviewIsPersistedToDiskCache()
     {
         var diskDir = _root.Dir("write");
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
 
         await service.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
@@ -495,7 +495,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         var transparentPath = Path.Combine(_root.Dir("source-alpha"), "transparent.png");
         File.WriteAllBytes(transparentPath, TestImages.TransparentPng);
         var diskDir = _root.Dir("alpha-no-write");
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
 
         var first = await service.GetPreviewAsync(transparentPath);
         await service.ShutdownPersistWorkersAsync(); // drains every queued persist deterministically
@@ -505,7 +505,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         var second = await service.GetPreviewAsync(transparentPath);
 
         Assert.True(first.Downscaled && second.Downscaled);
-        Assert.True(PreviewCacheFile.HasAlpha(second));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(second));
         Assert.Empty(written.Select(f => Path.GetRelativePath(diskDir, f)));
     }
 
@@ -513,7 +513,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task OpaquePng_IsStillPersisted()
     {
         var diskDir = _root.Dir("opaque-write");
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
 
         var image = await service.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
@@ -527,7 +527,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         var path = Path.Combine(_root.Dir("src-" + name), name + ".png");
         File.WriteAllBytes(path, png);
         var diskDir = _root.Dir("out-" + name);
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
         var image = await service.GetPreviewAsync(path);
         await service.ShutdownPersistWorkersAsync(); // drains every queued persist deterministically
         return (Directory.GetFiles(diskDir, "*.pv4", SearchOption.AllDirectories), image);
@@ -539,7 +539,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         var (files, image) = await DecodePngAsync("rgba-opaque", TestImages.BuildRgbaPng(64, 64, (_, _) => 255));
 
         Assert.True(image.Downscaled);
-        Assert.True(PreviewCacheFile.HasAlpha(image)); // proves the alpha scan path (not the opaque-format shortcut) was exercised
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(image)); // proves the alpha scan path (not the opaque-format shortcut) was exercised
         Assert.Single(files);
     }
 
@@ -548,7 +548,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     {
         var (files, image) = await DecodePngAsync("rgba-half", TestImages.BuildRgbaPng(64, 64, (_, _) => 128));
 
-        Assert.True(PreviewCacheFile.HasAlpha(image));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(image));
         Assert.Empty(files);
     }
 
@@ -574,7 +574,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task OriginalModeDoesNotWriteToDiskCache()
     {
         var diskDir = _root.Dir("original-no-write");
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => true, () => 0, diskCacheDirectory: diskDir), diskDir);
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => true, () => 0, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
 
         await service.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir, expectedCount: 1, timeoutMs: 500);
@@ -586,12 +586,12 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task DiskCacheHitAvoidsSourceRead()
     {
         var diskDir = _root.Dir("hit");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         await WaitForCacheFilesAsync(diskDir);
 
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
         var image = await reader.GetPreviewAsync(_previewPath);
         var snapshot = readerMetrics.Snapshot();
 
@@ -602,13 +602,13 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task CorruptDiskCacheEntryFallsBackToSource()
     {
         var diskDir = _root.Dir("corrupt");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
         File.WriteAllBytes(files[0], [1, 2, 3, 4]);
 
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
         var image = await reader.GetPreviewAsync(_previewPath);
         var snapshot = readerMetrics.Snapshot();
 
@@ -622,7 +622,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         // key/file version (e.g. a future v5) never needs to parse or migrate an older layout --
         // every entry stamped with a different version is simply ignored as if it didn't exist.
         var diskDir = _root.Dir("cache-version");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
         var bytes = File.ReadAllBytes(files[0]);
@@ -637,7 +637,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         File.WriteAllBytes(files[0], legacyLayout);
 
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
         var image = await reader.GetPreviewAsync(_previewPath);
         var snapshot = readerMetrics.Snapshot();
 
@@ -648,12 +648,12 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task ZeroDiskCacheCapacityDisablesDiskCache()
     {
         var diskDir = _root.Dir("cap-zero");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         var existing = await WaitForCacheFilesAsync(diskDir);
 
         var metrics = new ReviewMetrics();
-        var off = Track(new PreviewImageService(metrics, () => false, () => 32, diskCacheDirectory: diskDir, diskCacheCapacityBytes: 0), diskDir);
+        var off = Track(new PreviewImageService(metrics, () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir, diskCacheCapacityBytes: 0), diskDir);
         var image = await off.GetPreviewAsync(_previewPath);
         await off.ShutdownPersistWorkersAsync();
         var snapshot = metrics.Snapshot();
@@ -666,7 +666,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task ZeroDiskCacheCapacityDoesNotWrite()
     {
         var diskDir = _root.Dir("cap-zero-write");
-        var off = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir, diskCacheCapacityBytes: 0), diskDir);
+        var off = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDir, diskCacheCapacityBytes: 0), diskDir);
         await off.GetPreviewAsync(_previewPath);
         await off.ShutdownPersistWorkersAsync();
 
@@ -691,7 +691,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
             // race the next iteration's write under heavy parallel test load, where a slow
             // prune pass can still be mid-flight when the timeout trips, transiently leaving
             // the directory over quota when the loop moves on.
-            var service = new PreviewImageService(new ReviewMetrics(), () => false, () => width,
+            var service = new PreviewImageService(new ReviewMetrics(), () => false, () => width, WpfBitmapSourceCodec.Instance,
                 diskCacheDirectory: diskDir, diskCacheCapacityBytes: quotaBytes);
             await service.GetPreviewAsync(_previewPath);
             await service.ShutdownPersistWorkersAsync();

@@ -71,14 +71,10 @@ public sealed class DiskCacheStore
     }
 
     /// <summary>
-    /// Static atomic PNG write helper for an <see cref="IDecodedImage"/> whose platform image goes through the WPF bridge codec
-    /// (WP-04 temporary default, removed by WP-06 together with the codec default). A platform image the codec does not
-    /// understand is an <see cref="ArgumentException"/>.
+    /// Static atomic PNG write helper for an <see cref="IDecodedImage"/> whose platform image <paramref name="codec"/> understands
+    /// (C-02; WP-06: the codec is a required argument, there is no default). A platform image the codec does not understand is an
+    /// <see cref="ArgumentException"/>.
     /// </summary>
-    public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
-        => WriteAtomicallyAsync(image, WpfCacheImageCodec.Instance, cachePath, log, cancellationToken);
-
-    /// <summary>Static atomic PNG write helper for an <see cref="IDecodedImage"/> whose platform image <paramref name="codec"/> understands (C-02).</summary>
     public static async Task WriteAtomicallyAsync(IDecodedImage image, IPlatformImageCodec codec, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(image);
@@ -290,13 +286,13 @@ public sealed class DiskCacheStore
     /// <summary>
     /// True for the failures that reading or decoding a disk-cache entry can raise for a damaged, unreadable or foreign
     /// file: I/O and access errors, our own header validation (<see cref="InvalidDataException"/>), and whatever WPF/WIC
-    /// throws for a well-framed but broken image (<see cref="FileFormatException"/>, and <see cref="ArgumentException"/>,
+    /// throws for a well-framed but broken image (<see cref="FormatException"/> -- the base of WPF's <c>FileFormatException</c> -- and <see cref="ArgumentException"/>,
     /// <see cref="InvalidOperationException"/>, <see cref="OverflowException"/>, <see cref="InvalidCastException"/> or
     /// <see cref="COMException"/> for damaged metadata). Such an entry is a cache miss (delete it, decode from source);
     /// anything else (cancellation, out-of-memory, programming errors) must still propagate.
     /// </summary>
     internal static bool IsCacheEntryFailure(Exception ex) =>
-        ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or InvalidDataException
+        ex is IOException or UnauthorizedAccessException or NotSupportedException or FormatException or InvalidDataException
             or ArgumentException or InvalidOperationException or OverflowException or InvalidCastException or COMException;
 
     /// <summary>

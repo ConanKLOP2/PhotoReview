@@ -1,7 +1,5 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;
@@ -44,19 +42,12 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// <summary>Most scans a progressive JPEG may have (libjpeg-turbo's TJPARAM_SCANLIMIT); real files have about 10.</summary>
     internal const int MaxProgressiveScans = 500;
 
-    private readonly IPlatformImageCodec? _codec;
+    private readonly IPlatformImageCodec _codec;
 
     /// <summary>
-    /// WPF-compatible decoder: <see cref="IDecodedImage.PlatformImage"/> is a frozen <see cref="BitmapSource"/> (current app behaviour).
-    /// Kept until WP-06 moves the WPF adapter out of this project; new code passes a codec instead.
-    /// </summary>
-    public TurboJpegDecoder()
-    {
-    }
-
-    /// <summary>
-    /// Pixel decoder: the JPEG is decoded straight into a <see cref="PixelBuffer"/> (C-01), oriented by
-    /// <see cref="PixelOps.ApplyOrientation"/> and handed to <paramref name="codec"/> (C-02); no WPF type is touched.
+    /// The JPEG is decoded straight into a <see cref="PixelBuffer"/> (C-01), fine-scaled by WIC Fant
+    /// (<see cref="WicPixelScaler"/>), oriented by <see cref="PixelOps.ApplyOrientation"/> and handed to <paramref name="codec"/>
+    /// (C-02, required since WP-06); no WPF type is touched.
     /// </summary>
     public TurboJpegDecoder(IPlatformImageCodec codec)
     {
@@ -80,7 +71,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
     }
 
-    private IDecodedImage Decode(DecodeRequest request, ReadOnlyMemory<byte> bytesMemory)
+    private DecodedImage Decode(DecodeRequest request, ReadOnlyMemory<byte> bytesMemory)
     {
         var bytes = bytesMemory.Span;
 
@@ -204,7 +195,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
                 var finish = new FinishPlan(scaledW, scaledH, targetW, targetH, bufferLength, needsFineScale, needsOrientation,
                     orientation, downscaled, originalWidth, originalHeight, exif);
-                return _codec is null ? FinishWithWpf(pixels, finish) : FinishWithCodec(pixels, _codec, finish);
+                return FinishWithCodec(pixels, _codec, finish);
             }
         }
     }
@@ -218,7 +209,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         new($"TurboJPEG output dimensions are too large for the available memory: {plan.ScaledWidth}x{plan.ScaledHeight} ({plan.BufferLength} bytes).");
 
     /// <summary>
-    /// Pixel path (no WPF): fine scale by <see cref="PixelAreaResampler"/>, orientation by <see cref="PixelOps.ApplyOrientation"/>
+    /// Fine scale by WIC Fant (<see cref="WicPixelScaler"/>, owner decision "b"), orientation by <see cref="PixelOps.ApplyOrientation"/>
     /// (byte-exact with WPF's TransformedBitmap, proven by PixelOpsOrientationTests), then the codec takes the buffer.
     /// Takes ownership of <paramref name="pixels"/>.
     /// </summary>
@@ -229,7 +220,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         {
             if (plan.FineScale)
             {
-                var resized = PixelAreaResampler.Resize(current, plan.TargetWidth, plan.TargetHeight);
+                var resized = WicPixelScaler.Resize(current, plan.TargetWidth, plan.TargetHeight);
                 current.Dispose();
                 current = resized;
             }
@@ -272,59 +263,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
             plan.OriginalWidth, plan.OriginalHeight, plan.Exif);
     }
 
-    /// <summary>
-    /// Legacy WPF path (parameterless constructor), unchanged in behaviour: BitmapSource.Create copies the pixels once, then
-    /// fine scale and orientation run in one WIC pass (TransformedBitmap) and are materialized. WP-06 removes this method
-    /// together with <c>UseWPF</c>. Takes ownership of <paramref name="pixels"/>.
-    /// </summary>
-    private static WpfDecodedImage FinishWithWpf(PixelBuffer pixels, in FinishPlan plan)
-    {
-        BitmapSource bitmap;
-        try
-        {
-            bitmap = BitmapSource.Create(plan.ScaledWidth, plan.ScaledHeight, 96, 96, PixelFormats.Bgr32, null,
-                pixels.Address, plan.BufferLength, pixels.Stride);
-            bitmap.Freeze();
-        }
-        finally
-        {
-            pixels.Dispose();
-        }
 
-        if (plan.FineScale || plan.Orient)
-        {
-            var transform = new TransformGroup();
-            if (plan.FineScale)
-            {
-                transform.Children.Add(new ScaleTransform((double)plan.TargetWidth / plan.ScaledWidth, (double)plan.TargetHeight / plan.ScaledHeight));
-            }
-
-            if (plan.Orient)
-            {
-                transform.Children.Add(ExifOrientation.CreateTransform(plan.Orientation));
-            }
-
-            try
-            {
-                bitmap = WpfImageAdapter.Materialize(new TransformedBitmap(bitmap, transform));
-            }
-            catch (OutOfMemoryException)
-            {
-                var plan2 = plan;
-                throw UserFacingError.Localized(OutputTooLarge(plan2),
-                    () => Tr.ErrDecoderOutputTooLarge(plan2.ScaledWidth, plan2.ScaledHeight, plan2.BufferLength));
-            }
-        }
-
-        return new WpfDecodedImage(
-            bitmap,
-            downscaled: plan.Downscaled,
-            orientation: plan.Orientation,
-            actualBackend: DecoderBackend.TurboJpeg,
-            originalWidth: plan.OriginalWidth,
-            originalHeight: plan.OriginalHeight,
-            exif: plan.Exif);
-    }
     public ImageInfo ReadInfo(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

@@ -199,7 +199,7 @@ public sealed class RamCachePercentTests
         var physical = RamBudgetPolicy.GetPhysicalMemoryBytes();
         Assert.True(physical > 0);
         var dir = Path.Combine(Path.GetTempPath(), "PhotoReview-RamPercent-" + Guid.NewGuid().ToString("N"));
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 100,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 100, WpfBitmapSourceCodec.Instance,
             capacityBytes: 1 * Gib, diskCacheDirectory: dir, disableDiskCacheOverride: true, cacheRamPercent: 200);
         try
         {

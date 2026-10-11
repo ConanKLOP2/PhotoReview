@@ -21,7 +21,7 @@ public sealed class PreviewImageServicePersistTwoWorkerTests : IDisposable
         var source = Path.Combine(_root.Dir("src"), "opaque.png");
         File.WriteAllBytes(source, TestImages.OpaquePng);
         var dir = _root.Dir("cache");
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir);
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir);
 
         using var firstWriteDone = new ManualResetEventSlim(false);
         using var releaseFirst = new ManualResetEventSlim(false);

@@ -45,8 +45,8 @@ public sealed class RawSizeConsistencyAuditTests
         var path = RawCorpus.TryGetFile(fileName);
         if (path is null) return;
 
-        var reader = new RawDecoder(new LibRawDecoder()).ReadInfo(path);
-        var libraw = new LibRawDecoder().ReadInfo(path);
+        var reader = new RawDecoder(new LibRawDecoder(WpfBitmapSourceCodec.Instance)).ReadInfo(path);
+        var libraw = new LibRawDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path);
 
         Assert.Equal((readerWidth, readerHeight), (reader.Width, reader.Height));
         Assert.Equal((librawWidth, librawHeight), (libraw.Width, libraw.Height));

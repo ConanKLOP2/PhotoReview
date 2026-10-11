@@ -26,7 +26,7 @@ public sealed partial class ZoomDetailLoaderGapTests : IDisposable
     public ZoomDetailLoaderGapTests()
     {
         Directory.CreateDirectory(_tempDir);
-        _service = new PreviewImageService(new ReviewMetrics(), () => false, () => new DecodeBox(1920, 1080),
+        _service = new PreviewImageService(new ReviewMetrics(), () => false, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: _decoder, currentBackend: () => DecoderBackend.Wpf);
         _loader = new ZoomDetailLoader(_service, _clock, (image, _, _) => _shown.Add(image));

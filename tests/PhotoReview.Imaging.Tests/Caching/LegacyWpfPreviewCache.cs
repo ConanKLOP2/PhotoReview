@@ -49,7 +49,7 @@ internal static class LegacyWpfPreviewCache
         return pixels;
     }
 
-    /// <summary>Byte entry v7 đúng như <c>PreviewCacheFile.WriteAtomicallyAsync(BitmapSource, ...)</c> trước WP-04.</summary>
+    /// <summary>Byte entry v7 đúng như <c>PreviewCacheFile.WriteAtomicallyAsync(BitmapSource, WpfBitmapSourceCodec.Instance, ...)</c> trước WP-04.</summary>
     public static byte[] WriteV7(BitmapSource bitmap, DecoderBackend backend, int orientation, int originalWidth, int originalHeight,
         ExifSummary? exif, int quality = PreviewCacheFile.DefaultJpegQuality)
     {

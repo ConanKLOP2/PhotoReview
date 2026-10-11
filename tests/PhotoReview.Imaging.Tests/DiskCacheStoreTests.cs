@@ -58,7 +58,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         var cachePath = Path.Combine(dir, "out.png");
         var image = DecodeFixture();
 
-        await DiskCacheStore.WriteAtomicallyAsync(image, cachePath);
+        await DiskCacheStore.WriteAtomicallyAsync(image, WpfBitmapSourceCodec.Instance, cachePath);
 
         var files = Directory.GetFiles(dir);
         Assert.True(files is [var only] && only == cachePath && new FileInfo(cachePath).Length > 0);

@@ -17,7 +17,7 @@ using PhotoReview.Imaging.Decoding;
 /// For every supported file (up to <paramref name="max"/>, ordered by name like
 /// <see cref="LocalImageBenchmark"/>) this measures, three times each (run 1 = cold, P50 of runs 2-3
 /// = warm): a full sequential read into RAM, a decode from that in-memory copy at each width, a
-/// decode straight from the file via a real <see cref="WpfBitmapImageDecoder"/> instance at each
+/// decode straight from the file via a real <see cref="PhotoReview.Imaging.Wpf.WpfBitmapImageDecoder"/> instance at each
 /// width, a header-only <see cref="BitmapDecoder"/> read (DelayCreation, mirrors
 /// <c>GetOriginalDimensionsAsync</c>), and a PNG encode/decode round trip at width 2560 that stands
 /// in for the on-disk preview cache. Nothing here mutates <see cref="DiagOptions"/> or reads
@@ -122,7 +122,7 @@ internal static class IoDecodeSplit
     private static FileResult MeasureFile(int index, string path, int[] widths, StringBuilder rawCsv)
     {
         var result = new FileResult { Index = index, SourceBytes = SafeLength(path) };
-        var imageDecoder = new WpfBitmapImageDecoder();
+        var imageDecoder = new PhotoReview.Imaging.Wpf.WpfBitmapImageDecoder();
 
         var readRuns = new double[3];
         byte[] bytes = [];

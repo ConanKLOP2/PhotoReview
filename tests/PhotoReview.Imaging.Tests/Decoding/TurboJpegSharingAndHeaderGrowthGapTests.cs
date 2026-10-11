@@ -13,7 +13,7 @@ public sealed class TurboJpegSharingAndHeaderGrowthGapTests : IDisposable
     private const int PaddingBytes = 8 * 1024 * 1024 + 1024 * 1024; // beyond HeaderReadCap (8 MB)
 
     private readonly TempRoot _root = new("turbojpeg-gap");
-    private readonly TurboJpegDecoder _decoder = new();
+    private readonly TurboJpegDecoder _decoder = new(WpfBitmapSourceCodec.Instance);
 
     public void Dispose() => _root.Dispose();
 

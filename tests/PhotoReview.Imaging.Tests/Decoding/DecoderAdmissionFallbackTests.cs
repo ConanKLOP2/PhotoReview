@@ -38,7 +38,7 @@ public sealed class DecoderAdmissionFallbackTests
     {
         var bomb = WithClaimedSize(SmallJpeg(), 8192, 4096); // 128 MiB output, over a 64 MiB machine
         var fallback = new CountingDecoder();
-        var primary = new TurboJpegDecoder { MemoryInfo = () => (64L * 1024 * 1024, 0) };
+        var primary = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => (64L * 1024 * 1024, 0) };
         var decoder = new FallbackImageDecoder(primary, DecoderBackend.TurboJpeg, fallback);
 
         var ex = Assert.Throws<DecoderMemoryAdmissionException>(

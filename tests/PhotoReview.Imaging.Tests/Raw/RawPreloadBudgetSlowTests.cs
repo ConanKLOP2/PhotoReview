@@ -40,7 +40,7 @@ public sealed class RawPreloadBudgetSlowTests
         var decoder = new RawDecoder(new WpfBitmapImageDecoder(sourceReader), sourceReader, sourceBytesCache: sourceBytesCache);
         var metrics = new ReviewMetrics();
         var log = new CapturingLog();
-        var service = new PreviewImageService(metrics, () => false, () => new DecodeBox(Width, Height),
+        var service = new PreviewImageService(metrics, () => false, () => new DecodeBox(Width, Height), WpfBitmapSourceCodec.Instance,
             capacityBytes: CacheCapacityBytes, diskCacheDirectory: Path.Combine(root, "preview-cache"),
             diskCacheCapacityBytes: 0, disableDiskCacheOverride: true, decoder: decoder,
             sourceBytesCache: sourceBytesCache, sourceReader: sourceReader);

@@ -11,7 +11,7 @@ public sealed class OrientationTests(OrientationFixture files) : IClassFixture<O
     [Fact(DisplayName = "ExifOrientation.Read handles null, invalid, and standard values cleanly")]
     public void ReadHandlesNullAndInvalidCleanly()
     {
-        Assert.Equal(1, ExifOrientation.Read(null));
+        Assert.Equal(1, WpfExifOrientation.Read(null));
     }
 
     [Theory(DisplayName = "ImageInfo.Width and Height swap for transposed orientations (5-8) only")]

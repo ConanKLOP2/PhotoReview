@@ -74,7 +74,7 @@ public sealed class WebpHeicNativeTests : IDisposable
         Assert.Equal(Red, BgraAt(decoded, 0, 0));
         Assert.Equal(Blue, BgraAt(decoded, 1, 0));
         Assert.Equal(0u, BgraAt(decoded, 3, 1)); // fully transparent, premultiplied: shown over the viewer background like a PNG
-        Assert.True(PreviewCacheFile.HasAlpha(decoded));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(decoded));
     }
 
     [Fact]
@@ -87,11 +87,11 @@ public sealed class WebpHeicNativeTests : IDisposable
             Write("o.webp", WebPTestImage.Lossless(8, 8, (x, _) => x < 4 ? Blue : Red)), TargetWidth: 0));
 
         // Transparency is never flattened into the JPEG disk cache (IMG-01/Q-R7): the write is refused.
-        await Assert.ThrowsAsync<ArgumentException>(() => PreviewCacheFile.WriteAtomicallyAsync(transparent, _root.Combine("t.prvc")));
+        await Assert.ThrowsAsync<ArgumentException>(() => PreviewCacheFile.WriteAtomicallyAsync(transparent, WpfBitmapSourceCodec.Instance, _root.Combine("t.prvc")));
 
         var cachePath = _root.Combine("o.prvc");
-        await PreviewCacheFile.WriteAtomicallyAsync(opaque, cachePath);
-        var reread = PreviewCacheFile.ReadAsDecodedImage(cachePath);
+        await PreviewCacheFile.WriteAtomicallyAsync(opaque, WpfBitmapSourceCodec.Instance, cachePath);
+        var reread = PreviewCacheFile.ReadAsDecodedImage(cachePath, WpfBitmapSourceCodec.Instance);
         Assert.Equal((8, 8), (reread.PixelWidth, reread.PixelHeight));
         Assert.Equal(DecoderBackend.WicDirect, reread.ActualBackend);
         var left = BgraAt(reread, 1, 4);

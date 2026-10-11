@@ -42,7 +42,7 @@ public sealed class ZoomDetailTests : IDisposable
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "PhotoReview_ZoomDetail_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
-        _thumbnailCache = new ThumbnailCache(
+        _thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "thumbs"),
             maxRamBytes: 1024 * 1024);
         _sessionStore = new SessionStore(new AppPaths(_tempDir), new PhysicalFileSystem());
@@ -327,7 +327,7 @@ public sealed class ZoomDetailTests : IDisposable
         File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
         var previewDecoder = new SizedDecoder();
         var rawDecoder = new SizedDecoder { OriginalGate = new SemaphoreSlim(0) };
-        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: previewDecoder, currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
@@ -369,7 +369,7 @@ public sealed class ZoomDetailTests : IDisposable
         File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
         var embeddedJpegDecoder = new EmbeddedRawDecoder();
         var rawDecoder = new SizedDecoder();
-        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: embeddedJpegDecoder, currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
@@ -395,7 +395,7 @@ public sealed class ZoomDetailTests : IDisposable
     {
         var rawPath = Path.Combine(_tempDir, "info.cr2");
         File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
-        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: new SizedDecoder(), isRawFullDecodeEnabled: () => true);
@@ -427,7 +427,7 @@ public sealed class ZoomDetailTests : IDisposable
         var rawPath = Path.Combine(_tempDir, "info-embedded.cr2");
         File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
         // The "full" decoder fell back to the embedded JPEG: the held original still is the RAW preview.
-        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: new EmbeddedRawDecoder(), isRawFullDecodeEnabled: () => true);
@@ -456,7 +456,7 @@ public sealed class ZoomDetailTests : IDisposable
         File.WriteAllBytes(pathA, [0x49, 0x49, 0x2A, 0x00]);
         File.WriteAllBytes(pathB, [0x49, 0x49, 0x2A, 0x00]);
         // A gets a true full decode; B's "full" decode falls back to its embedded JPEG (still a RAW preview).
-        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: new FullForNamesDecoder("a.cr2"), isRawFullDecodeEnabled: () => true);
@@ -505,7 +505,7 @@ public sealed class ZoomDetailTests : IDisposable
         File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
         var embeddedJpegDecoder = new EmbeddedRawDecoder();
         var rawDecoder = new SizedDecoder();
-        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: embeddedJpegDecoder, currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => false);
@@ -532,7 +532,7 @@ public sealed class ZoomDetailTests : IDisposable
         File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
         var fullSizeDecoder = new EmbeddedRawDecoder(downscaled: false);
         var rawDecoder = new SizedDecoder();
-        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: fullSizeDecoder, currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
@@ -564,7 +564,7 @@ public sealed class ZoomDetailTests : IDisposable
         var rawDecoder = new SizedDecoder();
         rawDecoder.GateByName["a.cr2"] = gateA;
         rawDecoder.GateByName["b.cr2"] = gateB;
-        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: new SizedDecoder(), currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
@@ -823,7 +823,7 @@ public sealed class ZoomDetailTests : IDisposable
         File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
         var previewDecoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480 };
         var rawDecoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = 6744, DecodedHeight = 4502 };
-        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
             decoder: previewDecoder, currentBackend: () => DecoderBackend.Wpf,
             rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
@@ -967,6 +967,7 @@ public sealed class ZoomDetailTests : IDisposable
         _metrics,
         () => _settings.LoadingMode == LoadingMode.Original,
         () => box,
+        WpfBitmapSourceCodec.Instance,
         capacityBytes: 512L * 1024 * 1024,
         disableDiskCacheOverride: true,
         decoder: decoder,

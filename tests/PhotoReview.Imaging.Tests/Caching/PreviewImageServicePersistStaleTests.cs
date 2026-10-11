@@ -22,7 +22,7 @@ public sealed class PreviewImageServicePersistStaleTests : IDisposable
     public async Task Persist_ClearCacheDuringWrite_DeletesStaleFile()
     {
         var (source, dir) = Setup();
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir);
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir);
         var hookCalls = 0;
         service.AfterPersistWriteForTests = () =>
         {
@@ -49,7 +49,7 @@ public sealed class PreviewImageServicePersistStaleTests : IDisposable
     public async Task Persist_NoClearCache_KeepsFile()
     {
         var (source, dir) = Setup();
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir);
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir);
         var hookCalls = 0;
         service.AfterPersistWriteForTests = () => Interlocked.Increment(ref hookCalls);
         try

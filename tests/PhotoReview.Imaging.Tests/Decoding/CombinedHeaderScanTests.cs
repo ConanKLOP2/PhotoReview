@@ -139,7 +139,7 @@ public sealed class CombinedHeaderScanTests
             0xFF, 0xDA, 0x00, 0x02,
         ];
 
-        var decoder = new TurboJpegDecoder();
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
         var ex = Assert.Throws<NotSupportedException>(() =>
             decoder.Decode(new DecodeRequest("icc-and-exif.jpg", new DecodeBox(16, 16), bytes: jpeg)));
         Assert.Contains("ICC", ex.Message, StringComparison.Ordinal);
@@ -149,7 +149,7 @@ public sealed class CombinedHeaderScanTests
     public void Decode_RealJpeg_OrientationAndExifBothCorrect()
     {
         var bytes = ExifTestData.EncodeJpegWithExif(64, 48, orientation: 6);
-        var decoder = new TurboJpegDecoder();
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
 
         var decoded = decoder.Decode(new DecodeRequest("real.jpg", DecodeBox.Unbounded, bytes: bytes));
 

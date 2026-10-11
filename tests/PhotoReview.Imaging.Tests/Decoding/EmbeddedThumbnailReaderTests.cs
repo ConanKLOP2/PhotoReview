@@ -44,9 +44,9 @@ public sealed class EmbeddedThumbnailReaderTests : IDisposable
         var path = Path.Combine(_dir, "bomb.jpg");
         File.WriteAllBytes(path, WithClaimedThumbnailSize(width, height));
 
-        EmbeddedThumbnailReader.TryRead(path); // warm-up (WIC/WPF one-time init)
+        EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance); // warm-up (WIC/WPF one-time init)
         var before = GC.GetAllocatedBytesForCurrentThread();
-        var result = EmbeddedThumbnailReader.TryRead(path);
+        var result = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.Null(result);
@@ -98,9 +98,9 @@ public sealed class EmbeddedThumbnailReaderTests : IDisposable
         var path = Path.Combine(_dir, "big-thumb.jpg");
         File.WriteAllBytes(path, WithRealThumbnail(1100));
 
-        EmbeddedThumbnailReader.TryRead(path); // warm-up
+        EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance); // warm-up
         var before = GC.GetAllocatedBytesForCurrentThread();
-        var result = EmbeddedThumbnailReader.TryRead(path);
+        var result = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.Null(result);
@@ -113,7 +113,7 @@ public sealed class EmbeddedThumbnailReaderTests : IDisposable
         var path = Path.Combine(_dir, "small-thumb.jpg");
         File.WriteAllBytes(path, WithRealThumbnail(160));
 
-        var image = EmbeddedThumbnailReader.TryRead(path);
+        var image = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
 
         Assert.NotNull(image);
         Assert.Equal(160, image.PixelWidth);
@@ -125,7 +125,7 @@ public sealed class EmbeddedThumbnailReaderTests : IDisposable
         var path = Path.Combine(_dir, "ok.jpg");
         File.WriteAllBytes(path, EmbeddedThumbnailJpegFixture.CreateWithThumbnail(mainSize: 480, thumbnailSize: 160));
 
-        var image = EmbeddedThumbnailReader.TryRead(path);
+        var image = EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance);
 
         Assert.NotNull(image);
         Assert.Equal(160, image.PixelWidth);

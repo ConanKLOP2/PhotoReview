@@ -39,8 +39,12 @@ public sealed class LayerDependencyTests
             .HaveDependencyOnAny(
                 "PhotoReview.App",
                 "PhotoReview.Imaging.Raw",
+                "PhotoReview.Imaging.Wpf",
                 "PhotoReview.Platform.Windows",
                 "PresentationFramework",
+                "PresentationCore",
+                "WindowsBase",
+                "System.Windows",
                 "System.Windows.Forms")
             .GetResult();
 
@@ -79,8 +83,11 @@ public sealed class LayerDependencyTests
                 "PhotoReview.Platform.Windows",
                 "PhotoReview.Benchmarking",
                 "PhotoReview.Imaging.LibRaw",
+                "PhotoReview.Imaging.Wpf",
                 "PresentationFramework",
-                "System.Windows.Forms")
+                "PresentationCore",
+                "WindowsBase",
+                "System.Windows")
             .GetResult();
 
         Assert.True(
@@ -101,7 +108,11 @@ public sealed class LayerDependencyTests
                 "PhotoReview.Platform.Windows",
                 "PhotoReview.Benchmarking",
                 "PhotoReview.Imaging.Raw",
-                "System.Windows.Forms")
+                "PhotoReview.Imaging.Wpf",
+                "PresentationFramework",
+                "PresentationCore",
+                "WindowsBase",
+                "System.Windows")
             .GetResult();
 
         Assert.True(
@@ -145,19 +156,73 @@ public sealed class LayerDependencyTests
             $"Platform.Windows has forbidden WPF dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
     }
 
-    [Fact(DisplayName = "Rule 7: Benchmarking does not depend on App or UI frameworks beyond WPF imaging types")]
+    [Fact(DisplayName = "Rule 7: Benchmarking does not depend on App, the WPF bridge or any WPF/WinForms assembly (WP-06)")]
     public void Benchmarking_DoesNotDependOn_App()
     {
         var types = Types.InAssembly(typeof(PhotoReview.Benchmarking.BenchmarkEngine).Assembly);
 
         var result = types
             .ShouldNot()
-            .HaveDependencyOnAny("PhotoReview.App", "System.Windows.Forms")
+            .HaveDependencyOnAny("PhotoReview.App", "PhotoReview.Imaging.Wpf", "System.Windows.Forms", "System.Windows",
+                "PresentationFramework", "PresentationCore", "WindowsBase")
             .GetResult();
 
         Assert.True(
             result.IsSuccessful,
             $"Benchmarking has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
+    }
+
+    /// <summary>The WPF framework assemblies. None of the Imaging family may reference them (WP-06, L-IMG).</summary>
+    private static readonly string[] WpfAssemblyNames =
+        ["PresentationCore", "PresentationFramework", "WindowsBase", "System.Xaml", "UIAutomationTypes", "UIAutomationProvider", "ReachFramework"];
+
+    public static TheoryData<string> WpfFreeAssemblies() => new()
+    {
+        typeof(PhotoReview.Imaging.Decoding.IDecodedImage).Assembly.GetName().Name!,
+        typeof(PhotoReview.Imaging.Raw.RawFormat).Assembly.GetName().Name!,
+        typeof(PhotoReview.Imaging.LibRaw.LibRawAvailability).Assembly.GetName().Name!,
+        typeof(PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder).Assembly.GetName().Name!,
+        typeof(PhotoReview.Benchmarking.BenchmarkEngine).Assembly.GetName().Name!,
+    };
+
+    [Theory(DisplayName = "Rule 11 (L-IMG): Imaging, Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg and Benchmarking reference no WPF assembly")]
+    [MemberData(nameof(WpfFreeAssemblies))]
+    public void ImagingFamily_ReferencesNoWpfAssembly(string assemblyName)
+    {
+        var assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == assemblyName)
+            ?? System.Reflection.Assembly.Load(assemblyName);
+
+        var wpf = assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name ?? string.Empty)
+            .Where(name => WpfAssemblyNames.Contains(name, StringComparer.Ordinal))
+            .ToArray();
+
+        Assert.True(wpf.Length == 0, $"{assemblyName} references WPF assemblies: {string.Join(", ", wpf)}");
+    }
+
+    [Theory(DisplayName = "Rule 11 (L-IMG): the project files of the Imaging family do not set UseWPF")]
+    [InlineData("src/PhotoReview.Imaging/PhotoReview.Imaging.csproj")]
+    [InlineData("src/PhotoReview.Imaging.Raw/PhotoReview.Imaging.Raw.csproj")]
+    [InlineData("src/PhotoReview.Imaging.LibRaw/PhotoReview.Imaging.LibRaw.csproj")]
+    [InlineData("src/PhotoReview.Imaging.TurboJpeg/PhotoReview.Imaging.TurboJpeg.csproj")]
+    [InlineData("src/PhotoReview.Benchmarking/PhotoReview.Benchmarking.csproj")]
+    public void ImagingFamily_ProjectFiles_DoNotEnableWpf(string relativePath)
+    {
+        var text = File.ReadAllText(Path.Combine(RepoScan.Root, relativePath));
+
+        Assert.DoesNotContain("UseWPF", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("UseWindowsForms", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact(DisplayName = "Rule 12 (L-IMG): the WPF bridge is the only Imaging assembly with UseWPF and references only Core and Imaging")]
+    public void ImagingWpf_IsTheOnlyWpfImagingAssembly_AndDependsOnlyOnCoreAndImaging()
+    {
+        var wpfBridge = typeof(PhotoReview.Imaging.Wpf.WpfBitmapSourceCodec).Assembly;
+
+        Assert.Equal("PhotoReview.Imaging.Wpf", wpfBridge.GetName().Name);
+        Assert.Contains(wpfBridge.GetReferencedAssemblies(), a => a.Name == "PresentationCore");
+        Assert.Empty(UnexpectedPhotoReviewReferences(wpfBridge, "PhotoReview.Core", "PhotoReview.Imaging"));
+        Assert.Contains("UseWPF", File.ReadAllText(Path.Combine(RepoScan.Root, "src/PhotoReview.Imaging.Wpf/PhotoReview.Imaging.Wpf.csproj")));
     }
 
     [Fact(DisplayName = "Rule 6: ViewModels do not depend on System.Windows (K-2)")]

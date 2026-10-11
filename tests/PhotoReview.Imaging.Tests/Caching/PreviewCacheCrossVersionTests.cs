@@ -134,7 +134,7 @@ public sealed class PreviewCacheCrossVersionTests : IDisposable
     {
         var path = LegacyWpfPreviewCache.FixturePath("v7-exif-bgr32-96x64.pv4");
 
-        var wpf = PreviewCacheFile.ReadAsDecodedImage(path);
+        var wpf = PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance);
         var bitmap = Assert.IsAssignableFrom<BitmapSource>(wpf.PlatformImage);
         Assert.True(bitmap.IsFrozen);
         Assert.Equal(PixelFormats.Bgr32, bitmap.Format);
@@ -174,7 +174,7 @@ public sealed class PreviewCacheCrossVersionTests : IDisposable
         var expected = LegacyWpfPreviewCache.WritePng(bitmap);
         var path = Path.Combine(_root.Dir("thumbs"), "t.png");
 
-        await DiskCacheStore.WriteAtomicallyAsync(new WpfDecodedImage(bitmap), path);
+        await DiskCacheStore.WriteAtomicallyAsync(new WpfDecodedImage(bitmap), WpfBitmapSourceCodec.Instance, path);
 
         var actual = File.ReadAllBytes(path);
         if (!alpha) Assert.Equal(expected, actual);
@@ -190,7 +190,7 @@ public sealed class PreviewCacheCrossVersionTests : IDisposable
         const int width = 40, height = 24;
         var bitmap = LegacyWpfPreviewCache.PatternBitmap(width, height, PixelFormats.Bgra32, alpha: true);
         var path = Path.Combine(_root.Dir("thumbs"), "alpha.png");
-        await DiskCacheStore.WriteAtomicallyAsync(new WpfDecodedImage(bitmap), path);
+        await DiskCacheStore.WriteAtomicallyAsync(new WpfDecodedImage(bitmap), WpfBitmapSourceCodec.Instance, path);
 
         var image = ThumbnailCache.DecodeDiskThumbnail(path, PixelBufferImageCodec.Instance);
         using var pixels = Assert.IsType<PixelBuffer>(image.PlatformImage);

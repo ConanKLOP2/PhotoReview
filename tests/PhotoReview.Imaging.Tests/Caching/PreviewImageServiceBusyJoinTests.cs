@@ -22,7 +22,7 @@ public sealed class PreviewImageServiceBusyJoinTests : IDisposable
     public PreviewImageServiceBusyJoinTests()
     {
         _path = _root.File(Path.Combine("images", "a.jpg"), 1, 2, 3, 4);
-        _service = new PreviewImageService(_metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        _service = new PreviewImageService(_metrics, () => false, () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: _root.Dir("cache"), disableDiskCacheOverride: true, decoder: _decoder);
     }
 

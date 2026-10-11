@@ -46,7 +46,7 @@ internal static class DecoderProviders
 
         if (turboJpegProbe(out string? reason))
         {
-            Func<IImageDecoder> createTurboJpeg = () => new TurboJpegDecoder();
+            Func<IImageDecoder> createTurboJpeg = () => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
             providers.Add((DecoderBackend.TurboJpeg, createTurboJpeg));
         }
         else
@@ -58,7 +58,7 @@ internal static class DecoderProviders
 
         if (libRawProbe(out string? libRawReason))
         {
-            providers.Add((DecoderBackend.LibRaw, () => new LibRawDecoder()));
+            providers.Add((DecoderBackend.LibRaw, () => new LibRawDecoder(WpfBitmapSourceCodec.Instance)));
         }
         else if (isLibRawNeeded?.Invoke() ?? true)
         {

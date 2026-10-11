@@ -90,7 +90,7 @@ public sealed partial class ImagePresenterTests
         var service = new PreviewImageService(
             _metrics,
             () => false,
-            (Func<DecodeBox>)(() => new DecodeBox(1920, 0)),
+            (Func<DecodeBox>)(() => new DecodeBox(1920, 0)), WpfBitmapSourceCodec.Instance,
             capacityBytes: 64 * 1024 * 1024,
             currentBackend: () => DecoderBackend.Wpf,
             disableDiskCacheOverride: true,
@@ -115,7 +115,7 @@ public sealed partial class ImagePresenterTests
         var service = new PreviewImageService(
             _metrics,
             () => false,
-            (Func<DecodeBox>)(() => new DecodeBox(1920, 0)),
+            (Func<DecodeBox>)(() => new DecodeBox(1920, 0)), WpfBitmapSourceCodec.Instance,
             capacityBytes: 64 * 1024 * 1024,
             currentBackend: () => DecoderBackend.Wpf,
             disableDiskCacheOverride: true,
@@ -142,7 +142,7 @@ public sealed partial class ImagePresenterTests
         var service = new PreviewImageService(
             _metrics,
             () => false,
-            (Func<DecodeBox>)(() => new DecodeBox(1920, 0)),
+            (Func<DecodeBox>)(() => new DecodeBox(1920, 0)), WpfBitmapSourceCodec.Instance,
             capacityBytes: 64 * 1024 * 1024,
             currentBackend: () => DecoderBackend.Wpf,
             disableDiskCacheOverride: true,

@@ -2,6 +2,7 @@
 using System.IO;
 using System.Diagnostics;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Imaging.Decoding.Wic;
 using System.Threading.Channels;
 using PhotoReview.Imaging.Pixels;
 using PhotoReview.Core.Caching;
@@ -89,6 +90,7 @@ public sealed class PreviewImageService : IPreloadTarget
         ReviewMetrics metrics,
         Func<bool> isOriginalLoadingMode,
         Func<int> targetDecodeWidth,
+        IPlatformImageCodec platformCodec,
         long capacityBytes = 16L * 1024 * 1024 * 1024,
         string? diskCacheDirectory = null,
         long diskCacheCapacityBytes = 4L * 1024 * 1024 * 1024,
@@ -103,11 +105,10 @@ public sealed class PreviewImageService : IPreloadTarget
         PreloadWindow? preloadWindow = null,
         ISourceReader? sourceReader = null,
         IImageDecoder? rawFullDecoder = null,
-        Func<bool>? isRawFullDecodeEnabled = null,
-        IPlatformImageCodec? platformCodec = null)
-        : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
+        Func<bool>? isRawFullDecodeEnabled = null)
+        : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), platformCodec, capacityBytes, diskCacheDirectory,
             diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache,
-            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader, rawFullDecoder, isRawFullDecodeEnabled, platformCodec)
+            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader, rawFullDecoder, isRawFullDecodeEnabled)
     {
     }
 
@@ -125,6 +126,7 @@ public sealed class PreviewImageService : IPreloadTarget
         ReviewMetrics metrics,
         Func<bool> isOriginalLoadingMode,
         Func<DecodeBox> targetDecodeBox,
+        IPlatformImageCodec platformCodec,
         long capacityBytes = 16L * 1024 * 1024 * 1024,
         string? diskCacheDirectory = null,
         long diskCacheCapacityBytes = 4L * 1024 * 1024 * 1024,
@@ -139,13 +141,12 @@ public sealed class PreviewImageService : IPreloadTarget
         PreloadWindow? preloadWindow = null,
         ISourceReader? sourceReader = null,
         IImageDecoder? rawFullDecoder = null,
-        Func<bool>? isRawFullDecodeEnabled = null,
-        IPlatformImageCodec? platformCodec = null)
+        Func<bool>? isRawFullDecodeEnabled = null)
     {
-        // WP-04: disk-cache reads/writes go through PixelBuffer + WIC; this codec turns pixels into the platform image the
-        // presenter shows and back. null = the WPF bridge (the WPF app's decoders all produce BitmapSources) until WP-06 makes it
-        // a required dependency.
-        _platformCodec = platformCodec ?? WpfCacheImageCodec.Instance;
+        // WP-04/WP-06: disk-cache reads/writes go through PixelBuffer + WIC; this codec turns pixels into the platform image the
+        // presenter shows and back. Required (no default): the WPF app passes WpfBitmapSourceCodec, the Win32 shell
+        // PixelBufferImageCodec.
+        _platformCodec = platformCodec ?? throw new ArgumentNullException(nameof(platformCodec));
         _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
         _rawFullDecoder = rawFullDecoder;
         _isRawFullDecodeEnabled = isRawFullDecodeEnabled ?? (() => false);
@@ -164,7 +165,8 @@ public sealed class PreviewImageService : IPreloadTarget
             ?? (diskCacheCapacityBytes <= 0 || Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
         _decoderFactory = decoderFactory;
         _sourceBytesCache = sourceBytesCache;
-        _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WpfBitmapImageDecoder());
+        // No decoder and no factory: WIC Direct with the injected codec (WP-06: this assembly has no WPF decoder).
+        _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WicDirectDecoder(_platformCodec, _sourceReader));
         _originalDimensions = new BoundedLruCache<ImageCacheKey, (int Width, int Height)>(
             originalDimensionsCapacity, _ => 1);
         // IMG-11: clamp to the user's share of physical RAM (or half of it without a percent) and log what is in effect.

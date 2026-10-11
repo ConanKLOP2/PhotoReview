@@ -61,9 +61,9 @@ public sealed class PreviewCacheExifTests : IAsyncLifetime
     {
         var path = CachePath("roundtrip");
         await PreviewCacheFile.WriteAtomicallyAsync(
-            new WpfDecodedImage(Bitmap(), downscaled: true, orientation: 6, originalWidth: 4000, originalHeight: 6000, exif: Exif), path);
+            new WpfDecodedImage(Bitmap(), downscaled: true, orientation: 6, originalWidth: 4000, originalHeight: 6000, exif: Exif), WpfBitmapSourceCodec.Instance, path);
 
-        var read = PreviewCacheFile.ReadAsDecodedImage(path);
+        var read = PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance);
 
         Assert.Equal(Exif, read.Exif);
         Assert.Equal(6, read.Orientation);
@@ -75,9 +75,9 @@ public sealed class PreviewCacheExifTests : IAsyncLifetime
     public async Task EntryWithoutExif()
     {
         var path = CachePath("none");
-        await PreviewCacheFile.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(), downscaled: true), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(), downscaled: true), WpfBitmapSourceCodec.Instance, path);
 
-        Assert.Null(PreviewCacheFile.ReadAsDecodedImage(path).Exif);
+        Assert.Null(PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance).Exif);
         Assert.Equal(PreviewCacheFile.CurrentVersion, File.ReadAllBytes(path)[4]);
     }
 
@@ -85,13 +85,13 @@ public sealed class PreviewCacheExifTests : IAsyncLifetime
     public async Task Version6EntryIsReadWithoutExif()
     {
         var path = CachePath("v6");
-        await PreviewCacheFile.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(), downscaled: true, originalWidth: 800, originalHeight: 600), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(), downscaled: true, originalWidth: 800, originalHeight: 600), WpfBitmapSourceCodec.Instance, path);
         var bytes = File.ReadAllBytes(path);
         Assert.Equal(0, BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(24, 2))); // empty EXIF block
         File.WriteAllBytes(path, [.. bytes[..24], .. bytes[26..]]); // v6 layout: payload right after the header
         File.WriteAllBytes(path, SetVersion(File.ReadAllBytes(path), 6));
 
-        var read = PreviewCacheFile.ReadAsDecodedImage(path);
+        var read = PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance);
 
         Assert.Null(read.Exif);
         Assert.Equal((800, 600), (read.OriginalWidth, read.OriginalHeight));
@@ -102,12 +102,12 @@ public sealed class PreviewCacheExifTests : IAsyncLifetime
     public async Task CorruptExifBlockKeepsPixels()
     {
         var path = CachePath("corrupt");
-        await PreviewCacheFile.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(), downscaled: true, exif: Exif), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(), downscaled: true, exif: Exif), WpfBitmapSourceCodec.Instance, path);
         var bytes = File.ReadAllBytes(path);
         bytes[26] = 99; // EXIF block format version
 
         File.WriteAllBytes(path, bytes);
-        var read = PreviewCacheFile.ReadAsDecodedImage(path);
+        var read = PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance);
 
         Assert.Null(read.Exif);
         Assert.Equal(8, read.PixelWidth);
@@ -117,12 +117,12 @@ public sealed class PreviewCacheExifTests : IAsyncLifetime
     public async Task OversizedExifLengthIsRejected()
     {
         var path = CachePath("oversized");
-        await PreviewCacheFile.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(), downscaled: true, exif: Exif), path);
+        await PreviewCacheFile.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(), downscaled: true, exif: Exif), WpfBitmapSourceCodec.Instance, path);
         var bytes = File.ReadAllBytes(path);
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(24, 2), ushort.MaxValue);
         File.WriteAllBytes(path, bytes);
 
-        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path, WpfBitmapSourceCodec.Instance));
     }
 
     [Fact(DisplayName = "A disk-cache hit in a new session shows the EXIF without decoding (reading) the source")]
@@ -163,7 +163,7 @@ public sealed class PreviewCacheExifTests : IAsyncLifetime
     }
 
     private static PreviewImageService CreateService(string disk, IImageDecoder decoder, ReviewMetrics metrics) =>
-        new(metrics, () => false, () => 4, capacityBytes: 1024 * 1024, diskCacheDirectory: disk,
+        new(metrics, () => false, () => 4, WpfBitmapSourceCodec.Instance, capacityBytes: 1024 * 1024, diskCacheDirectory: disk,
             disableDiskCacheOverride: false, decoder: decoder);
 
     private sealed class ExifDecoder(ExifSummary? exif) : IImageDecoder

@@ -38,7 +38,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     private BenchmarkImageExecutor NewExecutor(BenchmarkProfile profile, string[] files,
         Func<double, bool>? hasHeadroom = null)
     {
-        var executor = new BenchmarkImageExecutor(profile, files, hasHeadroom);
+        var executor = new BenchmarkImageExecutor(profile, files, WpfBitmapSourceCodec.Instance, hasHeadroom, new WpfBitmapImageDecoder());
         _executors.Add(executor);
         return executor;
     }

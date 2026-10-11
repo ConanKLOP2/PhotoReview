@@ -293,7 +293,7 @@ public sealed class RawDecoder : IImageDecoder
             return false;
         return ex is System.Runtime.InteropServices.COMException com
             ? !IsResourceExhaustion(com.HResult)
-            : ex is InvalidDataException or System.IO.FileFormatException or NotSupportedException;
+            : ex is InvalidDataException or FormatException or NotSupportedException;
     }
 
     private static bool IsResourceExhaustion(int hresult) =>
@@ -301,7 +301,7 @@ public sealed class RawDecoder : IImageDecoder
 
     /// <summary>The failure says the preview's data is damaged (not missing a component, not transient).</summary>
     private static bool IsCorruptDataFailure(Exception ex) =>
-        ex is InvalidDataException or System.IO.FileFormatException
+        ex is InvalidDataException or FormatException
         || (ex is System.Runtime.InteropServices.COMException com && IsCorruptHResult(com.HResult))
         || (ex.InnerException is System.Runtime.InteropServices.COMException inner && IsCorruptHResult(inner.HResult));
 

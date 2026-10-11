@@ -25,7 +25,7 @@ public sealed class PreviewImageErrorLocalizationTests : IAsyncLifetime
     {
         _path = _root.File("photo.png", TestImages.PreviewPng);
         _diskCache = _root.Dir("disk-cache");
-        _service = new PhotoReview.Imaging.Caching.PreviewImageService(new ReviewMetrics(), () => false, () => 512,
+        _service = new PhotoReview.Imaging.Caching.PreviewImageService(new ReviewMetrics(), () => false, () => 512, WpfBitmapSourceCodec.Instance,
             capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: _diskCache);
     }
 

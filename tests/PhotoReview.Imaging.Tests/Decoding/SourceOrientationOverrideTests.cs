@@ -19,7 +19,7 @@ public sealed class SourceOrientationOverrideTests
 
         var wpfDecoder = new WpfBitmapImageDecoder();
         var wicDecoder = new WicDirectDecoder(WpfBitmapSourceCodec.Instance);
-        var turboDecoder = new TurboJpegDecoder();
+        var turboDecoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
 
         var request = new DecodeRequest(
             Path: "synthetic.jpg",

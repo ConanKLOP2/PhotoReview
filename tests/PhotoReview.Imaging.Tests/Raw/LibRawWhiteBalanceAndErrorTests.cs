@@ -71,7 +71,7 @@ public sealed class LibRawWhiteBalanceAndErrorTests
         Assert.True(Distance(camera, preview) < Distance(daylight, preview) / 2,
             $"{fileName}: preview {preview}, camera-WB {camera}, daylight {daylight}");
 
-        var image = new LibRawDecoder().Decode(new DecodeRequest(path, new DecodeBox(320, 240)));
+        var image = new LibRawDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, new DecodeBox(320, 240)));
         var decoded = Ratios(BitmapMeans((BitmapSource)image.PlatformImage));
         Assert.True(Math.Abs(decoded.RG / camera.RG - 1) < 0.04 && Math.Abs(decoded.BG / camera.BG - 1) < 0.04,
             $"{fileName}: decoder {decoded}, camera-WB {camera}, daylight {daylight}");

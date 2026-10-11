@@ -43,7 +43,7 @@ public sealed class EmbeddedThumbnailMutationTests : IDisposable
             File.WriteAllBytes(path, mutant);
             try
             {
-                if (EmbeddedThumbnailReader.TryRead(path) is { } image)
+                if (EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance) is { } image)
                 {
                     found++;
                     Assert.True(image.PixelWidth > 0 && image.PixelHeight > 0);
@@ -65,7 +65,7 @@ public sealed class EmbeddedThumbnailMutationTests : IDisposable
         var source = Path.Combine(_dir, "with-thumb.jpg");
         await File.WriteAllBytesAsync(source, EmbeddedThumbnailJpegFixture.CreateWithThumbnail(mainSize: 48, thumbnailSize: 16));
         var diskDir = Path.Combine(_dir, "disk");
-        using var cache = new PhotoReview.Imaging.Caching.ThumbnailCache(diskDir, maxRamBytes: 16 * 1024 * 1024);
+        using var cache = new PhotoReview.Imaging.Caching.ThumbnailCache(WpfBitmapSourceCodec.Instance, diskDir, maxRamBytes: 16 * 1024 * 1024);
         var seed = PhotoReview.TestSupport.TestImages.OpaquePng;
         var cached = PhotoReview.Imaging.Tests.Caching.ThumbnailCacheFiles.Write(diskDir, source, seed);
         Assert.NotNull(await cache.GetAsync(source, null));

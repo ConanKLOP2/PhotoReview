@@ -234,7 +234,7 @@ public sealed class LibRawDecodeMemoryTests
     private static BitmapSource Bitmap(byte[] source, int sw, int sh, int tw, int th, int channels)
     {
         using var buffer = RgbBgraResampler.ResizeToBuffer(source, sw, sh, tw, th, channels, CancellationToken.None);
-        return RgbBgraResampler.ToBitmap(buffer);
+        return (BitmapSource)WpfBitmapSourceCodec.Instance.FromPixels(buffer.TakePixels());
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public sealed class LibRawDecodeMemoryTests
         BitmapSource bitmap;
         using (var buffer = RgbBgraResampler.ResizeToBuffer(rgb, 2, 2, 2, 2, 3, CancellationToken.None))
         {
-            bitmap = RgbBgraResampler.ToBitmap(buffer);
+            bitmap = (BitmapSource)WpfBitmapSourceCodec.Instance.FromPixels(buffer.TakePixels());
         }
 
         Assert.True(bitmap.IsFrozen);

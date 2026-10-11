@@ -35,7 +35,7 @@ public sealed class TurboJpegWp05ManualTests
         if (Env("PHOTOREVIEW_WP05_OUT") is null || Env("PHOTOREVIEW_WP05_FILES") is not { } files) return;
         var pixelDecoder = NewPixelDecoder();
         if (pixelDecoder is null) return;
-        var legacy = new TurboJpeg.TurboJpegDecoder();
+        var legacy = new TurboJpeg.TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
         Append("# fine-scale: file | source | target width | size | MAE | PSNR dB");
         foreach (var path in files.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -61,7 +61,7 @@ public sealed class TurboJpegWp05ManualTests
     {
         if (Env("PHOTOREVIEW_WP05_OUT") is null || Env("PHOTOREVIEW_WP05_BENCH_FILE") is not { } file) return;
         var runs = int.TryParse(Env("PHOTOREVIEW_WP05_RUNS"), out var r) ? r : 12;
-        var legacy = new TurboJpeg.TurboJpegDecoder();
+        var legacy = new TurboJpeg.TurboJpegDecoder(WpfBitmapSourceCodec.Instance);
         var pixel = NewPixelDecoder();
         var bytes = File.ReadAllBytes(file); // in memory: measures decode, not the disk
         Append($"# bench {Path.GetFileName(file)} runs={runs} codecCtor={(pixel is null ? "absent (base)" : "present")}");

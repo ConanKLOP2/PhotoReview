@@ -2,12 +2,11 @@ namespace PhotoReview.Imaging.Decoding;
 
 /// <summary>
 /// Helper for reading and applying standard EXIF Orientation (tags 1 to 8).
-/// <para>WP-03 (C-03): this file holds the pure part (no WPF type). The members that take or return WPF types
-/// (<c>Read(BitmapMetadata)</c>, <c>Apply(BitmapSource,int)</c>, <c>CreateTransform</c>) live in the other half of this partial
-/// class, <c>ExifOrientationWpf.cs</c>, until WP-06 moves them to <c>PhotoReview.Imaging.Wpf</c>. Pixel rotation without WPF is
-/// <see cref="Pixels.PixelOps.ApplyOrientation"/>.</para>
+/// <para>WP-03 (C-03) / WP-06: pure (no WPF type). The members that take or return WPF types
+/// (<c>Read(BitmapMetadata)</c>, <c>Apply(BitmapSource,int)</c>, <c>CreateTransform</c>) are <c>WpfExifOrientation</c> in
+/// <c>PhotoReview.Imaging.Wpf</c>. Pixel rotation without WPF is <see cref="Pixels.PixelOps.ApplyOrientation"/>.</para>
 /// </summary>
-public static partial class ExifOrientation
+public static class ExifOrientation
 {
     /// <summary>EXIF IFD0 orientation tag (274) in a JPEG APP1 block, the query WPF and WIC answer the same way.</summary>
     internal const string ExifOrientationQuery = "/app1/ifd/{ushort=274}";

@@ -33,11 +33,11 @@ public sealed class IccMismatchTests
         var jpeg = Encode(format);
         Assert.True(JpegIccProbe.HasIcc(jpeg), "the fixture must carry the profile");
 
-        Assert.Throws<NotSupportedException>(() => new TurboJpegDecoder().Decode(new DecodeRequest("x.jpg", new DecodeBox(12, 12), bytes: jpeg)));
+        Assert.Throws<NotSupportedException>(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("x.jpg", new DecodeBox(12, 12), bytes: jpeg)));
         var chains = new (string Name, IImageDecoder Decoder)[]
         {
             ("Wpf", new WpfBitmapImageDecoder()),
-            ("Turbo->Wpf", new FallbackImageDecoder(new TurboJpegDecoder(), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder())),
+            ("Turbo->Wpf", new FallbackImageDecoder(new TurboJpegDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.TurboJpeg, new WpfBitmapImageDecoder())),
             ("WicDirect->Wpf", new FallbackImageDecoder(new WicDirectDecoder(WpfBitmapSourceCodec.Instance), DecoderBackend.WicDirect, new WpfBitmapImageDecoder())),
         };
         foreach (var (chainName, chain) in chains)

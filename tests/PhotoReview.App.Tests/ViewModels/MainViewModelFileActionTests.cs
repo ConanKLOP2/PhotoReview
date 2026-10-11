@@ -97,12 +97,12 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         _previewService = new PreviewImageService(
             _metrics,
             () => _previewContext.IsOriginalLoadingMode(),
-            () => _previewContext.TargetDecodeBox(),
+            () => _previewContext.TargetDecodeBox(), WpfBitmapSourceCodec.Instance,
             capacityBytes: 64 * 1024 * 1024,
             currentBackend: () => _previewContext.CurrentBackend(),
             disableDiskCacheOverride: true);
 
-        _thumbnailCache = new ThumbnailCache(
+        _thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance,
             diskDirectory: Path.Combine(_tempDir, "thumbs"),
             maxRamBytes: 16 * 1024 * 1024);
 

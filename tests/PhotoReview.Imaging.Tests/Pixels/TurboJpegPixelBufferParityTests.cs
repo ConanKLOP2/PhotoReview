@@ -8,10 +8,11 @@ using PhotoReview.TestSupport.Windows;
 namespace PhotoReview.Imaging.Tests.Pixels;
 
 /// <summary>
-/// WP-05: TurboJpegDecoder(codec) (decode straight into a PixelBuffer, PixelOps orientation) against the legacy
-/// parameterless decoder (BitmapSource + WPF TransformedBitmap) on the same files. Byte for byte whenever no fine scale is
-/// involved (full size, exact DCT factor). With fine scale WIC's Fant and the integer area filter differ by a few levels
-/// (worst measured on this edge-heavy checkerboard fixture: MAE 3.6, PSNR 30.6 dB; sizes and orientation always identical).
+/// WP-05: TurboJpegDecoder(codec) (decode straight into a PixelBuffer, PixelOps orientation) against WPF's
+/// TransformedBitmap on the same TurboJPEG pixels (WP-06 removed the parameterless legacy decoder) and, for fine scale, WPF's own decode. Byte for byte whenever no fine scale is
+/// involved (full size, exact DCT factor). With fine scale (TurboJPEG + WIC Fant against WPF's own decode) the pixels differ by a few levels
+/// (worst measured on this edge-heavy checkerboard fixture against WPF's own decode, a different JPEG decoder and scaler: MAE 3.8, PSNR 26.8 dB;
+/// sizes and orientation always identical).
 /// </summary>
 [Trait("Category", "HotPath")]
 public sealed class TurboJpegPixelBufferParityTests : IDisposable
@@ -27,8 +28,37 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         catch (UnauthorizedAccessException) { }
     }
 
-    private static readonly TurboJpeg.TurboJpegDecoder Legacy = new();
     private static readonly TurboJpeg.TurboJpegDecoder Pixels = new(PixelBufferImageCodec.Instance);
+    private static readonly WpfBitmapImageDecoder WpfDecoder = new();
+
+    /// <summary>
+    /// The WPF reference for <paramref name="request"/> when no fine scale is involved (WP-06: the parameterless "legacy"
+    /// TurboJpeg decoder is gone): the SAME unoriented TurboJPEG pixels as a BitmapSource, rotated by WPF's TransformedBitmap
+    /// (<see cref="WpfExifOrientation.Apply"/>) -- exactly what the removed legacy path did, so PixelOps.ApplyOrientation is proven
+    /// byte-exact against the WPF transform.
+    /// </summary>
+    private static (System.Windows.Media.Imaging.BitmapSource Source, int Orientation, int OriginalWidth, int OriginalHeight, bool Downscaled, PhotoReview.Imaging.Metadata.ExifSummary? Exif)
+        WpfReference(DecodeRequest request)
+    {
+        var probe = Assert.IsType<DecodedImage>(Pixels.Decode(request));
+        var orientation = request.SourceOrientation ?? probe.Orientation;
+        ((PixelBuffer)probe.PlatformImage).Dispose();
+        var transposed = request.ApplyOrientation && ExifOrientation.IsTransposed(orientation);
+        // The box is in displayed pixels: the same stored size is asked for unoriented by swapping the sides.
+        var rawRequest = request with
+        {
+            ApplyOrientation = false,
+            TargetWidth = transposed ? request.TargetHeight : request.TargetWidth,
+            TargetHeight = transposed ? request.TargetWidth : request.TargetHeight,
+        };
+        var raw = Assert.IsType<DecodedImage>(Pixels.Decode(rawRequest));
+        var rawBuffer = Assert.IsType<PixelBuffer>(raw.PlatformImage);
+        var source = PixelAssert.ToBitmapSource(rawBuffer);
+        rawBuffer.Dispose();
+        var oriented = request.ApplyOrientation ? WpfExifOrientation.Apply(source, orientation) : source;
+        var (ow, oh) = transposed ? (raw.OriginalHeight, raw.OriginalWidth) : (raw.OriginalWidth, raw.OriginalHeight);
+        return (oriented, request.ApplyOrientation ? orientation : 1, ow, oh, raw.Downscaled, raw.Exif);
+    }
 
     /// <summary>Ten source sizes: tiny, single row/column, odd, MCU-unaligned and a few "real" ones.</summary>
     public static TheoryData<int, int> Sizes() => new()
@@ -52,16 +82,16 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
             var path = Jpeg(width, height, orientation);
             var request = new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: true);
 
-            var expected = Assert.IsType<WpfDecodedImage>(Legacy.Decode(request));
+            var expected = WpfReference(request);
             var actual = Assert.IsType<DecodedImage>(Pixels.Decode(request));
             var buffer = Assert.IsType<PixelBuffer>(actual.PlatformImage);
 
-            Assert.Equal((expected.PixelWidth, expected.PixelHeight), (buffer.Width, buffer.Height));
-            Assert.Equal((expected.PixelWidth, expected.PixelHeight), (actual.PixelWidth, actual.PixelHeight));
+            Assert.Equal((expected.Source.PixelWidth, expected.Source.PixelHeight), (buffer.Width, buffer.Height));
+            Assert.Equal((expected.Source.PixelWidth, expected.Source.PixelHeight), (actual.PixelWidth, actual.PixelHeight));
             Assert.Equal((expected.OriginalWidth, expected.OriginalHeight), (actual.OriginalWidth, actual.OriginalHeight));
             Assert.Equal(expected.Orientation, actual.Orientation);
             Assert.Equal(expected.Downscaled, actual.Downscaled);
-            Assert.Equal(expected.EstimatedBytes, actual.EstimatedBytes);
+            Assert.Equal((long)buffer.Width * buffer.Height * 4, actual.EstimatedBytes);
             Assert.Equal(DecoderBackend.TurboJpeg, actual.ActualBackend);
             Assert.Equal(PixelLayout.Bgr32, buffer.Layout);
             PixelAssert.Equal(expected.Source, buffer);
@@ -83,11 +113,11 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         foreach (var targetWidth in targets)
         {
             var request = new DecodeRequest(path, TargetWidth: targetWidth, ApplyOrientation: true);
-            var expected = Assert.IsType<WpfDecodedImage>(Legacy.Decode(request));
+            var expected = WpfReference(request);
             var actual = Assert.IsType<DecodedImage>(Pixels.Decode(request));
             var buffer = Assert.IsType<PixelBuffer>(actual.PlatformImage);
 
-            Assert.Equal((expected.PixelWidth, expected.PixelHeight), (buffer.Width, buffer.Height));
+            Assert.Equal((expected.Source.PixelWidth, expected.Source.PixelHeight), (buffer.Width, buffer.Height));
             Assert.Equal(expected.Downscaled, actual.Downscaled);
             PixelAssert.Equal(expected.Source, buffer);
             buffer.Dispose();
@@ -107,7 +137,9 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         var path = Jpeg(400, 300, orientation);
         var request = new DecodeRequest(path, TargetWidth: targetWidth, ApplyOrientation: true);
 
-        var expected = Assert.IsType<WpfDecodedImage>(Legacy.Decode(request));
+        // Reference: WPF's own decode (WIC JPEG decoder + DecodePixelWidth scaler + TransformedBitmap), a different JPEG decoder
+        // and scaler than TurboJPEG + WIC Fant, so the pixels agree within rounding only.
+        var expected = Assert.IsType<WpfDecodedImage>(WpfDecoder.Decode(request));
         var actual = Assert.IsType<DecodedImage>(Pixels.Decode(request));
         var buffer = Assert.IsType<PixelBuffer>(actual.PlatformImage);
         using var reference = PixelAssert.FromBitmapSource(expected.Source, PixelLayout.Bgr32);
@@ -117,8 +149,8 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         Assert.Equal(expected.Downscaled, actual.Downscaled);
         var mae = PixelAssert.MeanAbsoluteError(reference, buffer);
         var psnr = PixelAssert.Psnr(reference, buffer);
-        Assert.True(mae <= 4.0, $"mean absolute error {mae:F3} (PSNR {psnr:F1} dB)");
-        Assert.True(psnr >= 29.0, $"PSNR {psnr:F1} dB (MAE {mae:F3})");
+        Assert.True(mae <= 5.0, $"mean absolute error {mae:F3} (PSNR {psnr:F1} dB)");
+        Assert.True(psnr >= 25.0, $"PSNR {psnr:F1} dB (MAE {mae:F3})");
         buffer.Dispose();
     }
 
@@ -129,7 +161,7 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         FixtureGenerator.GenerateGradientJpeg(path, 3000, 2001);
         var request = new DecodeRequest(path, TargetWidth: 1500, ApplyOrientation: true);
 
-        var expected = Assert.IsType<WpfDecodedImage>(Legacy.Decode(request));
+        var expected = Assert.IsType<WpfDecodedImage>(WpfDecoder.Decode(request));
         var actual = Assert.IsType<DecodedImage>(Pixels.Decode(request));
 
         var buffer = Assert.IsType<PixelBuffer>(actual.PlatformImage);
@@ -143,7 +175,7 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         var bytes = Metadata.ExifTestData.EncodeJpegWithExif(64, 48, withExif: true, orientation: 6);
         var request = new DecodeRequest("memory.jpg", TargetWidth: 0, ApplyOrientation: true, Bytes: bytes, SourceOrientation: 3);
 
-        var expected = Assert.IsType<WpfDecodedImage>(Legacy.Decode(request));
+        var expected = WpfReference(request);
         var actual = Assert.IsType<DecodedImage>(Pixels.Decode(request));
         var buffer = Assert.IsType<PixelBuffer>(actual.PlatformImage);
 
@@ -159,7 +191,7 @@ public sealed class TurboJpegPixelBufferParityTests : IDisposable
         var path = Jpeg(64, 48, 6);
         var request = new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: false);
 
-        var expected = Assert.IsType<WpfDecodedImage>(Legacy.Decode(request));
+        var expected = WpfReference(request);
         var actual = Assert.IsType<DecodedImage>(Pixels.Decode(request));
         var buffer = Assert.IsType<PixelBuffer>(actual.PlatformImage);
 

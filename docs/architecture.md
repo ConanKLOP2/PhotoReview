@@ -7,7 +7,8 @@ Tài liệu này mô tả cấu trúc sau đợt refactor, các luồng runtime 
 ```text
 PhotoReview.App (WPF composition root, View, ViewModel, coordinator)
   ├─> PhotoReview.Core (catalog, settings, session, file action, abstractions; net10.0, không WPF)
-  ├─> PhotoReview.Imaging (decode, cache, preload)
+  ├─> PhotoReview.Imaging (decode, cache, preload; KHÔNG WPF từ WP-06: PixelBuffer + IPlatformImageCodec + WIC)
+  ├─> PhotoReview.Imaging.Wpf (cầu WPF: WpfBitmapImageDecoder, WpfBitmapSourceCodec, WpfDecodedImage; WP-06)
   ├─> PhotoReview.Imaging.Raw (metadata + JPEG preview của camera RAW, ADR 0009)
   ├─> PhotoReview.Imaging.LibRaw (P/Invoke libraw.dll: decode cảm biến, thumbnail dự phòng)
   ├─> PhotoReview.Imaging.TurboJpeg (đăng ký khi TurboJpegAvailability.Probe() thành công — AR01)
@@ -16,7 +17,8 @@ PhotoReview.App (WPF composition root, View, ViewModel, coordinator)
         └─> PhotoReview.PerfAnalysis (phân tích perf session)
 
 Imaging, Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg, Platform.Windows ─> Core
-Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg ─> Imaging
+Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg, Imaging.Wpf ─> Imaging
+Imaging.Wpf ─> Core (UseWPF=true; là assembly Imaging duy nhất dùng WPF, L-IMG trong Architecture.Tests)
 Core ─> PhotoReview.Localization.Generator (source generator, netstandard2.0)
 tools/PhotoReview.Benchmark.Cli ─> App, Benchmarking, Imaging*, Platform.Windows, PerfAnalysis
 ```

@@ -22,20 +22,12 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     /// <summary>Test seam: decodes currently waiting for the full-decode slot (both lanes).</summary>
     internal static int FullDecodeQueuedWaiters => s_fullDecodeGate.QueuedViewers + s_fullDecodeGate.QueuedPreloads;
 
-    private readonly IPlatformImageCodec? _codec;
+    private readonly IPlatformImageCodec _codec;
 
     /// <summary>
-    /// WPF-compatible decoder: <see cref="IDecodedImage.PlatformImage"/> is a frozen <c>BitmapSource</c> (current app behaviour).
-    /// Kept until WP-06 moves the WPF adapter out of this project; new code passes a codec instead.
-    /// </summary>
-    public LibRawDecoder() { }
-
-    /// <summary>Test seam: <paramref name="stageObserver"/> is told "opened", "unpacked" and "processed" as each native stage completes.</summary>
-    internal LibRawDecoder(Action<string>? stageObserver) => _stageObserver = stageObserver;
-
-    /// <summary>
-    /// Pixel decoder: the resampled BGRA pixels are written straight into a <see cref="Pixels.PixelBuffer"/> (C-01) which
-    /// <paramref name="codec"/> (C-02) takes over; no WPF type is touched. <paramref name="stageObserver"/> is a test seam.
+    /// The resampled BGRA pixels are written straight into a <see cref="Pixels.PixelBuffer"/> (C-01) which
+    /// <paramref name="codec"/> (C-02, required since WP-06) takes over; no WPF type is touched.
+    /// <paramref name="stageObserver"/> is a test seam told "opened", "unpacked", "processed", ... as each native stage completes.
     /// </summary>
     public LibRawDecoder(IPlatformImageCodec codec, Action<string>? stageObserver = null)
     {
@@ -282,23 +274,14 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     }
 
     /// <summary>
-    /// Last step of a decode: the BGRA pixels leave this decoder. Legacy WPF path (no codec; removed by WP-06): BitmapSource.Create
-    /// copies and <paramref name="pixels"/> stays with the caller. Pixel path: ownership of the PixelBuffer moves to the codec
-    /// without a copy. <paramref name="sourceReleased"/> feeds the "source-released"/"source-held" stage reported right before the
-    /// hand-off (proves LibRaw's RGB buffer is already freed when the copy/codec starts).
+    /// Last step of a decode: the BGRA pixels leave this decoder -- ownership of the PixelBuffer moves to the codec without a copy.
+    /// <paramref name="sourceReleased"/> feeds the "source-released"/"source-held" stage reported right before the hand-off
+    /// (proves LibRaw's RGB buffer is already freed when the codec starts).
     /// </summary>
     internal IDecodedImage HandOff(RgbBgraResampler.BgraBuffer pixels, bool downscaled, int originalWidth, int originalHeight,
         Func<bool> sourceReleased)
     {
         void ReportSourceReleased() => _stageObserver?.Invoke(sourceReleased() ? "source-released" : "source-held");
-
-        if (_codec is null)
-        {
-            var bitmap = RgbBgraResampler.ToBitmap(pixels, ReportSourceReleased);
-            _stageObserver?.Invoke("bitmap-created");
-            return new WpfDecodedImage(bitmap, downscaled, actualBackend: DecoderBackend.LibRaw,
-                originalWidth: originalWidth, originalHeight: originalHeight);
-        }
 
         ReportSourceReleased();
         var buffer = pixels.TakePixels();

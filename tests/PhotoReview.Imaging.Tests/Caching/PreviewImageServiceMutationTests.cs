@@ -81,7 +81,7 @@ public sealed class PreviewImageServiceMutationTests : IAsyncLifetime, IDisposab
     private PreviewImageService Create(RecordingDecoder decoder, string? disk, long diskCapacity = 1L << 30, RecordingLog? log = null,
         Func<DecoderBackend>? backend = null, Func<bool>? original = null)
     {
-        var service = new PreviewImageService(new ReviewMetrics(), original ?? (() => false), () => 256, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(new ReviewMetrics(), original ?? (() => false), () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: disk ?? _root.Dir("unused-cache"), diskCacheCapacityBytes: diskCapacity,
             disableDiskCacheOverride: disk is null ? true : null, decoder: decoder, log: log, currentBackend: backend);
         _services.Add(service);
@@ -171,7 +171,7 @@ public sealed class PreviewImageServiceMutationTests : IAsyncLifetime, IDisposab
         var log = new RecordingLog();
         var decoder = new RecordingDecoder();
         var disk = _root.Combine("never-created");
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: disk, disableDiskCacheOverride: true, decoder: decoder, log: log);
         _services.Add(service);
         var path = Source("a.jpg");

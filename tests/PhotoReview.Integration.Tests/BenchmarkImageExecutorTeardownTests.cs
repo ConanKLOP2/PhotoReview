@@ -24,7 +24,7 @@ public sealed class BenchmarkImageExecutorTeardownTests : IDisposable
         // DiskCache=true forces the real persist/prune path (every shipped profile ships with DiskCache=false --
         // see BenchmarkProfiles.P -- so the override is needed to exercise the prune machinery here).
         var profile = BenchmarkProfiles.Find("fast-sequential")! with { DiskCache = true, Iterations = 1, WarmupCount = 0 };
-        var executor = new BenchmarkImageExecutor(profile, files, hasHeadroom: _ => true);
+        var executor = new BenchmarkImageExecutor(profile, files, WpfBitmapSourceCodec.Instance, hasHeadroom: _ => true, decoder: new WpfBitmapImageDecoder());
         var cacheDir = executor.DiskCacheDirectory;
 
         foreach (var file in files) await executor.DecodeAsync(file);

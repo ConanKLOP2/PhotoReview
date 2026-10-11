@@ -206,7 +206,7 @@ public sealed class PerfTraceTests : IDisposable
     }
 
     private static PreviewImageService CreatePreviewService(string diskCache)
-        => new(new ReviewMetrics(), () => false, () => 512, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: diskCache);
+        => new(new ReviewMetrics(), () => false, () => 512, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: diskCache);
 
     private static async Task RetireAsync(PreviewImageService service, string diskCache)
     {

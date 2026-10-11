@@ -23,7 +23,7 @@ public sealed class LibRawGateSlotNativeTests
         Assert.Throws<OperationCanceledException>(() => LibRawDecoder.ReadJpegThumbnail(@"Z:\missing.orf", cts.Token));
         Assert.Equal(1, LibRawDecoder.FullDecodeSlotsAvailable);
         Assert.Throws<OperationCanceledException>(() =>
-            new LibRawDecoder().Decode(new DecodeRequest(@"Z:\missing.cr2", DecodeBox.Unbounded), cts.Token));
+            new LibRawDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(@"Z:\missing.cr2", DecodeBox.Unbounded), cts.Token));
         Assert.Equal(1, LibRawDecoder.FullDecodeSlotsAvailable);
     }
 
@@ -36,7 +36,7 @@ public sealed class LibRawGateSlotNativeTests
         var stages = new List<string>();
         // The slot is held from before DecodeCore: cancelling at "opened" proves the release after a real acquisition (a token cancelled
         // before the call throws before the gate and proves nothing about it).
-        var decoder = new LibRawDecoder(stage =>
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stage =>
         {
             stages.Add(stage);
             if (stage == "opened")
@@ -60,7 +60,7 @@ public sealed class LibRawGateSlotNativeTests
         if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
         using var holderInside = new SemaphoreSlim(0);
         using var releaseHolder = new SemaphoreSlim(0);
-        var holder = new LibRawDecoder(stage =>
+        var holder = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stage =>
         {
             if (stage != "opened") return;
             holderInside.Release();
@@ -73,7 +73,7 @@ public sealed class LibRawGateSlotNativeTests
 
         using var cts = new CancellationTokenSource();
         var waiting = Task.Factory.StartNew(() =>
-            new LibRawDecoder().Decode(new DecodeRequest(samplePath, new DecodeBox(240, 180)), cts.Token), TaskCreationOptions.LongRunning);
+            new LibRawDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(samplePath, new DecodeBox(240, 180)), cts.Token), TaskCreationOptions.LongRunning);
         Assert.True(SpinWait.SpinUntil(() => LibRawDecoder.FullDecodeQueuedWaiters == 1, Bound), "the waiter never queued behind the holder");
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting).WaitAsync(Bound);

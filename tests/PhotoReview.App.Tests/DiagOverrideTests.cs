@@ -76,7 +76,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         // decodes run at once" without depending on decode timing.
         var diskDirectory = _root.Dir("override-2-cache");
         var metrics = new ReviewMetrics();
-        var service = Track(new PreviewImageService(metrics, () => false, () => 256,
+        var service = Track(new PreviewImageService(metrics, () => false, () => 256, WpfBitmapSourceCodec.Instance,
             capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: diskDirectory), diskDirectory);
         // 2 files, center 0: PreloadOrderService.Build only ever queues the one neighbor
         // (index 1) here, so RunPreloadSchedulerAsync never queues "workers" items in a single
@@ -105,7 +105,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         var files = MakePreviewFiles(_root, "override-0", 5);
         var diskDirectory = _root.Dir("override-0-cache");
         var metrics = new ReviewMetrics();
-        var service = Track(new PreviewImageService(metrics, () => false, () => 256,
+        var service = Track(new PreviewImageService(metrics, () => false, () => 256, WpfBitmapSourceCodec.Instance,
             diskCacheDirectory: diskDirectory), diskDirectory);
         using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(files), long.MaxValue,
             memoryLoadLimit: 1.0, memoryProbe: new DelegateMemoryProbe(_ => true), workerCountOverride: 0);
@@ -128,7 +128,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         var files = MakePreviewFiles(_root, "no-override", 2);
         var diskDirectory = _root.Dir("no-override-cache");
         var metrics = new ReviewMetrics();
-        var service = Track(new PreviewImageService(metrics, () => false, () => 256, diskCacheDirectory: diskDirectory), diskDirectory);
+        var service = Track(new PreviewImageService(metrics, () => false, () => 256, WpfBitmapSourceCodec.Instance, diskCacheDirectory: diskDirectory), diskDirectory);
         using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(files), long.MaxValue,
             memoryLoadLimit: 1.0, memoryProbe: new DelegateMemoryProbe(_ => true));
 
@@ -147,7 +147,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         var previewPath = Path.Combine(folder, "preview.png");
         File.WriteAllBytes(previewPath, WiderThanTargetPng);
         var diskDirectory = _root.Dir("disable-write-cache");
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256,
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, WpfBitmapSourceCodec.Instance,
             diskCacheDirectory: diskDirectory, disableDiskCacheOverride: true), diskDirectory);
 
         await service.GetPreviewAsync(previewPath);
@@ -168,7 +168,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         // Populate a real, valid disk-cache entry at the exact path a matching key would use,
         // via a normal (disk cache enabled) service -- this is the same fixture pattern
         // PreviewImageServiceDiskCacheTests uses for "DiskCacheHitAvoidsSourceRead".
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256,
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, WpfBitmapSourceCodec.Instance,
             diskCacheDirectory: diskDirectory), diskDirectory);
         await writer.GetPreviewAsync(previewPath);
         await writer.ShutdownPersistWorkersAsync();
@@ -181,7 +181,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         // cache disabled: it must decode from source instead of the entry seeded above, even
         // though that entry is present and valid on disk.
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256,
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, WpfBitmapSourceCodec.Instance,
             diskCacheDirectory: diskDirectory, disableDiskCacheOverride: true), diskDirectory);
         var image = await reader.GetPreviewAsync(previewPath);
         var snapshot = readerMetrics.Snapshot();

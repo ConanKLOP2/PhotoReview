@@ -75,7 +75,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     [Fact]
     public void Decode_ExactlyTheThreeSignatureBytes_FailsAsABrokenHeaderNotAsANonJpeg()
     {
-        var ex = Catch(() => new TurboJpegDecoder().Decode(new DecodeRequest("sig.jpg", DecodeBox.Unbounded, bytes: new byte[] { 0xFF, 0xD8, 0xFF })));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("sig.jpg", DecodeBox.Unbounded, bytes: new byte[] { 0xFF, 0xD8, 0xFF })));
 
         Assert.IsType<InvalidDataException>(ex);
     }
@@ -89,7 +89,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     [InlineData(new byte[] { 0xFF, 0x00, 0xFF })]
     public void Decode_WithoutTheJpegSignature_IsNotSupported(byte[] bytes)
     {
-        var ex = Catch(() => new TurboJpegDecoder().Decode(new DecodeRequest("sig.jpg", DecodeBox.Unbounded, bytes: bytes)));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("sig.jpg", DecodeBox.Unbounded, bytes: bytes)));
 
         Assert.IsType<NotSupportedException>(ex);
     }
@@ -99,7 +99,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var path = _root.File("sig3.jpg", 0xFF, 0xD8, 0xFF);
 
-        Assert.IsType<InvalidDataException>(Catch(() => new TurboJpegDecoder().ReadInfo(path)));
+        Assert.IsType<InvalidDataException>(Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path)));
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var path = _root.File("sig2.jpg", 0xFF, 0xD8);
 
-        Assert.IsType<NotSupportedException>(Catch(() => new TurboJpegDecoder().ReadInfo(path)));
+        Assert.IsType<NotSupportedException>(Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path)));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var request = new DecodeRequest(null!, 0, Bytes: new byte[] { 1, 2, 3, 4 });
 
-        var ex = Catch(() => new TurboJpegDecoder().Decode(request));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(request));
 
         Assert.Equal("File is not a valid JPEG: memory buffer", ex.Message);
     }
@@ -125,7 +125,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var request = new DecodeRequest("some-photo.jpg", 0, Bytes: new byte[] { 1, 2, 3, 4 });
 
-        var ex = Catch(() => new TurboJpegDecoder().Decode(request));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(request));
 
         Assert.Equal("File is not a valid JPEG: some-photo.jpg", ex.Message);
     }
@@ -137,7 +137,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var garbage = WithBadPrecision(SmallJpeg());
 
-        var ex = Catch(() => new TurboJpegDecoder().Decode(new DecodeRequest("g.jpg", DecodeBox.Unbounded, bytes: garbage)));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("g.jpg", DecodeBox.Unbounded, bytes: garbage)));
 
         Assert.IsType<InvalidDataException>(ex);
         Assert.StartsWith("TurboJPEG failed to decompress header: ", ex.Message, StringComparison.Ordinal);
@@ -153,7 +153,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
         var jpeg = SmallJpeg();
         var cut = jpeg.AsSpan(0, jpeg.Length * 6 / 10).ToArray();
 
-        var ex = Catch(() => new TurboJpegDecoder().Decode(new DecodeRequest("cut.jpg", DecodeBox.Unbounded, bytes: cut)));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("cut.jpg", DecodeBox.Unbounded, bytes: cut)));
 
         Assert.IsType<InvalidDataException>(ex);
         Assert.StartsWith("TurboJPEG decompression failed: ", ex.Message, StringComparison.Ordinal);
@@ -168,7 +168,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var path = _root.File("g.jpg", WithBadPrecision(SmallJpeg()));
 
-        var ex = Catch(() => new TurboJpegDecoder().ReadInfo(path));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path));
 
         Assert.IsType<InvalidDataException>(ex);
         Assert.StartsWith("TurboJPEG failed to read image info: ", ex.Message, StringComparison.Ordinal);
@@ -183,7 +183,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     [Fact]
     public void Decode_JpegWithoutAFrameHeader_ReportsInvalidDimensions()
     {
-        var ex = Catch(() => new TurboJpegDecoder().Decode(new DecodeRequest("nosof.jpg", DecodeBox.Unbounded, bytes: NoSof)));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("nosof.jpg", DecodeBox.Unbounded, bytes: NoSof)));
 
         Assert.IsType<InvalidDataException>(ex);
         Assert.StartsWith("Invalid image dimensions reported by TurboJPEG: ", ex.Message, StringComparison.Ordinal);
@@ -194,7 +194,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var path = _root.File("nosof.jpg", NoSof);
 
-        var ex = Catch(() => new TurboJpegDecoder().ReadInfo(path));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path));
 
         Assert.IsType<InvalidDataException>(ex);
         Assert.Equal("TurboJPEG failed to read image info: Header parse error", ex.Message);
@@ -205,7 +205,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var zero = WithClaimedSize(SmallJpeg(), 0, 48);
 
-        var ex = Catch(() => new TurboJpegDecoder().Decode(new DecodeRequest("zero.jpg", DecodeBox.Unbounded, bytes: zero)));
+        var ex = Catch(() => new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest("zero.jpg", DecodeBox.Unbounded, bytes: zero)));
 
         Assert.IsType<InvalidDataException>(ex);
     }
@@ -217,7 +217,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         // 8192 x 4096 x 4 = 128 MiB = GuardThresholdBytes: the guard applies at the threshold itself.
         var bomb = WithClaimedSize(SmallJpeg(), 8192, 4096);
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => (64L * 1024 * 1024, 0) };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => (64L * 1024 * 1024, 0) };
 
         var ex = Catch(() => decoder.Decode(new DecodeRequest("t.jpg", DecodeBox.Unbounded, bytes: bomb)));
 
@@ -230,7 +230,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var bomb = WithClaimedSize(SmallJpeg(), 8192, 4095);
         var consulted = 0;
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => { consulted++; return (64L * 1024 * 1024, 0); } };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => { consulted++; return (64L * 1024 * 1024, 0); } };
 
         var ex = Catch(() => decoder.Decode(new DecodeRequest("t.jpg", DecodeBox.Unbounded, bytes: bomb)));
 
@@ -244,7 +244,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
         // 20000 x 20000 declared, box 2000 x 2000: the 1/8 DCT scale gives 2500 x 2500 (25 MB), which fits a 1 GB machine
         // although the full-size buffer (1.6 GB) would not. The stub scan data then fails later, in the decompress.
         var bomb = WithClaimedSize(SmallJpeg(), 20000, 20000);
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => (1 * Gb, 0) };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => (1 * Gb, 0) };
 
         var ex = Catch(() => decoder.Decode(new DecodeRequest("t.jpg", new DecodeBox(2000, 2000), bytes: bomb)));
 
@@ -258,7 +258,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         // 32768 x 16384 x 4 = 2^31 bytes: beyond what one int-sized buffer can hold, whatever RAM there is.
         var bomb = WithClaimedSize(SmallJpeg(), 32768, 16384);
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => throw new InvalidOperationException("must not be consulted") };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => throw new InvalidOperationException("must not be consulted") };
 
         var ex = Catch(() => decoder.Decode(new DecodeRequest("t.jpg", DecodeBox.Unbounded, bytes: bomb)));
 
@@ -275,7 +275,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
         using (var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
             fs.SetLength(MemoryHeadroom.GuardThresholdBytes);
         var probed = 0;
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => { probed++; return (MemoryHeadroom.GuardThresholdBytes / 2, 0); } };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => { probed++; return (MemoryHeadroom.GuardThresholdBytes / 2, 0); } };
 
         var ex = Catch(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
 
@@ -291,7 +291,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
         using (var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
             fs.SetLength(MemoryHeadroom.GuardThresholdBytes - 1);
         var probed = 0;
-        var decoder = new TurboJpegDecoder { MemoryInfo = () => { probed++; return (MemoryHeadroom.GuardThresholdBytes / 2, 0); } };
+        var decoder = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance) { MemoryInfo = () => { probed++; return (MemoryHeadroom.GuardThresholdBytes / 2, 0); } };
 
         var ex = Catch(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
 
@@ -381,7 +381,7 @@ public sealed class TurboJpegGuardMutationTests : IDisposable
     {
         var path = _root.File("sos-cut-" + bytesOfSosInFirstChunk + ".jpg", JpegWithSosCutByTheFirstRead(bytesOfSosInFirstChunk));
 
-        var info = new TurboJpegDecoder().ReadInfo(path);
+        var info = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path);
 
         Assert.Equal((64, 48), (info.Width, info.Height));
     }

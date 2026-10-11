@@ -37,7 +37,7 @@ public sealed class LargeHeaderReadInfoTests : IDisposable
         {
             ("Wpf", new WpfBitmapImageDecoder()),
             ("WicDirect", new WicDirectDecoder(WpfBitmapSourceCodec.Instance)),
-            ("TurboJpeg", new TurboJpegDecoder()),
+            ("TurboJpeg", new TurboJpegDecoder(WpfBitmapSourceCodec.Instance)),
         };
         foreach (var (name, decoder) in decoders)
         {
@@ -67,7 +67,7 @@ public sealed class LargeHeaderReadInfoTests : IDisposable
         Assert.Equal(0xDA, padded[sosTarget + 1]);
         var path = _root.File("sos-straddle.jpg", [.. padded]);
 
-        var info = new TurboJpegDecoder().ReadInfo(path); // direct: a throw here would be the spurious WIC fallback
+        var info = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).ReadInfo(path); // direct: a throw here would be the spurious WIC fallback
 
         Assert.Equal((16, 24, 6), (info.Width, info.Height, info.Orientation)); // oriented size of the 24x16, orientation-6 image
     }

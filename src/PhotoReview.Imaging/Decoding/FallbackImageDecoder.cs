@@ -89,7 +89,8 @@ public sealed class FallbackImageDecoder : IImageDecoder
         return ex is NotSupportedException
             or InvalidCastException
             or OverflowException
-            or FileFormatException
+            // WPF's FileFormatException derives from FormatException (WPF itself is not referenced from this assembly, WP-06).
+            or FormatException
             or InvalidDataException
             or COMException
             or DllNotFoundException

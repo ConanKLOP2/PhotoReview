@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NO-WPF-EXEC-PLAN WP-06: cầu WPF của Imaging. Mọi kiểu System.Windows.Media (BitmapSource, BitmapImage, TransformedBitmap...)
+       của đường giải mã/cache nằm ở đây; PhotoReview.Imaging* còn lại KHÔNG UseWPF (luật L-IMG trong Architecture.Tests).
+       Bản Win32 không tham chiếu project này. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Platforms>AnyCPU;x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoReview.Imaging.Tests" />
+    <InternalsVisibleTo Include="PhotoReview.App.Tests" />
+    <InternalsVisibleTo Include="PhotoReview.Integration.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="PhotoReview.Core.Model" />
+    <Using Include="PhotoReview.Core.Abstractions" />
+    <Using Include="PhotoReview.Core.Diagnostics" />
+    <Using Include="PhotoReview.Imaging.Decoding" />
+  </ItemGroup>
+
+</Project>

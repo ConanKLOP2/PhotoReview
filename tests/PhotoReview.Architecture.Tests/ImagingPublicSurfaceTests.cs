@@ -6,19 +6,25 @@ namespace PhotoReview.Architecture.Tests;
 
 public sealed class ImagingPublicSurfaceTests
 {
-    [Fact(DisplayName = "Rule 3: Public types in Imaging.Caching and Imaging.Preload do not expose System.Windows.Media types (K-1)")]
-    public void Imaging_CachingAndPreload_PublicMembers_DoNotExpose_SystemWindowsMediaTypes()
+    /// <summary>
+    /// WP-06: every assembly of the Imaging family is WPF-free, so no public member of any exported type (in any namespace, not
+    /// only Caching/Preload as before) may expose a <c>System.Windows.*</c> type. The WPF types live in PhotoReview.Imaging.Wpf.
+    /// </summary>
+    public static TheoryData<string> ImagingAssemblies() => new()
     {
-        var assembly = typeof(PhotoReview.Imaging.Decoding.IDecodedImage).Assembly;
-        var targetNamespaces = new[]
-        {
-            "PhotoReview.Imaging.Caching",
-            "PhotoReview.Imaging.Preload"
-        };
+        typeof(PhotoReview.Imaging.Decoding.IDecodedImage).Assembly.GetName().Name!,
+        typeof(PhotoReview.Imaging.Raw.RawFormat).Assembly.GetName().Name!,
+        typeof(PhotoReview.Imaging.LibRaw.LibRawAvailability).Assembly.GetName().Name!,
+        typeof(PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder).Assembly.GetName().Name!,
+    };
 
-        var publicTypes = assembly.GetExportedTypes()
-            .Where(t => targetNamespaces.Any(ns => t.Namespace == ns || (t.Namespace != null && t.Namespace.StartsWith(ns + ".", StringComparison.Ordinal))))
-            .ToList();
+    [Theory(DisplayName = "Rule 3: Public types of Imaging, Imaging.Raw, Imaging.LibRaw and Imaging.TurboJpeg do not expose System.Windows types (K-1, WP-06)")]
+    [MemberData(nameof(ImagingAssemblies))]
+    public void ImagingFamily_PublicMembers_DoNotExpose_SystemWindowsTypes(string assemblyName)
+    {
+        var assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == assemblyName)
+            ?? Assembly.Load(assemblyName);
+        var publicTypes = assembly.GetExportedTypes().ToList();
 
         Assert.NotEmpty(publicTypes);
 
@@ -87,7 +93,7 @@ public sealed class ImagingPublicSurfaceTests
 
         Assert.True(
             violations.Count == 0,
-            $"Found K-1 violations (System.Windows.Media types exposed on public surface):\n{string.Join("\n", violations)}");
+            $"Found K-1 violations (System.Windows types exposed on public surface of {assemblyName}):\n{string.Join("\n", violations)}");
     }
 
     private static bool IsForbiddenMediaType(Type? type)
@@ -104,6 +110,6 @@ public sealed class ImagingPublicSurfaceTests
             return IsForbiddenMediaType(type.GetElementType());
         }
 
-        return type.FullName != null && type.FullName.StartsWith("System.Windows.Media", StringComparison.Ordinal);
+        return type.FullName != null && type.FullName.StartsWith("System.Windows", StringComparison.Ordinal);
     }
 }

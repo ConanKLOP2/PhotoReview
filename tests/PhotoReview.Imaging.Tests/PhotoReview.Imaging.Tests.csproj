@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Imaging.Wpf\PhotoReview.Imaging.Wpf.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging.Raw\PhotoReview.Imaging.Raw.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging.LibRaw\PhotoReview.Imaging.LibRaw.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging.TurboJpeg\PhotoReview.Imaging.TurboJpeg.csproj" />
@@ -30,6 +31,7 @@
     <Using Include="PhotoReview.Imaging.Raw" />
     <Using Include="PhotoReview.Imaging.Caching" />
     <Using Include="PhotoReview.Imaging.Decoding" />
+    <Using Include="PhotoReview.Imaging.Wpf" />
     <Using Include="PhotoReview.Imaging.TurboJpeg" />
     <Using Include="PhotoReview.Imaging.Preload" />
     <Using Include="PhotoReview.TestSupport" />

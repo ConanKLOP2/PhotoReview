@@ -374,8 +374,8 @@ public sealed class DiskCacheStoreMutationTests : IDisposable
     {
         var path = _root.Combine("x", "out.png");
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => DiskCacheStore.WriteAtomicallyAsync((IDecodedImage)null!, path));
-        await Assert.ThrowsAsync<ArgumentException>(() => DiskCacheStore.WriteAtomicallyAsync(new NonBitmapImage(), path));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => DiskCacheStore.WriteAtomicallyAsync((IDecodedImage)null!, WpfBitmapSourceCodec.Instance, path));
+        await Assert.ThrowsAsync<ArgumentException>(() => DiskCacheStore.WriteAtomicallyAsync(new NonBitmapImage(), WpfBitmapSourceCodec.Instance, path));
 
         Assert.False(File.Exists(path));
     }
@@ -386,7 +386,7 @@ public sealed class DiskCacheStoreMutationTests : IDisposable
         var dir = _root.Dir("png");
         var path = Path.Combine(dir, "out.png");
 
-        await DiskCacheStore.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(5, 3)), path);
+        await DiskCacheStore.WriteAtomicallyAsync(new WpfDecodedImage(Bitmap(5, 3)), WpfBitmapSourceCodec.Instance, path);
 
         var decoder = new PngBitmapDecoder(new Uri(path), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
         Assert.Equal(5, decoder.Frames[0].PixelWidth);

@@ -19,7 +19,7 @@ public sealed class LibRawDecoderBufferPinTests
         if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
         using var manager = new PinTrackingMemoryManager(File.ReadAllBytes(samplePath));
         var pinCounts = new List<(string Stage, int Pins)>();
-        var decoder = new LibRawDecoder(stage => pinCounts.Add((stage, manager.ActivePins)));
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stage => pinCounts.Add((stage, manager.ActivePins)));
 
         var image = decoder.Decode(new DecodeRequest(samplePath, DecodeBox.Unbounded, bytes: manager.Memory));
 
@@ -36,7 +36,7 @@ public sealed class LibRawDecoderBufferPinTests
     {
         if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
         var slotsWhileDecoding = -1;
-        var decoder = new LibRawDecoder(stage => { if (stage == "processed") slotsWhileDecoding = LibRawDecoder.FullDecodeSlotsAvailable; });
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stage => { if (stage == "processed") slotsWhileDecoding = LibRawDecoder.FullDecodeSlotsAvailable; });
 
         _ = decoder.Decode(new DecodeRequest(samplePath, DecodeBox.Unbounded));
 
@@ -49,7 +49,7 @@ public sealed class LibRawDecoderBufferPinTests
     {
         if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
 #pragma warning disable CA2201 // Simulating the runtime's allocation failure is the point of this test.
-        var decoder = new LibRawDecoder(stage => { if (stage == "processed") throw new OutOfMemoryException(); });
+        var decoder = new LibRawDecoder(WpfBitmapSourceCodec.Instance, stage => { if (stage == "processed") throw new OutOfMemoryException(); });
 #pragma warning restore CA2201
 
         var error = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(samplePath, DecodeBox.Unbounded)));
@@ -63,7 +63,7 @@ public sealed class LibRawDecoderBufferPinTests
     {
         if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
 
-        var image = new LibRawDecoder().Decode(new DecodeRequest(samplePath, new DecodeBox(300, 300)));
+        var image = new LibRawDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(samplePath, new DecodeBox(300, 300)));
 
         Assert.True(image.Downscaled);
         Assert.InRange(image.PixelWidth, 1, 300);

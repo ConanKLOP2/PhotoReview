@@ -21,8 +21,8 @@ public sealed class PreviewImageServiceRawKeyTests : IDisposable
     public async Task GetOriginalDimensionsAsync_ForARawPathAlreadyDecoded_ReusesTheSeededDimensionsWithoutReadInfo()
     {
         var raw = _root.File("shot.cr2", TestImages.OpaquePng); // a RAW extension over decodable bytes
-        var decoder = new CountingDecoder(new PhotoReview.Imaging.Decoding.WpfBitmapImageDecoder());
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, decoder: decoder, disableDiskCacheOverride: true);
+        var decoder = new CountingDecoder(new PhotoReview.Imaging.Wpf.WpfBitmapImageDecoder());
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, decoder: decoder, disableDiskCacheOverride: true);
         try
         {
             await service.GetPreviewAsync(raw);
@@ -40,7 +40,7 @@ public sealed class PreviewImageServiceRawKeyTests : IDisposable
     {
         var raw = _root.File("kind.cr2", TestImages.OpaquePng); // opaque: alpha previews are never persisted
         var dir = _root.Dir("disk");
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir);
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir);
         try
         {
             var rawKey = service.GetCurrentCacheKey(raw);
@@ -65,7 +65,7 @@ public sealed class PreviewImageServiceRawKeyTests : IDisposable
     {
         var jpg = _root.File("plain.png", TestImages.OpaquePng);
         var dir = _root.Dir("disk-standard");
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: dir);
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, diskCacheDirectory: dir);
         try
         {
             var key = service.GetCurrentCacheKey(jpg);

@@ -52,7 +52,7 @@ public sealed class ExifLineViewModelTests : IDisposable
     public ExifLineViewModelTests()
     {
         Directory.CreateDirectory(_tempDir);
-        _thumbnailCache = new ThumbnailCache(diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 1024 * 1024);
+        _thumbnailCache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 1024 * 1024);
     }
 
     public void Dispose()
@@ -174,7 +174,7 @@ public sealed class ExifLineViewModelTests : IDisposable
         var settingsStore = new SettingsStore(appPaths, fileSystem, new NullLog());
         var compare = new CompareViewModel();
         var hashService = new FileHashService();
-        var previewService = new PreviewImageService(metrics, () => false, () => new DecodeBox(1920, 1080),
+        var previewService = new PreviewImageService(metrics, () => false, () => new DecodeBox(1920, 1080), WpfBitmapSourceCodec.Instance,
             capacityBytes: 64 * 1024 * 1024, decoder: decoder, disableDiskCacheOverride: true);
         var preload = new NoPreload();
 

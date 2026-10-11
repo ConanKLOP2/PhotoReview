@@ -50,7 +50,7 @@ public sealed class PreviewImageServiceDegradedFallbackTests : IDisposable
     }
 
     private static PreviewImageService NewService(string diskDir, IImageDecoder decoder) =>
-        new(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: diskDir, decoder: decoder);
+        new(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: diskDir, decoder: decoder);
 
     [Fact]
     public async Task GetPreviewAsync_DegradedFallback_IsReturnedButNotCachedInRamOrOnDisk()

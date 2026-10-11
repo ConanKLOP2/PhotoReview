@@ -259,10 +259,10 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
     {
         var bmp = Create(FormatByName(name));
 
-        Assert.True(WpfCacheImageCodec.HasAlpha(bmp));
-        Assert.True(PreviewCacheFile.HasAlpha(new WpfDecodedImage(bmp)));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(bmp));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(new WpfDecodedImage(bmp)));
         if (name is not ("Bgra32" or "Pbgra32"))
-            Assert.False(WpfCacheImageCodec.IsFullyOpaque(bmp));
+            Assert.False(WpfBitmapSourceCodec.IsFullyOpaque(bmp));
     }
 
     [Theory(DisplayName = "HasAlpha is false for opaque pixel formats")]
@@ -281,8 +281,8 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         };
         var bmp = Create(format);
 
-        Assert.False(WpfCacheImageCodec.HasAlpha(bmp));
-        Assert.True(WpfCacheImageCodec.IsFullyOpaque(bmp));
+        Assert.False(WpfBitmapSourceCodec.HasAlpha(bmp));
+        Assert.True(WpfBitmapSourceCodec.IsFullyOpaque(bmp));
     }
 
     [Theory(DisplayName = "HasAlpha for an indexed format depends on whether its palette has a non-opaque colour (254 counts, 255 does not)")]
@@ -297,18 +297,18 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         var nearlyOpaque = new BitmapPalette([Color.FromArgb(255, 0, 0, 0), Color.FromArgb(254, 255, 255, 255)]);
         var translucent = new BitmapPalette([Color.FromArgb(0, 0, 0, 0), Color.FromArgb(255, 255, 255, 255)]);
 
-        Assert.False(WpfCacheImageCodec.HasAlpha(Create(format, opaque)));
-        Assert.True(WpfCacheImageCodec.HasAlpha(Create(format, nearlyOpaque)));
-        Assert.True(WpfCacheImageCodec.HasAlpha(Create(format, translucent)));
-        Assert.False(WpfCacheImageCodec.IsFullyOpaque(Create(format, translucent)));
-        Assert.True(WpfCacheImageCodec.IsFullyOpaque(Create(format, opaque)));
+        Assert.False(WpfBitmapSourceCodec.HasAlpha(Create(format, opaque)));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(Create(format, nearlyOpaque)));
+        Assert.True(WpfBitmapSourceCodec.HasAlpha(Create(format, translucent)));
+        Assert.False(WpfBitmapSourceCodec.IsFullyOpaque(Create(format, translucent)));
+        Assert.True(WpfBitmapSourceCodec.IsFullyOpaque(Create(format, opaque)));
     }
 
     [Fact(DisplayName = "HasAlpha(IDecodedImage) rejects null and is false for a platform image that is not a BitmapSource")]
     public void HasAlpha_DecodedImageOverload()
     {
-        Assert.Throws<ArgumentNullException>(() => PreviewCacheFile.HasAlpha((IDecodedImage)null!));
-        Assert.False(PreviewCacheFile.HasAlpha(new OpaqueObjectImage()));
+        Assert.Throws<ArgumentNullException>(() => WpfBitmapSourceCodec.HasAlpha((IDecodedImage)null!));
+        Assert.False(WpfBitmapSourceCodec.HasAlpha(new OpaqueObjectImage()));
     }
 
     private sealed class OpaqueObjectImage : IDecodedImage
@@ -351,10 +351,10 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
     {
         foreach (var format in new[] { PixelFormats.Bgra32, PixelFormats.Pbgra32 })
         {
-            Assert.True(WpfCacheImageCodec.IsFullyOpaque(Bgra(format, width, height, null)), $"{format} {width}x{height} opaque");
+            Assert.True(WpfBitmapSourceCodec.IsFullyOpaque(Bgra(format, width, height, null)), $"{format} {width}x{height} opaque");
             var total = width * height;
             foreach (var position in new[] { 0, total / 2, total - 1, (height - 1) * width })
-                Assert.False(WpfCacheImageCodec.IsFullyOpaque(Bgra(format, width, height, position)), $"{format} {width}x{height} pixel {position}");
+                Assert.False(WpfBitmapSourceCodec.IsFullyOpaque(Bgra(format, width, height, position)), $"{format} {width}x{height} pixel {position}");
         }
     }
 
@@ -366,12 +366,12 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         {
             var pixels = new uint[length];
             Array.Fill(pixels, 0xFF123456u); // colour bits set: the check must look at alpha only
-            Assert.True(WpfCacheImageCodec.AllAlphaOpaque(MemoryMarshal.AsBytes(pixels.AsSpan())), $"all opaque, length {length}");
+            Assert.True(WpfBitmapSourceCodec.AllAlphaOpaque(MemoryMarshal.AsBytes(pixels.AsSpan())), $"all opaque, length {length}");
             for (var index = 0; index < length; index++)
             {
                 var copy = (uint[])pixels.Clone();
                 copy[index] = 0xFE123456u;
-                Assert.False(WpfCacheImageCodec.AllAlphaOpaque(MemoryMarshal.AsBytes(copy.AsSpan())), $"length {length}, index {index}");
+                Assert.False(WpfBitmapSourceCodec.AllAlphaOpaque(MemoryMarshal.AsBytes(copy.AsSpan())), $"length {length}, index {index}");
             }
         }
     }

@@ -39,7 +39,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         var image = new WpfDecodedImage(opaque, downscaled: true, orientation: orientation, actualBackend: DecoderBackend.TurboJpeg,
             originalWidth: 4000, originalHeight: 3000, exif: exif);
         var path = Path.Combine(_dir, "seed.pv4");
-        await PreviewCacheFile.WriteAtomicallyAsync(image, path);
+        await PreviewCacheFile.WriteAtomicallyAsync(image, WpfBitmapSourceCodec.Instance, path);
         return await File.ReadAllBytesAsync(path);
     }
 

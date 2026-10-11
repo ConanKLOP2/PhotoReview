@@ -41,7 +41,7 @@ public sealed class ErrorHandlingReviewCachingTests : IDisposable
     [Fact(DisplayName = "ThumbnailCache.GetAsync reports a missing source through the returned task, not a synchronous throw")]
     public async Task ThumbnailGet_MissingSource_ReturnsFaultedTask()
     {
-        using var cache = new ThumbnailCache(_root.Dir("disk"));
+        using var cache = new ThumbnailCache(WpfBitmapSourceCodec.Instance, _root.Dir("disk"));
         var missing = _root.Combine("nope.jpg");
 
         Task<IDecodedImage?> task = null!;

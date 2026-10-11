@@ -163,7 +163,7 @@ public sealed class WicDirectDecoderWp03ReviewTests : IDisposable
         var path = _root.Combine("app1-" + kind + ".jpg");
         File.WriteAllBytes(path, bytes);
 
-        var error = Record.Exception(() => EmbeddedThumbnailReader.TryRead(path));
+        var error = Record.Exception(() => EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
 
         Assert.Null(error);
     }
@@ -184,7 +184,7 @@ public sealed class WicDirectDecoderWp03ReviewTests : IDisposable
         var path = _root.Combine("damaged" + offsetInTiff + ".jpg");
         File.WriteAllBytes(path, bytes);
 
-        var error = Record.Exception(() => EmbeddedThumbnailReader.TryRead(path));
+        var error = Record.Exception(() => EmbeddedThumbnailReader.TryRead(path, WpfBitmapSourceCodec.Instance));
 
         Assert.Null(error);
     }

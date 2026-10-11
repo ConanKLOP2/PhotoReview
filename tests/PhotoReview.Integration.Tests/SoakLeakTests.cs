@@ -415,7 +415,7 @@ internal sealed partial class SoakSession
                     (_, standardDecoder) => new SoakTrackingDecoder(
                         new FormatRoutingDecoder(
                             standardDecoder,
-                            ServiceFactories.CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache),
+                            ServiceFactories.CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache, WpfBitmapSourceCodec.Instance),
                             () => settingsStore.Current.RawSupportEnabled),
                         tracker));
             });

@@ -58,7 +58,7 @@ public sealed class ExifOrientationTests
     [InlineData(8)]
     public void Apply_NonSquareImage_PutsEverySourcePixelWhereTheExifOrientationDefinesIt(int orientation)
     {
-        var result = ExifOrientation.Apply(Source(), orientation);
+        var result = WpfExifOrientation.Apply(Source(), orientation);
 
         var transposed = orientation >= 5;
         Assert.Equal(transposed ? H : W, result.PixelWidth);
@@ -83,7 +83,7 @@ public sealed class ExifOrientationTests
         var source = Source();
         Assert.False(source.IsFrozen);
 
-        var result = ExifOrientation.Apply(source, orientation);
+        var result = WpfExifOrientation.Apply(source, orientation);
 
         Assert.Same(source, result);
         Assert.True(result.IsFrozen);
@@ -95,5 +95,5 @@ public sealed class ExifOrientationTests
     [InlineData(9)]
     [InlineData(65535)]
     public void CreateTransform_OrientationOutsideOneToEight_IsTheIdentity(int orientation) =>
-        Assert.Equal(Transform.Identity.Value, ExifOrientation.CreateTransform(orientation).Value);
+        Assert.Equal(Transform.Identity.Value, WpfExifOrientation.CreateTransform(orientation).Value);
 }

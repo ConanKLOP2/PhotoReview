@@ -25,14 +25,16 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     // hasHeadroom defaults to the real OS memory check (production behavior), exactly like
     // PreloadScheduler's own constructor -- tests inject a fixed answer so preload-warming
     // assertions don't depend on how much RAM the machine running them has free.
-    public BenchmarkImageExecutor(BenchmarkProfile profile, string[] files,
-        Func<double, bool>? hasHeadroom = null)
+    /// <param name="platformCodec">C-02 codec (required, WP-06: Benchmarking has no WPF): the host passes the codec of the build it measures.</param>
+    /// <param name="decoder">Decoder the preview service decodes with; null = WIC Direct over <paramref name="platformCodec"/>.</param>
+    public BenchmarkImageExecutor(BenchmarkProfile profile, string[] files, IPlatformImageCodec platformCodec,
+        Func<double, bool>? hasHeadroom = null, IImageDecoder? decoder = null)
     {
         _diskCacheDirectory = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Cache", Guid.NewGuid().ToString("N"));
         var isOriginal = profile.LoadingMode == LoadingMode.Original;
-        _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(),
+        _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(), platformCodec,
             PerformanceOptions.ImageCacheCapacityBytes, _diskCacheDirectory,
-            disableDiskCacheOverride: !profile.DiskCache);
+            disableDiskCacheOverride: !profile.DiskCache, decoder: decoder);
         var catalogEntries = Array.ConvertAll(files, f => new PhotoReview.Core.Catalog.CatalogEntry(f));
         // PERF-01: the profile's NextWindow/PreviousWindow/FullFolder must reach the scheduler, otherwise every
         // named profile ran the same production window policy regardless of what it claims to measure.

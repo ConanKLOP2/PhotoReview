@@ -156,7 +156,7 @@ public sealed class RawDecoderNoPreviewFallbackTests
         if (path is null || !RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
 
         var decoded = new RawDecoder(new WpfBitmapImageDecoder(), previewFallback: new LibRawThumbnailFallback(),
-                noPreviewDecoder: new LibRawDecoder())
+                noPreviewDecoder: new LibRawDecoder(WpfBitmapSourceCodec.Instance))
             .Decode(new DecodeRequest(path, DecodeBox.Unbounded));
 
         Assert.True(decoded.PixelWidth > 0 && decoded.PixelHeight > 0);

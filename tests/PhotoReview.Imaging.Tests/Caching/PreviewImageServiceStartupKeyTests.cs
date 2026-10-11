@@ -28,7 +28,7 @@ public sealed class PreviewImageServiceStartupKeyTests : IDisposable
     public PreviewImageServiceStartupKeyTests()
     {
         _path = _root.File(Path.Combine("images", "launch.jpg"), 1, 2, 3, 4);
-        _service = new PreviewImageService(_metrics, () => _original, () => _viewport, capacityBytes: 64L * 1024 * 1024,
+        _service = new PreviewImageService(_metrics, () => _original, () => _viewport, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: _root.Dir("cache"), disableDiskCacheOverride: true, decoder: _decoder);
     }
 

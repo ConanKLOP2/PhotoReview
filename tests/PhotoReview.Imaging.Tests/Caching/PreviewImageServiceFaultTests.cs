@@ -24,7 +24,7 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     private static PreviewImageService NewService(ReviewMetrics metrics, string diskDir, int width = 32) =>
-        new(metrics, () => false, () => width, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: diskDir);
+        new(metrics, () => false, () => width, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: diskDir);
 
     /// <summary>Decodes once with a fresh service so its persist worker writes the entry, and returns that entry's path and bytes.</summary>
     private async Task<(string Path, byte[] Bytes)> WriteEntryAsync(string diskDir)
@@ -213,7 +213,7 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         }).ToArray();
         var diskDir = _root.Dir("thrash-disk");
         // 32x32 previews cost 4096 bytes each; the budget holds about three.
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 3 * 4096 + 100,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, capacityBytes: 3 * 4096 + 100,
             diskCacheDirectory: diskDir, disableDiskCacheOverride: true);
         using var barrier = new Barrier(8);
         var failures = new System.Collections.Concurrent.ConcurrentBag<string>();
@@ -259,7 +259,7 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         var diskDir = _root.Dir("replaced-disk");
         using var entered = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDir, decoder: new GatedDecoder(entered, release));
 
         var pending = service.GetPreviewAsync(path);
@@ -275,7 +275,7 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         Assert.Empty(Directory.GetFiles(diskDir, "*.pv4"));
 
         // The failure is not sticky: the next request keys on the new identity and succeeds (the gate stays open).
-        var service2 = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024,
+        var service2 = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDir, disableDiskCacheOverride: true, decoder: new GatedDecoder(entered, release));
         Assert.True((await service2.GetPreviewAsync(path)).PixelWidth > 0);
         Assert.False(service.HasInflightPreview(service.GetCurrentCacheKey(path)));
@@ -304,7 +304,7 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         await File.WriteAllBytesAsync(path, TestImages.OpaquePng);
         Assert.True(new FileInfo(path).Length > 60 && new FileInfo(path).Length < 100_000);
         var decoder = new RecordingDecoder();
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024,
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, WpfBitmapSourceCodec.Instance, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: _root.Dir("preread-disk-" + cacheCapacity), disableDiskCacheOverride: true, decoder: decoder,
             sourceBytesCache: new SourceBytesCache(cacheCapacity));
 

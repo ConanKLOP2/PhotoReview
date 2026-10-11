@@ -159,9 +159,9 @@ public static class DecoderBenchmark
         {
             IImageDecoder? decoder = backend switch
             {
-                DecoderBackend.Wpf => new WpfBitmapImageDecoder(),
-                DecoderBackend.WicDirect => new PhotoReview.Imaging.Decoding.Wic.WicDirectDecoder(PhotoReview.Imaging.Decoding.WpfBitmapSourceCodec.Instance),
-                DecoderBackend.TurboJpeg => new PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder(),
+                DecoderBackend.Wpf => new PhotoReview.Imaging.Wpf.WpfBitmapImageDecoder(),
+                DecoderBackend.WicDirect => new PhotoReview.Imaging.Decoding.Wic.WicDirectDecoder(PhotoReview.Imaging.Wpf.WpfBitmapSourceCodec.Instance),
+                DecoderBackend.TurboJpeg => new PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder(PhotoReview.Imaging.Wpf.WpfBitmapSourceCodec.Instance),
                 _ => null
             };
 

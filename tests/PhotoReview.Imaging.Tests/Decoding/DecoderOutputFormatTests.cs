@@ -83,7 +83,7 @@ public sealed class DecoderOutputFormatTests : IDisposable
         var path = FixtureGenerator.GenerateJpegWithOrientation(
             Path.Combine(_tempDir, $"turbo-{targetWidth}-{orientation}.jpg"), 64, 48, orientation);
 
-        var decoded = new TurboJpegDecoder().Decode(new DecodeRequest(path, targetWidth));
+        var decoded = new TurboJpegDecoder(WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(path, targetWidth));
 
         // Scale + rotation run on the worker; the result is Bgr32 (opaque) or Pbgra32 if WIC's
         // scaler chose a premultiplied intermediate - both render without conversion.

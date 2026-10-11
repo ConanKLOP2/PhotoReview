@@ -144,14 +144,14 @@ public static class RawDecoderBenchmark
             {
                 rows.Add(Measure(file, info.Format.ToString(), "RawPreview", width, iteration, () =>
                 {
-                    var decoder = new RawDecoder(new WpfBitmapImageDecoder());
+                    var decoder = new RawDecoder(new PhotoReview.Imaging.Wpf.WpfBitmapImageDecoder());
                     var decoded = decoder.Decode(new DecodeRequest(file, width, ApplyOrientation: true));
                     return (decoded.PixelWidth, decoded.PixelHeight);
                 }, selected));
                 rows.Add(Measure(file, info.Format.ToString(), "EmbeddedJpegDirect", width, iteration, () =>
                 {
                     var bytes = ReadRange(file, preview.Offset, checked((int)preview.Length));
-                    var decoded = new WpfBitmapImageDecoder().Decode(new DecodeRequest(file, width,
+                    var decoded = new PhotoReview.Imaging.Wpf.WpfBitmapImageDecoder().Decode(new DecodeRequest(file, width,
                         ApplyOrientation: true, Bytes: bytes, SourceOrientation: info.Orientation));
                     return (decoded.PixelWidth, decoded.PixelHeight);
                 }, selected));
@@ -161,7 +161,7 @@ public static class RawDecoderBenchmark
         for (var iteration = 0; iteration < iterations; iteration++)
             rows.Add(Measure(file, info.Format.ToString(), "LibRawFullDecode", 0, iteration, () =>
             {
-                var decoded = new LibRawDecoder().Decode(new DecodeRequest(file, DecodeBox.Unbounded));
+                var decoded = new LibRawDecoder(PhotoReview.Imaging.Wpf.WpfBitmapSourceCodec.Instance).Decode(new DecodeRequest(file, DecodeBox.Unbounded));
                 return (decoded.PixelWidth, decoded.PixelHeight);
             }));
     }
