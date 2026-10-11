@@ -39,4 +39,15 @@ Thẻ: [NO-WPF-EXEC-PLAN-WP](NO-WPF-EXEC-PLAN-WP.md) mục WP-09. Tiền đề �
 
 ## 3. Kiểm chứng
 
-Xem perf doc và mục mutation bên dưới (điền khi chạy xong).
+- Build Release `PhotoReview.slnx`: 0 warning / 0 error. Test (CI filter, runner desktop ẩn): Architecture, Core, Imaging, Shell, Shell.Integration, App (gồm Category=UI), Integration xanh; flaky đã biết (`AppForwardedOpenTests` A3) xanh khi chạy lại.
+- Số đo ảnh đầu (22 vòng xen kẽ, máy rất bận): +2,9 % median, nửa thấp -0,3 % -> không hồi quy > 5 % (xem perf doc). `tune-matrix` S3 chưa đo (máy bận).
+- **Mutation thủ công, 27 đột biến** (sonnet, worktree riêng): 15 bị diệt bởi test của gói; 6 sống sót không tương đương và được lấp bằng test mới (codec của ThumbnailCache/PreviewImageService phải là codec của options;
+  `AppLog.ErrorForced` của SettingsStore; callback `SetCurrentImage` -> `NotifyCurrentImageChanged`; `ViewerState` transient; `UnavailableClipboardService` luôn false); 4 tương đương (slot Wpf lấp hai đường;
+  `GetMonitorInfoW` vs `A`); 1 không kiểm được bằng unit test: hằng `ImdtTouchpad` của `WheelMessageSource` (chỉ quan sát được khi có thông điệp chuột thật đang dispatch). Luật L-SHARED: thêm `UseWPF`/
+  ProjectReference Imaging.Wpf vào App.Shared.csproj -> test L-SHARED đỏ; thêm `System.Windows.Application` vào một ViewModel -> build đỏ.
+- Phát hiện: gọi `WpfPresentationSink.SetStatusText/...` trong test khi một `Application` WPF còn sống trong tiến trình (do test khác) làm sink marshal qua `Dispatcher.Invoke` và treo testhost khi chạy gộp lớp;
+  test của gói kiểm các delegate qua trường thay vì gọi sink.
+
+## 4. Phần còn lại
+
+Không còn phần nào của thẻ WP-09 chưa làm. Việc tiếp theo thuộc gói khác: WP-20 (shell gọi `AddPhotoReviewShared` với `PixelBufferImageCodec`), WP-19b (`RecoveryPresenter`, cửa sổ phụ), đo lại perf trên máy yên tĩnh khi đóng đợt 2.
