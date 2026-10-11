@@ -104,30 +104,7 @@ public static partial class WicCodecAvailability
         {
             factory.CreateComponentEnumerator(WicDecoderComponent, WicComponentEnumerateDefault, out nint enumPtr);
             enumerator = WicCom.Wrap<IEnumUnknown>(enumPtr);
-            while (enumerator.Next(1, out nint item, out uint fetched) == 0 && fetched == 1)
-            {
-                IWICBitmapCodecInfo? info = null;
-                try
-                {
-                    // Not every enumerated component is a codec info: QueryInterface instead of a cast keeps "no" cheap (E_NOINTERFACE).
-                    var codecInfoIid = typeof(IWICBitmapCodecInfo).GUID;
-                    if (Marshal.QueryInterface(item, in codecInfoIid, out nint infoPointer) >= 0 && infoPointer != 0)
-                    {
-                        info = WicCom.Wrap<IWICBitmapCodecInfo>(infoPointer);
-                        info.GetContainerFormat(out Guid container);
-                        result.Add(new DecoderEntry(container, ReadString(info.GetFriendlyName), ReadString(info.GetFileExtensions)));
-                    }
-                }
-                catch (COMException)
-                {
-                    // One broken third-party codec registration must not hide the others.
-                }
-                finally
-                {
-                    WicCom.Release(info);
-                    if (item != 0) Marshal.Release(item);
-                }
-            }
+            CollectDecoders(enumerator, result);
         }
         finally
         {
@@ -136,6 +113,35 @@ public static partial class WicCodecAvailability
         }
 
         return result;
+    }
+
+    /// <summary>Reads every component the enumerator hands out; each IUnknown reference <c>Next</c> returns is released, one broken registration is skipped.</summary>
+    internal static void CollectDecoders(IEnumUnknown enumerator, List<DecoderEntry> result)
+    {
+        while (enumerator.Next(1, out nint item, out uint fetched) == 0 && fetched == 1)
+        {
+            IWICBitmapCodecInfo? info = null;
+            try
+            {
+                // Not every enumerated component is a codec info: QueryInterface instead of a cast keeps "no" cheap (E_NOINTERFACE).
+                var codecInfoIid = typeof(IWICBitmapCodecInfo).GUID;
+                if (Marshal.QueryInterface(item, in codecInfoIid, out nint infoPointer) >= 0 && infoPointer != 0)
+                {
+                    info = WicCom.Wrap<IWICBitmapCodecInfo>(infoPointer);
+                    info.GetContainerFormat(out Guid container);
+                    result.Add(new DecoderEntry(container, ReadString(info.GetFriendlyName), ReadString(info.GetFileExtensions)));
+                }
+            }
+            catch (COMException)
+            {
+                // One broken third-party codec registration must not hide the others.
+            }
+            finally
+            {
+                WicCom.Release(info);
+                if (item != 0) Marshal.Release(item);
+            }
+        }
     }
 
     private delegate void StringGetter(uint cch, nint buffer, out uint actual);

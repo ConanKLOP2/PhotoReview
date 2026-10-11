@@ -70,10 +70,15 @@ public sealed partial class WicGeneratedComTests : IDisposable
     public void Release_NullManagedAndRepeated_AreNoOps()
     {
         var wrapper = WicCom.Wrap<IWICBitmapScaler>(NewRawScaler());
-        WicCom.Release(wrapper);
-        WicCom.Release(wrapper);
-        WicCom.Release(null);
-        WicCom.Release(new object());
+        var fault = Record.Exception(() =>
+        {
+            WicCom.Release(wrapper);
+            WicCom.Release(wrapper);
+            WicCom.Release(null);
+            WicCom.Release(new object());
+        });
+
+        Assert.Null(fault);
     }
 
     [Fact(DisplayName = "Wrap rejects a null pointer; WrapOrNull maps it to null")]
@@ -124,6 +129,88 @@ public sealed partial class WicGeneratedComTests : IDisposable
         Assert.Equal(72, (int)Marshal.OffsetOf<StatStgNative>(nameof(StatStgNative.grfStateBits)));
     }
 
+    // ---- codec enumeration (WicCodecAvailability) ----
+
+    [Fact(DisplayName = "EnumerateDecoders lists the in-box JPEG codec with its container, name and extensions (vtable order of IWICBitmapCodecInfo)")]
+    public void EnumerateDecoders_ListsTheJpegCodec()
+    {
+        var jpeg = WicCodecAvailability.EnumerateDecoders().FirstOrDefault(d => d.ContainerFormat == WicGuids.GUID_ContainerFormatJpeg);
+
+        Assert.NotEqual(default, jpeg);
+        Assert.False(string.IsNullOrWhiteSpace(jpeg.FriendlyName));
+        Assert.Contains(".jpg", jpeg.FileExtensions, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [GeneratedComClass]
+    private sealed partial class FakeCodecInfo : IWICBitmapCodecInfo
+    {
+        public void GetComponentType(out uint pType) => throw new NotImplementedException();
+        public void GetCLSID(out Guid pclsid) => throw new NotImplementedException();
+        public void GetSigningStatus(out uint pStatus) => throw new NotImplementedException();
+        public void GetAuthor(uint cchAuthor, nint wzAuthor, out uint pcchActual) => throw new NotImplementedException();
+        public void GetVendorGUID(out Guid pguidVendor) => throw new NotImplementedException();
+        public void GetVersion(uint cchVersion, nint wzVersion, out uint pcchActual) => throw new NotImplementedException();
+        public void GetSpecVersion(uint cchSpecVersion, nint wzSpecVersion, out uint pcchActual) => throw new NotImplementedException();
+        public void GetFriendlyName(uint cchFriendlyName, nint wzFriendlyName, out uint pcchActual) => Text("Fake", cchFriendlyName, wzFriendlyName, out pcchActual);
+        public void GetContainerFormat(out Guid pguidContainerFormat) => pguidContainerFormat = WicGuids.GUID_ContainerFormatTiff;
+        public void GetPixelFormats(uint cFormats, nint pguidPixelFormats, out uint pcActual) => throw new NotImplementedException();
+        public void GetColorManagementVersion(uint cchColorManagementVersion, nint wzColorManagementVersion, out uint pcchActual) => throw new NotImplementedException();
+        public void GetDeviceManufacturer(uint cchDeviceManufacturer, nint wzDeviceManufacturer, out uint pcchActual) => throw new NotImplementedException();
+        public void GetDeviceModels(uint cchDeviceModels, nint wzDeviceModels, out uint pcchActual) => throw new NotImplementedException();
+        public void GetMimeTypes(uint cchMimeTypes, nint wzMimeTypes, out uint pcchActual) => throw new NotImplementedException();
+        public void GetFileExtensions(uint cchFileExtensions, nint wzFileExtensions, out uint pcchActual) => Text(".fk", cchFileExtensions, wzFileExtensions, out pcchActual);
+
+        private static void Text(string value, uint capacity, nint buffer, out uint actual)
+        {
+            actual = (uint)value.Length + 1;
+            if (buffer == 0) return;
+            var chars = (value + "\0").AsSpan(0, (int)Math.Min(capacity, actual));
+            for (var i = 0; i < chars.Length; i++) Marshal.WriteInt16(buffer, i * 2, chars[i]);
+        }
+    }
+
+    [GeneratedComClass]
+    private sealed partial class FakeEnumerator(List<nint> handedOut, int count) : IEnumUnknown
+    {
+        private int _next;
+
+        public int Next(uint celt, out nint rgelt, out uint pceltFetched)
+        {
+            if (_next >= count)
+            {
+                rgelt = 0;
+                pceltFetched = 0;
+                return 1;
+            }
+
+            _next++;
+            var pointer = (nint)Wrappers.GetOrCreateComInterfaceForObject(new FakeCodecInfo(), CreateComInterfaceFlags.None);
+            Marshal.AddRef(pointer); // the test's own reference
+            handedOut.Add(pointer);
+            rgelt = pointer;
+            pceltFetched = 1;
+            return 0;
+        }
+
+        public int Skip(uint celt) => throw new NotImplementedException();
+        public void Reset() => throw new NotImplementedException();
+        public void Clone(out nint ppenum) => throw new NotImplementedException();
+    }
+
+    [Fact(DisplayName = "CollectDecoders reads every component and releases the IUnknown reference each Next handed out")]
+    public void CollectDecoders_ReadsAndReleasesEveryItem()
+    {
+        var handedOut = new List<nint>();
+        var result = new List<WicCodecAvailability.DecoderEntry>();
+
+        WicCodecAvailability.CollectDecoders(new FakeEnumerator(handedOut, 2), result);
+
+        Assert.Equal(2, result.Count);
+        Assert.All(result, e => Assert.Equal(("Fake", ".fk", WicGuids.GUID_ContainerFormatTiff), (e.FriendlyName, e.FileExtensions, e.ContainerFormat)));
+        Assert.Equal(2, handedOut.Count);
+        // handed-out reference + the test's one = 2; the collector's release (item and its wrapper) leaves only the test's.
+        Assert.All(handedOut, p => Assert.Equal(0u, (uint)Marshal.Release(p)));
+    }
     // ---- ReadColorContexts: the raw pointers it creates are released on every failure path ----
 
     [GeneratedComClass]
@@ -223,6 +310,17 @@ public sealed partial class WicGeneratedComTests : IDisposable
         Assert.All(created, p => Assert.Equal(0u, (uint)Marshal.Release(p)));
     }
 
+    [Fact(DisplayName = "An unexpected fault while filling the contexts propagates and still releases the context pointers")]
+    public void ReadColorContexts_UnexpectedFaultInFill_PropagatesAndReleases()
+    {
+        var created = new List<nint>();
+        var frame = new Frame((_, count) => { if (count > 0) throw new InvalidOperationException("not a WIC data fault"); });
+
+        Assert.Throws<InvalidOperationException>(() => ReadColorContexts(new Factory(created, _ => false), frame));
+
+        Assert.Equal(2, created.Count);
+        Assert.All(created, p => Assert.Equal(0u, (uint)Marshal.Release(p)));
+    }
     [Fact(DisplayName = "CreateColorContext failing midway releases the contexts already created")]
     public void ReadColorContexts_SecondCreateFails_ReleasesTheFirst()
     {
