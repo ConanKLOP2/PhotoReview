@@ -34,9 +34,9 @@ public sealed class ContractSurfaceTests
     internal const string RegenerateEnvironmentVariable = "PHOTOREVIEW_REGENERATE_CONTRACTS";
 
     private const string Header =
-        "PhotoReview - hợp đồng NO-WPF v1.1 (v1 đóng băng ở WP-01; v1.1: C-07 vào App.Shared, C-09 IRenderSurfaceFactory, C-03 ExifOrientation). FILE SINH TỰ ĐỘNG - không sửa tay.\n" +
+        "PhotoReview - hợp đồng NO-WPF v1.2 (v1 đóng băng ở WP-01; v1.1: C-07 vào App.Shared, C-09 IRenderSurfaceFactory, C-03 ExifOrientation; v1.2 (WP-09): IClipboardService sang App.Shared, khoá ở C-13). FILE SINH TỰ ĐỘNG - không sửa tay.\n" +
         "Sinh lại: dotnet test tests/PhotoReview.Architecture.Tests -c Release --filter \"FullyQualifiedName~ContractSurfaceTests.WriteApprovedSurface\"\n" +
-        "Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5. IClipboardService (C-13, dời) được khoá khi gói sở hữu sửa nó.";
+        "Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5.";
 
     /// <summary>Các kiểu thuộc từng hợp đồng (mục 5). Thêm/bớt kiểu ở đây = đổi hợp đồng.</summary>
     internal static readonly (string Id, Type[] Types)[] Contracts =
@@ -54,7 +54,7 @@ public sealed class ContractSurfaceTests
         ("C-11", [typeof(TextTrimming), typeof(TextStyle), typeof(ITextLayout), typeof(ITextRenderer),
                   typeof(OverlayLayoutContext), typeof(IOverlayElement), typeof(IAnimator), typeof(Easing)]),
         ("C-12", [typeof(MenuItemKind), typeof(MenuItemModel), typeof(ContextMenuBuildContext), typeof(ContextMenuModelBuilder), typeof(IPopupMenuHost)]),
-        ("C-13", [typeof(IZoomPromptService), typeof(ISecondaryWindowHost), typeof(SecondaryWindowHostFactory)]),
+        ("C-13", [typeof(IClipboardService), typeof(IZoomPromptService), typeof(ISecondaryWindowHost), typeof(SecondaryWindowHostFactory)]),
         ("C-14", [typeof(WindowShowState), typeof(WindowPlacementData), typeof(IWindowPlacementStore), typeof(WindowPlacementRules), typeof(IFullscreenController)]),
         ("C-15", [typeof(ShellCursor), typeof(WindowMessage), typeof(IWindowMessageHandler), typeof(IShellWindow)]),
         ("C-16", [typeof(SharedServiceOptions), typeof(SharedServiceRegistration), typeof(IPresentationSinkFactory),
@@ -76,7 +76,7 @@ public sealed class ContractSurfaceTests
 
     private static string Normalize(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal);
 
-    [Fact(DisplayName = "L-CONTRACT: contract signatures (C-01..C-18) match Approved/contracts.v1.txt (v1.1)")]
+    [Fact(DisplayName = "L-CONTRACT: contract signatures (C-01..C-18) match Approved/contracts.v1.txt (v1.2)")]
     [Trait("Category", "Architecture")]
     public void Contracts_MatchApprovedSurface()
     {

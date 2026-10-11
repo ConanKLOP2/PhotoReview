@@ -29,14 +29,14 @@ public sealed class DecoderProvidersTests
 
     private static List<(DecoderBackend Backend, Func<PhotoReview.Imaging.Decoding.IImageDecoder> Factory)> Create(
         Func<bool>? needed, DecoderProviders.LibRawProbe probe, List<string> errors, List<string> infos) =>
-        DecoderProviders.Create(PhysicalSourceReader.Instance, needed, probe, TurboJpegAvailable,
+        DecoderProviders.Create(PhysicalSourceReader.Instance, WpfBitmapSourceCodec.Instance, () => new WpfBitmapImageDecoder(PhysicalSourceReader.Instance), needed, probe, TurboJpegAvailable,
             (message, _) => errors.Add(message), infos.Add);
 
     [Fact]
     public void Create_TurboJpegMissing_LogsThroughTheInjectedLoggerAndDoesNotRegisterIt()
     {
         var errors = new List<string>();
-        var providers = DecoderProviders.Create(PhysicalSourceReader.Instance, () => false, TurboJpegOrLibRawAvailable,
+        var providers = DecoderProviders.Create(PhysicalSourceReader.Instance, WpfBitmapSourceCodec.Instance, () => new WpfBitmapImageDecoder(PhysicalSourceReader.Instance), () => false, TurboJpegOrLibRawAvailable,
             (out string? reason) => { reason = "turbojpeg.dll not found"; return false; },
             (message, _) => errors.Add(message), _ => { });
 

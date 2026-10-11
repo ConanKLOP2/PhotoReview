@@ -12,7 +12,7 @@ namespace PhotoReview.App.ViewModels;
 
 /// <summary>
 /// ViewModel chính quản lý trạng thái hiển thị, điều phối thao tác mở thư mục và điều hướng xem ảnh,
-/// tuân thủ tuyệt đối quy tắc K-2 (hoàn toàn độc lập với WPF và System.Windows).
+/// tuân thủ tuyệt đối quy tắc K-2 (hoàn toàn độc lập với WPF và System.Windows; L-SHARED: App.Shared không tham chiếu assembly WPF).
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, IFileActionSink, ISiblingNavigatorSink, IDuplicateCleanupSink
 {
@@ -74,8 +74,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         Action? resetCachesAction = null,
         ReviewMetrics? metrics = null,
         IUiScheduler? uiScheduler = null,
-        IFolderPicker? folderPicker = null)
+        IFolderPicker? folderPicker = null,
+        IClipboardService? clipboard = null)
     {
+        // WP-09 (C-13): the clipboard is injected (WPF app: WpfClipboardService; Win32 shell: Win32ClipboardService); a view model
+        // built without one (unit tests) gets a clipboard that reports "unavailable" instead of a hidden dependency on the real one.
+        Clipboard = clipboard ?? UnavailableClipboardService.Instance;
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _folderCoordinator = folderCoordinator ?? throw new ArgumentNullException(nameof(folderCoordinator));
@@ -313,7 +317,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         get
         {
             var configured = Settings.Shortcuts.ToggleCaptureMember;
-            // The store's key-name validator (WPF-backed in the app): this class must not depend on System.Windows (Rule 6).
+            // The store's key-name validator (WPF-backed in the app): this class lives in App.Shared, which must not reference WPF (L-SHARED).
             return !string.IsNullOrWhiteSpace(configured) && _settingsStore.KeyNames.IsValidKeyName(configured)
                 ? Tr.MainCapturePairBadgeTooltipBound(configured.Trim())
                 : Tr.MainCapturePairBadgeTooltipUnbound;
@@ -751,8 +755,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
-    /// <summary>Test seam: clipboard writer for the "Copy File Name" / "Copy Full Pathname" context-menu items; default is the real WPF clipboard.</summary>
-    internal IClipboardService Clipboard { get; set; } = new WpfClipboardService();
+    /// <summary>Test seam: clipboard writer for the "Copy File Name" / "Copy Full Pathname" context-menu items; set from the constructor (composition root: the DI-registered service).</summary>
+    internal IClipboardService Clipboard { get; set; }
 
     /// <summary>The two "Copy ..." context-menu items are enabled only while a photo is open.</summary>
     public bool CanCopyCurrentFilePath => HasImages && CurrentFilePath() is not null;

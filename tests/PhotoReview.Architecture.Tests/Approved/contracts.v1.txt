@@ -1,6 +1,6 @@
-# PhotoReview - hợp đồng NO-WPF v1.1 (v1 đóng băng ở WP-01; v1.1: C-07 vào App.Shared, C-09 IRenderSurfaceFactory, C-03 ExifOrientation). FILE SINH TỰ ĐỘNG - không sửa tay.
+# PhotoReview - hợp đồng NO-WPF v1.2 (v1 đóng băng ở WP-01; v1.1: C-07 vào App.Shared, C-09 IRenderSurfaceFactory, C-03 ExifOrientation; v1.2 (WP-09): IClipboardService sang App.Shared, khoá ở C-13). FILE SINH TỰ ĐỘNG - không sửa tay.
 # Sinh lại: dotnet test tests/PhotoReview.Architecture.Tests -c Release --filter "FullyQualifiedName~ContractSurfaceTests.WriteApprovedSurface"
-# Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5. IClipboardService (C-13, dời) được khoá khi gói sở hữu sửa nó.
+# Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5.
 
 [C-01] public sealed class PhotoReview.Imaging.Pixels.PixelBuffer : System.IDisposable  (assembly PhotoReview.Imaging)
   method public System.Span<byte> GetRow(int y)
@@ -562,6 +562,9 @@
 
 [C-12] public interface PhotoReview.Shell.Win32.Menus.IPopupMenuHost  (assembly PhotoReview)
   method public string? Show(System.Collections.Generic.IReadOnlyList<PhotoReview.App.Menus.MenuItemModel> items, PhotoReview.App.Input.PointD screenPointDip)
+
+[C-13] public interface PhotoReview.App.Services.IClipboardService  (assembly PhotoReview.App.Shared)
+  method public bool TrySetText(string text)
 
 [C-13] public interface PhotoReview.App.Services.IZoomPromptService  (assembly PhotoReview.App.Shared)
   method public int? PromptCustomZoom(int currentPercent)

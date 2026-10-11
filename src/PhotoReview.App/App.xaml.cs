@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.App.Composition;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
@@ -33,219 +34,28 @@ public partial class App : System.Windows.Application, IDisposable
 
     public static void ConfigureServices(IServiceCollection services)
     {
-        // 1. Core Abstractions
-        services.AddSingleton<IAppPaths>(_ => PhotoReview.Core.AppPaths.FromEnvironment());
-        // Metadata queries are counted into ReviewMetrics (StatCount) for the diagnostics/benchmark reports.
-        services.AddSingleton<IFileSystem>(sp => new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()));
-        // Q-R29 option C-2: the one choke point every source-image byte read (SourceBytesCache, the
-        // decoders, PreviewImageService's diag pre-read) goes through. Production default is a pure
-        // pass-through, byte-for-byte the direct FileStream each of those opened before this seam
-        // existed -- only tools/PhotoReview.Benchmark.Cli overrides it (with a throttling decorator)
-        // for perf-session measurement, never a production default.
-        services.AddSingleton<ISourceReader>(_ => PhysicalSourceReader.Instance);
-        services.AddSingleton<IClock, SystemClock>();
-        // AR02c/AR02b: FileLog.Default is a process-wide static singleton whose Shutdown/Dispose
-        // lifecycle is owned by the process (App.Dispose / PerfSession's own AppLog.Shutdown()), not by
-        // any one composition-root's ServiceProvider. A container that disposes itself (Benchmark.Cli
-        // building/disposing a fresh graph per iteration, and AR02b's per-window ServiceProvider) must
-        // not also dispose this shared instance -- registering the already-constructed instance (instead
-        // of a factory returning it) opts it out of container-owned disposal.
-        services.AddSingleton<ILog>(FileLog.Default);
-
-        // 2. Settings & Session
-        services.AddSingleton<SettingsStore>(sp => new SettingsStore(
-            sp.GetRequiredService<IAppPaths>(),
-            sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<ILog>(),
-            LogStartupErrorForced,
-            new WpfKeyNameValidator())); // AR11a: was the static AppSettings.Validator, now an instance dependency
-        services.AddSingleton<SessionStore>(sp => new SessionStore(
-            sp.GetRequiredService<IAppPaths>(),
-            sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<ReviewMetrics>()));
-        services.AddSingleton<SessionWriter>(sp => new SessionWriter(sp.GetRequiredService<SessionStore>(), sp.GetRequiredService<ILog>()));
-
-        // I18N (ADR 0006): a plain file system on purpose -- catalog reads must not count in ReviewMetrics read budgets.
-        services.AddSingleton<PhotoReview.App.Localization.LocalizationService>(sp => new PhotoReview.App.Localization.LocalizationService(
-            sp.GetRequiredService<IAppPaths>(),
-            new PhysicalFileSystem(),
-            sp.GetRequiredService<ILog>()));
-
-        // 3. Journal & File Actions
-        services.AddSingleton<OperationJournal>(sp => new OperationJournal(
-            sp.GetRequiredService<IAppPaths>(),
-            sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<IClock>(),
-            () => sp.GetRequiredService<SettingsStore>().Current.JournalDurability,
-            liveOperations: sp.GetRequiredService<ILiveOperationRegistry>(),
-            compactionFiles: new PhysicalJournalCompactionFiles()));
-        services.AddSingleton<RecoveryRetryService>(sp => Composition.ServiceFactories.CreateRecoveryRetryService(
-            sp.GetRequiredService<OperationJournal>(),
-            sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<IClock>(),
-            sp.GetRequiredService<IRecycleBin>(),
-            sp.GetRequiredService<SettingsStore>(),
-            sp.GetRequiredService<FileActionService>()));
-        services.AddSingleton<FileHashService>(sp => new FileHashService(
-            sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
-        services.AddSingleton<FileActionService>(sp => new FileActionService(
-            sp.GetRequiredService<OperationJournal>(),
-            sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<IClock>(),
-            sp.GetRequiredService<IRecycleBin>(),
-            moveOverride: GetMoveOverride(sp)));
-        services.AddSingleton<UndoService>(sp => new UndoService(
-            sp.GetRequiredService<OperationJournal>(),
-            sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<IRecycleBin>(),
-            sp.GetRequiredService<FileActionService>(),
-            moveOverride: GetMoveOverride(sp)));
-
-        // 4. Diagnostics & Metrics
-        services.AddSingleton<ReviewMetrics>();
-        services.AddSingleton<LatestExplorerSnapshot>();
-
-        // 5. Platform Services
-        services.AddSingleton<IExplorerOrderProvider, ExplorerOrderService>();
-        services.AddSingleton<IRecycleBin>(_ => WindowsRecycleBin.Instance);
-        // Q-R27: named per-operation markers so another PhotoReview's startup reconcile skips operations still running here.
-        services.AddSingleton<ILiveOperationRegistry>(sp => new WindowsLiveOperationRegistry(sp.GetRequiredService<ILog>()));
-        services.AddSingleton<IMemoryProbe>(sp => new WindowsMemoryProbe(sp.GetRequiredService<ILog>()));
-        services.AddSingleton<INaturalComparer>(_ => WindowsNaturalComparer.Instance);
-        services.AddSingleton<IDisplayClock>(_ => WindowsDisplayClock.Instance);
-        services.AddSingleton<IKeyNameValidator, WpfKeyNameValidator>();
+        // WP-09 (C-16): everything that does not depend on WPF is registered by the shared composition (App.Shared); the WPF app
+        // only supplies what is WPF-specific below and the main window.
+        // 1. Host services of the WPF app (resolved by the shared graph: view model composition root, settings window, ...).
         services.AddSingleton<IUiScheduler>(_ => new DispatcherUiScheduler(Current?.Dispatcher ?? Dispatcher.CurrentDispatcher));
         services.AddSingleton<IDialogService, PhotoReview.App.Services.WpfDialogService>();
-        services.AddSingleton<PhotoReview.App.Services.ViewportSizeSource>();
-        services.AddSingleton<PhotoReview.App.Services.IPresentationObserver>(_ => PhotoReview.App.Services.NullPresentationObserver.Instance);
         services.AddSingleton<PhotoReview.App.Coordinators.IFolderPicker, PhotoReview.App.Services.WpfFolderPicker>();
+        services.AddSingleton<IClipboardService, PhotoReview.App.Services.WpfClipboardService>();
+        services.AddSingleton<IPresentationSinkFactory, PhotoReview.App.Services.WpfPresentationSinkFactory>();
 
-        // 6. Imaging & Decoding
-        services.AddSingleton<IImageDecoderFactory>(sp =>
-        {
-            var sourceReader = sp.GetRequiredService<ISourceReader>();
-            var settingsStore = sp.GetRequiredService<SettingsStore>();
-            var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
-            var log = sp.GetService<ILog>();
-            var metrics = sp.GetService<ReviewMetrics>();
-            // Q-FMT-WEBP-HEIC: WebP/HEIC always decode through WIC (WicDirect + the usual WPF fallback), whatever backend is picked.
-            var webpHeicDecoder = Composition.ServiceFactories.CreateWebpHeicDecoder(sourceReader, log, metrics);
-            return new ImageDecoderFactory(
-                Composition.DecoderProviders.Create(sourceReader,
-                    () => settingsStore.Current.RawSupportEnabled || settingsStore.Current.DecoderBackend == PhotoReview.Core.Model.DecoderBackend.LibRaw),
-                log,
-                metrics,
-                (_, standardDecoder) => new FormatRoutingDecoder(
-                    new WebpHeicRoutingDecoder(standardDecoder, webpHeicDecoder,
-                        () => settingsStore.Current.WebpHeicSupportEnabled, () => WicCodecAvailability.Current, log),
-                    Composition.ServiceFactories.CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache,
-                        WpfBitmapSourceCodec.Instance),
-                    () => settingsStore.Current.RawSupportEnabled));
-        });
-        services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
+        // 2. The shared graph: codec = WPF bitmap codec, INV-12 fallback decoder = the WPF decoder, over the one source reader.
+        services.AddPhotoReviewShared(new SharedServiceOptions(
             WpfBitmapSourceCodec.Instance,
-            diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
-            log: sp.GetService<ILog>()));
-        services.AddSingleton<SourceBytesCachePolicy>(sp =>
-        {
-            var settings = sp.GetRequiredService<SettingsStore>().Current;
-            if (!settings.UseSourceBytesCache) return new SourceBytesCachePolicy(null);
-            // RAM%: the source-bytes cache must leave the preload window to the preview cache inside the user's share.
-            var sourceBytes = RamBudgetPolicy.SourceBytesForPercent(
-                settings.SourceBytesCapacityBytes, settings.ImageCacheRamPercent, RamBudgetPolicy.GetPhysicalMemoryBytes(),
-                PreloadWindow.FromSettings(settings));
-            if (sourceBytes <= 0)
-            {
-                sp.GetService<ILog>()?.Warn("Source-bytes cache disabled: the RAM cache share leaves no room beyond the preview preload window.");
-                return new SourceBytesCachePolicy(null);
-            }
-            return new SourceBytesCachePolicy(new SourceBytesCache(sourceBytes, sp.GetRequiredService<ISourceReader>()));
-        });
+            WpfFallbackDecoder: sp => new WpfBitmapImageDecoder(sp.GetRequiredService<ISourceReader>()),
+            ThumbnailDecoder: sp => new WpfBitmapImageDecoder(sp.GetRequiredService<ISourceReader>())));
 
-        services.AddSingleton<PreviewStateContext>();
-        services.AddSingleton<PreviewImageService>(sp =>
-        {
-            var ctx = sp.GetRequiredService<PreviewStateContext>();
-            var settingsStore = sp.GetRequiredService<SettingsStore>();
-            // Also lost in T46d: without this the "Original" loading mode still decoded previews.
-            ctx.IsOriginalLoadingMode = () => settingsStore.Current.LoadingMode == PhotoReview.Core.Model.LoadingMode.Original;
-            ctx.CurrentBackend = () => settingsStore.Current.DecoderBackend;
-            // T46d dropped the viewport-based decode width, so Preview decoded every image at full size.
-            // perf(decode): the target is now a width x height box (see AdaptivePreviewPolicy).
-            var viewport = sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>();
-            ctx.TargetDecodeBox = () => viewport.TargetDecodeBox;
-            return new PreviewImageService(
-                sp.GetRequiredService<ReviewMetrics>(),
-                () => ctx.IsOriginalLoadingMode(),
-                () => ctx.TargetDecodeBox(),
-                WpfBitmapSourceCodec.Instance,
-                capacityBytes: settingsStore.Current.ImageCacheCapacityBytes,
-                diskCacheDirectory: sp.GetRequiredService<IAppPaths>().PreviewCacheDir,
-                decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
-                currentBackend: () => ctx.CurrentBackend(),
-                log: sp.GetService<ILog>(),
-                sourceBytesCache: sp.GetRequiredService<SourceBytesCachePolicy>().Cache,
-                cacheRamPercent: settingsStore.Current.ImageCacheRamPercent,
-                // feat/preload-window-setting: captured once (applies after restart, like PreloadWorkerCount/Q-AR6/Q-R19);
-                // only affects the "allowed X-90%" text logged when the requested percent is clamped.
-                preloadWindow: PreloadWindow.FromSettings(settingsStore.Current),
-                sourceReader: sp.GetRequiredService<ISourceReader>(),
-                rawFullDecoder: LibRawAvailability.Probe(out _) ? new LibRawDecoder(WpfBitmapSourceCodec.Instance) : null,
-                isRawFullDecodeEnabled: () => settingsStore.Current.RawSupportEnabled
-                    && settingsStore.Current.RawFullDecode == PhotoReview.Core.Model.RawFullDecode.OnZoom);
-        });
-
-        // RV-I13: getSnapshotVersion (ReviewCatalog.StructuralVersion) lets a running preload lifetime notice a catalog
-        // change that did not go through Cancel() and restart on the new snapshot.
-        services.AddSingleton<Func<Func<CatalogEntry[]>, Func<int>, PreloadScheduler>>(sp =>
-            (getEntries, getSnapshotVersion) =>
-            {
-                var settingsStore = sp.GetRequiredService<SettingsStore>();
-                var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
-                var previewService = sp.GetRequiredService<PreviewImageService>();
-                return new PreloadScheduler(
-                previewService,
-                sp.GetRequiredService<ReviewMetrics>(),
-                getEntries,
-                fullFolderRamThresholdBytes: previewService.CapacityBytes, // effective (clamped) budget, R2-A-05
-                memoryLoadLimit: settingsStore.Current.PreloadMemoryLoadLimit,
-                memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
-                workerCountOverride: settingsStore.Current.PreloadWorkerCount,
-                log: sp.GetService<ILog>(),
-                prefetchSourceBytes: sourceBytesCache is not null
-                    ? Composition.ServiceFactories.CreateSourcePrefetch(sourceBytesCache,
-                        () => settingsStore.Current.WebpHeicSupportEnabled, () => WicCodecAvailability.Current)
-                    : null,
-                // feat/preload-window-setting: captured once at composition (applies after restart, Q-AR6/Q-R19).
-                window: PreloadWindow.FromSettings(settingsStore.Current),
-                snapshotVersion: getSnapshotVersion);
-            });
-
-        // 7. ViewModels & Coordinators
-        services.AddTransient<PhotoReview.App.ViewModels.ViewerState>();
-        services.AddTransient<PhotoReview.App.ViewModels.CompareViewModel>();
-        services.AddTransient<PhotoReview.Core.Catalog.ReviewCatalog>();
-        services.AddTransient<PhotoReview.Core.Catalog.GenerationClock>();
-        services.AddTransient<PhotoReview.App.ViewModels.MainViewModel>(sp => Composition.MainViewModelCompositionRoot.Create(sp));
-
-        // 8. Window
+        // 3. Window
         services.AddTransient<MainWindow>(sp => new MainWindow(
             sp.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>(),
             sp.GetRequiredService<SettingsStore>(),
             sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>(),
             sp.GetRequiredService<IAppPaths>(),
             sp.GetRequiredService<IDisplayClock>()));
-    }
-
-    /// <summary>
-    /// AR02a step 6 (F-move-seam): production registers no <see cref="PhotoReview.App.Coordinators.IMoveOverride"/>,
-    /// so <see cref="FileActionService"/>/<see cref="UndoService"/> get a <c>null</c> override and move files for
-    /// real. A DI override (test-only, from AR02b onward) can register one to intercept the move step.
-    /// </summary>
-    private static Func<string, string, Task>? GetMoveOverride(IServiceProvider sp)
-    {
-        var moveOverride = sp.GetService<PhotoReview.App.Coordinators.IMoveOverride>();
-        return moveOverride is null ? null : moveOverride.MoveAsync;
     }
 
     /// <summary>Test seam (null in production): extra registrations layered over the production graph in <see cref="StartupCoreAsync"/>.</summary>
@@ -512,31 +322,12 @@ public partial class App : System.Windows.Application, IDisposable
     private static readonly TimeSpan ExplorerPrefetchTimeout = TimeSpan.FromSeconds(3);
 
     /// <summary>
-    /// Serializes the "force logging on, write, flush, restore" sequences: two racing callers (AppDomain handler on a
-    /// pool thread and the dispatcher handler) each saved the other's forced value as "previous state" and could leave
-    /// logging permanently on.
+    /// The "force logging on, write, flush, restore" sequence lives in <see cref="AppLog.WriteForced"/> (App.Shared, one lock for
+    /// every caller: the shared composition logs its own startup errors through it).
     /// </summary>
-    private static readonly object ForcedLogLock = new();
+    private static void WriteForced(Action write) => AppLog.WriteForced(write);
 
-    private static void WriteForced(Action write)
-    {
-        lock (ForcedLogLock)
-        {
-            var wasEnabled = AppLog.Enabled;
-            AppLog.Enabled = true;
-            try
-            {
-                write();
-                AppLog.Flush();
-            }
-            finally
-            {
-                AppLog.Enabled = wasEnabled;
-            }
-        }
-    }
-
-    internal static void LogStartupErrorForced(string message, Exception ex) => WriteForced(() => AppLog.Error(message, ex));
+    internal static void LogStartupErrorForced(string message, Exception ex) => AppLog.ErrorForced(message, ex);
 
     /// <summary>R2-F-12: records an unhandled exception even when logging is disabled and flushes before returning.</summary>
     internal static void LogUnhandledForced(string message, object? exceptionObject)

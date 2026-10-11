@@ -33,7 +33,8 @@ public sealed class StructureOptimizeRulesTests
     [Fact(DisplayName = "Rule ST03: MainViewModelCompositionRoot is isolated in Composition namespace")]
     public void MainViewModelCompositionRoot_IsIsolatedInCompositionNamespace()
     {
-        var appAssembly = typeof(PhotoReview.App.App).Assembly;
+        // WP-09: the composition root moved with the other non-WPF code to PhotoReview.App.Shared (namespace unchanged).
+        var appAssembly = typeof(PhotoReview.App.Input.PointD).Assembly;
         var appTypes = Types.InAssembly(appAssembly);
         var compositionTypes = appTypes.That().ResideInNamespace("PhotoReview.App.Composition");
 
@@ -99,7 +100,9 @@ public sealed class StructureOptimizeRulesTests
     [Trait("Category", "Architecture")]
     public void BenchmarkCli_DoesNotReflectIntoAppTypes()
     {
+        // WP-09: the App types now live in two assemblies (WPF app + App.Shared, same namespaces).
         var appTypeNames = typeof(PhotoReview.App.App).Assembly.GetTypes()
+            .Concat(typeof(PhotoReview.App.Input.PointD).Assembly.GetTypes())
             .Select(t => t.Name)
             .ToHashSet(StringComparer.Ordinal);
         var reflectionOnType = new Regex(

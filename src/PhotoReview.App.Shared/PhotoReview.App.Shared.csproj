@@ -16,7 +16,24 @@
   <ItemGroup>
     <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging.Raw\PhotoReview.Imaging.Raw.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging.LibRaw\PhotoReview.Imaging.LibRaw.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging.TurboJpeg\PhotoReview.Imaging.TurboJpeg.csproj" />
     <ProjectReference Include="..\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
+  </ItemGroup>
+
+  <!-- Same global usings as PhotoReview.App.csproj: the files moved here from App (WP-09) keep their unqualified names. -->
+  <ItemGroup>
+    <Using Include="PhotoReview.Core.Settings" />
+    <Using Include="PhotoReview.App.Services" />
+    <Using Include="PhotoReview.Core.FileActions" />
+    <Using Include="PhotoReview.Core.Session" />
+    <Using Include="PhotoReview.Imaging" />
+    <Using Include="PhotoReview.Imaging.Caching" />
+    <Using Include="PhotoReview.Imaging.Decoding" />
+    <Using Include="PhotoReview.Imaging.Preload" />
+    <Using Include="PhotoReview.Platform.Windows" />
+    <Using Include="PhotoReview.Platform.Windows.Explorer" />
   </ItemGroup>
 
   <ItemGroup>
