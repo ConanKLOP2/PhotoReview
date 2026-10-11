@@ -37,6 +37,9 @@ internal sealed partial class ShellMainWindow
 
     internal PresentationComposer? Composer => _composer;
 
+    /// <summary>Số lần cache GPU bị xoá do "xoá cache" của RAM (INV-2; chẩn đoán/test).</summary>
+    internal int GpuCacheClearCount { get; private set; }
+
     internal PresentationPrefetcher? Prefetcher => _prefetcher;
 
     /// <summary>Gọi một lần từ constructor, trước khi có bề mặt.</summary>
@@ -215,6 +218,7 @@ internal sealed partial class ShellMainWindow
             return;
         }
 
+        GpuCacheClearCount++;
         _cache?.Clear();
         _composer?.CancelCrossfade();
         _window.Invalidate();
