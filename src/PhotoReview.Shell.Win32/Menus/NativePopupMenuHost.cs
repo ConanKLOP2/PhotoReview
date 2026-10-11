@@ -47,11 +47,8 @@ internal sealed class NativePopupMenuHost : IPopupMenuHost
         _showing = true;
         try
         {
-            Populate(root, items, ids);
-            var dpi = User32.GetDpiForWindow(owner);
-            var scale = dpi == 0 ? 1.0 : dpi / BaseDpi;
-            var x = (int)Math.Round(screenPointDip.X * scale);
-            var y = (int)Math.Round(screenPointDip.Y * scale);
+            Populate(root, items, ids, MenuCreated);
+            var (x, y) = ToScreenPixels(screenPointDip, User32.GetDpiForWindow(owner));
             var command = User32.TrackPopupMenuEx(root, WindowMessages.TpmReturnCmd | WindowMessages.TpmRightButton, x, y, owner, 0);
             return NativeMenuMapping.IdForCommand(ids, command);
         }
@@ -62,8 +59,19 @@ internal sealed class NativePopupMenuHost : IPopupMenuHost
         }
     }
 
-    private static void Populate(nint menu, IReadOnlyList<MenuItemModel> items, List<string> ids)
+    /// <summary>Test: gọi với mỗi HMENU (gốc và submenu) vừa tạo, để kiểm mọi handle đều được huỷ sau khi menu đóng (WP-24).</summary>
+    internal Action<nint>? MenuCreated { get; set; }
+
+    /// <summary>DIP (theo DPI của cửa sổ chủ) -> pixel màn hình; dpi = 0 (cửa sổ không đọc được) coi như 96.</summary>
+    internal static (int X, int Y) ToScreenPixels(PointD dip, uint dpi)
     {
+        var scale = dpi == 0 ? 1.0 : dpi / BaseDpi;
+        return ((int)Math.Round(dip.X * scale), (int)Math.Round(dip.Y * scale));
+    }
+
+    private static void Populate(nint menu, IReadOnlyList<MenuItemModel> items, List<string> ids, Action<nint>? created)
+    {
+        created?.Invoke(menu);
         foreach (var item in items)
         {
             if (item.Kind == MenuItemKind.Separator)
@@ -78,7 +86,7 @@ internal sealed class NativePopupMenuHost : IPopupMenuHost
             {
                 var sub = User32.CreatePopupMenu();
                 if (sub == 0) continue;
-                Populate(sub, item.Children, ids);
+                Populate(sub, item.Children, ids, created);
                 User32.AppendMenu(menu, flags | WindowMessages.MfPopup, (nuint)sub, text);
                 continue;
             }
