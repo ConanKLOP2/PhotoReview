@@ -4,7 +4,7 @@ using PhotoReview.Shell.Win32.Overlay;
 
 namespace PhotoReview.Shell.Tests.Overlay;
 
-/// <summary>WP-17: <see cref="DarkPalette"/> khớp từng khoá và giá trị của <c>PhotoReview.App/Themes/DarkPalette.xaml</c>.</summary>
+/// <summary>WP-17: <see cref="DarkPalette"/> khớp từng khoá và giá trị của <c>PhotoReview.App.WpfWindows/Themes/DarkPalette.xaml</c>.</summary>
 public sealed partial class DarkPaletteTests
 {
     [GeneratedRegex("""<SolidColorBrush\s+x:Key="(?<key>Dark\.[A-Za-z0-9]+)"\s+Color="#(?<hex>[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})"\s*/>""")]
@@ -14,7 +14,7 @@ public sealed partial class DarkPaletteTests
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            string candidate = Path.Combine(dir.FullName, "src", "PhotoReview.App", "Themes", "DarkPalette.xaml");
+            string candidate = Path.Combine(dir.FullName, "src", "PhotoReview.App.WpfWindows", "Themes", "DarkPalette.xaml");
             if (File.Exists(candidate))
             {
                 return candidate;

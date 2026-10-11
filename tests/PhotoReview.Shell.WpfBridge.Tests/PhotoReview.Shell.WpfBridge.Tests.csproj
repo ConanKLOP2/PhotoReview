@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- WP-19b: test cua so phu WPF nap muon qua Shell.WpfBridge (HWND that tren UI thread cua shell, desktop an qua
+       tools/run-tests-hidden.ps1). Project test DUY NHAT cua phia shell co UseWPF (de doc trang thai cua so WPF).
+       Exe tu viet (Program.cs) = thanh probe tien trinh con cho test "khong nap WPF khi chua mo cua so phu". -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Platforms>AnyCPU;x64</Platforms>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateProgramFile>false</GenerateProgramFile>
+    <OutputType>Exe</OutputType>
+    <StartupObject>PhotoReview.Shell.WpfBridge.Tests.Probe.ProbeProgram</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.App.Shared\PhotoReview.App.Shared.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.App.WpfWindows\PhotoReview.App.WpfWindows.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Shell.Interop\PhotoReview.Shell.Interop.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Shell.WpfBridge\PhotoReview.Shell.WpfBridge.csproj" />
+    <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- UI thread that (dispatcher + vong lap) dung chung voi Shell.Tests. -->
+    <Compile Include="..\PhotoReview.Shell.Tests\Hosting\UiThread.cs" Link="Hosting\UiThread.cs" />
+  </ItemGroup>
+
+</Project>

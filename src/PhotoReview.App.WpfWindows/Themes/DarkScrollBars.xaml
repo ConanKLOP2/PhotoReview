@@ -14,7 +14,7 @@
         Dark.ScrollTrack instead.
     -->
     <ResourceDictionary.MergedDictionaries>
-        <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/>
+        <ResourceDictionary Source="/PhotoReview.App.WpfWindows;component/Themes/DarkPalette.xaml"/>
     </ResourceDictionary.MergedDictionaries>
 
     <Style x:Key="Dark.ScrollThumb" TargetType="Thumb">

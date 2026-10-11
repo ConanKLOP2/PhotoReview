@@ -54,6 +54,56 @@ public sealed class Win32DialogServiceTests
             Calls.Add($"batch:{ownerHwnd}:{items.Count}");
             return Answer;
         }
+
+        public int? ZoomAnswer;
+
+        public int? PromptCustomZoom(nint ownerHwnd, int currentPercent)
+        {
+            Calls.Add($"zoom:{ownerHwnd}:{currentPercent}");
+            return ZoomAnswer;
+        }
+    }
+
+    [Fact]
+    public void ZoomPrompt_ForwardsOwnerAndCurrentPercent_AndReturnsTheChosenValue()
+    {
+        var secondary = new FakeSecondary { ZoomAnswer = 250 };
+        var service = new Win32ZoomPromptService(() => 77, new Lazy<ISecondaryWindowPort?>(() => secondary));
+
+        var chosen = service.PromptCustomZoom(125);
+
+        Assert.Equal(250, chosen);
+        Assert.Equal(["zoom:77:125"], secondary.Calls);
+    }
+
+    [Fact]
+    public void ZoomPrompt_Cancelled_ReturnsNull()
+    {
+        var service = new Win32ZoomPromptService(() => 1, new Lazy<ISecondaryWindowPort?>(() => new FakeSecondary { ZoomAnswer = null }));
+
+        Assert.Null(service.PromptCustomZoom(100));
+    }
+
+    [Fact]
+    public void ZoomPrompt_BridgeMissing_ReturnsNullWithoutThrowing()
+    {
+        var service = new Win32ZoomPromptService(() => 1, new Lazy<ISecondaryWindowPort?>(() => null));
+
+        Assert.Null(service.PromptCustomZoom(100));
+    }
+
+    [Fact]
+    public void ZoomPrompt_DoesNotLoadTheBridge_UntilFirstUse()
+    {
+        var created = 0;
+        var lazy = new Lazy<ISecondaryWindowPort?>(() => { created++; return new FakeSecondary(); });
+        var service = new Win32ZoomPromptService(() => 1, lazy);
+
+        Assert.Equal(0, created);
+        _ = service.PromptCustomZoom(100);
+        _ = service.PromptCustomZoom(100);
+
+        Assert.Equal(1, created);
     }
 
     private static readonly string[] TwoPaths = [@"C:\a.jpg", @"C:\b.jpg"];

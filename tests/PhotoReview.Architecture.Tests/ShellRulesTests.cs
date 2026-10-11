@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace PhotoReview.Architecture.Tests;
 
@@ -57,6 +58,36 @@ public sealed class ShellRulesTests
             string.Join(", ", result.FailingTypeNames ?? []));
         Assert.All(ShellWin32.GetTypes().Where(t => t.Name == "WpfBridgeLoader"),
             t => Assert.Equal("PhotoReview.Shell.Win32.Dialogs", t.Namespace));
+    }
+
+    private static readonly Assembly WpfBridge = typeof(PhotoReview.Shell.WpfBridge.ISecondaryWindowHost).Assembly;
+    private static readonly Assembly WpfWindows = typeof(PhotoReview.App.Services.SecondaryWindowFactory).Assembly;
+
+    [Fact(DisplayName = "L-WPF: only App, App.WpfWindows, Imaging.Wpf and Shell.WpfBridge projects (and test projects) enable UseWPF")]
+    [Trait("Category", "Architecture")]
+    public void OnlyTheWpfSideProjectsUseWpf()
+    {
+        var allowed = new[] { "PhotoReview.App", "PhotoReview.App.WpfWindows", "PhotoReview.Imaging.Wpf", "PhotoReview.Shell.WpfBridge" };
+        var withWpf = Directory.GetFiles(Path.Combine(RepoScan.Root, "src"), "*.csproj", SearchOption.AllDirectories)
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"<UseWPF>\s*true\s*</UseWPF>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .ToList();
+
+        Assert.Equal(allowed.Order(StringComparer.Ordinal), withWpf.Order(StringComparer.Ordinal));
+    }
+
+    [Fact(DisplayName = "L-WPF: Shell.WpfBridge and App.WpfWindows reference neither the WPF app, other Shell.* assemblies nor each other backwards")]
+    [Trait("Category", "Architecture")]
+    public void WpfBridgeAndWpfWindows_FollowTheLayerDirection()
+    {
+        var bridge = ReferencedNames(WpfBridge);
+        var windows = ReferencedNames(WpfWindows);
+
+        Assert.Contains("PhotoReview.App.WpfWindows", bridge);               // Shell.Win32 -> WpfBridge -> WpfWindows
+        Assert.DoesNotContain(bridge, r => r is "PhotoReview" or "PhotoReview.App" or "PhotoReview.Shell.Win32"
+            or "PhotoReview.Shell.Rendering" or "PhotoReview.Shell.Interop");
+        Assert.DoesNotContain(windows, r => r is "PhotoReview" or "PhotoReview.App" or "PhotoReview.Shell.WpfBridge"
+            || r.StartsWith("PhotoReview.Shell.", StringComparison.Ordinal));
     }
 
     [Fact(DisplayName = "L-SHARED: the App.Shared project file enables no WPF/WinForms and references no App, Shell.* or Imaging.Wpf project")]

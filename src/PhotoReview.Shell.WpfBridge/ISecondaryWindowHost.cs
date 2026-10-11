@@ -23,9 +23,3 @@ public interface ISecondaryWindowHost
 
     int? PromptCustomZoom(nint ownerHwnd, int currentPercent);
 }
-
-public static class SecondaryWindowHostFactory
-{
-    /// <summary>WP-19b thực thi.</summary>
-    public static ISecondaryWindowHost Create(IServiceProvider services) => throw new NotImplementedException();
-}

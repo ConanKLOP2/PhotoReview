@@ -16,6 +16,7 @@
     <InternalsVisibleTo Include="PhotoReview.Shell.Rendering" />
     <InternalsVisibleTo Include="PhotoReview.Shell.Tests" />
     <InternalsVisibleTo Include="PhotoReview.Shell.Integration.Tests" />
+    <InternalsVisibleTo Include="PhotoReview.Shell.WpfBridge.Tests" />
   </ItemGroup>
 
 </Project>

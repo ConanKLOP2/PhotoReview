@@ -21,11 +21,14 @@
     <ProjectReference Include="..\PhotoReview.App.Shared\PhotoReview.App.Shared.csproj" />
     <ProjectReference Include="..\PhotoReview.Shell.Interop\PhotoReview.Shell.Interop.csproj" />
     <ProjectReference Include="..\PhotoReview.Shell.Rendering\PhotoReview.Shell.Rendering.csproj" />
+    <!-- WP-19b (NE-5, L-SHELL): cầu cửa sổ phụ WPF nạp muộn; chỉ Dialogs/WpfBridgeLoader.cs chạm tới nó. -->
+    <ProjectReference Include="..\PhotoReview.Shell.WpfBridge\PhotoReview.Shell.WpfBridge.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="PhotoReview.Shell.Tests" />
     <InternalsVisibleTo Include="PhotoReview.Shell.Integration.Tests" />
+    <InternalsVisibleTo Include="PhotoReview.Shell.WpfBridge.Tests" />
   </ItemGroup>
 
 </Project>
