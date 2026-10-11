@@ -364,6 +364,58 @@ public sealed partial class ShellInputEndToEndTests
         StopAndAssertClean(run);
     }
 
+    // ---- nối interop vào ViewportController ----
+
+    [Fact]
+    public void ViewportController_UsesTheSystemDragThreshold_AtTheWindowDpi()
+    {
+        using var run = StartWithImages("drag", ("a.jpg", 0, 0));
+        var main = run.Main!;
+        var (threshold, dpi) = run.OnUi(() => (main.Viewport.DragThreshold, main.Window.DpiScale));
+
+        var system = InputNative.DragMetricsPixels(InputNative.DpiOf(dpi));
+
+        Assert.Equal(system.Horizontal / dpi, threshold.Horizontal, 9);
+        Assert.Equal(system.Vertical / dpi, threshold.Vertical, 9);
+        StopAndAssertClean(run);
+    }
+
+    // ---- điều hướng dừng đà; Skip/ToggleInfoOverlay mặc định ----
+
+    [Fact]
+    public void Navigation_StopsAKineticGlide()
+    {
+        using var run = StartWithImages("glidenav", ("a.png", 3000, 2000), ("b.png", 3000, 2000));
+        var main = run.Main!;
+        run.OnUi(() => main.ViewModel.Settings.KineticPanEnabled = true);
+        Key(run, KeyId.D1);
+        Assert.True(WaitUntil(() => run.OnUi(() => main.ViewModel.Viewer.DisplayZoomPercent == 100 && !main.Viewport.IsLayoutPosted)));
+        for (var i = 0; i < 12; i++)
+        {
+            Key(run, KeyId.Right, repeat: i > 0); // xung lượng cộng dồn: đà dài
+        }
+
+        run.OnUi(() => _ = main.ViewModel.NextAsync());
+        Assert.True(WaitUntil(() => run.OnUi(() => main.ViewModel.CurrentIndex == 1)));
+
+        Assert.False(run.OnUi(() => main.Input.Pointer.StopKinetic()), "điều hướng phải dừng đà đang chạy");
+        StopAndAssertClean(run);
+    }
+
+    [Fact]
+    public void SpaceSkips_AndIToggleTheInfoOverlay_WithTheDefaultShortcuts()
+    {
+        using var run = StartWithImages("defaults", ("a.jpg", 0, 0), ("b.jpg", 0, 0));
+        var main = run.Main!;
+        var overlay = run.OnUi(() => main.ViewModel.Settings.ShowInfoOverlay);
+
+        Key(run, KeyId.I);
+        Assert.True(WaitUntil(() => run.OnUi(() => main.ViewModel.Settings.ShowInfoOverlay) != overlay), "phím I không đổi overlay");
+        Key(run, KeyId.Space);
+        Assert.True(WaitUntil(() => run.OnUi(() => main.ViewModel.CurrentIndex) == 1), "Space (Skip) không sang ảnh kế");
+        StopAndAssertClean(run);
+    }
+
     // ---- độ trễ input -> khung ----
 
     [Fact]
