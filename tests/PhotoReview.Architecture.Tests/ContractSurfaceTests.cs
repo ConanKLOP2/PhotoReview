@@ -34,22 +34,22 @@ public sealed class ContractSurfaceTests
     internal const string RegenerateEnvironmentVariable = "PHOTOREVIEW_REGENERATE_CONTRACTS";
 
     private const string Header =
-        "PhotoReview - hợp đồng NO-WPF v1 (đóng băng ở WP-01). FILE SINH TỰ ĐỘNG - không sửa tay.\n" +
+        "PhotoReview - hợp đồng NO-WPF v1.1 (v1 đóng băng ở WP-01; v1.1: C-07 vào App.Shared, C-09 IRenderSurfaceFactory, C-03 ExifOrientation). FILE SINH TỰ ĐỘNG - không sửa tay.\n" +
         "Sinh lại: dotnet test tests/PhotoReview.Architecture.Tests -c Release --filter \"FullyQualifiedName~ContractSurfaceTests.WriteApprovedSurface\"\n" +
-        "Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5. C-07 (IImageSurface/IFitSurface/ViewportSnapshot), phần thuần của\n" +
-        "ExifOrientation (C-03) và IClipboardService (C-13, dời) được khoá khi gói sở hữu sửa chúng (v1.1).";
+        "Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5. IClipboardService (C-13, dời) được khoá khi gói sở hữu sửa nó.";
 
     /// <summary>Các kiểu thuộc từng hợp đồng (mục 5). Thêm/bớt kiểu ở đây = đổi hợp đồng.</summary>
     internal static readonly (string Id, Type[] Types)[] Contracts =
     [
         ("C-01", [typeof(PixelLayout), typeof(PixelBuffer)]),
         ("C-02", [typeof(IPlatformImageCodec), typeof(PixelLease), typeof(PixelBufferImageCodec), typeof(DecodedImage)]),
-        ("C-03", [typeof(PixelOps)]),
+        ("C-03", [typeof(PixelOps), typeof(ExifOrientation)]),
         ("C-04", [typeof(UiPriority), typeof(IUiDispatcher)]),
         ("C-05", [typeof(FrameTick), typeof(FrameTickEventArgs), typeof(IFrameClock)]),
         ("C-06", [typeof(PointD), typeof(SizeD), typeof(RectD), typeof(PointerButton), typeof(KeyModifiers), typeof(KeyId), typeof(KeyIdMapping)]),
+        ("C-07", [typeof(IImageSurface), typeof(IFitSurface), typeof(ViewportSnapshot)]),
         ("C-08", [typeof(ScrollBarPolicy), typeof(ViewportInput), typeof(ViewportLayout), typeof(ViewportLayoutEngine), typeof(ViewerStretchMode)]),
-        ("C-09", [typeof(ColorF), typeof(ImageInterpolation), typeof(PresentResult), typeof(RenderSurfaceOptions), typeof(IRenderSurface), typeof(IDrawContext)]),
+        ("C-09", [typeof(ColorF), typeof(ImageInterpolation), typeof(PresentResult), typeof(RenderSurfaceOptions), typeof(IRenderSurface), typeof(IRenderSurfaceFactory), typeof(IDrawContext)]),
         ("C-10", [typeof(IGpuImage), typeof(IGpuImageCache)]),
         ("C-11", [typeof(TextTrimming), typeof(TextStyle), typeof(ITextLayout), typeof(ITextRenderer),
                   typeof(OverlayLayoutContext), typeof(IOverlayElement), typeof(IAnimator), typeof(Easing)]),
@@ -64,13 +64,19 @@ public sealed class ContractSurfaceTests
         ("C-18", [typeof(ShellPerfMarks)]),
     ];
 
-    internal static string ActualSurface() => ContractSurface.Render(Contracts, Header);
+    /// <summary>Kiểu chỉ khoá một phần: ExifOrientation còn nửa WPF (<c>ExifOrientationWpf.cs</c>) tới WP-06.</summary>
+    internal static readonly IReadOnlyDictionary<Type, string[]> OnlyMembers = new Dictionary<Type, string[]>
+    {
+        [typeof(ExifOrientation)] = ["IsTransposed", "Normalize"],
+    };
+
+    internal static string ActualSurface() => ContractSurface.Render(Contracts, Header, OnlyMembers);
 
     private static string ApprovedPath => Path.Combine(RepoScan.Root, ApprovedRelativePath);
 
     private static string Normalize(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal);
 
-    [Fact(DisplayName = "L-CONTRACT: contract signatures (C-01..C-18) match Approved/contracts.v1.txt")]
+    [Fact(DisplayName = "L-CONTRACT: contract signatures (C-01..C-18) match Approved/contracts.v1.txt (v1.1)")]
     [Trait("Category", "Architecture")]
     public void Contracts_MatchApprovedSurface()
     {
@@ -98,7 +104,7 @@ public sealed class ContractSurfaceTests
         var all = Contracts.SelectMany(c => c.Types).ToArray();
 
         Assert.Equal(all.Length, all.Distinct().Count());
-        Assert.Equal(17, Contracts.Length); // C-01..C-18 trừ C-07 (khoá ở WP-07)
+        Assert.Equal(18, Contracts.Length); // C-01..C-18 (C-07 khoá ở v1.1)
     }
 
     /// <summary>Ghi lại file duyệt từ reflection. Chỉ lead chạy, trong PR đổi hợp đồng.</summary>

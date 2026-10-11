@@ -7,7 +7,7 @@ namespace PhotoReview.App.Input;
 /// the <c>MainImage</c> element). Points are in ImageScroll coordinates. The WPF adapter is
 /// <see cref="PhotoReview.App.Services.WpfImageSurface"/>; unit tests use a fake.
 /// </summary>
-internal interface IImageSurface
+public interface IImageSurface
 {
     /// <summary>The window is loaded (a glide frame or a zoom continuation after close does nothing).</summary>
     bool IsLoaded { get; }

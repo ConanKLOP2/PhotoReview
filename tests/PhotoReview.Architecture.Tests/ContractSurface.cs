@@ -26,7 +26,8 @@ internal static class ContractSurface
     };
 
     /// <summary>Toàn bộ bề mặt: một khối mỗi kiểu, theo thứ tự hợp đồng rồi tên kiểu; dòng kết thúc bằng '\n'.</summary>
-    public static string Render(IEnumerable<(string Id, Type[] Types)> contracts, string header)
+    public static string Render(IEnumerable<(string Id, Type[] Types)> contracts, string header,
+        IReadOnlyDictionary<Type, string[]>? onlyMembers = null)
     {
         var sb = new StringBuilder();
         foreach (var line in header.Split('\n')) sb.Append("# ").Append(line.TrimEnd('\r')).Append('\n');
@@ -35,17 +36,29 @@ internal static class ContractSurface
             foreach (var type in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
             {
                 sb.Append('\n');
-                foreach (var line in RenderType(id, type)) sb.Append(line).Append('\n');
+                foreach (var line in RenderType(id, type, onlyMembers is not null && onlyMembers.TryGetValue(type, out var names) ? names : null)) sb.Append(line).Append('\n');
             }
         }
         return sb.ToString();
     }
 
-    public static IEnumerable<string> RenderType(string contractId, Type type)
+    /// <param name="onlyMembers">
+    /// Khoá một phần kiểu (partial còn thành viên chưa thuần, ví dụ <c>ExifOrientation</c> trước WP-06): chỉ in thành viên có tên
+    /// trong danh sách (mọi overload). Null = toàn bộ bề mặt.
+    /// </param>
+    public static IEnumerable<string> RenderType(string contractId, Type type, string[]? onlyMembers = null)
     {
         yield return $"[{contractId}] {TypeHeader(type)}";
-        foreach (var line in Members(type)) yield return "  " + line;
+        foreach (var line in Members(type))
+        {
+            if (onlyMembers is not null && !onlyMembers.Any(n => IsMemberLine(line, n))) continue;
+            yield return "  " + line;
+        }
     }
+
+    // "method public static bool IsTransposed(int orientation)" -> tên đứng ngay trước "(" hoặc "<".
+    private static bool IsMemberLine(string line, string name) =>
+        line.Contains(" " + name + "(", StringComparison.Ordinal) || line.Contains(" " + name + "<", StringComparison.Ordinal);
 
     private static string TypeHeader(Type type)
     {

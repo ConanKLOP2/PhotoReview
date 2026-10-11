@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Input;
 using PhotoReview.App.ViewModels;
+using PhotoReview.App.Viewport;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.App.Services;

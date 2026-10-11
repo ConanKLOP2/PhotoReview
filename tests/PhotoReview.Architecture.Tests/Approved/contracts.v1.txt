@@ -1,7 +1,6 @@
-# PhotoReview - hợp đồng NO-WPF v1 (đóng băng ở WP-01). FILE SINH TỰ ĐỘNG - không sửa tay.
+# PhotoReview - hợp đồng NO-WPF v1.1 (v1 đóng băng ở WP-01; v1.1: C-07 vào App.Shared, C-09 IRenderSurfaceFactory, C-03 ExifOrientation). FILE SINH TỰ ĐỘNG - không sửa tay.
 # Sinh lại: dotnet test tests/PhotoReview.Architecture.Tests -c Release --filter "FullyQualifiedName~ContractSurfaceTests.WriteApprovedSurface"
-# Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5. C-07 (IImageSurface/IFitSurface/ViewportSnapshot), phần thuần của
-# ExifOrientation (C-03) và IClipboardService (C-13, dời) được khoá khi gói sở hữu sửa chúng (v1.1).
+# Kế hoạch: docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md mục 5. IClipboardService (C-13, dời) được khoá khi gói sở hữu sửa nó.
 
 [C-01] public sealed class PhotoReview.Imaging.Pixels.PixelBuffer : System.IDisposable  (assembly PhotoReview.Imaging)
   method public System.Span<byte> GetRow(int y)
@@ -51,6 +50,10 @@
   method public void Dispose()
   property public PhotoReview.Imaging.Pixels.PixelBuffer Pixels { get; }
   property public bool Owned { get; }
+
+[C-03] public static class PhotoReview.Imaging.Decoding.ExifOrientation  (assembly PhotoReview.Imaging)
+  method public static bool IsTransposed(int orientation)
+  method public static int Normalize(int orientation)
 
 [C-03] public static class PhotoReview.Imaging.Pixels.PixelOps  (assembly PhotoReview.Imaging)
   method public static PhotoReview.Imaging.Pixels.PixelBuffer ApplyOrientation(PhotoReview.Imaging.Pixels.PixelBuffer src, int exifOrientation)
@@ -326,6 +329,60 @@
   property public double Height { get; init; }
   property public double Width { get; init; }
 
+[C-07] public interface PhotoReview.App.Coordinators.IFitSurface  (assembly PhotoReview.App.Shared)
+  method public PhotoReview.App.Viewport.ViewportSnapshot Capture()
+  method public System.Threading.Tasks.Task YieldToRenderAsync()
+  method public void ScrollHome()
+  method public void UpdateFitSize()
+  method public void UpdateLayout()
+  property public (double Width, double Height) ViewportSize { get; }
+  property public bool IsLoaded { get; }
+
+[C-07] public interface PhotoReview.App.Input.IImageSurface  (assembly PhotoReview.App.Shared)
+  method public PhotoReview.App.Input.PointD ToImageElement(PhotoReview.App.Input.PointD surfacePoint)
+  method public System.Threading.Tasks.Task YieldToRenderAsync()
+  method public System.TimeSpan? RenderingTime(System.EventArgs e)
+  method public void CaptureMouse()
+  method public void HookRenderFrame(System.EventHandler handler)
+  method public void ReleaseMouseCapture()
+  method public void ScrollTo(double horizontal, double vertical)
+  method public void SetPanCursor(bool panning)
+  method public void UnhookRenderFrame(System.EventHandler handler)
+  method public void UpdateLayout()
+  property public (double Horizontal, double Vertical) DragThreshold { get; }
+  property public (double Width, double Height)? SourceSize { get; }
+  property public PhotoReview.App.Input.PointD ImageOrigin { get; }
+  property public PhotoReview.App.Input.PointD? PointerPosition { get; }
+  property public PhotoReview.Core.Abstractions.DisplayTiming? DisplayTiming { get; }
+  property public bool IsLoaded { get; }
+  property public double ExtentHeight { get; }
+  property public double ExtentWidth { get; }
+  property public double HorizontalOffset { get; }
+  property public double ImageActualHeight { get; }
+  property public double ImageActualWidth { get; }
+  property public double VerticalOffset { get; }
+  property public double ViewportHeight { get; }
+  property public double ViewportWidth { get; }
+  property public long Timestamp { get; }
+
+[C-07] public record PhotoReview.App.Viewport.ViewportSnapshot : System.IEquatable<PhotoReview.App.Viewport.ViewportSnapshot>  (assembly PhotoReview.App.Shared)
+  ctor public (double Zoom, PhotoReview.App.ViewModels.ViewerStretchMode Stretch, double MaxImageWidth, double MaxImageHeight, double ActualImageWidth, double ActualImageHeight, double ExtentWidth, double ExtentHeight, double ViewportWidth, double ViewportHeight, double HorizontalOffset, double VerticalOffset, bool HorizontalScrollBarVisible, bool VerticalScrollBarVisible)
+  method public override string ToString()
+  property public PhotoReview.App.ViewModels.ViewerStretchMode Stretch { get; init; }
+  property public bool HorizontalScrollBarVisible { get; init; }
+  property public bool VerticalScrollBarVisible { get; init; }
+  property public double ActualImageHeight { get; init; }
+  property public double ActualImageWidth { get; init; }
+  property public double ExtentHeight { get; init; }
+  property public double ExtentWidth { get; init; }
+  property public double HorizontalOffset { get; init; }
+  property public double MaxImageHeight { get; init; }
+  property public double MaxImageWidth { get; init; }
+  property public double VerticalOffset { get; init; }
+  property public double ViewportHeight { get; init; }
+  property public double ViewportWidth { get; init; }
+  property public double Zoom { get; init; }
+
 [C-08] public enum PhotoReview.App.ViewModels.ViewerStretchMode  (assembly PhotoReview.App.Shared)
   None = 0
   Uniform = 1
@@ -389,8 +446,6 @@
   event public System.EventHandler? DeviceRecreated
   method public PhotoReview.Shell.Rendering.IDrawContext BeginDraw()
   method public PhotoReview.Shell.Rendering.PresentResult EndDrawAndPresent()
-  method public static abstract PhotoReview.Shell.Rendering.IRenderSurface CreateForWindow(nint hwnd, PhotoReview.Shell.Rendering.RenderSurfaceOptions options)
-  method public static abstract PhotoReview.Shell.Rendering.IRenderSurface CreateOffscreen(int pixelWidth, int pixelHeight, double dpiScale)
   method public void Resize(int pixelWidth, int pixelHeight, double dpiScale)
   property public bool IsWarp { get; }
   property public double DpiScale { get; }
@@ -398,6 +453,10 @@
   property public int PixelWidth { get; }
   property public nint FrameLatencyWaitHandle { get; }
   property public nint Hwnd { get; }
+
+[C-09] public interface PhotoReview.Shell.Rendering.IRenderSurfaceFactory  (assembly PhotoReview.Shell.Rendering)
+  method public PhotoReview.Shell.Rendering.IRenderSurface CreateForWindow(nint hwnd, PhotoReview.Shell.Rendering.RenderSurfaceOptions options)
+  method public PhotoReview.Shell.Rendering.IRenderSurface CreateOffscreen(int pixelWidth, int pixelHeight, double dpiScale)
 
 [C-09] public enum PhotoReview.Shell.Rendering.ImageInterpolation  (assembly PhotoReview.Shell.Rendering)
   NearestNeighbor = 0

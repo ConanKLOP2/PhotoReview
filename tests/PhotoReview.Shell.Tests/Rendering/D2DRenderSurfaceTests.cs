@@ -37,6 +37,31 @@ public sealed class D2DRenderSurfaceTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Factory_CreatesOffscreenSurfaceThroughTheInterface()
+    {
+        var factory = new D2DRenderSurfaceFactory();
+        // Through the interface: a fake can stand in for it (C-09 v1.1).
+        IRenderSurfaceFactory viaInterface = factory;
+        Assert.NotNull(viaInterface);
+
+        using IRenderSurface surface = factory.CreateOffscreen(16, 8, 1);
+
+        Assert.True(surface.IsWarp);
+        Assert.Equal((16, 8), (surface.PixelWidth, surface.PixelHeight));
+    }
+
+    [Fact]
+    public void Factory_CreateForWindow_RejectsNullHandle()
+    {
+        var factory = new D2DRenderSurfaceFactory();
+        // Through the interface: a fake can stand in for it (C-09 v1.1).
+        IRenderSurfaceFactory viaInterface = factory;
+        Assert.NotNull(viaInterface);
+
+        Assert.Throws<ArgumentException>(() => factory.CreateForWindow(0, new RenderSurfaceOptions()));
+    }
+
+    [Fact]
     public void Clear_DarkCanvas_ReadsBackThemeColor()
     {
         using D2DRenderSurface surface = D2DRenderSurface.CreateOffscreenSurface(8, 4, 1);
