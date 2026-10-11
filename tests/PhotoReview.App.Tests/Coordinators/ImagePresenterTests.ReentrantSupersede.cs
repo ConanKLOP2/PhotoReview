@@ -22,11 +22,15 @@ public sealed partial class ImagePresenterTests
         var fs = new DelayedStatFileSystem(new PhysicalFileSystem());
         var presenter = CreatePresenterWithDelayedStat(fs);
         Task? reentrant = null;
+        var entered = 0;
         _sink.OnSetStatusText = _ =>
         {
             // First status of the first navigation ("loading"): runs synchronously inside PresentCoreAsync, after its stat resumed and
             // was found current, before it asks the preview service for the viewer decode.
-            if (reentrant is not null) return;
+            // The guard is an atomic flag set BEFORE re-entering, not "reentrant is not null": the second navigation's own "loading"
+            // status can fire on the stat worker before the assignment below completes, which re-entered again, superseded the
+            // second navigation and left the awaited task completed with nothing presented (the CI flake).
+            if (Interlocked.Exchange(ref entered, 1) != 0) return;
             reentrant = presenter.PresentAsync(1);
         };
         try
