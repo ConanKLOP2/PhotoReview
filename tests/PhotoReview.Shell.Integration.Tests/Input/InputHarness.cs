@@ -187,7 +187,7 @@ internal sealed class InputHarness : IDisposable
 
     public void SendWheel(uint message, int delta, int x, int y, bool ctrl = false)
     {
-        var wParam = (nint)(((uint)(ushort)(short)delta << 16) | (uint)(ctrl ? InputNative.MkControl : 0));
+        var wParam = (nint)(((uint)(ushort)(short)delta << 16) | (uint)(ctrl ? 0x0008 : 0));
         Send(message, wParam, PackPoint(x, y));
     }
 
@@ -196,12 +196,12 @@ internal sealed class InputHarness : IDisposable
         long lParam = 1 | ((long)scanCode << 16);
         if (repeat)
         {
-            lParam |= InputNative.KeyRepeatBit;
+            lParam |= 0x40000000L;
         }
 
         if (extended)
         {
-            lParam |= InputNative.KeyExtendedBit;
+            lParam |= 0x01000000L;
         }
 
         return Send(system ? WindowMessages.WmSysKeyDown : WindowMessages.WmKeyDown, virtualKey, (nint)lParam);

@@ -16,11 +16,11 @@ public sealed partial class InputNativeTests
     private static partial bool SetKeyboardState(byte[] state);
 
     [Theory]
-    [InlineData(InputNative.VkControl, KeyModifiers.Control)]
-    [InlineData(InputNative.VkMenu, KeyModifiers.Alt)]
-    [InlineData(InputNative.VkShift, KeyModifiers.Shift)]
-    [InlineData(InputNative.VkLWin, KeyModifiers.Windows)]
-    [InlineData(InputNative.VkRWin, KeyModifiers.Windows)]
+    [InlineData(0x11, KeyModifiers.Control)]
+    [InlineData(0x12, KeyModifiers.Alt)]
+    [InlineData(0x10, KeyModifiers.Shift)]
+    [InlineData(0x5B, KeyModifiers.Windows)]
+    [InlineData(0x5C, KeyModifiers.Windows)]
     public void ReadModifiers_MapsEachKeyStateToItsFlag(int virtualKey, KeyModifiers expected)
     {
         var state = new byte[256];
@@ -35,8 +35,8 @@ public sealed partial class InputNativeTests
             Assert.Equal(expected, InputNative.ReadModifiers());
 
             state[virtualKey] = 0;
-            state[InputNative.VkControl] = 0x80;
-            state[InputNative.VkShift] = 0x80;
+            state[0x11] = 0x80;
+            state[0x10] = 0x80;
             Assert.True(SetKeyboardState(state));
             Assert.Equal(KeyModifiers.Control | KeyModifiers.Shift, InputNative.ReadModifiers());
         }
@@ -76,9 +76,18 @@ public sealed partial class InputNativeTests
     }
 
     [Fact]
-    public void CursorScreenPixel_IsReadable()
+    public unsafe void CursorScreenPixel_IsTheCursorPosition_OrNullWhenWindowsCannotSayIt()
     {
-        Assert.NotNull(InputNative.CursorScreenPixel());
+        // Trên desktop ẩn (runner UI) GetCursorPos thất bại: khi đó phải là null, không phải (0,0).
+        PhotoReview.Shell.Interop.Point point;
+        var ok = PhotoReview.Shell.Win32.Hosting.PendingInterop.PendingUser32.GetCursorPos(&point);
+        var read = InputNative.CursorScreenPixel();
+
+        Assert.Equal(ok, read is not null);
+        if (ok)
+        {
+            Assert.Equal(new PointD(point.X, point.Y), read);
+        }
     }
 
     [Theory]

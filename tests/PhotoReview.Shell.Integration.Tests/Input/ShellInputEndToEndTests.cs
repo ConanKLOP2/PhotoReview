@@ -7,6 +7,7 @@ using PhotoReview.Shell.Tests.Input;
 using PhotoReview.Shell.Win32;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 using PhotoReview.Shell.Win32.Input;
+using PhotoReview.Shell.Win32.Startup;
 
 namespace PhotoReview.Shell.Integration.Tests.Input;
 
@@ -38,7 +39,11 @@ public sealed partial class ShellInputEndToEndTests
     private static string Diag(ShellRun run) =>
         $"marks=[{string.Join(", ", run.MarkNames)}] error={run.Error} exit={run.ExitCode} firstPresent={run.Main?.FirstPresentDone}";
 
-    private static ShellRun StartWithImages(string label, params (string Name, int Width, int Height)[] images)
+    private static ShellRun StartWithImages(string label, params (string Name, int Width, int Height)[] images) =>
+        StartWithImages(label, configure: null, images);
+
+    private static ShellRun StartWithImages(string label, Func<ShellStartupOptions, ShellStartupOptions>? configure,
+        params (string Name, int Width, int Height)[] images)
     {
         var root = ShellRun.NewRoot(label);
         var folder = Path.Combine(root, "photos");
@@ -58,7 +63,7 @@ public sealed partial class ShellInputEndToEndTests
             first ??= path;
         }
 
-        var run = ShellRun.Start(root, [first!]);
+        var run = ShellRun.Start(root, [first!], configure: configure);
         Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + Diag(run));
         Assert.True(WaitUntil(() => run.Main!.FirstImagePresented), "ảnh đầu không được vẽ: " + Diag(run));
         return run;
@@ -76,7 +81,7 @@ public sealed partial class ShellInputEndToEndTests
 
     private static void Key(ShellRun run, KeyId key, bool repeat = false)
     {
-        long lParam = 1 | (repeat ? InputNative.KeyRepeatBit : 0);
+        long lParam = 1 | (repeat ? 0x40000000L : 0);
         PendingUser32.SendMessage(run.Main!.Hwnd, WindowMessages.WmKeyDown, KeyIdMapping.ToVirtualKey(key), (nint)lParam);
     }
 
@@ -91,7 +96,7 @@ public sealed partial class ShellInputEndToEndTests
     {
         var hwnd = run.Main!.Hwnd;
         var (sx, sy) = ClientToScreenPixels(hwnd, clientX, clientY);
-        var wParam = (nint)(((uint)(ushort)(short)delta << 16) | (uint)(ctrl ? InputNative.MkControl : 0));
+        var wParam = (nint)(((uint)(ushort)(short)delta << 16) | (uint)(ctrl ? 0x0008 : 0));
         PendingUser32.SendMessage(hwnd, WindowMessages.WmMouseWheel, wParam, Pack(sx, sy));
     }
 
@@ -194,7 +199,7 @@ public sealed partial class ShellInputEndToEndTests
         });
         var hwnd = main.Hwnd;
 
-        PendingUser32.SendMessage(hwnd, WindowMessages.WmLButtonDown, InputNative.MkLButton, Pack(cx, cy));
+        PendingUser32.SendMessage(hwnd, WindowMessages.WmLButtonDown, 0x0001, Pack(cx, cy));
         Assert.True(run.OnUi(() => main.Window.HasPointerCapture), "nhấn trái trên ảnh phải bắt chuột");
         PendingUser32.SendMessage(hwnd, WindowMessages.WmLButtonUp, 0, Pack(cx, cy));
         Assert.False(run.OnUi(() => main.Window.HasPointerCapture));
@@ -416,46 +421,110 @@ public sealed partial class ShellInputEndToEndTests
         StopAndAssertClean(run);
     }
 
+    [Fact]
+    public void KeyK_TogglesKeepZoomAcrossImages_AndSavesItThroughTheStore()
+    {
+        using var run = StartWithImages("keepkey", ("a.jpg", 0, 0));
+        var main = run.Main!;
+        var initial = run.OnUi(() => main.ViewModel.Settings.KeepZoomAcrossImages);
+
+        Key(run, KeyId.K);
+
+        Assert.True(WaitUntil(() => run.OnUi(() => main.ViewModel.Settings.KeepZoomAcrossImages) != initial), "phím K không đổi KeepZoomAcrossImages");
+        var saved = File.ReadAllText(run.Paths.ConfigFile);
+        Assert.Contains($"\"KeepZoomAcrossImages\": {(!initial).ToString().ToLowerInvariant()}", saved, StringComparison.OrdinalIgnoreCase);
+        StopAndAssertClean(run);
+    }
+
     // ---- độ trễ input -> khung ----
 
     [Fact]
-    public void InputToFrameLatency_ArrowPan_IsMeasured()
+    public void InputLatency_ArrowPan_IsMeasuredAtTheHandler_TheLayout_AndTheFrame()
     {
-        using var run = StartWithImages("latency", ("big.png", 3000, 4500));
+        // PHOTOREVIEW_WP22_GPU=1: GPU thật thay WARP + cửa sổ topmost (chạy trên desktop tương tác của máy đo; fragment WP-22).
+        var gpu = Environment.GetEnvironmentVariable("PHOTOREVIEW_WP22_GPU") == "1";
+        using var run = StartWithImages("latency", options => options with { PreferWarp = !gpu, Activate = gpu }, ("big.png", 3000, 4500));
         var main = run.Main!;
+        if (gpu)
+        {
+            // Đo trên màn hình thật: cửa sổ phải thấy được (không bị che) thì Present(1) mới theo vblank thật.
+            run.OnUi(() => User32.SetWindowPos(main.Hwnd, WindowMessages.HwndTopMost, 0, 0, 0, 0,
+                WindowMessages.SwpNoMove | WindowMessages.SwpNoSize | WindowMessages.SwpNoActivate));
+        }
+
         Key(run, KeyId.D1);
         Assert.True(WaitUntil(() => run.OnUi(() => main.ViewModel.Viewer.DisplayZoomPercent == 100 && !main.Viewport.IsLayoutPosted)));
 
+        var layoutDone = new ManualResetEventSlim();
         var presented = new ManualResetEventSlim();
-        EventHandler<PhotoReview.App.Input.FrameTickEventArgs> onRender = (_, _) => presented.Set();
-        run.OnUi(() => main.Window.Render += onRender);
-        var samples = new List<double>();
+        long layoutAt = 0;
+        long frameAt = 0;
+        EventHandler onLayout = (_, _) =>
+        {
+            if (!layoutDone.IsSet)
+            {
+                layoutAt = Stopwatch.GetTimestamp();
+                layoutDone.Set();
+            }
+        };
+        EventHandler<PhotoReview.App.Input.FrameTickEventArgs> onRender = (_, _) =>
+        {
+            if (layoutDone.IsSet && !presented.IsSet)
+            {
+                frameAt = Stopwatch.GetTimestamp();
+                presented.Set();
+            }
+        };
+        run.OnUi(() =>
+        {
+            main.Viewport.LayoutUpdated += onLayout;
+            main.Window.Render += onRender;
+        });
+
+        var send = new List<double>();
+        var layout = new List<double>();
+        var frame = new List<double>();
         try
         {
             var directions = new[] { KeyId.Right, KeyId.Down, KeyId.Left, KeyId.Up };
             for (var i = 0; i < 60; i++)
             {
+                layoutDone.Reset();
                 presented.Reset();
                 var started = Stopwatch.GetTimestamp();
-                Key(run, directions[i % directions.Length]);
+                Key(run, directions[i % directions.Length]); // SendMessage: trả về khi handler đã chạy xong
+                send.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                Assert.True(layoutDone.Wait(Bound), "layout không chạy sau phím");
+                layout.Add(Stopwatch.GetElapsedTime(started, layoutAt).TotalMilliseconds);
                 Assert.True(presented.Wait(Bound), "không có khung nào được trình bày sau phím");
-                samples.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                frame.Add(Stopwatch.GetElapsedTime(started, frameAt).TotalMilliseconds);
             }
         }
         finally
         {
-            run.OnUi(() => main.Window.Render -= onRender);
+            run.OnUi(() =>
+            {
+                main.Viewport.LayoutUpdated -= onLayout;
+                main.Window.Render -= onRender;
+            });
         }
 
-        var raw = string.Join(',', samples.Select(s => s.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)));
-        samples.Sort();
-        var p50 = samples[samples.Count / 2];
-        var p95 = samples[(int)(samples.Count * 0.95)];
+        static (double P50, double P95, double Max) Stats(List<double> samples)
+        {
+            var sorted = samples.OrderBy(s => s).ToList();
+            return (sorted[sorted.Count / 2], sorted[(int)(sorted.Count * 0.95)], sorted[^1]);
+        }
+
+        var s = Stats(send);
+        var l = Stats(layout);
+        var f = Stats(frame);
         File.AppendAllText(Path.Combine(Path.GetTempPath(), "pr-wp22-latency.txt"),
-            $"{DateTime.UtcNow:O} warp key->frame ms: p50={p50:F2} p95={p95:F2} max={samples[^1]:F2} n={samples.Count} raw=[{raw}]{Environment.NewLine}");
-        // Trên desktop ẩn không có vblank thật nên Present(1) có thể chờ theo bội 250 ms sau vài chục khung (xem fragment WP-22):
-        // chỉ bảo vệ trung vị; p95 chỉ ghi lại để so với đo trên màn hình thật.
-        Assert.True(p50 < 100, $"độ trễ phím -> khung (trung vị) quá cao: p50={p50:F1} ms, p95={p95:F1} ms");
+            $"{DateTime.UtcNow:O} {(gpu ? "gpu" : "warp")} n={frame.Count} " +
+            $"handler(SendMessage) p50={s.P50:F2} p95={s.P95:F2} max={s.Max:F2} | key->layout p50={l.P50:F2} p95={l.P95:F2} max={l.Max:F2} | " +
+            $"key->frame p50={f.P50:F2} p95={f.P95:F2} max={f.Max:F2}{Environment.NewLine}");
+        Assert.True(s.P95 < 50, $"handler quá chậm: p50={s.P50:F2} ms, p95={s.P95:F2} ms");
+        Assert.True(l.P95 < 100, $"key->layout quá chậm: p50={l.P50:F2} ms, p95={l.P95:F2} ms");
+        // key->frame chỉ ghi lại: Present(1) trên desktop ẩn/bị che chờ theo bội 250 ms (xem fragment WP-22), không thuộc nhập liệu.
         StopAndAssertClean(run);
     }
 }

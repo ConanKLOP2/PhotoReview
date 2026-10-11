@@ -81,14 +81,13 @@ public sealed partial class DropTargetTests
     }
 
     [Fact]
-    public async Task Drop_OpensOnlyTheFirstFile_WithCopyEffect()
+    public void Drop_OpensOnlyTheFirstFile_WithCopyEffect()
     {
         var sink = new Sink();
         var target = Create(sink);
         var effect = DropEffect.None;
 
         var hr = target.Drop(new FakeDropData([@"C:\first.jpg", @"C:\second.jpg"]), 0, default, ref effect);
-        await Task.Yield();
 
         Assert.Equal(0, hr);
         Assert.Equal(DropEffect.Copy, effect);
@@ -110,29 +109,26 @@ public sealed partial class DropTargetTests
     }
 
     [Fact]
-    public async Task Drop_WhenOpeningFails_ReportsTheFailure_NotACrash()
+    public void Drop_WhenOpeningFails_ReportsTheFailure_NotACrash()
     {
         var sink = new Sink { Behaviour = _ => Task.FromException(new IOException("gone")) };
         var target = Create(sink);
         var effect = DropEffect.None;
 
-        target.Drop(new FakeDropData([@"C:\x.jpg"]), 0, default, ref effect);
-        await Task.Yield();
-        await Task.Delay(1); // OpenFirstAsync đã chạy inline; chỉ để chắc chắn continuation
+        target.Drop(new FakeDropData([@"C:\x.jpg"]), 0, default, ref effect); // OpenFirstAsync chạy tại chỗ tới await đầu
 
         Assert.Single(sink.Failures);
         Assert.IsType<IOException>(sink.Failures[0]);
     }
 
     [Fact]
-    public async Task Drop_Cancellation_IsNotAFailure()
+    public void Drop_Cancellation_IsNotAFailure()
     {
         var sink = new Sink { Behaviour = _ => Task.FromCanceled(new CancellationToken(true)) };
         var target = Create(sink);
         var effect = DropEffect.None;
 
         target.Drop(new FakeDropData([@"C:\x.jpg"]), 0, default, ref effect);
-        await Task.Yield();
 
         Assert.Empty(sink.Failures);
     }
@@ -152,7 +148,7 @@ public sealed partial class DropTargetTests
     }
 
     [Fact]
-    public async Task TheVtableMarshalling_CarriesPointByValue_AndTheEffectByRef()
+    public void TheVtableMarshalling_CarriesPointByValue_AndTheEffectByRef()
     {
         // Gọi qua COM thật (ConvertToUnmanaged -> con trỏ interface -> RCW sinh): chữ ký IDropTarget của WP-13b phải đúng slot/ABI.
         var sink = new Sink();
@@ -173,7 +169,6 @@ public sealed partial class DropTargetTests
                 effect = DropEffect.None;
                 Assert.Equal(0, proxy.Drop(data, 0, new PointL { X = 5, Y = 6 }, ref effect));
                 Assert.Equal(DropEffect.Copy, effect);
-                await Task.Yield();
                 Assert.Equal([@"C:\drag\a.jpg"], sink.Opened);
             }
             finally

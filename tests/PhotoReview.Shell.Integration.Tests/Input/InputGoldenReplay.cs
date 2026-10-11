@@ -94,7 +94,7 @@ internal static class InputGoldenReplay
                 h.SendMouse(button == PointerButton.Middle ? WindowMessages.WmMButtonDown : WindowMessages.WmLButtonDown, x, y);
                 return button == PointerButton.Left || leftDown;
             case "move":
-                h.SendMouse(WindowMessages.WmMouseMove, x, y, leftDown ? InputNative.MkLButton : 0);
+                h.SendMouse(WindowMessages.WmMouseMove, x, y, leftDown ? 0x0001 : 0);
                 break;
             case "release":
                 h.SendMouse(WindowMessages.WmLButtonUp, x, y);

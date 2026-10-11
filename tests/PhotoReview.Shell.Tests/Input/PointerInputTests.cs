@@ -17,7 +17,7 @@ public sealed class PointerInputTests
     private const uint LUp = WindowMessages.WmLButtonUp;
     private const uint MDown = WindowMessages.WmMButtonDown;
     private const uint Move = WindowMessages.WmMouseMove;
-    private const int MkL = InputNative.MkLButton;
+    private const int MkL = 0x0001;
 
     private static void ActualSize(InputRig rig)
     {

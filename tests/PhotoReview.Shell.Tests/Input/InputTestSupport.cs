@@ -371,19 +371,19 @@ internal sealed class InputRig : IDisposable
     public (bool Handled, nint Result) Mouse(uint message, int x, int y, int keyFlags = 0) => Send(message, keyFlags, Pack(x, y));
 
     public (bool Handled, nint Result) Wheel(uint message, int delta, int x, int y, bool ctrl = false) =>
-        Send(message, (nint)(((uint)(ushort)(short)delta << 16) | (uint)(ctrl ? InputNative.MkControl : 0)), Pack(x, y));
+        Send(message, (nint)(((uint)(ushort)(short)delta << 16) | (uint)(ctrl ? 0x0008 : 0)), Pack(x, y));
 
     public (bool Handled, nint Result) KeyDown(int virtualKey, bool repeat = false, bool system = false, bool extended = false, int scanCode = 0)
     {
         long lParam = 1 | ((long)scanCode << 16);
         if (repeat)
         {
-            lParam |= InputNative.KeyRepeatBit;
+            lParam |= 0x40000000L;
         }
 
         if (extended)
         {
-            lParam |= InputNative.KeyExtendedBit;
+            lParam |= 0x01000000L;
         }
 
         return Send(system ? PhotoReview.Shell.Interop.WindowMessages.WmSysKeyDown : PhotoReview.Shell.Interop.WindowMessages.WmKeyDown,
