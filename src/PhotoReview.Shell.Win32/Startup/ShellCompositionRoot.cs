@@ -6,6 +6,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Shell.Win32.Dialogs;
 using PhotoReview.Shell.Win32.Hosting;
+using PhotoReview.Shell.Win32.Viewing;
 
 namespace PhotoReview.Shell.Win32.Startup;
 
@@ -40,7 +41,6 @@ internal static class ShellCompositionRoot
         services.AddSingleton<IClipboardService>(_ => new Win32ClipboardService(host.OwnerWindow));
         services.AddSingleton(sp => new FolderPicker(sp.GetService<IShellFolderDialog>() ?? UnwiredShellFolderDialog.Instance, host.OwnerWindow));
         services.AddSingleton<IFolderPicker, ShellFolderPickerAdapter>();
-        services.AddSingleton<IPresentationSinkFactory, ShellPresentationSinkFactory>();
         services.AddSingleton<IDialogService>(sp => new Win32DialogService(
             host.OwnerWindow,
             sp.GetRequiredService<FolderPicker>(),
@@ -60,11 +60,11 @@ internal static class ShellCompositionRoot
 
     /// <summary>
     /// Điểm cắm của WP-21..26: mỗi gói thêm đúng MỘT dòng ở CUỐI hàm này (<c>services.AddShellXxx();</c>) để không xung đột
-    /// khi merge. Hiện chưa có tính năng nào ngoài startup.
+    /// khi merge.
     /// </summary>
     private static void RegisterFeatures(IServiceCollection services)
     {
-        _ = services;
+        services.AddShellViewing(); // WP-21: trình bày ảnh, compare, crossfade
         services.AddShellOverlay(); // WP-23
     }
 }

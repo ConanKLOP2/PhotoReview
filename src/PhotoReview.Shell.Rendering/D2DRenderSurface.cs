@@ -46,7 +46,13 @@ public sealed class D2DRenderSurface : IRenderSurface
 
     public nint FrameLatencyWaitHandle => _resources.FrameLatencyWaitHandle;
 
+    /// <summary>Có waitable object của swap chain (cửa sổ thật); offscreen/WARP không swap chain: không có.</summary>
+    internal bool HasFrameLatencyWaitHandle => _resources.FrameLatencyWaitHandle != 0;
+
     public bool IsWarp => _resources.IsWarp;
+
+    /// <summary>Adapter của thiết bị D3D (chẩn đoán/báo cáo hiệu năng); rỗng với offscreen.</summary>
+    public string AdapterDescription => _resources.AdapterDescription;
 
     /// <summary>Tăng mỗi lần thiết bị được tạo lại.</summary>
     public long DeviceGeneration => _resources.Generation;
@@ -120,7 +126,9 @@ public sealed class D2DRenderSurface : IRenderSurface
 
         _drawing = false;
         bool balanced = _drawContext.End();
+        long endDrawStart = System.Diagnostics.Stopwatch.GetTimestamp();
         int hr = _resources.EndDraw();
+        LastEndDrawTicks = System.Diagnostics.Stopwatch.GetTimestamp() - endDrawStart;
         PresentResult result;
         if (DeviceLoss.IsDeviceLost(hr))
         {
@@ -185,15 +193,24 @@ public sealed class D2DRenderSurface : IRenderSurface
         DeviceRecreated?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Chẩn đoán (WP-21): Stopwatch ticks của <c>ID2D1DeviceContext::EndDraw</c> lần gần nhất.</summary>
+    internal long LastEndDrawTicks { get; private set; }
+
+    /// <summary>Chẩn đoán (WP-21): Stopwatch ticks của <c>IDXGISwapChain::Present</c> lần gần nhất.</summary>
+    internal long LastPresentTicks { get; private set; }
+
     private PresentResult Present()
     {
+        LastPresentTicks = 0;
         if (!_resources.HasSwapChain)
         {
             return PresentResult.Presented;
         }
 
         // AllowTearing: không chờ vblank (sync 0). Cờ DXGI_PRESENT_ALLOW_TEARING cần IDXGIFactory5 - chưa dùng (v1).
+        long presentStart = System.Diagnostics.Stopwatch.GetTimestamp();
         int hr = _resources.Present(_options.AllowTearing || ImmediatePresent ? 0u : 1u);
+        LastPresentTicks = System.Diagnostics.Stopwatch.GetTimestamp() - presentStart;
         if (hr == DxgiConstants.StatusOccluded)
         {
             return PresentResult.Occluded;

@@ -105,6 +105,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         _hub.ImageChanged += _onImageChanged;
         UpdateTargetDecodeBox();
         _window.SetTitle(_viewModel.FolderTitle);
+        InitializeViewing(frameClock); // WP-21
     }
 
     public ShellWindow Window => _window;
@@ -151,6 +152,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
 
         _surface = surface;
         _cache = new GpuImageCache(surface, _dispatcher);
+        AttachViewing(); // WP-21
         _window.SetSurfaceReady(true);
     }
 
@@ -281,19 +283,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         }
     }
 
-    private void OnImageChanged(object? image, bool isFileChange)
-    {
-        _ = isFileChange; // crossfade là của WP-21
-        _image = image as PixelBuffer;
-        _viewport.InvalidateLayout();
-        _window.Invalidate();
-        if (_image is not null && !_disposed && !_firstImageDrawn)
-        {
-            // Ảnh đầu: vẽ NGAY trong lượt này (không chờ nhịp khung kế) - đây là mốc "ảnh đầu đã vẽ". Các ảnh sau đi qua
-            // Invalidate (một khung mỗi nhịp, gộp).
-            RenderNow();
-        }
-    }
+    private void OnImageChanged(object? image, bool isFileChange) => HandleImageChanged(image, isFileChange); // WP-21
 
     private void OnClientSizeChanged(object? sender, EventArgs e)
     {
@@ -403,6 +393,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         _sizeSource.Get = static () => (0, 0);
         _cloak.Stop();
         _image = null;
+        DisposeViewing(); // WP-21: trước cache (lớp ảnh giữ tham chiếu bitmap GPU)
         Interlocked.Exchange(ref _cache, null)?.Dispose();
         Interlocked.Exchange(ref _surface, null)?.Dispose();
         _viewport.Dispose();

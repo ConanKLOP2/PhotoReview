@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using PhotoReview.App.Input;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Imaging.Pixels;
 using PhotoReview.Shell.Rendering;
+using PhotoReview.Shell.Win32.Viewing;
 
 namespace PhotoReview.Shell.Win32;
 
@@ -34,7 +36,19 @@ internal sealed partial class ShellMainWindow
             return; // thu nhỏ: không có gì để vẽ; khung sau khi khôi phục sẽ vẽ
         }
 
+        // WP-21: nhịp khung - Present không được chặn UI thread (FramePacer). Ảnh đầu: Immediate tới khi đã vẽ.
+        var awaitingFirstImage = !_firstImageDrawn;
+        var mode = _pacer.ModeFor(_viewModel.Viewer.IsFullscreen, awaitingFirstImage);
+        if (!awaitingFirstImage && _surface.HasFrameLatencyWaitHandle && _pacer.ShouldDefer(_surface.WaitForNextFrame(0)))
+        {
+            _window.Invalidate(); // swap chain chưa nhận khung mới: để nhịp sau, không chặn
+            return;
+        }
+
         PresentResult result;
+        var frameStart = Stopwatch.GetTimestamp();
+        var presentTicks = 0L;
+        var presentStartTicks = 0L;
         try
         {
             if (_surface.PixelWidth != width || _surface.PixelHeight != height)
@@ -42,14 +56,16 @@ internal sealed partial class ShellMainWindow
                 _surface.Resize(width, height, _window.DpiScale);
             }
 
+            // WP-21: bản nâng cấp (full-res) đã upload xong thì thành ảnh chính TRƯỚC layout, để khung này đo theo bitmap mới.
+            _composer?.TryPromotePending();
+
             // Layout đã xếp mà chưa chạy: chạy ngay để khung này dùng kích thước/offset mới (như UpdateLayout của WPF).
             if (_viewport.IsLayoutPosted)
             {
                 _viewport.UpdateLayout();
             }
 
-            // Khung ảnh đầu không chờ vblank (xem D2DRenderSurface.ImmediatePresent); sau đó Present(1) bình thường.
-            _surface.ImmediatePresent = !_firstImageDrawn;
+            _surface.ImmediatePresent = mode == PresentMode.Immediate;
             var context = _surface.BeginDrawContext();
             try
             {
@@ -59,7 +75,10 @@ internal sealed partial class ShellMainWindow
             }
             finally
             {
+                var presentStart = Stopwatch.GetTimestamp();
+                presentStartTicks = presentStart;
                 result = _surface.EndDrawAndPresent();
+                presentTicks = Stopwatch.GetTimestamp() - presentStart;
             }
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or ObjectDisposedException)
@@ -68,6 +87,18 @@ internal sealed partial class ShellMainWindow
             return;
         }
 
+        _pacer.ObservePresent(mode, FrameStats.ToMs(presentTicks));
+        var endDrawMs = FrameStats.ToMs(_surface.LastEndDrawTicks);
+        var surfacePresentMs = FrameStats.ToMs(_surface.LastPresentTicks);
+        if (FrameStats.IsSlow(endDrawMs, surfacePresentMs))
+        {
+            // Chỉ khung chậm mới dựng chuỗi chẩn đoán (đường nóng không cấp phát).
+            Stats.RecordSlow(FrameStats.ToMs(Stopwatch.GetTimestamp() - frameStart), FrameStats.ToMs(presentStartTicks - frameStart),
+                endDrawMs, surfacePresentMs,
+                $"mode={mode} result={result} img={_composer?.Current?.Width}x{_composer?.Current?.Height} fade={_composer?.Crossfade.IsActive}");
+        }
+
+        Stats.Record(Stopwatch.GetTimestamp() - frameStart, presentTicks);
         if (result == PresentResult.DeviceRecreated || result == PresentResult.Failed)
         {
             // Thiết bị mất: cache đã tự xoá (DeviceRecreated); vẽ lại khung ở nhịp kế (ảnh được upload lại từ PixelBuffer).
@@ -86,39 +117,8 @@ internal sealed partial class ShellMainWindow
         }
     }
 
-    private void DrawContent(D2DDrawContext context)
-    {
-        if (_image is not { IsDisposed: false } pixels || _cache is null)
-        {
-            return;
-        }
-
-        IGpuImage gpu;
-        try
-        {
-            gpu = _cache.GetOrUpload(pixels);
-        }
-        catch (ObjectDisposedException)
-        {
-            return; // bộ đệm CPU vừa giải phóng buffer này: ảnh thay thế sắp tới
-        }
-
-        var origin = _viewport.ImageOrigin;
-        var destination = new RectD(origin.X, origin.Y, _viewport.ImageActualWidth, _viewport.ImageActualHeight);
-        var (viewportWidth, viewportHeight) = (_window.ClientSizeDip.Width, _window.ClientSizeDip.Height);
-        context.PushClip(new RectD(0, 0, viewportWidth, viewportHeight));
-        try
-        {
-            context.DrawImage(gpu, destination, null,
-                ImageInterpolations.FromScalingQuality(_viewModel.Viewer.EffectiveScalingQuality));
-        }
-        finally
-        {
-            context.PopClip();
-        }
-
-        _imageDrawnInFrame = true;
-    }
+    /// <summary>WP-21: ảnh chính, lớp ảnh cũ crossfade, compare (<c>ShellMainWindow.Viewing.cs</c>). WP-23 vẽ overlay sau nó.</summary>
+    private void DrawContent(D2DDrawContext context) => DrawPresentation(context);
 
     private void OnFramePresented()
     {

@@ -102,6 +102,23 @@ public sealed class ShellPresentationHubTests
     }
 
     [Fact]
+    public void Win32Sink_TracePresented_ReachesTheHubAndIsEmittedWithTheFrameThatHasTheImage()
+    {
+        using var capture = new Capture();
+        var hub = new ShellPresentationHub();
+        var sink = new PhotoReview.Shell.Win32.Viewing.Win32PresentationSink(hub,
+            new MainViewModelSinkCallbacks((_, _) => { }, _ => { }, () => { }, _ => { }));
+        var token = NewToken();
+        sink.SetCurrentImage(new object(), isFileChange: false);
+
+        sink.TracePresented(token, "preview", Stopwatch.GetTimestamp());
+        Assert.Empty(capture.NamesFor(token));            // chưa có khung nào chứa ảnh
+
+        hub.NoteFramePresented(containedImage: true);
+        Assert.Equal(["Rendered", "Presented", "RenderedFrame"], capture.NamesFor(token));
+    }
+
+    [Fact]
     public void ImageChanged_IsRaisedWithTheNewImageAndTheFileChangeFlag()
     {
         var hub = new ShellPresentationHub();
@@ -114,38 +131,5 @@ public sealed class ShellPresentationHubTests
         Assert.Same(image, hub.CurrentImage);
         Assert.Equal(1, hub.ImageChangeCount);
         Assert.Equal([(image, true)], seen);
-    }
-
-    [Fact]
-    public void Sink_UpdatesTheViewModelBeforeTheSurfaceSeesTheNewImage()
-    {
-        var order = new List<string>();
-        var hub = new ShellPresentationHub();
-        hub.ImageChanged += (_, _) => order.Add("surface");
-        var callbacks = new MainViewModelSinkCallbacks(
-            SetCurrentImage: (_, _) => order.Add("viewmodel"),
-            SetStatusText: s => order.Add("status:" + s),
-            ApplyInitialViewMode: () => order.Add("initialView"),
-            OnPresented: p => order.Add("presented:" + p));
-        var sink = new ShellPresentationSink(hub, callbacks);
-
-        sink.SetCurrentImage(new object(), isFileChange: false);
-        sink.SetStatusText("s");
-        sink.ApplyInitialViewMode();
-        sink.OnPresented("p");
-
-        Assert.Equal(["viewmodel", "surface", "status:s", "initialView", "presented:p"], order);
-    }
-
-    [Fact]
-    public void Factory_BuildsASinkOverTheSharedHub()
-    {
-        var hub = new ShellPresentationHub();
-        var factory = new ShellPresentationSinkFactory(hub);
-        var sink = factory.Create(new MainViewModelSinkCallbacks((_, _) => { }, _ => { }, () => { }, _ => { }));
-
-        sink.SetCurrentImage("img", isFileChange: false);
-
-        Assert.Equal("img", hub.CurrentImage);
     }
 }
