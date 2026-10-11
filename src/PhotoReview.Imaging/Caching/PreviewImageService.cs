@@ -708,11 +708,18 @@ public sealed class PreviewImageService : IPreloadTarget
         }
     }
 
+    /// <summary>
+    /// WP-21 (INV-2): raised after <see cref="ClearCache"/> dropped the RAM cache, on the calling thread. The Win32 shell clears
+    /// its GPU image cache with it (a GPU bitmap must not outlive the CPU entry it was uploaded from). No subscriber = no cost.
+    /// </summary>
+    public event EventHandler? CacheCleared;
+
     /// <summary>Bumps the cache epoch and drops every cached bitmap.</summary>
     public void ClearCache()
     {
         lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
         _originalDimensions.Clear();
+        CacheCleared?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

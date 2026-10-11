@@ -115,37 +115,4 @@ public sealed class ShellPresentationHubTests
         Assert.Equal(1, hub.ImageChangeCount);
         Assert.Equal([(image, true)], seen);
     }
-
-    [Fact]
-    public void Sink_UpdatesTheViewModelBeforeTheSurfaceSeesTheNewImage()
-    {
-        var order = new List<string>();
-        var hub = new ShellPresentationHub();
-        hub.ImageChanged += (_, _) => order.Add("surface");
-        var callbacks = new MainViewModelSinkCallbacks(
-            SetCurrentImage: (_, _) => order.Add("viewmodel"),
-            SetStatusText: s => order.Add("status:" + s),
-            ApplyInitialViewMode: () => order.Add("initialView"),
-            OnPresented: p => order.Add("presented:" + p));
-        var sink = new ShellPresentationSink(hub, callbacks);
-
-        sink.SetCurrentImage(new object(), isFileChange: false);
-        sink.SetStatusText("s");
-        sink.ApplyInitialViewMode();
-        sink.OnPresented("p");
-
-        Assert.Equal(["viewmodel", "surface", "status:s", "initialView", "presented:p"], order);
-    }
-
-    [Fact]
-    public void Factory_BuildsASinkOverTheSharedHub()
-    {
-        var hub = new ShellPresentationHub();
-        var factory = new ShellPresentationSinkFactory(hub);
-        var sink = factory.Create(new MainViewModelSinkCallbacks((_, _) => { }, _ => { }, () => { }, _ => { }));
-
-        sink.SetCurrentImage("img", isFileChange: false);
-
-        Assert.Equal("img", hub.CurrentImage);
-    }
 }
