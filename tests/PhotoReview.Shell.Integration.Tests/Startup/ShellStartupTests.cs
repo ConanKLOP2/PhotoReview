@@ -403,8 +403,10 @@ public sealed class ShellStartupTests
         int wantH = (int)Math.Round(ShellMainWindow.DefaultHeightDip * dpi);
         int workW = info.Work.Right - info.Work.Left, workH = info.Work.Bottom - info.Work.Top;
         int gotW = outer.Right - outer.Left, gotH = outer.Bottom - outer.Top;
-        if (workW >= wantW) Assert.Equal(wantW, gotW); else Assert.InRange(gotW, 1, workW);
-        if (workH >= wantH) Assert.Equal(wantH, gotH); else Assert.InRange(gotH, 1, workH);
+        // GetWindowRect gồm cả viền đổi cỡ vô hình (~8 px mỗi bên): dung sai một viền ở mỗi cạnh khi bị kẹp.
+        const int InvisibleFrameSlack = 24;
+        if (workW >= wantW) Assert.Equal(wantW, gotW); else Assert.InRange(gotW, 1, workW + InvisibleFrameSlack);
+        if (workH >= wantH) Assert.Equal(wantH, gotH); else Assert.InRange(gotH, 1, workH + InvisibleFrameSlack);
         StopAndAssertClean(run);
     }
 
