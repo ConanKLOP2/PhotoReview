@@ -394,8 +394,17 @@ public sealed class ShellStartupTests
         Assert.True(User32.GetWindowRect(main.Hwnd, &outer));
         var dpi = run.OnUi(() => main.Window.DpiScale);
         // Width/Height 1200x800 của MainWindow.xaml là cỡ NGOÀI (gồm khung) trong WPF: bản Win32 giữ đúng cỡ đó.
-        Assert.Equal((int)Math.Round(ShellMainWindow.DefaultWidthDip * dpi), outer.Right - outer.Left);
-        Assert.Equal((int)Math.Round(ShellMainWindow.DefaultHeightDip * dpi), outer.Bottom - outer.Top);
+        // Trên máy có vùng làm việc nhỏ hơn cỡ mặc định (runner CI) vị trí bị kẹp vào vùng làm việc: chỉ khi vùng làm việc
+        // đủ lớn mới khẳng định đúng cỡ mặc định; còn lại cửa sổ phải nằm gọn trong vùng làm việc.
+        var monitor = User32.MonitorFromWindow(main.Hwnd, 2 /* MONITOR_DEFAULTTONEAREST */);
+        var info = new MonitorInfo { Size = (uint)sizeof(MonitorInfo) };
+        Assert.True(User32.GetMonitorInfo(monitor, &info));
+        int wantW = (int)Math.Round(ShellMainWindow.DefaultWidthDip * dpi);
+        int wantH = (int)Math.Round(ShellMainWindow.DefaultHeightDip * dpi);
+        int workW = info.Work.Right - info.Work.Left, workH = info.Work.Bottom - info.Work.Top;
+        int gotW = outer.Right - outer.Left, gotH = outer.Bottom - outer.Top;
+        if (workW >= wantW) Assert.Equal(wantW, gotW); else Assert.InRange(gotW, 1, workW);
+        if (workH >= wantH) Assert.Equal(wantH, gotH); else Assert.InRange(gotH, 1, workH);
         StopAndAssertClean(run);
     }
 
