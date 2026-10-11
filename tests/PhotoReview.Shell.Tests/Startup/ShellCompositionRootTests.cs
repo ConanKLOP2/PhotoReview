@@ -11,6 +11,7 @@ using PhotoReview.Shell.Integration.Tests.Startup;
 using PhotoReview.Shell.Win32.Dialogs;
 using PhotoReview.Shell.Win32.Hosting;
 using PhotoReview.Shell.Win32.Startup;
+using PhotoReview.Shell.Win32.Viewing;
 
 namespace PhotoReview.Shell.Tests.Startup;
 
@@ -57,7 +58,7 @@ public sealed class ShellCompositionRootTests : IDisposable
         Assert.IsType<Win32ClipboardService>(provider.GetRequiredService<IClipboardService>());
         Assert.IsType<Win32DialogService>(provider.GetRequiredService<IDialogService>());
         Assert.IsType<ShellFolderPickerAdapter>(provider.GetRequiredService<IFolderPicker>());
-        Assert.IsType<ShellPresentationSinkFactory>(provider.GetRequiredService<IPresentationSinkFactory>());
+        Assert.IsType<Win32PresentationSinkFactory>(provider.GetRequiredService<IPresentationSinkFactory>());
         Assert.Same(_hub, provider.GetRequiredService<ShellPresentationHub>());
     }
 
@@ -69,7 +70,7 @@ public sealed class ShellCompositionRootTests : IDisposable
         var viewModel = provider.GetRequiredService<MainViewModel>();
 
         Assert.NotNull(viewModel);
-        Assert.IsType<ShellPresentationSink>(viewModel.Presenter.Sink);
+        Assert.IsType<Win32PresentationSink>(viewModel.Presenter.Sink);
         // Hai MainViewModel khác nhau chia sẻ cùng dịch vụ singleton (cache, settings), không chia sẻ trạng thái.
         Assert.Same(provider.GetRequiredService<PreviewImageService>(), provider.GetRequiredService<PreviewImageService>());
     }

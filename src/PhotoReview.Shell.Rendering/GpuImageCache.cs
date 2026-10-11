@@ -60,6 +60,12 @@ public sealed class GpuImageCache : IGpuImageCache, IDisposable
         _backend.DeviceRecreated += OnDeviceRecreated;
     }
 
+    /// <summary>
+    /// WP-21: một ảnh đang <see cref="Prefetch"/> vừa upload xong dải cuối (đối số = <c>PixelBuffer.Id</c>). Luôn phát trên UI thread.
+    /// Cho người gọi đổi sang ảnh đó mà không phải upload đồng bộ.
+    /// </summary>
+    public event Action<long>? UploadCompleted;
+
     public long BudgetBytes
     {
         get => _budgetBytes;
@@ -95,6 +101,13 @@ public sealed class GpuImageCache : IGpuImageCache, IDisposable
     }
 
     public bool Contains(long pixelBufferId) => _entries.ContainsKey(pixelBufferId);
+
+    /// <summary>
+    /// WP-21: ảnh đã nằm trọn trên GPU (upload xong, kể cả prefetch từng dải) - vẽ nó không còn phải upload đồng bộ trên UI
+    /// thread. False khi chưa có, đang dở, hoặc đã bị evict.
+    /// </summary>
+    public bool IsFullyUploaded(long pixelBufferId) =>
+        _entries.TryGetValue(pixelBufferId, out Entry? entry) && entry.Image.IsComplete && !entry.Image.IsReleased;
 
     public IGpuImage GetOrUpload(PixelBuffer pixels)
     {
@@ -250,6 +263,10 @@ public sealed class GpuImageCache : IGpuImageCache, IDisposable
         if (!entry.Image.IsComplete)
         {
             ScheduleStripe(entry);
+        }
+        else
+        {
+            UploadCompleted?.Invoke(entry.Image.PixelBufferId);
         }
     }
 
