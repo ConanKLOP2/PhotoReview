@@ -1,6 +1,5 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
 using PhotoReview.Imaging.Decoding.Wic;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
@@ -9,8 +8,14 @@ namespace PhotoReview.Imaging.Tests.Decoding;
 /// <see cref="ManagedIStream"/> is the COM IStream WIC reads through: its Read/Seek must report exact byte counts and
 /// positions through the out pointers (WIC trusts them), tolerate null out pointers, and refuse use after Dispose.
 /// </summary>
-public sealed class ManagedIStreamTests
+public sealed unsafe class ManagedIStreamTests
 {
+    // The COM Read/Write take raw pointers (WP-12): the tests pin a managed array for the call.
+    private static void Read(ManagedIStream com, byte[] buffer, int cb, nint pcbRead)
+    {
+        fixed (byte* p = buffer) com.Read(p, cb, pcbRead);
+    }
+
     private static readonly byte[] Data = [10, 11, 12, 13, 14, 15, 16, 17];
 
     [Fact(DisplayName = "Read reports the actual byte count through pcbRead, including a short read at end of stream")]
@@ -23,11 +28,11 @@ public sealed class ManagedIStreamTests
         {
             stream.Position = 6;
             var buffer = new byte[4];
-            com.Read(buffer, 4, pcb);
+            Read(com, buffer, 4, pcb);
             Assert.Equal(2, Marshal.ReadInt32(pcb));
             Assert.Equal([16, 17, 0, 0], buffer);
 
-            com.Read(buffer, 4, pcb);
+            Read(com, buffer, 4, pcb);
             Assert.Equal(0, Marshal.ReadInt32(pcb));
         }
         finally { Marshal.FreeHGlobal(pcb); }
@@ -40,7 +45,7 @@ public sealed class ManagedIStreamTests
         using var com = new ManagedIStream(stream);
         var buffer = new byte[3];
 
-        com.Read(buffer, 3, IntPtr.Zero);
+        Read(com, buffer, 3, IntPtr.Zero);
         Assert.Equal(3, stream.Position);
         Assert.Equal([10, 11, 12], buffer);
 
@@ -84,7 +89,7 @@ public sealed class ManagedIStreamTests
         using var stream = new MemoryStream(Data);
         using var com = new ManagedIStream(stream);
 
-        com.Stat(out STATSTG stat, 0);
+        com.Stat(out StatStgNative stat, 0);
 
         Assert.Equal(Data.Length, stat.cbSize);
         Assert.Equal(2, stat.type); // STGTY_STREAM
@@ -97,7 +102,7 @@ public sealed class ManagedIStreamTests
         var com = new ManagedIStream(stream);
         com.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => com.Read(new byte[1], 1, IntPtr.Zero));
+        Assert.Throws<ObjectDisposedException>(() => Read(com, new byte[1], 1, IntPtr.Zero));
         Assert.Throws<ObjectDisposedException>(() => com.Seek(0, (int)SeekOrigin.Begin, IntPtr.Zero));
         Assert.Throws<ObjectDisposedException>(() => com.Stat(out _, 0));
         com.Commit(0); // tolerated: WIC may release/commit after the owner disposed it
@@ -110,6 +115,6 @@ public sealed class ManagedIStreamTests
         using var com = new ManagedIStream(stream);
 
         Assert.Throws<NotSupportedException>(() => com.Clone(out _));
-        Assert.Throws<NotSupportedException>(() => com.CopyTo(com, 1, IntPtr.Zero, IntPtr.Zero));
+        Assert.Throws<NotSupportedException>(() => com.CopyTo(0, 1, IntPtr.Zero, IntPtr.Zero));
     }
 }
