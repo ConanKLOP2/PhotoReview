@@ -30,13 +30,14 @@ public sealed class LibRawPixelBufferHandOffTests
     {
         using var forWpf = Resampled(sw, sh, tw, th, channels);
         using var forCodec = Resampled(sw, sh, tw, th, channels);
-        var legacy = Assert.IsType<WpfDecodedImage>(new LibRawDecoder(WpfBitmapSourceCodec.Instance).HandOff(forWpf, downscaled: true, sw, sh, () => true));
+        var legacy = Assert.IsType<DecodedImage>(new LibRawDecoder(WpfBitmapSourceCodec.Instance).HandOff(forWpf, downscaled: true, sw, sh, () => true));
+        var legacySource = Assert.IsAssignableFrom<System.Windows.Media.Imaging.BitmapSource>(legacy.PlatformImage);
         var stages = new List<string>();
 
         var image = Assert.IsType<DecodedImage>(new LibRawDecoder(PixelBufferImageCodec.Instance, stages.Add).HandOff(forCodec, downscaled: true, sw, sh, () => true));
 
         var buffer = Assert.IsType<PixelBuffer>(image.PlatformImage);
-        PixelAssert.Equal(legacy.Source, buffer);
+        PixelAssert.Equal(legacySource, buffer);
         Assert.Equal((tw, th), (image.PixelWidth, image.PixelHeight));
         Assert.Equal((sw, sh), (image.OriginalWidth, image.OriginalHeight));
         Assert.Equal(DecoderBackend.LibRaw, image.ActualBackend);

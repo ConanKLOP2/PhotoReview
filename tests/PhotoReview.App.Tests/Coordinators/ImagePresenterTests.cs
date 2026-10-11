@@ -817,6 +817,7 @@ public sealed partial class ImagePresenterTests : IDisposable
         _metrics,
         () => _previewContext.IsOriginalLoadingMode(),
         () => _previewContext.TargetDecodeBox(),
+        WpfBitmapSourceCodec.Instance,
         capacityBytes: 64 * 1024 * 1024,
         decoder: decoder,
         currentBackend: () => _previewContext.CurrentBackend(),

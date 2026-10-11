@@ -967,6 +967,7 @@ public sealed class ZoomDetailTests : IDisposable
         _metrics,
         () => _settings.LoadingMode == LoadingMode.Original,
         () => box,
+        WpfBitmapSourceCodec.Instance,
         capacityBytes: 512L * 1024 * 1024,
         disableDiskCacheOverride: true,
         decoder: decoder,

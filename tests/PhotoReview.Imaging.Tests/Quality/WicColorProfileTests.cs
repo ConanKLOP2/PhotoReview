@@ -89,7 +89,7 @@ public sealed class WicColorProfileTests : IDisposable
         var path = FixtureGenerator.GenerateJpegWithIcc(
             Path.Combine(_tempDir, $"nofallback-{targetWidth}.jpg"), 128, 96);
         var metrics = new ReviewMetrics();
-        var decoder = new ImageDecoderFactory([(DecoderBackend.WicDirect, () => new WicDirectDecoder(WpfBitmapSourceCodec.Instance))], metrics: metrics).Create(DecoderBackend.WicDirect);
+        var decoder = new ImageDecoderFactory([(DecoderBackend.WicDirect, () => new WicDirectDecoder(WpfBitmapSourceCodec.Instance))], metrics: metrics, wpfDecoderFactory: () => new WpfBitmapImageDecoder()).Create(DecoderBackend.WicDirect);
         Assert.IsType<FallbackImageDecoder>(decoder);
 
         var decoded = decoder.Decode(new DecodeRequest(path, targetWidth));
@@ -106,7 +106,7 @@ public sealed class WicColorProfileTests : IDisposable
     {
         var path = FixtureGenerator.GeneratePngWithIcc(
             Path.Combine(_tempDir, "p3-alpha.png"), 32, 24);
-        var decoder = new ImageDecoderFactory([(DecoderBackend.WicDirect, () => new WicDirectDecoder(WpfBitmapSourceCodec.Instance))]).Create(DecoderBackend.WicDirect);
+        var decoder = new ImageDecoderFactory([(DecoderBackend.WicDirect, () => new WicDirectDecoder(WpfBitmapSourceCodec.Instance))], wpfDecoderFactory: () => new WpfBitmapImageDecoder()).Create(DecoderBackend.WicDirect);
 
         var decoded = decoder.Decode(new DecodeRequest(path, 0));
         var bitmap = Assert.IsAssignableFrom<BitmapSource>(decoded.PlatformImage);

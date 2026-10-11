@@ -491,7 +491,7 @@ public sealed class DecodingHelpersMutationTests : IDisposable
     public void Factory_UnregisteredBackend_WarnsThroughTheInjectedLogAndGivesWpf()
     {
         var log = new RecordingLog();
-        var factory = new ImageDecoderFactory([], log);
+        var factory = new ImageDecoderFactory([], log, wpfDecoderFactory: () => new WpfBitmapImageDecoder());
 
         var decoder = factory.Create(DecoderBackend.TurboJpeg);
 
