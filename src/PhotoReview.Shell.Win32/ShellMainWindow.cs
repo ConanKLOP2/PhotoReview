@@ -115,6 +115,9 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
 
     internal ViewportController Viewport => _viewport;
 
+    /// <summary>Dispatcher của UI thread (gói tính năng và test đăng việc lên UI thread qua nó).</summary>
+    internal Win32UiDispatcher Dispatcher => _dispatcher;
+
     /// <summary>True sau khung đầu tiên đã Present.</summary>
     public bool FirstPresentDone => _firstPresentDone;
 

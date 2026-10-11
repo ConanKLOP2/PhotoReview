@@ -20,8 +20,17 @@ namespace PhotoReview.Shell.Win32.Startup;
 /// <summary>Tuỳ chọn khởi động; mặc định = chạy thật. Test thay từng seam (không đụng dữ liệu người dùng).</summary>
 internal sealed record ShellStartupOptions
 {
-    /// <summary>Prefix mutex/pipe của instance (NE-6). Test dùng prefix duy nhất.</summary>
-    public string InstanceNamePrefix { get; init; } = ShellInstanceNames.Prefix;
+    /// <summary>
+    /// Prefix mutex/pipe của instance (NE-6). Mặc định <see cref="ShellInstanceNames.Prefix"/>; biến môi trường
+    /// <c>PHOTOREVIEW_SHELL_INSTANCE_PREFIX</c> đổi nó (chẩn đoán/test tiến trình, để không forward nhầm cho cửa sổ đang dùng).
+    /// </summary>
+    public string InstanceNamePrefix { get; init; } = InstancePrefixFromEnvironment();
+
+    /// <summary>Seam cloak DWM: (hwnd, cloaked) -> được chấp nhận. Null = <c>WindowsDwmCloak</c>.</summary>
+    public Func<nint, bool, bool>? SetCloaked { get; init; }
+
+    private static string InstancePrefixFromEnvironment() =>
+        Environment.GetEnvironmentVariable("PHOTOREVIEW_SHELL_INSTANCE_PREFIX") is { Length: > 0 } value ? value : ShellInstanceNames.Prefix;
 
     /// <summary>Đăng ký thêm/đè lên đồ thị DI sau <c>AddPhotoReviewShared</c> (test: <c>IAppPaths</c> riêng, journal giả...).</summary>
     public Action<IServiceCollection>? ServiceOverrides { get; init; }
@@ -108,6 +117,7 @@ internal sealed class ShellStartup : IDisposable
     private string? _pendingForwardPath;
     private int _exitCode;
     private int? _forcedExit;
+    private long _startTimestamp;
     private ShellStartup(string[] args, ShellLaunch launch, ShellStartupOptions options)
     {
         _args = args;
@@ -131,6 +141,7 @@ internal sealed class ShellStartup : IDisposable
     private int RunLoop()
     {
         // perf(startup): listener CSV chỉ phụ thuộc môi trường nên chạy trước; mốc msSinceProcessStart bao cả phần sau.
+        _startTimestamp = System.Diagnostics.Stopwatch.GetTimestamp(); // vào Main (không đọc StartTime của tiến trình: chậm)
         _perf = _options.StartPerfListener ? PerfCsvListener.TryStartFromEnvironment() : null;
         _mark("appStartup");
         DpiAwarenessBootstrap.EnsurePerMonitorV2();
@@ -269,6 +280,10 @@ internal sealed class ShellStartup : IDisposable
             _mark("languageLoaded");
             return (Settings: loaded, Localizer: localizer);
         });
+        // C-16: đầu vào của startup shell (cho gói tính năng và chẩn đoán): đối số, settings, placement, mốc bắt đầu tiến trình.
+        Context = new ShellStartupContext(_launch.Arguments, _launch.InitialPath, _launch.LaunchFolder,
+            ReadSettingsAsync(settingsLoad), placementLoad,
+            _startTimestamp);
         var (appSettings, localizer) = await settingsLoad;
         localization.Apply(appSettings.UiLanguage, localizer);
         _mark("settingsLoaded");
@@ -321,7 +336,11 @@ internal sealed class ShellStartup : IDisposable
             }
         }
 
-        _mark("instanceLock");
+        if (_instanceScope is not null)
+        {
+            _mark("instanceLock");
+        }
+
         if (earlyDecode is not null && initial is not null)
         {
             StartEarlyDecode(services, earlyDecode, initial, appSettings);
@@ -371,7 +390,7 @@ internal sealed class ShellStartup : IDisposable
 
         // perf/startup-first-image: không bao giờ thấy bề mặt chưa vẽ (trắng) và không bao giờ thấy cửa sổ 1200x800 rồi mới nhảy
         // tới placement: cloak từ lúc có HWND, placement áp khi cửa sổ chưa hiện, rồi mới ShowWindow.
-        _cloak = new StartupCloak(dispatcher, onRevealed: () => _mark("windowRevealed"));
+        _cloak = new StartupCloak(dispatcher, onRevealed: () => _mark("windowRevealed"), setCloaked: _options.SetCloaked);
         _cloak.Hide(window.Hwnd);
         WindowShowState? state = null;
         if (!_launch.Smoke)
@@ -467,6 +486,11 @@ internal sealed class ShellStartup : IDisposable
 
     /// <summary>P-1: những gì decode sớm của ảnh dòng lệnh cần, chuẩn bị trên pool trong lúc settings/cửa sổ nạp.</summary>
     private sealed record EarlyDecodePlan(PreviewImageService Previews, DecodeBox Box);
+
+    private static async Task<AppSettings> ReadSettingsAsync(Task<(AppSettings Settings, Localizer Localizer)> load) => (await load).Settings;
+
+    /// <summary>Đầu vào startup (C-16): đặt sau khi dịch vụ dựng xong, trước khi chờ settings.</summary>
+    internal ShellStartupContext? Context { get; private set; }
 
     private static async Task<EarlyDecodePlan?> PrepareEarlyDecodeAsync(IServiceProvider services, Task<WindowPlacementData?> placementLoad)
     {

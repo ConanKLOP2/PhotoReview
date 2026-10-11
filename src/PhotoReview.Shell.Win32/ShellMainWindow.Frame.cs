@@ -75,7 +75,9 @@ internal sealed partial class ShellMainWindow
             }
         }
 
-        if (result is PresentResult.Presented or PresentResult.DeviceRecreated)
+        // Occluded (bị che/thu nhỏ/desktop không tương tác): khung đã vẽ và nộp, chỉ là không có gì hiện ra. Vẫn tính là đã
+        // present để cloak được bỏ và mốc khởi động tiến lên (khi hết che, WM_PAINT -> Invalidate vẽ lại).
+        if (result is PresentResult.Presented or PresentResult.DeviceRecreated or PresentResult.Occluded)
         {
             OnFramePresented();
         }
