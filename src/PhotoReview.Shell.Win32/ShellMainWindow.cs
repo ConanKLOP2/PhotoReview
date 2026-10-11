@@ -6,10 +6,12 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.App.Windowing;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Pixels;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Rendering;
 using PhotoReview.Shell.Win32.Hosting;
+using PhotoReview.Shell.Win32.Input;
 using PhotoReview.Shell.Win32.Startup;
 using PhotoReview.Shell.Win32.Viewing;
 
@@ -19,7 +21,11 @@ namespace PhotoReview.Shell.Win32;
 /// <param name="PreferWarp">Dùng WARP thay vì GPU (RDP/không GPU/test; <c>PHOTOREVIEW_SHELL_WARP=1</c>).</param>
 /// <param name="PlacementFile">Tệp window-placement.json để lưu khi đóng; null = không lưu (smoke, test).</param>
 /// <param name="Activate">Lấy focus khi hiện (smoke/test = false).</param>
-internal sealed record ShellMainWindowOptions(bool PreferWarp = false, string? PlacementFile = null, bool Activate = true);
+/// <param name="SettingsStore">WP-22: kho cài đặt (phím tắt dựng lại khi Changed, lưu KeepZoom/ClickZoom); null = chỉ đọc cài đặt của view model.</param>
+/// <param name="ZoomPrompt">WP-22: hộp thoại zoom tuỳ chọn của phím CustomZoom; null = lệnh này không làm gì.</param>
+/// <param name="InputEnvironment">WP-22: seam đọc hệ thống của nhập liệu (test); null = Win32 thật.</param>
+internal sealed record ShellMainWindowOptions(bool PreferWarp = false, string? PlacementFile = null, bool Activate = true,
+    SettingsStore? SettingsStore = null, IZoomPromptService? ZoomPrompt = null, ShellInputEnvironment? InputEnvironment = null);
 
 /// <summary>
 /// Cửa sổ chính của shell Win32 (NO-WPF-EXEC-PLAN C-15/C-16, WP-20 giai đoạn A): sở hữu <see cref="ShellWindow"/> + bề mặt Direct2D +
@@ -87,9 +93,10 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         ArgumentNullException.ThrowIfNull(frameClock);
 
         _viewport = new ViewportController(_window, _dispatcher, frameClock, ContentFromViewer, UpdateFitSize,
-            new ViewportControllerOptions { DisplayClock = displayClock });
+            CreateViewportOptions(_window, displayClock));
         _sizeSource.Get = () => _viewport.ViewportSize;
         _viewModel.Viewer.DpiScale = _window.DpiScale;
+        RegisterFeatures();
 
         _onRender = (_, _) => RenderFrame();
         _onViewModelChanged = OnViewModelPropertyChanged;
@@ -106,6 +113,16 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         UpdateTargetDecodeBox();
         _window.SetTitle(_viewModel.FolderTitle);
         InitializeViewing(frameClock); // WP-21
+    }
+
+    /// <summary>
+    /// Điểm cắm của các gói tính năng (WP-21..26): mỗi gói thêm đúng MỘT dòng ở CUỐI hàm này (lời gọi <c>RegisterXxx()</c> trong
+    /// <c>ShellMainWindow.&lt;Feature&gt;.cs</c>); xung đột khi merge thì giữ cả các dòng. Chạy trong constructor, SAU khi viewport
+    /// và view model đã có, TRƯỚC các đăng ký sự kiện cửa sổ của lớp lõi (nên <c>Closed</c> của tính năng chạy trước <c>OnClosed</c>).
+    /// </summary>
+    private void RegisterFeatures()
+    {
+        RegisterInput(); // WP-22: chuột, phím, wheel, touchpad, kéo-thả
     }
 
     public ShellWindow Window => _window;
