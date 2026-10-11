@@ -13,8 +13,9 @@ namespace PhotoReview.Shell.Win32.Viewing;
 /// <list type="bullet">
 /// <item>chuyển callback của view model (kích thước nguồn -&gt; ViewerState, trạng thái, chế độ xem đầu, <c>OnPresented</c>) và đẩy
 /// ảnh sang <see cref="ShellPresentationHub"/> SAU khi ViewerState đã cập nhật (như thứ tự WPF: bề mặt đổi ảnh và layout sau);</item>
-/// <item>giữ ADR 0005: mọi cập nhật phải ở UI thread; lọt sang thread khác thì được marshal qua dispatcher và đếm vào
-/// <c>ReviewMetrics.CrossThreadPresentCount</c> (kỳ vọng 0), log lần đầu - giống <c>WpfPresentationSink.InvokeUi</c>;</item>
+/// <item>giữ ADR 0005: mọi cập nhật phải ở UI thread; lọt sang thread khác thì được đăng lên dispatcher (không chặn thread gọi,
+/// FIFO nên giữ thứ tự) và đếm vào <c>ReviewMetrics.CrossThreadPresentCount</c> (kỳ vọng 0), log lần đầu - như
+/// <c>WpfPresentationSink.InvokeUi</c> (nó dùng Dispatcher.Invoke đồng bộ; shell không được chặn trên Task);</item>
 /// <item>mốc đo <c>Rendered/Presented/RenderedFrame</c> do hub phát khi khung CÓ ẢNH ĐÓ thật sự được Present (C-18).</item>
 /// </list>
 /// </summary>
@@ -64,7 +65,8 @@ internal sealed class Win32PresentationSink : IPresentationSink
                     + $"{Environment.CurrentManagedThreadId}); marshalled to the UI dispatcher. ADR 0005 expects 0.");
             }
 
-            dispatcher.InvokeAsync(action).GetAwaiter().GetResult();
+            // Không chặn thread gọi (ADR 0005: không block trên Task); thứ tự giữ nguyên vì dispatcher chạy theo FIFO.
+            dispatcher.Post(action);
             return;
         }
 

@@ -25,7 +25,7 @@ public sealed partial class PresentationPerfReportTests(ITestOutputHelper output
         double PresentP50, double PresentP95, double PresentMax, long Blocked, double CpuPercent);
 
     [Fact]
-    public async Task Frames_AfterTheFirstImage_DoNotBlockTheUiThreadInPresent()
+    public void Frames_AfterTheFirstImage_DoNotBlockTheUiThreadInPresent()
     {
         var root = ShellRun.NewRoot("perf");
         var folder = PrepareFolder(root);
@@ -37,18 +37,18 @@ public sealed partial class PresentationPerfReportTests(ITestOutputHelper output
         var main = run.Main!;
         var results = new List<PhaseResult>();
         var surfaceKind = run.OnUi(() => (main.Surface!.IsWarp ? "WARP" : "GPU thật") + " - " + main.Surface.AdapterDescription);
-        await Task.Delay(1500); // preload + khung đầu lắng
+        Pacing.PauseMs(1500); // preload + khung đầu lắng
 
         // Pha 1: điều hướng (không crossfade), mỗi ảnh một khung có ảnh mới.
-        results.Add(await MeasureAsync(run, "Điều hướng (Next, 150 ms/ảnh)", async () =>
+        results.Add(Measure(run, "Điều hướng (Next, 150 ms/ảnh)", () =>
         {
             for (var i = 0; i < Math.Min(8, files.Length - 1); i++)
             {
                 run.OnUi(() => { _ = main.ViewModel.NextAsync(); });
-                await Task.Delay(150);
+                Pacing.PauseMs(150);
             }
 
-            await Task.Delay(400);
+            Pacing.PauseMs(400);
         }));
 
         // Pha 2: crossfade 200 ms (QuadraticOut), mỗi lần điều hướng chạy trọn hiệu ứng.
@@ -57,28 +57,28 @@ public sealed partial class PresentationPerfReportTests(ITestOutputHelper output
             main.ViewModel.Settings.ImageTransition = ImageTransition.Fade;
             main.ViewModel.Settings.ImageTransitionMs = 200;
         });
-        results.Add(await MeasureAsync(run, "Crossfade 200 ms (Previous, 450 ms/ảnh)", async () =>
+        results.Add(Measure(run, "Crossfade 200 ms (Previous, 450 ms/ảnh)", () =>
         {
             for (var i = 0; i < 6; i++)
             {
                 run.OnUi(() => { _ = main.ViewModel.PreviousAsync(); });
-                await Task.Delay(450);
+                Pacing.PauseMs(450);
             }
         }));
         run.OnUi(() => main.ViewModel.Settings.ImageTransition = ImageTransition.None);
 
         // Pha 3: zoom (nâng cấp preview -> full ở 100 %+), rồi pan liên tục.
-        results.Add(await MeasureAsync(run, "Zoom in x5 + nâng cấp full", async () =>
+        results.Add(Measure(run, "Zoom in x5 + nâng cấp full", () =>
         {
             for (var i = 0; i < 5; i++)
             {
                 run.OnUi(() => main.ViewModel.ZoomIn());
-                await Task.Delay(500);
+                Pacing.PauseMs(500);
             }
 
-            await Task.Delay(1500); // full decode + chuyển bitmap
+            Pacing.PauseMs(1500); // full decode + chuyển bitmap
         }));
-        results.Add(await MeasureAsync(run, "Pan 120 khung (~60 Hz)", async () =>
+        results.Add(Measure(run, "Pan 120 khung (~60 Hz)", () =>
         {
             var timer = Stopwatch.StartNew();
             for (var i = 0; i < 120; i++)
@@ -91,17 +91,13 @@ public sealed partial class PresentationPerfReportTests(ITestOutputHelper output
                     main.Window.Invalidate();
                 });
                 var due = TimeSpan.FromMilliseconds((i + 1) * 1000.0 / 60);
-                var wait = due - timer.Elapsed;
-                if (wait > TimeSpan.Zero)
-                {
-                    await Task.Delay(wait);
-                }
+                Pacing.Pause(due - timer.Elapsed);
             }
         }));
-        results.Add(await MeasureAsync(run, "Zoom out về Fit", async () =>
+        results.Add(Measure(run, "Zoom out về Fit", () =>
         {
             run.OnUi(() => main.ViewModel.ToggleFit());
-            await Task.Delay(800);
+            Pacing.PauseMs(800);
         }));
 
         var report = Format(surfaceKind, files.Length, results);
@@ -147,12 +143,12 @@ public sealed partial class PresentationPerfReportTests(ITestOutputHelper output
         return target;
     }
 
-    private static async Task<PhaseResult> MeasureAsync(ShellRun run, string name, Func<Task> action)
+    private static PhaseResult Measure(ShellRun run, string name, Action action)
     {
         var main = run.Main!;
         run.OnUi(() => main.Stats.Reset());
         var cpuBefore = SystemCpu();
-        await action();
+        action();
         var cpuAfter = SystemCpu();
         return run.OnUi(() =>
         {

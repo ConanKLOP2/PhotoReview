@@ -104,7 +104,7 @@ public sealed class ShellViewingTests
     }
 
     [Fact]
-    public async Task RapidNavigation_OneHundredSteps_AlwaysEndsOnTheImageOfTheFinalIndex()
+    public void RapidNavigation_OneHundredSteps_AlwaysEndsOnTheImageOfTheFinalIndex()
     {
         // INV-1: điều hướng dồn dập với decode về lúc nào cũng được; ảnh cuối PHẢI là ảnh của chỉ số cuối.
         var root = ShellRun.NewRoot("view-rapid");
@@ -124,7 +124,7 @@ public sealed class ShellViewingTests
             });
             if (rng.Next(3) == 0)
             {
-                await Task.Delay(rng.Next(1, 12));
+                Pacing.PauseMs(rng.Next(1, 12));
             }
         }
 

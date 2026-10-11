@@ -57,7 +57,7 @@ public sealed class Win32PresentationSinkTests
         sink.SetCurrentImage("img", isFileChange: false);
         sink.SetStatusText("x");
 
-        Assert.Equal(2, dispatcher.InvokeCount);       // mỗi cập nhật qua dispatcher
+        Assert.Equal(2, dispatcher.PostCount);         // mỗi cập nhật qua dispatcher (không chặn thread gọi), theo thứ tự
         Assert.Equal(["viewmodel:False", "status:x"], order);
         Assert.Equal(2, metrics.Snapshot().CrossThreadPresentCount);
         Assert.Equal("img", hub.CurrentImage);
@@ -73,7 +73,7 @@ public sealed class Win32PresentationSinkTests
         sink.SetCurrentImage("img", isFileChange: false);
         sink.TracePresented(1, "preview", 5);
 
-        Assert.Equal(0, dispatcher.InvokeCount);
+        Assert.Equal(0, dispatcher.PostCount);
         Assert.Equal(0, metrics.Snapshot().CrossThreadPresentCount);
     }
 
@@ -81,19 +81,22 @@ public sealed class Win32PresentationSinkTests
     {
         public bool OnUiThread { get; init; }
 
-        public int InvokeCount { get; private set; }
+        public int PostCount { get; private set; }
 
         public bool CheckAccess() => OnUiThread;
 
-        public void Post(Action action) => action();
+        public void Post(Action action) => Post(action, UiPriority.Normal);
 
-        public void Post(Action action, UiPriority priority) => action();
+        public void Post(Action action, UiPriority priority)
+        {
+            PostCount++;
+            action();
+        }
 
         public Task InvokeAsync(Action action) => InvokeAsync(action, UiPriority.Normal);
 
         public Task InvokeAsync(Action action, UiPriority priority)
         {
-            InvokeCount++;
             action();
             return Task.CompletedTask;
         }

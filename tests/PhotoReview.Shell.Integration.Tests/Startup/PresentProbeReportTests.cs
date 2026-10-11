@@ -93,7 +93,7 @@ public sealed class PresentProbeReportTests(ITestOutputHelper output)
             endDraw.Add(surface.LastEndDrawTicks * 1000.0 / Stopwatch.Frequency);
             if (config.SleepMs > 0)
             {
-                Thread.Sleep(config.SleepMs);
+                Pacing.PauseMs(config.SleepMs);
             }
         }
 
