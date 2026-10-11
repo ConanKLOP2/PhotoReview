@@ -137,5 +137,19 @@ public sealed class OverlayHostTests
         Assert.Equal(0, fake.Live);
         Assert.Throws<ObjectDisposedException>(() => host.Add(new PanelElement("C")));
     }
+
+    [Fact]
+    public void HitTest_PrefersTheLaterRoot_WhereRootsOverlap()
+    {
+        var fake = new FakeTextRenderer();
+        using var host = new OverlayHost();
+        var under = new PanelElement("Under");
+        var over = new PanelElement("Over");
+        host.Add(under);
+        host.Add(over);
+        host.Arrange(Context(fake));
+
+        Assert.Same(over, host.HitTest(new PointD(100, 100)));
+    }
 }
 

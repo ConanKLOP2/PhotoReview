@@ -337,4 +337,18 @@ public sealed class DWriteTextRendererTests
         {
         }
     }
+
+    [Fact]
+    public void RendererDispose_ReleasesTheDirectWriteFactoryImmediately()
+    {
+        var renderer = NewRenderer();
+        object factory = typeof(DWriteTextRenderer)
+            .GetField("_factory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(renderer)!;
+
+        renderer.Dispose();
+
+        // Wrapper Ä‘Ã£ FinalRelease: gá»i tiáº¿p pháº£i nÃ©m (rÃ² factory = váº«n gá»i Ä‘Æ°á»£c).
+        Assert.ThrowsAny<Exception>(() => ((IDWriteFactory)factory).GetSystemFontCollection(out _, 0));
+    }
 }

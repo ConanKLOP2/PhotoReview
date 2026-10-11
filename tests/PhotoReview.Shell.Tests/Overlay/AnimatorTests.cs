@@ -290,4 +290,20 @@ public sealed class AnimatorTests
     [InlineData(Easing.QuadraticOut, 1.0, 1.0)]
     public void Ease_Values(Easing easing, double t, double expected) =>
         Assert.Equal(expected, Animator.Ease(easing, t), 6);
+
+    [Fact]
+    public void FadeEnd_LandsExactlyOnTarget_NotOnAFloatRoundedInterpolation()
+    {
+        // Má»‘c káº¿t thÃºc pháº£i gÃ¡n ÄÃšNG Ä‘Ã­ch: ná»™i suy 0,02 + (0,1 - 0,02) lÃ m trÃ²n float lá»‡ch 1 ulp so vá»›i 0,1.
+        (Animator animator, FakeFrameClock clock, var targets) = Create();
+        FakeOpacityTarget toolbar = targets["Toolbar"];
+        toolbar.Opacity = 0.02f;
+        animator.FadeTo("Toolbar", 0.1f, TimeSpan.FromMilliseconds(100), Easing.Linear);
+
+        clock.Tick(0);
+        clock.Tick(100);
+
+        Assert.Equal(0.1f, toolbar.Opacity);
+        Assert.False(animator.IsAnimating);
+    }
 }

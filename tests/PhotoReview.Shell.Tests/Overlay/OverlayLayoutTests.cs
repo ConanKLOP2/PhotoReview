@@ -275,4 +275,120 @@ public sealed class OverlayLayoutTests
         Assert.Equal(DarkPalette.ButtonPressed, Background(true, true));
         Assert.Equal(DarkPalette.Button, Background(true, true, enabled: false));
     }
+
+    [Fact]
+    public void VerticalCenter_PlacesPanelInTheMiddleOfTheClient()
+    {
+        var fake = new FakeTextRenderer();
+        PanelElement panel = Badge("P", "", OverlayHorizontalAlignment.Left, OverlayVerticalAlignment.Center).Add(Text("a", "ABCDEFGHIJ"));
+
+        panel.Arrange(Context(fake));
+
+        // Cao 23 (15 chá»¯ + 8 Ä‘á»‡m), lá» 8: y = 8 + (584 - 23) / 2.
+        Assert.Equal(new RectD(8, 288.5, 62, 23), panel.Bounds);
+    }
+
+    [Fact]
+    public void MaxWidth_CapsTheDesiredWidth_EvenWhenAChildCannotShrink()
+    {
+        var fake = new FakeTextRenderer();
+        // NÃºt luÃ´n má»™t dÃ²ng khÃ´ng cáº¯t: 40 x 5 + 16 + 2 = 218 DIP báº¥t ká»ƒ chá»— cho phÃ©p.
+        var button = new ButtonElement("B") { Content = new string('x', 40), Style = new TextStyle("Segoe UI", 10) };
+        var panel = new PanelElement("P")
+        {
+            HorizontalAlignment = OverlayHorizontalAlignment.Left,
+            VerticalAlignment = OverlayVerticalAlignment.Top,
+            MaxWidth = 100,
+        }.Add(button);
+
+        panel.Arrange(Context(fake));
+
+        Assert.Equal(100, panel.DesiredSize.Width, 6);
+        Assert.Equal(100, panel.Bounds.Width, 6);
+    }
+
+    [Fact]
+    public void StretchPanel_WithMaxWidth_IsCappedInAWiderClient()
+    {
+        var fake = new FakeTextRenderer();
+        var panel = new PanelElement("P") { MaxWidth = 300 };
+
+        panel.Arrange(Context(fake, 800, 600));
+
+        Assert.Equal(new RectD(0, 0, 300, 600), panel.Bounds);
+    }
+
+    [Fact]
+    public void HorizontalPanel_PlacesChildrenSideBySide()
+    {
+        var fake = new FakeTextRenderer();
+        TextElement a = Text("a", "AAAA");      // 20 x 15
+        TextElement b = Text("b", "BBBBBB");    // 30 x 15
+        var panel = new PanelElement("P")
+        {
+            Orientation = OverlayOrientation.Horizontal,
+            HorizontalAlignment = OverlayHorizontalAlignment.Left,
+            VerticalAlignment = OverlayVerticalAlignment.Top,
+        }.Add(a).Add(b);
+
+        panel.Arrange(Context(fake));
+
+        Assert.Equal(new RectD(0, 0, 20, 15), a.Bounds);
+        Assert.Equal(new RectD(20, 0, 30, 15), b.Bounds);
+        Assert.Equal(new RectD(0, 0, 50, 15), panel.Bounds);
+    }
+
+    [Fact]
+    public void FindAt_PrefersTheLaterSibling_WhereChildrenOverlap()
+    {
+        var fake = new FakeTextRenderer();
+        var lower = new ButtonElement("Lower") { Content = "AAAA", Style = new TextStyle("Segoe UI", 10) };
+        var upper = new ButtonElement("Upper")
+        {
+            Content = "BBBB",
+            Style = new TextStyle("Segoe UI", 10),
+            Margin = new OverlayThickness(0, -10, 0, 0),   // lÃ¹i 10 DIP: chá»“ng lÃªn nÃºt dÆ°á»›i á»Ÿ y 15..25
+        };
+        var panel = new PanelElement("P")
+        {
+            HorizontalAlignment = OverlayHorizontalAlignment.Left,
+            VerticalAlignment = OverlayVerticalAlignment.Top,
+        }.Add(lower).Add(upper);
+
+        panel.Arrange(Context(fake));
+
+        var overlap = new PointD(2, 20);
+        Assert.True(lower.HitTest(overlap));
+        Assert.True(upper.HitTest(overlap));
+        Assert.Same(upper, panel.FindAt(overlap));   // pháº§n tá»­ thÃªm sau náº±m trÃªn
+    }
+
+    [Fact]
+    public void TextElement_IsClickThroughByDefault()
+    {
+        var fake = new FakeTextRenderer();
+        TextElement text = Text("t", "hello");
+
+        text.Arrange(Context(fake));
+
+        Assert.False(text.IsHitTestVisible);
+        Assert.False(text.HitTest(new PointD(1, 1)));
+        Assert.Null(text.FindAt(new PointD(1, 1)));
+    }
+
+    [Fact]
+    public void TextElement_RemeasuresWithANewRenderer_AndReleasesTheOldLayout()
+    {
+        var first = new FakeTextRenderer();
+        var second = new FakeTextRenderer();
+        TextElement text = Text("a", "hello");
+
+        text.Arrange(Context(first));
+        Assert.Equal(1, first.Live);
+        text.Arrange(Context(second));
+
+        Assert.Equal(0, first.Live);
+        Assert.Single(second.Requests);
+        Assert.Equal(1, second.Live);
+    }
 }
