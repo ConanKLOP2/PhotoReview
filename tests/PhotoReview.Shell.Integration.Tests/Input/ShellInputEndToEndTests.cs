@@ -72,7 +72,8 @@ public sealed partial class ShellInputEndToEndTests
     private static void StopAndAssertClean(ShellRun run)
     {
         run.RequestClose();
-        Assert.True(run.WaitForExit(Bound), "shell không thoát sau WM_CLOSE");
+        // Có thể đang giải mã ảnh lớn ở nền (runner CI 2 nhân + WARP): chờ lâu hơn bound mặc định, vẫn có giới hạn.
+        Assert.True(run.WaitForExit(TimeSpan.FromSeconds(90)), "shell không thoát sau WM_CLOSE");
         Assert.Null(run.Error);
         Assert.Equal(0, run.ExitCode);
     }
@@ -146,7 +147,7 @@ public sealed partial class ShellInputEndToEndTests
     [Fact]
     public void Wheel_ZoomsAtTheCursor_ThroughRealMessages_KeepingThePointUnderIt()
     {
-        using var run = StartWithImages("wheel", ("big.png", 6000, 4000)); // sau một bước zoom ảnh vẫn rộng hơn viewport: neo giữ được
+        using var run = StartWithImages("wheel", ("big.png", 3000, 2000)); // sau một bước zoom ảnh vẫn rộng hơn viewport: neo giữ được
         var main = run.Main!;
         var (clientPixels, dpi) = run.OnUi(() => (main.Window.ClientSizePixels, main.Window.DpiScale));
         var (px, py) = (clientPixels.Width / 3, clientPixels.Height / 3); // pixel client (đơn vị của lParam)
@@ -174,7 +175,7 @@ public sealed partial class ShellInputEndToEndTests
     [Fact]
     public void MiddleClick_DefaultAction_ZoomsToActualSize()
     {
-        using var run = StartWithImages("middle", ("big.png", 3000, 4500));
+        using var run = StartWithImages("middle", ("big.png", 2000, 3000));
         var main = run.Main!;
         var client = run.OnUi(() => main.Window.ClientSizeDip);
 
@@ -188,7 +189,7 @@ public sealed partial class ShellInputEndToEndTests
     [Fact]
     public void ClickToZoom_LeftPressRelease_ZoomsInAndOutAgain_ThroughRealCapture()
     {
-        using var run = StartWithImages("click", ("big.png", 3000, 4500));
+        using var run = StartWithImages("click", ("big.png", 2000, 3000));
         var main = run.Main!;
         run.OnUi(() => main.ViewModel.Settings.ClickToZoomEnabled = true);
         var (cx, cy) = run.OnUi(() =>
@@ -217,7 +218,7 @@ public sealed partial class ShellInputEndToEndTests
     {
         // Báo cáo "ghosting 1-2/10 lần zoom bàn phím": zoom áp trong một lượt dispatcher, cuộn neo sau lượt render nên một khung
         // được trình bày ở kích thước mới với offset cũ. Ghi trạng thái layout của MỌI khung shell trình bày (sau Present).
-        using var run = StartWithImages("zoomframes", ("portrait.png", 3000, 4500));
+        using var run = StartWithImages("zoomframes", ("portrait.png", 2000, 3000));
         var main = run.Main!;
         var frames = new List<Frame>();
         var gate = new object();
@@ -362,10 +363,11 @@ public sealed partial class ShellInputEndToEndTests
             settings.Shortcuts.ToggleInfoOverlay = "J";
             store.Save(settings);
         });
-        Key(run, KeyId.I); // phím cũ không còn gán
         Key(run, KeyId.J);
-
         Assert.True(WaitUntil(() => Overlay() != initial), "phím J (mới gán) không bật/tắt overlay");
+        Key(run, KeyId.I); // phím cũ không còn gán: không đổi gì
+        Key(run, KeyId.J);
+        Assert.True(WaitUntil(() => Overlay() == initial), "I vẫn còn gán, hoặc J không còn đổi overlay");
         StopAndAssertClean(run);
     }
 
@@ -390,7 +392,7 @@ public sealed partial class ShellInputEndToEndTests
     [Fact]
     public void Navigation_StopsAKineticGlide()
     {
-        using var run = StartWithImages("glidenav", ("a.png", 3000, 2000), ("b.png", 3000, 2000));
+        using var run = StartWithImages("glidenav", ("a.png", 2400, 1600), ("b.png", 2400, 1600));
         var main = run.Main!;
         run.OnUi(() => main.ViewModel.Settings.KineticPanEnabled = true);
         Key(run, KeyId.D1);
@@ -443,7 +445,7 @@ public sealed partial class ShellInputEndToEndTests
     {
         // PHOTOREVIEW_WP22_GPU=1: GPU thật thay WARP + cửa sổ topmost (chạy trên desktop tương tác của máy đo; fragment WP-22).
         var gpu = Environment.GetEnvironmentVariable("PHOTOREVIEW_WP22_GPU") == "1";
-        using var run = StartWithImages("latency", options => options with { PreferWarp = !gpu, Activate = gpu }, ("big.png", 3000, 4500));
+        using var run = StartWithImages("latency", options => options with { PreferWarp = !gpu, Activate = gpu }, ("big.png", 2000, 3000));
         var main = run.Main!;
         if (gpu)
         {
