@@ -332,9 +332,18 @@ public sealed class WicDirectDecoder : IImageDecoder
 
     internal static IWICImagingFactory CreateFactory()
     {
-        int hr = WicNativeMethods.WICCreateImagingFactory_Proxy(WicNativeMethods.WINCODEC_SDK_VERSION1, out IWICImagingFactory? factory);
-        ThrowIfFactoryFailed(hr, factory is not null);
-        return factory!;
+        int hr = WicNativeMethods.WICCreateImagingFactory_Proxy(WicNativeMethods.WINCODEC_SDK_VERSION1, out nint raw);
+        try
+        {
+            ThrowIfFactoryFailed(hr, raw != 0);
+        }
+        catch
+        {
+            if (raw != 0) Marshal.Release(raw); // a failing HRESULT that still returned a pointer must not leak it
+            throw;
+        }
+
+        return WicCom.Wrap<IWICImagingFactory>(raw);
     }
 
     private const int EFail = unchecked((int)0x80004005);
@@ -431,7 +440,7 @@ public sealed class WicDirectDecoder : IImageDecoder
         uint count;
         try
         {
-            frame.GetColorContexts(0, null, out count);
+            frame.GetColorContexts(0, 0, out count);
         }
         catch (Exception ex) when (ex is ArgumentException or COMException)
         {
@@ -445,26 +454,53 @@ public sealed class WicDirectDecoder : IImageDecoder
             return null;
         }
 
-        var contexts = new IWICColorContext[count];
+        // The array of raw IWICColorContext pointers is what IWICBitmapFrameDecode::GetColorContexts fills; each pointer is wrapped
+        // (taking its reference) only once the call succeeded, so a failure releases exactly the references still raw.
+        var raw = new nint[count];
+        var contexts = new IWICColorContext[raw.Length];
         try
         {
-            for (var i = 0; i < contexts.Length; i++)
+            for (var i = 0; i < raw.Length; i++)
             {
-                factory.CreateColorContext(out contexts[i]);
+                factory.CreateColorContext(out raw[i]);
             }
 
-            frame.GetColorContexts(count, contexts, out _);
+            unsafe
+            {
+                fixed (nint* pointers = raw)
+                {
+                    frame.GetColorContexts(count, (nint)pointers, out _);
+                }
+            }
+
+            for (var i = 0; i < raw.Length; i++)
+            {
+                var pointer = raw[i];
+                raw[i] = 0; // Wrap owns (and releases) the pointer from here on, also when it throws
+                contexts[i] = WicCom.Wrap<IWICColorContext>(pointer);
+            }
+
             return contexts;
         }
         catch (Exception ex) when (ex is ArgumentException or COMException)
         {
+            ReleaseRaw(raw);
             ReleaseAll(contexts);
             return null;
         }
         catch
         {
+            ReleaseRaw(raw);
             ReleaseAll(contexts);
             throw;
+        }
+    }
+
+    private static void ReleaseRaw(nint[] pointers)
+    {
+        foreach (var pointer in pointers)
+        {
+            if (pointer != 0) Marshal.Release(pointer);
         }
     }
 
@@ -598,11 +634,6 @@ public sealed class WicDirectDecoder : IImageDecoder
         };
     }
 
-    internal static void SafeReleaseCom(object? comObj)
-    {
-        if (comObj is not null && Marshal.IsComObject(comObj))
-        {
-            Marshal.ReleaseComObject(comObj);
-        }
-    }
+    /// <summary>Gives the COM reference of a WIC wrapper back immediately (WP-12: <c>ComObject.FinalRelease</c>); null/managed no-op.</summary>
+    internal static void SafeReleaseCom(object? comObj) => WicCom.Release(comObj);
 }

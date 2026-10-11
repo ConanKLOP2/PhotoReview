@@ -10,7 +10,7 @@ namespace PhotoReview.Imaging.Decoding.Wic;
 /// <see cref="ExifQueryInterpreter"/> and <see cref="ExifOrientation.ReadFromWic"/> serve both paths. Never throws for a
 /// metadata fault: any failure gives orientation 1 / no EXIF.
 /// </summary>
-internal static class WicExifReader
+internal static partial class WicExifReader
 {
     private const int PropVariantSize = 24;
 
@@ -159,14 +159,8 @@ internal static class WicExifReader
         };
     }
 
-    private static void SafeRelease(object? comObj)
-    {
-        if (comObj is not null && Marshal.IsComObject(comObj))
-        {
-            Marshal.ReleaseComObject(comObj);
-        }
-    }
+    private static void SafeRelease(object? comObj) => WicCom.Release(comObj);
 
-    [DllImport("ole32.dll", ExactSpelling = true)]
-    private static extern int PropVariantClear(IntPtr pvar);
+    [LibraryImport("ole32.dll")]
+    private static partial int PropVariantClear(nint pvar);
 }
