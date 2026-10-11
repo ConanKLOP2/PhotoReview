@@ -45,5 +45,6 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-10 -- WP-03 WIC decode ra PixelBuffer: 24 MP -> 1920 px, new so với master -1.8 % gộp / +2.9 % lượt yên (trong ngưỡng 5 %)](perf/2026-10-10-wp03-wic-decode.md)
 - [2026-10-10 -- WP-05 TurboJpeg ra PixelBuffer (fine-scale vs WIC Fant)](perf/2026-10-10-wp05-native-pixelbuffer.md)
 - [2026-10-11 -- WP-09 tách App.Shared: ảnh đầu từ Explorer base vs new +2,9 % median (22 vòng, máy rất bận), nửa thấp -0,3 %; không hồi quy > 5 %](perf/2026-10-11-wp09-app-shared.md)
+- [2026-10-12 -- WP-19b App.WpfWindows + WpfBridge: startup bản WPF +1,9 % median (10 vòng xen kẽ, CPU ~22 %); mở cửa sổ phụ qua cầu lần đầu ~470-690 ms, lần sau ~100-215 ms](perf/2026-10-12-wp19b-wpf-bridge.md)
 - [2026-10-11 -- WP-12 WIC sang [GeneratedComInterface]: decode P50 -1,7 %/+1,6 % (nền nhiễu +1,9 %), cache JPEG encode -5,7 %, decode -6,2 %, không hồi quy > 5 %; mutation 25/25](perf/2026-10-11-wp12-wic-generated-com.md)
 - [2026-10-11 -- WP-17 chữ DirectWrite + overlay: layout miss P50 0,10 ms, hit ~0, khung 5 panel submit P50 0,47 / P95 1,4 ms (GPU thật, tải nền ~23 %); G-OVL lệch 0,017 DIP](perf/2026-10-11-wp17-text-overlay.md)

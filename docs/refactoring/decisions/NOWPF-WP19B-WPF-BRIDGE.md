@@ -43,7 +43,12 @@ Câu hỏi của kế hoạch: WPF `Dispatcher` có sống được trong vòng 
 
 ## 3. Số đo
 
-*(điền sau khi đo)*
+Chi tiết: [perf/2026-10-12-wp19b-wpf-bridge.md](../perf/2026-10-12-wp19b-wpf-bridge.md).
+
+- Startup bản WPF (R2R publish, 10 vòng xen kẽ, CPU ~22 %): median 1228 -> 1252 ms = **+1,9 %** (min ngang nhau) - không hồi quy > 5 %.
+- Mở cửa sổ phụ qua cầu (build chưa R2R): lần đầu 470-690 ms (mốc 600), lần sau Diagnostics 100-160 ms, Settings 170-215 ms (mốc 150: **chưa đạt** cho Settings).
+- Số assembly WPF nạp trước/sau cửa sổ phụ đầu tiên (probe tiến trình sạch): 0 -> 6 (`PresentationCore`, `PresentationFramework`, `PresentationFramework-SystemXml`, `PresentationFramework.Aero2`,
+  `System.Xaml`, `WindowsBase`) + `PhotoReview.App.WpfWindows`; assembly cầu nạp lúc đọc `Lazy.Value`.
 
 ## 4. Lệch khỏi thẻ / điểm cần nối
 
