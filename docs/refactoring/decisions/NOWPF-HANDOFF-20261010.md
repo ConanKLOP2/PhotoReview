@@ -20,13 +20,12 @@ Mỗi gói đã merge có fragment `NOWPF-WPxx-*.md` cạnh file này. Người 
   WP-19a (#404), WP-08 (#403), WP-14 (#406), WP-18 (#409), WP-10 golden (#405), bước pan phím bằng nhau (#407).
 
 ## 2. Đang mở hoặc dở (xem `gh pr list`)
+Trạng thái PR (kiểm 2026-10-11 bằng `gh pr view N --json state`): #411, #412, #413, #414, #437, #430 đã merge; #415 còn mở, chờ CI.
 - **#411 WP-16 engine viewport**: `ViewportInputGoldenTests.EveryRecordedScript_ReplaysOnTheEngine` XANH với golden thật (85 kịch bản
   chặn; 512 -> 0 checkpoint lệch). Nguyên nhân đều ở RUNNER, không phải engine: (1) override JSON đọc phân biệt hoa thường nên
   `keyboardZoomStepPercent` bị bỏ qua (bước wheel 0,1 thay vì 0,5; Ctrl+wheel ở chế độ Navigate không áp); (2) bộ ghi hiện ảnh đầu
   với cài đặt mặc định + Fit RỒI MỚI áp override (runner áp trước); (3) thiếu Touchpad hint, chuột giữa, trạng thái nút trái ở `move`,
-  con trỏ kịch bản (PointerPosition), Timestamp theo `frame`; (4) `Next/Previous` là no-op. 5 kịch bản `ArrowPan-pending-rule-change|`
-  bị loại khỏi phát lại (như WPF, WP10 mục 5) vì ghi theo quy tắc pan CŨ: chờ ghi lại golden bằng `tools/diag/record-golden.ps1`
-  rồi bỏ tiền tố và dòng `continue` trong test. Chưa bật auto-merge. Test G-VIEW (Shell.Tests) 103 xanh.
+  con trỏ kịch bản (PointerPosition), Timestamp theo `frame`; (4) `Next/Previous` là no-op. 5 kịch bản pan phím đã ghi lại theo quy tắc mới bằng `tools/diag/record-golden.ps1` (#437), mã tạm đã bỏ. Chưa bật auto-merge. Test G-VIEW (Shell.Tests) 103 xanh.
 - **#412 WP-04 cache đĩa bằng WIC** (WIP): mã và fixture tương thích hai chiều (`tests/Fixtures/PreviewCache`) có, 17 + 4 test xanh.
   Chưa: Architecture/App tests, đo hiệu năng 24 MP, mutation, decision fragment. Cần quyết: codec WPF đang là mặc định khi không truyền
   codec (WP-06 phải chuyển sang tiêm bắt buộc); ba thay đổi hành vi nhỏ ghi trong mô tả PR (EXIF hỏng vẫn dùng cache, Rgba64 đục được cache,
@@ -45,8 +44,6 @@ Mỗi gói đã merge có fragment `NOWPF-WPxx-*.md` cạnh file này. Người 
   preview cỡ viewport nên không gặp). Chưa: mutation, decision fragment (order dự kiến 542) và generate/check-open-decisions, đo lại khi máy
   rảnh (số hiện nhiễu vì CPU 99 %). Đề xuất v1.1: C-09 `static abstract` cản fake và không dùng được làm type argument, thay bằng
   `IRenderSurfaceFactory`.
-- Golden pan phím (5 kịch bản `ArrowPan-pending-rule-change|`): #407 đã merge, cần ghi lại bằng `tools/diag/record-golden.ps1`
-  và bỏ hằng `InputScriptCatalog.ArrowPanPending` (xem NOWPF-WP10-GOLDEN-RECORDER mục 5).
 - Hợp đồng v1.1 (C-07: dời IImageSurface, IFitSurface, ViewportSnapshot sang App.Shared): PR nhỏ của lead; đặt
   `PHOTOREVIEW_REGENERATE_CONTRACTS=1` rồi chạy `ContractSurfaceTests.WriteApprovedSurface`.
 - **WP-14 đã merge (#406) nhưng 3 đột biến SỐNG SÓT** (22/25 bị bắt; log thô trong scratchpad `mutesults.txt`): M7 `MessageLoop.Run` chạy việc Background kể cả khi còn message chờ; M23 `Win32UiSynchronizationContext.Post` dùng Background thay Normal; M24 `YieldAsync` dùng RunContinuationsAsynchronously (comment nói phải inline). Cần 3 test: Background nhường message đang chờ; SynchronizationContext.Post chạy trước việc Background xếp trước đó; continuation sau `await YieldAsync(p)` chạy trong cùng việc mức p.

@@ -20,7 +20,7 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 | NE-9 | (a) D2D cubic/linear; G-PIX theo PSNR + xem bằng mắt | (b) thu nhỏ CPU bằng WIC Fant mỗi bước zoom | Đổi bộ lọc trong WP-15 | CHƯA XÁC NHẬN |
 | WP04-JPEG | Cache JPEG qua WIC chậm hơn +17-30 % (cầu WPF thêm 2 bản chép khung, ~+4 ms/preview nền): (a) chấp nhận tới WP-06, WP-06 bắt buộc tiêm codec | (b) lối tắt băng-dải, cần mở rộng C-02 đóng băng | Không đổi mặc định (codec WPF mặc định); đổi ở WP-06 | CHƯA XÁC NHẬN |
 | STARTUP-1 | Bản .jpg dùng publish R2R 15 MB (người dùng ĐÃ chọn, xác nhận) | 174 MB self-contained + composite | Đổi khoá registry | ĐÃ XÁC NHẬN |
-| STARTUP-2 | Hoãn UI nhìn thấy tới sau ảnh đầu (-100 ms) khi làm startup tiếp | giữ nguyên | Revert PR | CHƯA XÁC NHẬN |
+| STARTUP-2 | ĐÃ ĐO 2026-10-11, KHÔNG làm: bỏ hẳn toolbar/ContextMenu/overlay khỏi XAML chỉ bớt 0-17 ms (nhiễu); InitializeComponent ~200 ms là chi phí khởi tạo lạnh chung của WPF (BAML, ResourceDictionary, theme, binding). Đòn bẩy thật còn lại: self-contained + R2R composite (-140..-160 ms, 174 MB) hoặc bỏ XAML chrome ở bản NoWpf | giữ nguyên | Không cần (chưa làm) | CHƯA XÁC NHẬN |
 | B-06 | Thêm hậu kiểm "nguồn đã biến mất" cho Recycle đơn như bản nhóm (fail + không commit nếu file còn) | giữ nguyên | Revert PR | CHƯA XÁC NHẬN |
 | C-04 | Save sau khi Load ConfigVersion mới hơn: sao lưu `config.json.newer-<ts>` trước khi ghi v3 | giữ nguyên (mất trường lạ) | Revert PR | CHƯA XÁC NHẬN |
 | WP05-SCALE | Fine-scale dùng WIC Fant (người dùng ĐÃ chọn b, xác nhận) | PixelAreaResampler tự viết | WP-06 | ĐÃ XÁC NHẬN |

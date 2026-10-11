@@ -95,15 +95,9 @@ bản: khung 16/7 ms, khung bất thường, nhấn dừng glide, chạm mép, w
 chuột giữa (8 `MiddleClickAction`), KeepZoom 3 ảnh (bật/tắt) + 6 `InitialViewMode`, đổi kích thước RAW (3), DPI đổi giữa chừng (3),
 resize (4), menu zoom (3) + 4K/DPI 2.
 
-### Nhóm `ArrowPan-pending-rule-change|` (chờ đổi quy tắc)
+### Nhóm pan phím mũi tên (đã ghi lại, PR #437)
 
-Chủ dự án sắp đổi bước pan phím mũi tên của app WPF (pixel bằng nhau hai trục = `ArrowPanStepPercent` % x min(viewport W, H); hiện
-mỗi trục x kích thước viewport của trục đó). 5 kịch bản pan bằng mũi tên khi đang zoom (`arrow-keys-pan-at-100pct-step10`,
-`...-at-edge-consumed-no-navigate`, `...-at-edge-navigate-setting`, `...-step-25pct`, `...-kinetic-impulse-frames`) mang tiền tố
-`ArrowPan-pending-rule-change|` và được ghi theo quy tắc CŨ: KHÔNG phải chuẩn cho bản Win32. Chúng bị loại khỏi lần phát lại chặn
-(`InputScripts_CommittedGolden_ReplayOnWpf`) và chỉ có test `Category=Manual` `InputScripts_ArrowPanPendingRuleChange_ReplayOnWpf`.
-Sau khi PR pan merge: chạy test Manual đó để thấy đúng chỗ đổi, chạy `tools/diag/record-golden.ps1`, rồi bỏ tiền tố
-(`InputScriptCatalog.ArrowPanPending`) và đưa nhóm này lại vào lần phát lại chặn. `arrow-keys-at-fit-navigate` (không pan) không bị ảnh hưởng.
+5 kịch bản pan bằng mũi tên khi đang zoom (`arrow-keys-pan-at-100pct-step10`, `...-at-edge-consumed-no-navigate`, `...-at-edge-navigate-setting`, `...-step-25pct`, `...-kinetic-impulse-frames`) đã được ghi lại bằng `tools/diag/record-golden.ps1` theo quy tắc pan mới (pixel bằng nhau hai trục = `ArrowPanStepPercent` % x min(viewport W, H)). Tiền tố `ArrowPan-pending-rule-change|`, hằng `InputScriptCatalog.ArrowPanPending`, nhánh `continue` và test `Category=Manual` đã bỏ; nhóm nằm trong lần phát lại chặn. `arrow-keys-at-fit-navigate` (không pan) không bị ảnh hưởng.
 
 ## 6. G-MENU: id
 
