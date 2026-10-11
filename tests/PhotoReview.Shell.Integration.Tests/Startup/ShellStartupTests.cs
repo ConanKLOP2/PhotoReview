@@ -39,18 +39,7 @@ public sealed class ShellStartupTests
 
     private static bool WaitUntil(Func<bool> condition, TimeSpan? timeout = null)
     {
-        var watch = Stopwatch.StartNew();
-        while (watch.Elapsed < (timeout ?? Bound))
-        {
-            if (condition())
-            {
-                return true;
-            }
-
-            Thread.Sleep(5);
-        }
-
-        return condition();
+        return SpinWait.SpinUntil(condition, timeout ?? Bound);
     }
 
     private static void StopAndAssertClean(ShellRun run)

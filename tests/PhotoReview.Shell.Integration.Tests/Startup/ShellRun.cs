@@ -85,24 +85,8 @@ internal sealed class ShellRun : IDisposable
 
     public bool WaitForMark(string name, TimeSpan? timeout = null)
     {
-        var deadline = Stopwatch.StartNew();
-        var limit = timeout ?? DefaultWait;
-        while (deadline.Elapsed < limit)
-        {
-            if (MarkNames.Contains(name))
-            {
-                return true;
-            }
-
-            if (_exited.IsSet)
-            {
-                return MarkNames.Contains(name);
-            }
-
-            Thread.Sleep(5);
-        }
-
-        return false;
+        SpinWait.SpinUntil(() => MarkNames.Contains(name) || _exited.IsSet, timeout ?? DefaultWait);
+        return MarkNames.Contains(name);
     }
 
     public bool WaitForMain(TimeSpan? timeout = null) => _mainReady.Wait(timeout ?? DefaultWait);

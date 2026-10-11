@@ -121,12 +121,14 @@ public sealed class StartupCloakTests
     public void Stop_CancelsTheSafetyTimeoutSoAClosedWindowIsNeverTouched()
     {
         var recorder = new Recorder();
-        var cloak = new StartupCloak(new InlineDispatcher(), setCloaked: recorder.Set, safetyTimeout: TimeSpan.FromMilliseconds(40));
+        using var revealed = new ManualResetEventSlim();
+        var cloak = new StartupCloak(new InlineDispatcher(), onRevealed: revealed.Set, setCloaked: recorder.Set,
+            safetyTimeout: TimeSpan.FromMilliseconds(40));
         cloak.Hide(7);
 
         cloak.Stop();
-        Thread.Sleep(250);
 
+        Assert.False(revealed.Wait(TimeSpan.FromMilliseconds(300)), "hạn chót đã bị huỷ không được bỏ cloak");
         Assert.True(cloak.IsHidden); // vẫn cloak: cửa sổ đang đóng, hạn chót không được đụng vào nó
         Assert.Single(recorder.Calls);
     }
