@@ -273,19 +273,29 @@ internal partial interface IWICImagingFactory
 internal static class WicCom
 {
     private static readonly StrategyBasedComWrappers Wrappers = new();
-    private const int EPointer = unchecked((int)0x80004003);
+    private const int EFail = unchecked((int)0x80004005);
 
     /// <summary>
     /// Wrapper RIÊNG (UniqueInstance - cache chung không trả ref khi <see cref="Release"/>) cho con trỏ COM vừa nhận; CHIẾM 1 ref
     /// của <paramref name="unknown"/> (wrapper giữ ref riêng, ref truyền vào được trả lại ở đây, cả khi bọc thất bại).
-    /// Con trỏ 0 ném lỗi E_POINTER (một đối tượng ra bắt buộc mà WIC trả S_OK + null).
+    /// Con trỏ 0 ném COMException E_FAIL (một đối tượng ra bắt buộc mà WIC trả S_OK + null; E_FAIL luôn ánh xạ sang COMException,
+    /// CA2201 cấm tự dựng), cùng loại lỗi backend mà fallback WPF xử lý.
     /// </summary>
     internal static T Wrap<T>(nint unknown) where T : class
     {
-        if (unknown == 0) throw Marshal.GetExceptionForHR(EPointer, new IntPtr(-1))!; // CA2201: không tự dựng COMException
+        if (unknown == 0) throw Marshal.GetExceptionForHR(EFail, new IntPtr(-1))!;
+        object? wrapper = null;
         try
         {
-            return (T)Wrappers.GetOrCreateObjectForComInstance(unknown, CreateObjectFlags.UniqueInstance);
+            wrapper = Wrappers.GetOrCreateObjectForComInstance(unknown, CreateObjectFlags.UniqueInstance);
+            var typed = (T)wrapper; // QueryInterface for T's IID; a pointer that is not a T throws here
+            t_outstanding++;
+            return typed;
+        }
+        catch
+        {
+            (wrapper as ComObject)?.FinalRelease(); // not handed out: give its reference back now instead of at finalization
+            throw;
         }
         finally
         {
@@ -293,13 +303,23 @@ internal static class WicCom
         }
     }
 
+    // Diagnostics for the lifetime tests (per thread: every WIC call chain runs on one thread, so tests running in parallel do
+    // not see each other): wrappers handed out minus wrappers released. Back to its starting value after a complete call chain.
+    [ThreadStatic]
+    private static int t_outstanding;
+
+    /// <summary>Wrappers created by <see cref="Wrap{T}"/> on this thread and not yet <see cref="Release"/>d.</summary>
+    internal static int OutstandingOnThisThread => t_outstanding;
+
     /// <summary>Như <see cref="Wrap{T}"/> nhưng con trỏ 0 cho null (đối tượng ra tuỳ chọn, vd. thumbnail).</summary>
     internal static T? WrapOrNull<T>(nint unknown) where T : class => unknown == 0 ? null : Wrap<T>(unknown);
 
     /// <summary>Trả COM ref của wrapper ngay; null, đối tượng managed (fake test) hay lần gọi thứ hai là no-op.</summary>
     internal static void Release(object? comObject)
     {
-        if (comObject is ComObject wrapper) wrapper.FinalRelease();
+        if (comObject is not ComObject wrapper) return;
+        wrapper.FinalRelease();
+        t_outstanding--;
     }
 }
 
