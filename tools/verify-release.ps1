@@ -18,6 +18,7 @@ $required = @(
     'PhotoReview.Imaging.dll',
     'PhotoReview.Imaging.Wpf.dll',
     'PhotoReview.App.Shared.dll',
+    'PhotoReview.App.WpfWindows.dll',
     'PhotoReview.Platform.Windows.dll',
     'PhotoReview.Benchmarking.dll',
     'PhotoReview.PerfAnalysis.dll',

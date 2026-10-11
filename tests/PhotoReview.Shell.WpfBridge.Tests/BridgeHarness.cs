@@ -101,6 +101,22 @@ internal sealed class BridgeHarness : IAsyncDisposable
         return found;
     }
 
+    /// <summary>Mọi cửa sổ top-level đang hiện của UI thread, trừ cửa sổ chủ (kể cả cửa sổ không có owner).</summary>
+    public List<nint> TopLevelVisibleWindows()
+    {
+        var found = new List<nint>();
+        EnumThreadWindows(UiThreadId, (hwnd, _) =>
+        {
+            if (hwnd != OwnerHwnd && IsWindowVisible(hwnd))
+            {
+                found.Add(hwnd);
+            }
+
+            return true;
+        }, 0);
+        return found;
+    }
+
     public async Task<nint> WaitForOwnedWindowAsync(string what)
     {
         nint hwnd = 0;

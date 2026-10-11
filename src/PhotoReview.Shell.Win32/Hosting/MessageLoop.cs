@@ -65,6 +65,9 @@ internal sealed unsafe class MessageLoop
 
     internal Win32UiDispatcher Dispatcher => _dispatcher;
 
+    /// <summary>Số bộ lọc message đang đăng ký (chẩn đoán/test: cầu WPF gỡ bộ lọc khi dispose).</summary>
+    internal int MessageFilterCount => _filters.Length;
+
     public void AddFrameClock(FrameClockBase clock)
     {
         ArgumentNullException.ThrowIfNull(clock);
