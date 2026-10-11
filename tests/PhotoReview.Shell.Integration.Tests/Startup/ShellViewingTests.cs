@@ -1,5 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Input;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Pixels;
 using PhotoReview.Shell.Rendering;
 using PhotoReview.Shell.Win32;
@@ -137,6 +139,77 @@ public sealed class ShellViewingTests
         Assert.Equal(expected, path, StringComparer.OrdinalIgnoreCase);
         Assert.InRange(index, 0, files.Length - 1);
         Stop(run);
+    }
+
+    [Fact]
+    public void RapidNavigation_WithRandomDecodeLatency_StillEndsOnTheImageOfTheFinalIndex()
+    {
+        // INV-1 với decode trễ ngẫu nhiên (0-45 ms theo từng lần): hoàn thành không theo thứ tự yêu cầu, ảnh cuối vẫn phải đúng.
+        var root = ShellRun.NewRoot("view-latency");
+        var files = MakeFolder(root, 60);
+        var counter = 0;
+        using var run = ShellRun.Start(root, [files[0]], configure: options =>
+        {
+            var inner = options.ServiceOverrides;
+            return options with
+            {
+                ServiceOverrides = services =>
+                {
+                    inner?.Invoke(services);
+                    var original = services.Last(d => d.ServiceType == typeof(IImageDecoderFactory));
+                    services.Remove(original);
+                    services.AddSingleton<IImageDecoderFactory>(sp => new DelayingDecoderFactory(
+                        (IImageDecoderFactory)(original.ImplementationFactory?.Invoke(sp)
+                            ?? original.ImplementationInstance
+                            ?? ActivatorUtilities.CreateInstance(sp, original.ImplementationType!)),
+                        () => (uint)(((uint)Interlocked.Increment(ref counter) * 2654435761UL) % 46)));
+                },
+            };
+        });
+        Assert.True(run.WaitForMain());
+        Assert.True(WaitUntil(() => run.Main!.FirstImagePresented));
+        Assert.True(WaitUntil(() => IsSettled(run)));
+        var rng = new Random(777);
+
+        for (var i = 0; i < 100; i++)
+        {
+            var forward = i % 5 < 4;
+            run.OnUi(() =>
+            {
+                _ = forward ? run.Main!.ViewModel.NextAsync() : run.Main!.ViewModel.PreviousAsync();
+            });
+            Pacing.PauseMs(rng.Next(0, 9));
+        }
+
+        Assert.True(WaitUntil(() => IsSettled(run)), "trình bày không lắng sau điều hướng dồn dập có decode trễ");
+        var (path, expected, drawnIsCurrent) = run.OnUi(() =>
+        {
+            var vm = run.Main!.ViewModel;
+            return (vm.Presenter.CurrentPresentedPath, vm.Catalog.PathAt(vm.CurrentIndex),
+                ReferenceEquals(run.Main!.Composer!.Current, vm.CurrentImage));
+        });
+        Assert.Equal(expected, path, StringComparer.OrdinalIgnoreCase);
+        Assert.True(drawnIsCurrent);
+        Assert.True(Volatile.Read(ref counter) > 10, "decoder trễ giả không được dùng: " + counter);
+        Stop(run);
+    }
+
+    private sealed class DelayingDecoderFactory(IImageDecoderFactory inner, Func<uint> nextDelayMs) : IImageDecoderFactory
+    {
+        public IImageDecoder Create(DecoderBackend backend) => new DelayingDecoder(inner.Create(backend), nextDelayMs);
+
+        public bool IsRegistered(DecoderBackend backend) => inner.IsRegistered(backend);
+    }
+
+    private sealed class DelayingDecoder(IImageDecoder inner, Func<uint> nextDelayMs) : IImageDecoder
+    {
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            Pacing.PauseMs(nextDelayMs());
+            return inner.Decode(request);
+        }
+
+        public ImageInfo ReadInfo(string path) => inner.ReadInfo(path);
     }
 
     [Fact]
