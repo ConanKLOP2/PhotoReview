@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Runtime.Intrinsics;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Pixels;
@@ -59,9 +60,11 @@ internal static class WicImageEncoder
             var containerFormat = container;
             var vendor = VendorMicrosoft;
             factory.CreateEncoder(ref containerFormat, ref vendor, out var encoderPointer);
-            encoder = TakeObject<IWicBitmapEncoder>(encoderPointer);
+            encoder = WicCom.Wrap<IWicBitmapEncoder>(encoderPointer);
             encoder.Initialize(stream, WicBitmapEncoderNoCache);
-            encoder.CreateNewFrame(out frame, out options);
+            encoder.CreateNewFrame(out var framePointer, out var optionsPointer);
+            frame = WicCom.Wrap<IWicBitmapFrameEncode>(framePointer);
+            options = WicCom.Wrap<IWicPropertyBag2>(optionsPointer);
             if (quality > 0) WriteImageQuality(options, quality / 100f);
             frame.Initialize(options);
             frame.SetSize((uint)pixels.Width, (uint)pixels.Height);
@@ -160,7 +163,7 @@ internal static class WicImageEncoder
         {
             factory.CreateBitmapFromMemory((uint)pixels.Width, (uint)pixels.Height, ref sourceFormat, (uint)pixels.Stride,
                 (uint)pixels.ByteCount, pixels.Address, out var bitmapPointer);
-            bitmap = TakeObject<IWICBitmapSource>(bitmapPointer);
+            bitmap = WicCom.Wrap<IWICBitmapSource>(bitmapPointer);
             frame.WriteSource(bitmap, IntPtr.Zero);
         }
         finally
@@ -190,33 +193,26 @@ internal static class WicImageEncoder
 
     private const ushort VtR4 = 4;
     private const int EFail = unchecked((int)0x80004005);
-    private const int EPointer = unchecked((int)0x80004003);
 
     internal static IWICImagingFactory CreateFactory()
     {
-        var hr = WicNativeMethods.WICCreateImagingFactory_Proxy(WicNativeMethods.WINCODEC_SDK_VERSION1, out var factory);
-        Marshal.ThrowExceptionForHR(hr, new IntPtr(-1));
-        return factory ?? throw Marshal.GetExceptionForHR(EFail, new IntPtr(-1))!;
-    }
-
-    /// <summary>RCW cho một con trỏ COM vừa nhận (out IntPtr), rồi trả tham chiếu gốc: RCW giữ tham chiếu riêng của nó.</summary>
-    internal static T TakeObject<T>(nint pointer) where T : class
-    {
-        if (pointer == 0) throw Marshal.GetExceptionForHR(EPointer, new IntPtr(-1))!; // E_POINTER maps to a COMException-like error (CA2201)
+        var hr = WicNativeMethods.WICCreateImagingFactory_Proxy(WicNativeMethods.WINCODEC_SDK_VERSION1, out var raw);
         try
         {
-            return (T)Marshal.GetObjectForIUnknown(pointer);
+            Marshal.ThrowExceptionForHR(hr, new IntPtr(-1));
+            if (raw == 0) throw Marshal.GetExceptionForHR(EFail, new IntPtr(-1))!;
         }
-        finally
+        catch
         {
-            Marshal.Release(pointer);
+            if (raw != 0) Marshal.Release(raw);
+            throw;
         }
+
+        return WicCom.Wrap<IWICImagingFactory>(raw);
     }
 
-    internal static void Release(object? comObject)
-    {
-        if (comObject is not null && Marshal.IsComObject(comObject)) Marshal.ReleaseComObject(comObject);
-    }
+    /// <summary>Trả COM ref của wrapper WIC ngay (<see cref="WicCom.Release"/>); null/đối tượng managed là no-op.</summary>
+    internal static void Release(object? comObject) => WicCom.Release(comObject);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PropBag2
@@ -231,55 +227,53 @@ internal static class WicImageEncoder
 }
 
 // COM interop cho phía mã hoá của WIC (vtable theo wincodec.h / ocidl.h). Phía giải mã nằm ở Decoding/Wic/WicInterop.cs (WP-03);
-// WP-12 chuyển cả hai sang [GeneratedComInterface].
+// WP-12: cả hai phía là [GeneratedComInterface] (quy ước con trỏ ra thô + WicCom.Wrap ở WicInterop.cs).
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("00000103-a8f2-4877-ba0a-fd2b6645fb94")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWicBitmapEncoder
+internal partial interface IWicBitmapEncoder
 {
-    void Initialize(System.Runtime.InteropServices.ComTypes.IStream pIStream, uint cacheOption);
-    void GetContainerFormat(out Guid pguidContainerFormat);
-    void GetEncoderInfo(out nint ppIEncoderInfo);
-    void SetColorContexts(uint cCount, nint ppIColorContext);
-    void SetPalette(nint pIPalette);
-    void SetThumbnail(nint pIThumbnail);
-    void SetPreview(nint pIPreview);
-    void CreateNewFrame(out IWicBitmapFrameEncode ppIFrameEncode, out IWicPropertyBag2 ppIEncoderOptions);
-    void Commit();
-    void GetMetadataQueryWriter(out nint ppIMetadataQueryWriter);
+    void Initialize(IComStream pIStream, uint cacheOption);                                    // [3]
+    void GetContainerFormat(out Guid pguidContainerFormat);                                    // [4]
+    void GetEncoderInfo(out nint ppIEncoderInfo);                                              // [5]
+    void SetColorContexts(uint cCount, nint ppIColorContext);                                  // [6]
+    void SetPalette(nint pIPalette);                                                           // [7]
+    void SetThumbnail(nint pIThumbnail);                                                       // [8]
+    void SetPreview(nint pIPreview);                                                           // [9]
+    // Đối tượng ra là con trỏ thô (quy ước ở WicInterop.cs): bọc bằng WicCom.Wrap.
+    void CreateNewFrame(out nint ppIFrameEncode, out nint ppIEncoderOptions);                  // [10]
+    void Commit();                                                                             // [11]
+    void GetMetadataQueryWriter(out nint ppIMetadataQueryWriter);                              // [12]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("00000105-a8f2-4877-ba0a-fd2b6645fb94")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWicBitmapFrameEncode
+internal partial interface IWicBitmapFrameEncode
 {
-    void Initialize(IWicPropertyBag2? pIEncoderOptions);
-    void SetSize(uint uiWidth, uint uiHeight);
-    void SetResolution(double dpiX, double dpiY);
-    void SetPixelFormat(ref Guid pPixelFormat);
-    void SetColorContexts(uint cCount, nint ppIColorContext);
-    void SetPalette(nint pIPalette);
-    void SetThumbnail(nint pIThumbnail);
-    void WritePixels(uint lineCount, uint cbStride, uint cbBufferSize, nint pbPixels);
-    void WriteSource(IWICBitmapSource pIBitmapSource, nint prc);
-    void Commit();
-    void GetMetadataQueryWriter(out nint ppIMetadataQueryWriter);
+    void Initialize(IWicPropertyBag2? pIEncoderOptions);                                       // [3]
+    void SetSize(uint uiWidth, uint uiHeight);                                                 // [4]
+    void SetResolution(double dpiX, double dpiY);                                              // [5]
+    void SetPixelFormat(ref Guid pPixelFormat);                                                // [6]
+    void SetColorContexts(uint cCount, nint ppIColorContext);                                  // [7]
+    void SetPalette(nint pIPalette);                                                           // [8]
+    void SetThumbnail(nint pIThumbnail);                                                       // [9]
+    void WritePixels(uint lineCount, uint cbStride, uint cbBufferSize, nint pbPixels);         // [10]
+    void WriteSource(IWICBitmapSource pIBitmapSource, nint prc);                               // [11]
+    void Commit();                                                                             // [12]
+    void GetMetadataQueryWriter(out nint ppIMetadataQueryWriter);                              // [13]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("22F55882-280B-11d0-A8A9-00A0C90C2004")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWicPropertyBag2
+internal partial interface IWicPropertyBag2
 {
     [PreserveSig]
-    int Read(uint cProperties, nint pPropBag, nint pErrLog, nint pvarValue, nint phrError);
+    int Read(uint cProperties, nint pPropBag, nint pErrLog, nint pvarValue, nint phrError);    // [3]
 
     [PreserveSig]
-    int Write(uint cProperties, nint pPropBag, nint pvarValue);
+    int Write(uint cProperties, nint pPropBag, nint pvarValue);                                // [4]
 
-    void CountProperties(out uint pcProperties);
-    void GetPropertyInfo(uint iProperty, uint cProperties, nint pPropBag, out uint pcProperties);
-    void LoadObject([MarshalAs(UnmanagedType.LPWStr)] string pstrName, uint dwHint, nint pUnkObject, nint pErrLog);
+    void CountProperties(out uint pcProperties);                                               // [5]
+    void GetPropertyInfo(uint iProperty, uint cProperties, nint pPropBag, out uint pcProperties); // [6]
+    void LoadObject(string pstrName, uint dwHint, nint pUnkObject, nint pErrLog);              // [7]
 }

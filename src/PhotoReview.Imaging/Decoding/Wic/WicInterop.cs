@@ -1,6 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace PhotoReview.Imaging.Decoding.Wic;
 
@@ -75,251 +75,309 @@ internal enum WICBitmapTransformOptions : uint
     FlipVertical = 16
 }
 
-[ComImport]
+// WP-12: WIC khai báo bằng [GeneratedComInterface] (source-generated, không ComImport/RCW runtime - thân thiện trim/Native AOT).
+// Quy ước (như Shell.Interop/ComInterop, WP-13b): tham số RA kiểu interface khai báo `out nint` và bọc bằng WicCom.Wrap<T> (hoặc
+// các hàm mở rộng ở WicComExtensions cùng chữ ký cũ `out IFoo`) vì chỉ wrapper UniqueInstance mới trả được COM ref ngay
+// (FinalRelease); tham số VÀO kiểu interface dùng kiểu interface. Thứ tự method = vtable wincodec.h (slot ghi ở comment);
+// interface dẫn xuất kế thừa IWICBitmapSource để slot 3-7 là của nguồn bitmap.
+
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("00000120-a8f2-4877-ba0a-fd2b6645fb94")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICBitmapSource
+internal partial interface IWICBitmapSource
 {
-    void GetSize(out uint puiWidth, out uint puiHeight);
-    void GetPixelFormat(out Guid pPixelFormat);
-    void GetResolution(out double pDpiX, out double pDpiY);
-    void CopyPalette(IntPtr pIPalette);
-    void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
+    void GetSize(out uint puiWidth, out uint puiHeight);                                          // [3]
+    void GetPixelFormat(out Guid pPixelFormat);                                                   // [4]
+    void GetResolution(out double pDpiX, out double pDpiY);                                       // [5]
+    void CopyPalette(nint pIPalette);                                                             // [6]
+    void CopyPixels(nint prc, uint cbStride, uint cbBufferSize, nint pbBuffer);                   // [7]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("3B16811B-6A43-4EC9-B713-3D5A0C13B940")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICBitmapSourceTransform
+internal partial interface IWICBitmapSourceTransform
 {
-    // COM vtable order must match wincodec.h: CopyPixels, GetClosestSize, GetClosestPixelFormat, DoesSupportTransform.
-    void CopyPixels(IntPtr prcDst, uint uiWidth, uint uiHeight, ref Guid pguidDstFormat, uint dstTransform, uint nStride, uint cbBufferSize, IntPtr pbBuffer);
-    void GetClosestSize(ref uint puiWidth, ref uint puiHeight);
-    void GetClosestPixelFormat(ref Guid pguidDstFormat);
-    void DoesSupportTransform(uint dstTransform, out int pfIsSupported);
+    // vtable wincodec.h: CopyPixels, GetClosestSize, GetClosestPixelFormat, DoesSupportTransform.
+    void CopyPixels(nint prcDst, uint uiWidth, uint uiHeight, ref Guid pguidDstFormat, uint dstTransform, uint nStride, uint cbBufferSize, nint pbBuffer); // [3]
+    void GetClosestSize(ref uint puiWidth, ref uint puiHeight);                                   // [4]
+    void GetClosestPixelFormat(ref Guid pguidDstFormat);                                          // [5]
+    void DoesSupportTransform(uint dstTransform, out int pfIsSupported);                          // [6]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("3B16811B-6A43-4EC9-A813-3D930C13B940")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICBitmapFrameDecode
+internal partial interface IWICBitmapFrameDecode : IWICBitmapSource
 {
-    // IWICBitmapSource methods
-    void GetSize(out uint puiWidth, out uint puiHeight);
-    void GetPixelFormat(out Guid pPixelFormat);
-    void GetResolution(out double pDpiX, out double pDpiY);
-    void CopyPalette(IntPtr pIPalette);
-    void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
-
-    // IWICBitmapFrameDecode methods
-    void GetMetadataQueryReader(out IWICMetadataQueryReader ppIMetadataQueryReader);
-    void GetColorContexts(
-        uint cCount,
-        [In, MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.Interface, SizeParamIndex = 0)]
-        IWICColorContext[]? ppIColorContexts,
-        out uint pcActualCount);
-    void GetThumbnail(out IWICBitmapSource ppIThumbnail);
+    void GetMetadataQueryReader(out nint ppIMetadataQueryReader);                                 // [8]
+    // ppIColorContexts: mảng cCount con trỏ IWICColorContext do người gọi tạo (CreateColorContext); 0 khi chỉ hỏi số lượng.
+    void GetColorContexts(uint cCount, nint ppIColorContexts, out uint pcActualCount);            // [9]
+    void GetThumbnail(out nint ppIThumbnail);                                                     // [10]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("3C613A02-34B2-44EA-9A7C-45AEA9C6FD6D")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICColorContext
+internal partial interface IWICColorContext
 {
-    void InitializeFromFilename([MarshalAs(UnmanagedType.LPWStr)] string wzFilename);
-    void InitializeFromMemory(IntPtr pbBuffer, uint cbBufferSize);
-    void InitializeFromExifColorSpace(uint value);
-    // IWICColorContext::GetType (renamed to avoid confusion with object.GetType; vtable slot is unchanged).
-    void GetContextType(out WICColorContextType pType);
-    void GetProfileBytes(uint cbBuffer, IntPtr pbBuffer, out uint pcbActual);
-    void GetExifColorSpace(out uint pValue);
+    void InitializeFromFilename(string wzFilename);                                               // [3]
+    void InitializeFromMemory(nint pbBuffer, uint cbBufferSize);                                  // [4]
+    void InitializeFromExifColorSpace(uint value);                                                // [5]
+    // IWICColorContext::GetType (đổi tên để khỏi lẫn object.GetType; slot không đổi).
+    void GetContextType(out WICColorContextType pType);                                           // [6]
+    void GetProfileBytes(uint cbBuffer, nint pbBuffer, out uint pcbActual);                       // [7]
+    void GetExifColorSpace(out uint pValue);                                                      // [8]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("B66F034F-D0E2-40AB-B436-6DE39E321A94")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICColorTransform
+internal partial interface IWICColorTransform : IWICBitmapSource
 {
-    // IWICBitmapSource methods
-    void GetSize(out uint puiWidth, out uint puiHeight);
-    void GetPixelFormat(out Guid pPixelFormat);
-    void GetResolution(out double pDpiX, out double pDpiY);
-    void CopyPalette(IntPtr pIPalette);
-    void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
-
-    // IWICColorTransform methods
-    void Initialize(
-        IWICBitmapSource pIBitmapSource,
-        IWICColorContext pIContextSource,
-        IWICColorContext pIContextDest,
-        [In] ref Guid pixelFmtDest);
+    void Initialize(IWICBitmapSource pIBitmapSource, IWICColorContext pIContextSource, IWICColorContext pIContextDest,
+        ref Guid pixelFmtDest);                                                                   // [8]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("9EDDE9E7-8DEE-47EA-99DF-E6FAF2ED44BF")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICBitmapDecoder
+internal partial interface IWICBitmapDecoder
 {
-    void QueryCapability(IStream pIStream, out uint pdwCapability);
-    void Initialize(IStream pIStream, WICDecodeOptions cacheOptions);
-    void GetContainerFormat(out Guid pguidContainerFormat);
-    void GetDecoderInfo(out IntPtr ppIDecoderInfo);
-    void CopyPalette(IntPtr pIPalette);
-    void GetMetadataQueryReader(out IWICMetadataQueryReader ppIMetadataQueryReader);
-    void GetPreview(out IWICBitmapSource ppIPreview);
-    void GetColorContexts(uint cCount, IntPtr ppIColorContexts, out uint pcActualCount);
-    void GetThumbnail(out IWICBitmapSource ppIThumbnail);
-    void GetFrameCount(out uint pCount);
-    void GetFrame(uint index, out IWICBitmapFrameDecode ppIBitmapFrame);
+    void QueryCapability(IComStream pIStream, out uint pdwCapability);                            // [3]
+    void Initialize(IComStream pIStream, WICDecodeOptions cacheOptions);                          // [4]
+    void GetContainerFormat(out Guid pguidContainerFormat);                                       // [5]
+    void GetDecoderInfo(out nint ppIDecoderInfo);                                                 // [6]
+    void CopyPalette(nint pIPalette);                                                             // [7]
+    void GetMetadataQueryReader(out nint ppIMetadataQueryReader);                                 // [8]
+    void GetPreview(out nint ppIPreview);                                                         // [9]
+    void GetColorContexts(uint cCount, nint ppIColorContexts, out uint pcActualCount);            // [10]
+    void GetThumbnail(out nint ppIThumbnail);                                                     // [11]
+    void GetFrameCount(out uint pCount);                                                          // [12]
+    void GetFrame(uint index, out nint ppIBitmapFrame);                                           // [13]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("00000301-a8f2-4877-ba0a-fd2b6645fb94")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICFormatConverter
+internal partial interface IWICFormatConverter : IWICBitmapSource
 {
-    // IWICBitmapSource methods
-    void GetSize(out uint puiWidth, out uint puiHeight);
-    void GetPixelFormat(out Guid pPixelFormat);
-    void GetResolution(out double pDpiX, out double pDpiY);
-    void CopyPalette(IntPtr pIPalette);
-    void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
-
-    // IWICFormatConverter methods
-    void Initialize(
-        IWICBitmapSource pISource,
-        [In] ref Guid dstFormat,
-        WICBitmapDitherType dither,
-        IntPtr pIPalette,
-        double alphaThresholdPercent,
-        WICBitmapPaletteType paletteTranslate);
-    void CanConvert(ref Guid srcPixelFormat, ref Guid dstPixelFormat, out int pfCanConvert);
+    void Initialize(IWICBitmapSource pISource, ref Guid dstFormat, WICBitmapDitherType dither, nint pIPalette,
+        double alphaThresholdPercent, WICBitmapPaletteType paletteTranslate);                     // [8]
+    void CanConvert(ref Guid srcPixelFormat, ref Guid dstPixelFormat, out int pfCanConvert);      // [9]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("00000302-a8f2-4877-ba0a-fd2b6645fb94")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICBitmapScaler
+internal partial interface IWICBitmapScaler : IWICBitmapSource
 {
-    // IWICBitmapSource methods
-    void GetSize(out uint puiWidth, out uint puiHeight);
-    void GetPixelFormat(out Guid pPixelFormat);
-    void GetResolution(out double pDpiX, out double pDpiY);
-    void CopyPalette(IntPtr pIPalette);
-    void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
-
-    // IWICBitmapScaler methods
-    void Initialize(IWICBitmapSource pISource, uint uiWidth, uint uiHeight, WICBitmapInterpolationMode mode);
+    void Initialize(IWICBitmapSource pISource, uint uiWidth, uint uiHeight, WICBitmapInterpolationMode mode); // [8]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("5009834F-2D6A-41CE-9E1B-17C5AFF7A782")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICBitmapFlipRotator
+internal partial interface IWICBitmapFlipRotator : IWICBitmapSource
 {
-    // IWICBitmapSource methods
-    void GetSize(out uint puiWidth, out uint puiHeight);
-    void GetPixelFormat(out Guid pPixelFormat);
-    void GetResolution(out double pDpiX, out double pDpiY);
-    void CopyPalette(IntPtr pIPalette);
-    void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
-
-    // IWICBitmapFlipRotator methods
-    void Initialize(IWICBitmapSource pISource, WICBitmapTransformOptions options);
+    void Initialize(IWICBitmapSource pISource, WICBitmapTransformOptions options);                // [8]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("30989668-E1C9-4597-B395-458EEDB808DF")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICMetadataQueryReader
+internal partial interface IWICMetadataQueryReader
 {
-    void GetContainerFormat(out Guid pguidContainerFormat);
-    void GetLocation(uint cchMaxLength, [Out] char[] wzNamespace, out uint pcchActualLength);
-    // PreserveSig: a missing tag (WINCODEC_ERR_PROPERTYNOTFOUND) is the normal case when reading several EXIF
-    // tags; returning the HRESULT avoids a first-chance COMException per absent tag on the decode path.
+    void GetContainerFormat(out Guid pguidContainerFormat);                                       // [3]
+    void GetLocation(uint cchMaxLength, nint wzNamespace, out uint pcchActualLength);             // [4]
+    // PreserveSig: thiếu tag (WINCODEC_ERR_PROPERTYNOTFOUND) là chuyện thường khi đọc nhiều tag EXIF; trả HRESULT để khỏi ném
+    // một COMException first-chance cho mỗi tag vắng trên đường decode.
     [PreserveSig]
-    int GetMetadataByName([MarshalAs(UnmanagedType.LPWStr)] string wzName, IntPtr pvarValue);
-    void GetEnumerator(out IntPtr ppIEnumString);
+    int GetMetadataByName(string wzName, nint pvarValue);                                         // [5]
+    void GetEnumerator(out nint ppIEnumString);                                                   // [6]
 }
 
-[ComImport]
+/// <summary>COM <c>IStream</c> (IID 0000000c-0000-0000-C000-000000000046): ISequentialStream (Read, Write) + IStream.</summary>
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
+[Guid("0000000c-0000-0000-C000-000000000046")]
+internal unsafe partial interface IComStream
+{
+    void Read(byte* pv, int cb, nint pcbRead);                                                    // [3]
+    void Write(byte* pv, int cb, nint pcbWritten);                                                // [4]
+    void Seek(long dlibMove, int dwOrigin, nint plibNewPosition);                                 // [5]
+    void SetSize(long libNewSize);                                                                // [6]
+    void CopyTo(nint pstm, long cb, nint pcbRead, nint pcbWritten);                               // [7]
+    void Commit(int grfCommitFlags);                                                              // [8]
+    void Revert();                                                                                // [9]
+    void LockRegion(long libOffset, long cb, int dwLockType);                                     // [10]
+    void UnlockRegion(long libOffset, long cb, int dwLockType);                                   // [11]
+    void Stat(out StatStgNative pstatstg, int grfStatFlag);                                       // [12]
+    void Clone(out nint ppstm);                                                                   // [13]
+}
+
+/// <summary>STATSTG (objidl.h) với con trỏ tên thô (luôn null: STATFLAG_NONAME); 80 byte trên x64.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct StatStgNative
+{
+    public nint pwcsName;
+    public int type;
+    public long cbSize;
+    public long mtime;
+    public long ctime;
+    public long atime;
+    public int grfMode;
+    public int grfLocksSupported;
+    public Guid clsid;
+    public int grfStateBits;
+    public int reserved;
+}
+
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("135FF860-22B7-4DDF-B0F6-218F4F299A43")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICStream : IStream
+internal unsafe partial interface IWICStream : IComStream
 {
-    // IStream methods
-    new void Read([Out] byte[] pv, int cb, IntPtr pcbRead);
-    new void Write([In] byte[] pv, int cb, IntPtr pcbWritten);
-    new void Seek(long dlibMove, int dwOrigin, IntPtr plibNewPosition);
-    new void SetSize(long libNewSize);
-    new void CopyTo(IStream pstm, long cb, IntPtr pcbRead, IntPtr pcbWritten);
-    new void Commit(int grfCommitFlags);
-    new void Revert();
-    new void LockRegion(long libOffset, long cb, int dwLockType);
-    new void UnlockRegion(long libOffset, long cb, int dwLockType);
-    new void Stat(out STATSTG pstatstg, int grfStatFlag);
-    new void Clone(out IStream ppstm);
-
-    // IWICStream methods
-    void InitializeFromIStream(IStream pIStream);
-    void InitializeFromFile(string wzFileName, uint dwDesiredAccess);
-    void InitializeFromMemory(IntPtr pbBuffer, uint cbBufferSize);
-    void InitializeFromMemoryEx(IntPtr pbBuffer, ulong cbBufferSize);
+    void InitializeFromIStream(IComStream pIStream);                                              // [14]
+    void InitializeFromFilename(string wzFileName, uint dwDesiredAccess);                         // [15]
+    void InitializeFromMemory(nint pbBuffer, uint cbBufferSize);                                  // [16]
+    void InitializeFromIStreamRegion(IComStream pIStream, ulong ulOffset, ulong ulMaxSize);       // [17]
 }
 
-[ComImport]
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
 [Guid("ec5ec8a9-c395-4314-9c77-54d7a935ff70")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IWICImagingFactory
+internal partial interface IWICImagingFactory
 {
-    void CreateDecoderFromFilename(
-        [MarshalAs(UnmanagedType.LPWStr)] string wzFilename,
-        IntPtr pguidVendor,
-        uint dwDesiredAccess,
-        WICDecodeOptions metadataOptions,
-        out IWICBitmapDecoder ppIDecoder);
-
-    void CreateDecoderFromStream(
-        IStream pIStream,
-        IntPtr pguidVendor,
-        WICDecodeOptions metadataOptions,
-        out IWICBitmapDecoder ppIDecoder);
-
-    void CreateDecoderFromFileHandle(
-        IntPtr hFile,
-        IntPtr pguidVendor,
-        WICDecodeOptions metadataOptions,
-        out IWICBitmapDecoder ppIDecoder);
-
-    void CreateComponentInfo(ref Guid clsidComponent, out IntPtr ppIInfo);
-    void CreateDecoder(ref Guid guidContainerFormat, ref Guid pguidVendor, out IWICBitmapDecoder ppIDecoder);
-    void CreateEncoder(ref Guid guidContainerFormat, ref Guid pguidVendor, out IntPtr ppIEncoder);
-    void CreatePalette(out IntPtr ppIPalette);
-    void CreateFormatConverter(out IWICFormatConverter ppIFormatConverter);
-    void CreateBitmapScaler(out IWICBitmapScaler ppIBitmapScaler);
-    void CreateBitmapClipper(out IntPtr ppIBitmapClipper);
-    void CreateBitmapFlipRotator(out IWICBitmapFlipRotator ppIBitmapFlipRotator);
-    void CreateStream(out IWICStream ppIWICStream);
-    void CreateColorContext(out IWICColorContext ppIColorContext);
-    void CreateColorTransformer(out IWICColorTransform ppIColorTransform);
-    void CreateBitmap(uint uiWidth, uint uiHeight, ref Guid pixelFormat, uint option, out IntPtr ppIBitmap);
-    void CreateBitmapFromSource(IWICBitmapSource pIBitmapSource, uint option, out IntPtr ppIBitmap);
-    void CreateBitmapFromSourceRect(IWICBitmapSource pIBitmapSource, uint x, uint y, uint width, uint height, out IntPtr ppIBitmap);
-    void CreateBitmapFromMemory(uint uiWidth, uint uiHeight, ref Guid pixelFormat, uint cbStride, uint cbBufferSize, IntPtr pbBuffer, out IntPtr ppIBitmap);
-    void CreateBitmapFromHBITMAP(IntPtr hBitmap, IntPtr hPalette, uint options, out IntPtr ppIBitmap);
-    void CreateBitmapFromHICON(IntPtr hIcon, out IntPtr ppIBitmap);
-    void CreateComponentEnumerator(uint componentTypes, uint options, out IntPtr ppIEnumUnknown);
-    void CreateFastMetadataEncoderFromDecoder(IWICBitmapDecoder pIDecoder, out IntPtr ppIFastEncoder);
-    void CreateFastMetadataEncoderFromFrameDecode(IWICBitmapFrameDecode pIFrameDecoder, out IntPtr ppIFastEncoder);
-    void CreateQueryWriter(ref Guid guidMetadataFormat, ref Guid pguidVendor, out IntPtr ppIQueryWriter);
-    void CreateQueryWriterFromReader(IWICMetadataQueryReader pIQueryReader, ref Guid pguidVendor, out IntPtr ppIQueryWriter);
+    void CreateDecoderFromFilename(string wzFilename, nint pguidVendor, uint dwDesiredAccess, WICDecodeOptions metadataOptions,
+        out nint ppIDecoder);                                                                     // [3]
+    void CreateDecoderFromStream(IComStream pIStream, nint pguidVendor, WICDecodeOptions metadataOptions,
+        out nint ppIDecoder);                                                                     // [4]
+    void CreateDecoderFromFileHandle(nint hFile, nint pguidVendor, WICDecodeOptions metadataOptions, out nint ppIDecoder); // [5]
+    void CreateComponentInfo(ref Guid clsidComponent, out nint ppIInfo);                          // [6]
+    void CreateDecoder(ref Guid guidContainerFormat, ref Guid pguidVendor, out nint ppIDecoder);  // [7]
+    void CreateEncoder(ref Guid guidContainerFormat, ref Guid pguidVendor, out nint ppIEncoder);  // [8]
+    void CreatePalette(out nint ppIPalette);                                                      // [9]
+    void CreateFormatConverter(out nint ppIFormatConverter);                                      // [10]
+    void CreateBitmapScaler(out nint ppIBitmapScaler);                                            // [11]
+    void CreateBitmapClipper(out nint ppIBitmapClipper);                                          // [12]
+    void CreateBitmapFlipRotator(out nint ppIBitmapFlipRotator);                                  // [13]
+    void CreateStream(out nint ppIWICStream);                                                     // [14]
+    void CreateColorContext(out nint ppIColorContext);                                            // [15]
+    void CreateColorTransformer(out nint ppIColorTransform);                                      // [16]
+    void CreateBitmap(uint uiWidth, uint uiHeight, ref Guid pixelFormat, uint option, out nint ppIBitmap); // [17]
+    void CreateBitmapFromSource(IWICBitmapSource pIBitmapSource, uint option, out nint ppIBitmap); // [18]
+    void CreateBitmapFromSourceRect(IWICBitmapSource pIBitmapSource, uint x, uint y, uint width, uint height, out nint ppIBitmap); // [19]
+    void CreateBitmapFromMemory(uint uiWidth, uint uiHeight, ref Guid pixelFormat, uint cbStride, uint cbBufferSize, nint pbBuffer,
+        out nint ppIBitmap);                                                                      // [20]
+    void CreateBitmapFromHBITMAP(nint hBitmap, nint hPalette, uint options, out nint ppIBitmap);  // [21]
+    void CreateBitmapFromHICON(nint hIcon, out nint ppIBitmap);                                   // [22]
+    void CreateComponentEnumerator(uint componentTypes, uint options, out nint ppIEnumUnknown);   // [23]
+    void CreateFastMetadataEncoderFromDecoder(IWICBitmapDecoder pIDecoder, out nint ppIFastEncoder); // [24]
+    void CreateFastMetadataEncoderFromFrameDecode(IWICBitmapFrameDecode pIFrameDecoder, out nint ppIFastEncoder); // [25]
+    void CreateQueryWriter(ref Guid guidMetadataFormat, ref Guid pguidVendor, out nint ppIQueryWriter); // [26]
+    void CreateQueryWriterFromReader(IWICMetadataQueryReader pIQueryReader, ref Guid pguidVendor, out nint ppIQueryWriter); // [27]
 }
 
 /// <summary>
-/// Managed wrapper around a .NET <see cref="Stream"/> providing the COM <see cref="IStream"/> interface.
-/// Enables passing FileStream with native ReadWrite | Delete sharing to WIC without proprietary lock.
+/// Biên giữa con trỏ COM thô và đối tượng <c>[GeneratedComInterface]</c>: bọc con trỏ vừa nhận (out nint) và trả COM ref NGAY
+/// (không đợi GC) - thay cho <c>Marshal.ReleaseComObject</c> của RCW cũ (vô tác dụng với wrapper của ComWrappers).
 /// </summary>
-internal sealed class ManagedIStream : IStream, IDisposable
+internal static class WicCom
+{
+    private static readonly StrategyBasedComWrappers Wrappers = new();
+    private const int EPointer = unchecked((int)0x80004003);
+
+    /// <summary>
+    /// Wrapper RIÊNG (UniqueInstance - cache chung không trả ref khi <see cref="Release"/>) cho con trỏ COM vừa nhận; CHIẾM 1 ref
+    /// của <paramref name="unknown"/> (wrapper giữ ref riêng, ref truyền vào được trả lại ở đây, cả khi bọc thất bại).
+    /// Con trỏ 0 ném lỗi E_POINTER (một đối tượng ra bắt buộc mà WIC trả S_OK + null).
+    /// </summary>
+    internal static T Wrap<T>(nint unknown) where T : class
+    {
+        if (unknown == 0) throw Marshal.GetExceptionForHR(EPointer, new IntPtr(-1))!; // CA2201: không tự dựng COMException
+        try
+        {
+            return (T)Wrappers.GetOrCreateObjectForComInstance(unknown, CreateObjectFlags.UniqueInstance);
+        }
+        finally
+        {
+            Marshal.Release(unknown);
+        }
+    }
+
+    /// <summary>Như <see cref="Wrap{T}"/> nhưng con trỏ 0 cho null (đối tượng ra tuỳ chọn, vd. thumbnail).</summary>
+    internal static T? WrapOrNull<T>(nint unknown) where T : class => unknown == 0 ? null : Wrap<T>(unknown);
+
+    /// <summary>Trả COM ref của wrapper ngay; null, đối tượng managed (fake test) hay lần gọi thứ hai là no-op.</summary>
+    internal static void Release(object? comObject)
+    {
+        if (comObject is ComObject wrapper) wrapper.FinalRelease();
+    }
+}
+
+/// <summary>
+/// Dạng gọi tiện lợi `out IFoo` của các method có đối tượng ra (interface sinh dùng `out nint`, xem quy ước ở đầu file): cùng chữ ký
+/// như bản ComImport cũ nên chỗ gọi không đổi; mỗi đối tượng ra được bọc ngay thành wrapper có thể <see cref="WicCom.Release"/>.
+/// </summary>
+internal static class WicComExtensions
+{
+    public static void CreateDecoderFromStream(this IWICImagingFactory f, IComStream stream, nint vendor, WICDecodeOptions options,
+        out IWICBitmapDecoder decoder)
+    {
+        f.CreateDecoderFromStream(stream, vendor, options, out nint p);
+        decoder = WicCom.Wrap<IWICBitmapDecoder>(p);
+    }
+
+    public static void CreateFormatConverter(this IWICImagingFactory f, out IWICFormatConverter converter)
+    {
+        f.CreateFormatConverter(out nint p);
+        converter = WicCom.Wrap<IWICFormatConverter>(p);
+    }
+
+    public static void CreateBitmapScaler(this IWICImagingFactory f, out IWICBitmapScaler scaler)
+    {
+        f.CreateBitmapScaler(out nint p);
+        scaler = WicCom.Wrap<IWICBitmapScaler>(p);
+    }
+
+    public static void CreateBitmapFlipRotator(this IWICImagingFactory f, out IWICBitmapFlipRotator rotator)
+    {
+        f.CreateBitmapFlipRotator(out nint p);
+        rotator = WicCom.Wrap<IWICBitmapFlipRotator>(p);
+    }
+
+    public static void CreateStream(this IWICImagingFactory f, out IWICStream stream)
+    {
+        f.CreateStream(out nint p);
+        stream = WicCom.Wrap<IWICStream>(p);
+    }
+
+    public static void CreateColorContext(this IWICImagingFactory f, out IWICColorContext context)
+    {
+        f.CreateColorContext(out nint p);
+        context = WicCom.Wrap<IWICColorContext>(p);
+    }
+
+    public static void CreateColorTransformer(this IWICImagingFactory f, out IWICColorTransform transform)
+    {
+        f.CreateColorTransformer(out nint p);
+        transform = WicCom.Wrap<IWICColorTransform>(p);
+    }
+
+    public static void GetFrame(this IWICBitmapDecoder d, uint index, out IWICBitmapFrameDecode frame)
+    {
+        d.GetFrame(index, out nint p);
+        frame = WicCom.Wrap<IWICBitmapFrameDecode>(p);
+    }
+
+    public static void GetMetadataQueryReader(this IWICBitmapFrameDecode f, out IWICMetadataQueryReader reader)
+    {
+        f.GetMetadataQueryReader(out nint p);
+        reader = WicCom.Wrap<IWICMetadataQueryReader>(p);
+    }
+
+    /// <summary>Thumbnail nhúng; null khi codec trả S_OK mà không có đối tượng.</summary>
+    public static void GetThumbnail(this IWICBitmapFrameDecode f, out IWICBitmapSource? thumbnail)
+    {
+        f.GetThumbnail(out nint p);
+        thumbnail = WicCom.WrapOrNull<IWICBitmapSource>(p);
+    }
+}
+
+/// <summary>
+/// Bọc .NET <see cref="Stream"/> thành COM <c>IStream</c> (CCW của [GeneratedComClass]).
+/// Cho phép đưa FileStream với chia sẻ native ReadWrite | Delete vào WIC mà không cần khoá riêng.
+/// </summary>
+[GeneratedComClass]
+internal sealed unsafe partial class ManagedIStream : IComStream, IDisposable
 {
     private Stream? _stream;
 
@@ -328,27 +386,27 @@ internal sealed class ManagedIStream : IStream, IDisposable
         _stream = stream ?? throw new ArgumentNullException(nameof(stream));
     }
 
-    public void Read(byte[] pv, int cb, IntPtr pcbRead)
+    public void Read(byte* pv, int cb, nint pcbRead)
     {
         ObjectDisposedException.ThrowIf(_stream is null, this);
-        var bytesRead = _stream.Read(pv, 0, cb);
+        var bytesRead = _stream.Read(new Span<byte>(pv, cb));
         if (pcbRead != IntPtr.Zero)
         {
             Marshal.WriteInt32(pcbRead, bytesRead);
         }
     }
 
-    public void Write(byte[] pv, int cb, IntPtr pcbWritten)
+    public void Write(byte* pv, int cb, nint pcbWritten)
     {
         ObjectDisposedException.ThrowIf(_stream is null, this);
-        _stream.Write(pv, 0, cb);
+        _stream.Write(new ReadOnlySpan<byte>(pv, cb));
         if (pcbWritten != IntPtr.Zero)
         {
             Marshal.WriteInt32(pcbWritten, cb);
         }
     }
 
-    public void Seek(long dlibMove, int dwOrigin, IntPtr plibNewPosition)
+    public void Seek(long dlibMove, int dwOrigin, nint plibNewPosition)
     {
         ObjectDisposedException.ThrowIf(_stream is null, this);
         var origin = (SeekOrigin)dwOrigin;
@@ -365,7 +423,7 @@ internal sealed class ManagedIStream : IStream, IDisposable
         _stream.SetLength(libNewSize);
     }
 
-    public void CopyTo(IStream pstm, long cb, IntPtr pcbRead, IntPtr pcbWritten)
+    public void CopyTo(nint pstm, long cb, nint pcbRead, nint pcbWritten)
     {
         throw new NotSupportedException();
     }
@@ -387,10 +445,10 @@ internal sealed class ManagedIStream : IStream, IDisposable
     {
     }
 
-    public void Stat(out STATSTG pstatstg, int grfStatFlag)
+    public void Stat(out StatStgNative pstatstg, int grfStatFlag)
     {
         ObjectDisposedException.ThrowIf(_stream is null, this);
-        pstatstg = new STATSTG
+        pstatstg = new StatStgNative
         {
             type = 2, // STGTY_STREAM
             cbSize = _stream.Length,
@@ -398,7 +456,7 @@ internal sealed class ManagedIStream : IStream, IDisposable
         };
     }
 
-    public void Clone(out IStream ppstm)
+    public void Clone(out nint ppstm)
     {
         throw new NotSupportedException();
     }
@@ -409,14 +467,13 @@ internal sealed class ManagedIStream : IStream, IDisposable
     }
 }
 
-internal static class WicNativeMethods
+internal static partial class WicNativeMethods
 {
     public const uint WINCODEC_SDK_VERSION1 = 0x0236;
 
-    [DllImport("WindowsCodecs.dll", EntryPoint = "WICCreateImagingFactory_Proxy", ExactSpelling = true)]
-    public static extern int WICCreateImagingFactory_Proxy(uint sdkVersion, out IWICImagingFactory ppIImagingFactory);
+    [LibraryImport("WindowsCodecs.dll", EntryPoint = "WICCreateImagingFactory_Proxy")]
+    public static partial int WICCreateImagingFactory_Proxy(uint sdkVersion, out nint ppIImagingFactory);
 }
 
 #pragma warning restore CA1712
 #pragma warning restore CA1069
-

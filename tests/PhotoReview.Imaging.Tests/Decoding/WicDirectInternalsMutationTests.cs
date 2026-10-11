@@ -106,9 +106,9 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
         public void GetResolution(out double pDpiX, out double pDpiY) => throw new NotImplementedException();
         public void CopyPalette(IntPtr pIPalette) => throw new NotImplementedException();
         public void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer) => throw new NotImplementedException();
-        public void GetMetadataQueryReader(out IWICMetadataQueryReader ppIMetadataQueryReader) => throw new NotImplementedException();
-        public void GetColorContexts(uint cCount, IWICColorContext[]? ppIColorContexts, out uint pcActualCount) => throw new NotImplementedException();
-        public void GetThumbnail(out IWICBitmapSource ppIThumbnail) => throw new NotImplementedException();
+        public void GetMetadataQueryReader(out nint ppIMetadataQueryReader) => throw new NotImplementedException();
+        public void GetColorContexts(uint cCount, nint ppIColorContexts, out uint pcActualCount) => throw new NotImplementedException();
+        public void GetThumbnail(out nint ppIThumbnail) => throw new NotImplementedException();
 
         public void CopyPixels(IntPtr prcDst, uint uiWidth, uint uiHeight, ref Guid pguidDstFormat, uint dstTransform, uint nStride, uint cbBufferSize, IntPtr pbBuffer) => throw new NotImplementedException();
         public void GetClosestSize(ref uint puiWidth, ref uint puiHeight) => (puiWidth, puiHeight) = closest();
@@ -123,9 +123,9 @@ public sealed class WicDirectInternalsMutationTests : IDisposable
         public void GetResolution(out double pDpiX, out double pDpiY) => throw new NotImplementedException();
         public void CopyPalette(IntPtr pIPalette) => throw new NotImplementedException();
         public void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer) => throw new NotImplementedException();
-        public void GetMetadataQueryReader(out IWICMetadataQueryReader ppIMetadataQueryReader) => throw new NotImplementedException();
-        public void GetColorContexts(uint cCount, IWICColorContext[]? ppIColorContexts, out uint pcActualCount) => throw new NotImplementedException();
-        public void GetThumbnail(out IWICBitmapSource ppIThumbnail) => throw new NotImplementedException();
+        public void GetMetadataQueryReader(out nint ppIMetadataQueryReader) => throw new NotImplementedException();
+        public void GetColorContexts(uint cCount, nint ppIColorContexts, out uint pcActualCount) => throw new NotImplementedException();
+        public void GetThumbnail(out nint ppIThumbnail) => throw new NotImplementedException();
     }
 
     private static (bool Useful, uint W, uint H) NativeReduction(object frame, uint targetW, uint targetH, uint origW, uint origH)

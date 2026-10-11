@@ -1,4 +1,4 @@
-using IStream = System.Runtime.InteropServices.ComTypes.IStream;
+using System.Runtime.InteropServices.Marshalling;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -12,7 +12,7 @@ namespace PhotoReview.Imaging.Tests.Decoding;
 /// Mutation-gap tests for <see cref="WicDirectDecoder"/> failure paths: the catch filters around metadata, colour-context and
 /// container-format reads, driven with managed fakes of the WIC interfaces, and the E_INVALIDARG mapping through real decodes.
 /// </summary>
-public sealed class WicDirectFaultInjectionTests : IDisposable
+public sealed partial class WicDirectFaultInjectionTests : IDisposable
 {
     private readonly TempRoot _root = new("wic-fault");
 
@@ -37,12 +37,17 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
         }
     }
 
+    private static readonly StrategyBasedComWrappers CcwFactory = new();
+
+    /// <summary>Raw IUnknown of a managed fake exactly as WIC would hand one out (the caller owns the reference).</summary>
+    private static nint Ccw(object fake) => (nint)CcwFactory.GetOrCreateComInterfaceForObject(fake, CreateComInterfaceFlags.None);
+
     private static COMException ComFault(string message = "injected") =>
 #pragma warning disable CA2201
         new COMException(message, unchecked((int)0x88982F50));
 #pragma warning restore CA2201
 
-    private sealed class FakeFrame(Func<IWICMetadataQueryReader>? metadata = null, Action<IWICColorContext[]?, uint>? colorContexts = null) : IWICBitmapFrameDecode
+    private sealed class FakeFrame(Func<nint>? metadata = null, Action<nint, uint>? colorContexts = null) : IWICBitmapFrameDecode
     {
         public int ColorContextCalls;
         public void GetSize(out uint puiWidth, out uint puiHeight) => throw new NotImplementedException();
@@ -50,19 +55,20 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
         public void GetResolution(out double pDpiX, out double pDpiY) => throw new NotImplementedException();
         public void CopyPalette(IntPtr pIPalette) => throw new NotImplementedException();
         public void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer) => throw new NotImplementedException();
-        public void GetMetadataQueryReader(out IWICMetadataQueryReader ppIMetadataQueryReader) =>
+        public void GetMetadataQueryReader(out nint ppIMetadataQueryReader) =>
             ppIMetadataQueryReader = (metadata ?? throw new NotImplementedException())();
-        public void GetColorContexts(uint cCount, IWICColorContext[]? ppIColorContexts, out uint pcActualCount)
+        public void GetColorContexts(uint cCount, nint ppIColorContexts, out uint pcActualCount)
         {
             ColorContextCalls++;
             if (colorContexts is null) throw new NotImplementedException();
             colorContexts(ppIColorContexts, cCount);
             pcActualCount = cCount == 0 ? 1u : cCount;
         }
-        public void GetThumbnail(out IWICBitmapSource ppIThumbnail) => throw new NotImplementedException();
+        public void GetThumbnail(out nint ppIThumbnail) => throw new NotImplementedException();
     }
 
-    private sealed class FakeContext : IWICColorContext
+    [GeneratedComClass]
+    private sealed partial class FakeContext : IWICColorContext
     {
         public void InitializeFromFilename(string wzFilename) => throw new NotImplementedException();
         public void InitializeFromMemory(IntPtr pbBuffer, uint cbBufferSize) => throw new NotImplementedException();
@@ -72,22 +78,22 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
         public void GetExifColorSpace(out uint pValue) => throw new NotImplementedException();
     }
 
-    private sealed class FakeFactory(Func<IWICColorContext> createContext) : IWICImagingFactory
+    private sealed class FakeFactory(Func<nint> createContext) : IWICImagingFactory
     {
-        public void CreateColorContext(out IWICColorContext ppIColorContext) => ppIColorContext = createContext();
-        public void CreateDecoderFromFilename(string wzFilename, IntPtr pguidVendor, uint dwDesiredAccess, WICDecodeOptions metadataOptions, out IWICBitmapDecoder ppIDecoder) => throw new NotImplementedException();
-        public void CreateDecoderFromStream(IStream pIStream, IntPtr pguidVendor, WICDecodeOptions metadataOptions, out IWICBitmapDecoder ppIDecoder) => throw new NotImplementedException();
-        public void CreateDecoderFromFileHandle(IntPtr hFile, IntPtr pguidVendor, WICDecodeOptions metadataOptions, out IWICBitmapDecoder ppIDecoder) => throw new NotImplementedException();
+        public void CreateColorContext(out nint ppIColorContext) => ppIColorContext = createContext();
+        public void CreateDecoderFromFilename(string wzFilename, IntPtr pguidVendor, uint dwDesiredAccess, WICDecodeOptions metadataOptions, out nint ppIDecoder) => throw new NotImplementedException();
+        public void CreateDecoderFromStream(IComStream pIStream, IntPtr pguidVendor, WICDecodeOptions metadataOptions, out nint ppIDecoder) => throw new NotImplementedException();
+        public void CreateDecoderFromFileHandle(IntPtr hFile, IntPtr pguidVendor, WICDecodeOptions metadataOptions, out nint ppIDecoder) => throw new NotImplementedException();
         public void CreateComponentInfo(ref Guid clsidComponent, out IntPtr ppIInfo) => throw new NotImplementedException();
-        public void CreateDecoder(ref Guid guidContainerFormat, ref Guid pguidVendor, out IWICBitmapDecoder ppIDecoder) => throw new NotImplementedException();
+        public void CreateDecoder(ref Guid guidContainerFormat, ref Guid pguidVendor, out nint ppIDecoder) => throw new NotImplementedException();
         public void CreateEncoder(ref Guid guidContainerFormat, ref Guid pguidVendor, out IntPtr ppIEncoder) => throw new NotImplementedException();
         public void CreatePalette(out IntPtr ppIPalette) => throw new NotImplementedException();
-        public void CreateFormatConverter(out IWICFormatConverter ppIFormatConverter) => throw new NotImplementedException();
-        public void CreateBitmapScaler(out IWICBitmapScaler ppIBitmapScaler) => throw new NotImplementedException();
+        public void CreateFormatConverter(out nint ppIFormatConverter) => throw new NotImplementedException();
+        public void CreateBitmapScaler(out nint ppIBitmapScaler) => throw new NotImplementedException();
         public void CreateBitmapClipper(out IntPtr ppIBitmapClipper) => throw new NotImplementedException();
-        public void CreateBitmapFlipRotator(out IWICBitmapFlipRotator ppIBitmapFlipRotator) => throw new NotImplementedException();
-        public void CreateStream(out IWICStream ppIWICStream) => throw new NotImplementedException();
-        public void CreateColorTransformer(out IWICColorTransform ppIColorTransform) => throw new NotImplementedException();
+        public void CreateBitmapFlipRotator(out nint ppIBitmapFlipRotator) => throw new NotImplementedException();
+        public void CreateStream(out nint ppIWICStream) => throw new NotImplementedException();
+        public void CreateColorTransformer(out nint ppIColorTransform) => throw new NotImplementedException();
         public void CreateBitmap(uint uiWidth, uint uiHeight, ref Guid pixelFormat, uint option, out IntPtr ppIBitmap) => throw new NotImplementedException();
         public void CreateBitmapFromSource(IWICBitmapSource pIBitmapSource, uint option, out IntPtr ppIBitmap) => throw new NotImplementedException();
         public void CreateBitmapFromSourceRect(IWICBitmapSource pIBitmapSource, uint x, uint y, uint width, uint height, out IntPtr ppIBitmap) => throw new NotImplementedException();
@@ -104,16 +110,16 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
     private sealed class FakeDecoder(Action containerFormat) : IWICBitmapDecoder
     {
         public void GetContainerFormat(out Guid pguidContainerFormat) { containerFormat(); pguidContainerFormat = Guid.Empty; }
-        public void QueryCapability(IStream pIStream, out uint pdwCapability) => throw new NotImplementedException();
-        public void Initialize(IStream pIStream, WICDecodeOptions cacheOptions) => throw new NotImplementedException();
+        public void QueryCapability(IComStream pIStream, out uint pdwCapability) => throw new NotImplementedException();
+        public void Initialize(IComStream pIStream, WICDecodeOptions cacheOptions) => throw new NotImplementedException();
         public void GetDecoderInfo(out IntPtr ppIDecoderInfo) => throw new NotImplementedException();
         public void CopyPalette(IntPtr pIPalette) => throw new NotImplementedException();
-        public void GetMetadataQueryReader(out IWICMetadataQueryReader ppIMetadataQueryReader) => throw new NotImplementedException();
-        public void GetPreview(out IWICBitmapSource ppIPreview) => throw new NotImplementedException();
+        public void GetMetadataQueryReader(out nint ppIMetadataQueryReader) => throw new NotImplementedException();
+        public void GetPreview(out nint ppIPreview) => throw new NotImplementedException();
         public void GetColorContexts(uint cCount, IntPtr ppIColorContexts, out uint pcActualCount) => throw new NotImplementedException();
-        public void GetThumbnail(out IWICBitmapSource ppIThumbnail) => throw new NotImplementedException();
+        public void GetThumbnail(out nint ppIThumbnail) => throw new NotImplementedException();
         public void GetFrameCount(out uint pCount) => throw new NotImplementedException();
-        public void GetFrame(uint index, out IWICBitmapFrameDecode ppIBitmapFrame) => throw new NotImplementedException();
+        public void GetFrame(uint index, out nint ppIBitmapFrame) => throw new NotImplementedException();
     }
 
     // ---- ReadFrameMetadata: a frame without a metadata reader reads as unrotated / no EXIF ----
@@ -166,7 +172,7 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
     {
         var frame = new FakeFrame(colorContexts: (_, _) => throw (argumentFault ? new ArgumentException("damaged TIFF header") : ComFault()));
 
-        var result = Unwrap(() => Private("ReadColorContexts").Invoke(null, [new FakeFactory(() => new FakeContext()), frame]));
+        var result = Unwrap(() => Private("ReadColorContexts").Invoke(null, [new FakeFactory(() => Ccw(new FakeContext())), frame]));
 
         Assert.Null(result);
         Assert.Equal(1, frame.ColorContextCalls);
@@ -180,11 +186,11 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
     {
         // failure 0: CreateColorContext throws COM; 1: CreateColorContext throws ArgumentException; 2: the filling GetColorContexts throws COM.
         var frame = new FakeFrame(colorContexts: (_, count) => { if (count > 0 && failure == 2) throw ComFault(); });
-        IWICColorContext Create() => failure switch
+        nint Create() => failure switch
         {
             0 => throw ComFault(),
             1 => throw new ArgumentException("bad"),
-            _ => new FakeContext(),
+            _ => Ccw(new FakeContext()),
         };
 
         var result = Unwrap(() => Private("ReadColorContexts").Invoke(null, [new FakeFactory(Create), frame]));
@@ -206,7 +212,7 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
     {
         var frame = new FakeFrame(colorContexts: (_, _) => { });
 
-        var result = (IWICColorContext[]?)Unwrap(() => Private("ReadColorContexts").Invoke(null, [new FakeFactory(() => new FakeContext()), frame]));
+        var result = (IWICColorContext[]?)Unwrap(() => Private("ReadColorContexts").Invoke(null, [new FakeFactory(() => Ccw(new FakeContext())), frame]));
 
         Assert.NotNull(result);
         Assert.Single(result);
@@ -223,7 +229,7 @@ public sealed class WicDirectFaultInjectionTests : IDisposable
         var chainType = typeof(WicDirectDecoder).GetNestedType("ColorTransformChain", BindingFlags.NonPublic)!;
         var chain = Activator.CreateInstance(chainType)!;
         var build = chainType.GetMethod("Build")!;
-        IWICColorContext Create() => fault switch
+        nint Create() => fault switch
         {
             0 => throw ComFault(),
             1 => throw new InvalidCastException("bad cast"),
