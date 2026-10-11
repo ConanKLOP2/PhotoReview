@@ -15,7 +15,7 @@ namespace PhotoReview.Shell.Integration.Tests.Startup;
 [Collection("ShellStartup")]
 [Trait("Category", "Manual")]
 [Trait("Category", "UI")]
-public sealed class PresentProbeReportTests(ITestOutputHelper output)
+public sealed partial class PresentProbeReportTests(ITestOutputHelper output)
 {
     private sealed record Config(string Name, RenderSurfaceOptions Options, bool Immediate = false, bool WaitWaitable = false,
         int SleepMs = 16, bool Activate = false, bool Maximize = false);
@@ -24,6 +24,11 @@ public sealed class PresentProbeReportTests(ITestOutputHelper output)
     public async Task Probe_PresentTimingsAcrossConfigurations()
     {
         var sparse = Environment.GetEnvironmentVariable("PHOTOREVIEW_PROBE_SPARSE") == "1";
+        if (Environment.GetEnvironmentVariable("PHOTOREVIEW_PROBE_TIMER") == "1")
+        {
+            _ = TimeBeginPeriod(1);
+        }
+
         var configs = sparse ? new[]
         {
             new Config("sync0 spacing 16", new RenderSurfaceOptions(), Immediate: true, SleepMs: 16),
@@ -57,6 +62,9 @@ public sealed class PresentProbeReportTests(ITestOutputHelper output)
             File.WriteAllText(outPath, text.ToString());
         }
     }
+
+    [System.Runtime.InteropServices.LibraryImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
+    private static partial uint TimeBeginPeriod(uint period);
 
     private static string Timing = "?";
     private static string EndDrawSummary = string.Empty;
