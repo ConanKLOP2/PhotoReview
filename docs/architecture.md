@@ -23,11 +23,46 @@ App.Shared ─> Core, Imaging, Imaging.Raw, Imaging.LibRaw, Imaging.TurboJpeg, P
 Imaging.Wpf ─> Core (UseWPF=true; là assembly Imaging duy nhất dùng WPF, L-IMG trong Architecture.Tests)
 Core ─> PhotoReview.Localization.Generator (source generator, netstandard2.0)
 tools/PhotoReview.Benchmark.Cli ─> App, Benchmarking, Imaging*, Platform.Windows, PerfAnalysis
+PhotoReview.App.WpfWindows (UseWPF) ─> App.Shared, Imaging.Wpf, Platform.Windows, Benchmarking, Core
+PhotoReview.Shell.Win32 (PhotoReview.exe, không WPF) ─> Shell.Rendering, Shell.Interop, Shell.WpfBridge, App.Shared, Core
+PhotoReview.Shell.Rendering ─> App.Shared, Imaging, Shell.Interop, Core
+PhotoReview.Shell.WpfBridge (UseWPF) ─> App.WpfWindows, Core
 ```
 
 `PhotoReview.Core` không phụ thuộc WPF. `MainWindow` giữ phần view/input; `MainViewModel`, coordinator và service điều phối hành vi nằm ở `PhotoReview.App.Shared` (namespace giữ `PhotoReview.App.*`). **Composition (C-16, WP-09):** `SharedServiceRegistration.AddPhotoReviewShared(SharedServiceOptions)` đăng ký mọi thứ không phụ thuộc WPF (đường dẫn, file system, settings, session, journal, file action, decoder, cache, preload, ViewModel); `App.ConfigureServices` chỉ thêm phần WPF (`IUiScheduler`, `IDialogService`, `IFolderPicker`, `IClipboardService`, `IPresentationSinkFactory`) rồi gọi hàm chung với codec `WpfBitmapSourceCodec` và decoder fallback WPF. `MainViewModelCompositionRoot` lấy `IPresentationSinkFactory` và `IClipboardService` từ DI (không còn `new WpfPresentationSink`/`new WpfClipboardService` trong lõi). Shell Win32 gọi cùng hàm với `PixelBufferImageCodec` và `WpfFallbackDecoder = null` (WP-20).
 
 **AppHost (AR02a–d, xong):** `PhotoReview.App.Composition.AppHost.BuildServices(overrides)` là điểm vào duy nhất dựng `IServiceProvider` — gọi `App.ConfigureServices`, áp `overrides` (nếu có), rồi `BuildServiceProvider()`. `App.App_Startup`, `Benchmark.Cli` (AR02c) và test tích hợp (AR02b) đều dùng hàm này, chỉ khác override để thay `IPreloadController`, `IPresentationObserver` hay `IMoveOverride`. `MainWindow` chỉ có **một constructor DI** (AR02d); các trường public cũ đã thành thuộc tính chỉ-đọc (`Files`, `CurrentIndex`, `CompareSelectedPath`, `Metrics`, `IsFileActionInProgress`). Seam production: `ViewportSizeSource` (F3 — `MainWindow` gán `Get` về `GetViewportSize` ngay sau `InitializeComponent()`), `IPresentationObserver`/`NullPresentationObserver`, seam preload (`MainViewModelCompositionRoot` chỉ dựng `PreloadScheduler` thật khi không có `IPreloadController` nào được đăng ký) và `IMoveOverride` (`null` ở production).
+
+## Hai exe, shell Win32 và luật NO-WPF
+
+Gói phát hành có hai exe trong một thư mục (WP-30, `tools/publish-release.ps1`): `PhotoReview.App.exe` (WPF, mặc định) và `PhotoReview.exe` (assembly của `PhotoReview.Shell.Win32`, Win32 + Direct2D). Hai bản dùng prefix instance khác nhau (`PhotoReview` và `PhotoReviewShell`, hằng `ShellInstanceNames.Prefix`) nên không forward nhầm cho nhau. Liên kết "Open with" của shell là opt-in: `deploy/install-photo-review-association.ps1 -Variant Shell` (ProgId `PhotoReview.Shell`, không đổi ứng dụng mặc định của loại tệp nào).
+
+**Project NO-WPF:**
+- `App.Shared`: ViewModel, coordinator, input và composition không WPF; hai exe cùng dùng.
+- `App.WpfWindows`: cửa sổ phụ WPF (Settings, Recovery, Diagnostics, Benchmark...); App và shell cùng dùng, shell nạp muộn qua `Shell.WpfBridge`.
+- `Imaging.Wpf`: cầu WPF duy nhất của Imaging.
+- `Shell.Interop`: khai báo P/Invoke và COM (`LibraryImport`, `GeneratedComInterface`), không có logic.
+- `Shell.Rendering`: renderer Direct2D và `GpuKeepAlive`.
+- `Shell.Win32`: cửa sổ, overlay, menu và khởi động (`Startup/`) của `PhotoReview.exe`.
+- `Shell.WpfBridge`: project WPF duy nhất trong `Shell.*`, tham chiếu `App.WpfWindows`.
+
+**Luật kiểm trong `tests/PhotoReview.Architecture.Tests`:**
+- L-SHARED: `App.Shared` không bật WPF/WinForms và không tham chiếu App, Shell.* hay Imaging.Wpf.
+- L-IMG: các Imaging* trừ `Imaging.Wpf` không dùng WPF (`LayerDependencyTests`).
+- L-WPF: chỉ App, App.WpfWindows, Imaging.Wpf, Shell.WpfBridge (và project test) bật `UseWPF` (`ShellRulesTests`).
+- L-SHELL: `Shell.Interop`, `Shell.Rendering`, `Shell.Win32` không tham chiếu WPF, WinForms, App hay Shell.WpfBridge; trong Shell.Win32 chỉ `Dialogs/WpfBridgeLoader` phụ thuộc WpfBridge.
+- L-AOT: assembly shared/shell bật `IsAotCompatible`; không `[ComImport]`, không `DllImport` ngoài `LibraryImport`, không `dynamic`.
+
+**Đường khởi động shell** (`ShellStartup`, `Startup/`):
+1. `ShellLaunch` đọc đối số: file tồn tại đầu tiên là ảnh mở đầu, không có thì lấy thư mục đầu tiên. `--smoke` tạo cửa sổ, không khoá instance, rồi thoát 0.
+2. DI, prefetch Explorer và placement, đọc settings trên thread pool.
+3. `InstanceScope` (prefix `PhotoReviewShell`): bản thứ hai chuyển đường dẫn cho bản đang chạy rồi thoát 0. Các lần forward liên tiếp của Explorer trong 750 ms được gộp. Đổi prefix bằng `PHOTOREVIEW_SHELL_INSTANCE_PREFIX` (chẩn đoán/test).
+4. Chỉ sau khi giữ khoá mới decode ảnh đầu sớm; bản bị từ chối không decode gì.
+5. Cửa sổ ẩn và `StartupCloak` (DWM cloak) từ lúc có HWND; `ShellPlacement` áp vị trí trước `ShowWindow`; sau đó dựng view model và bề mặt D2D.
+6. Khung đầu (canvas) được present rồi mới bỏ cloak (`windowRevealed`); ảnh đầu được gán và vẽ sau đó.
+7. Reconcile journal (INV-6) sau khoá và sau khi cửa sổ hiện, trước vòng nhận input đầu tiên.
+
+**`GpuKeepAlive`** (`Shell.Rendering`): luồng nền nộp định kỳ một lệnh GPU rỗng trên thiết bị offscreen riêng, để GPU không về trạng thái ngủ giữa các lần mở ảnh (stall đã đo ở WP-21). Tự tắt khi chỉ có WARP hoặc thiết bị hỏng. Mặc định bật; cấu hình qua `PHOTOREVIEW_GPU_KEEPWARM*`. `PHOTOREVIEW_FRAME_LOG` ghi nhật ký khung.
 
 ## Khoảng trống đã biết (cập nhật 2026-09-27)
 

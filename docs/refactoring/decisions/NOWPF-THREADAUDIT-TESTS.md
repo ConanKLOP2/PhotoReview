@@ -74,3 +74,9 @@ Ghi chú: đột biến "bỏ kẹp dưới" (`Math.Min(intervalMs, 1000)`: kho�
 `...ThreadId` hoặc biến `caller|worker|pool|mutation|continuation|owner|dispatcher|bound...Thread`, ngoài allowlist co dần (11 file
 AN TOÀN ở bảng trên). Không cấm `Assert.All(..., id => Assert.NotEqual(callerThread, id))` ngoài tên biến đã liệt kê (regex dựa
 tên): giới hạn đã biết, đổi lấy không dương tính giả ở bộ đếm kiểu `perThread`/`OutstandingOnThisThread` (đã loại).
+
+## 5. Ngân sách tài liệu
+
+`OPEN-DECISIONS.md` nằm sát trần 48 KB (48 992 / 49 152 byte trên master); chính dòng của fragment này vượt ~130 byte. Nâng trần tối
+thiểu 48 -> 49 KB trong `tools/docs-budget.ps1` (và `INDEX.md`, `AGENTS.md` nhắc con số). Các gói song song thêm dòng nữa sẽ cần
+quyết định riêng về việc cắt gọn bảng "Decided" thay vì nâng tiếp.
