@@ -61,3 +61,6 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+# WP-28: G-PIX reference frames written by the WPF recorder: never normalise line endings.
+tests/Fixtures/golden/pixel/*.png binary
