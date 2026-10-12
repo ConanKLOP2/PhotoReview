@@ -73,7 +73,9 @@ public sealed unsafe class ShellFullscreenFrameGeometryTests
         var main = run.Main!;
         var (client, viewport, origin, width, height) = run.OnUi(() =>
         {
-            main.RenderNow(); // layout + the draw of the first frame after the change
+            // layout + the draw of the first frame after the change; RenderNow alone may be deferred by FramePacer (no layout pass)
+            var framesBefore = main.Stats.Total;
+            Assert.True(ShellFrames.RenderUntil(main, () => main.Stats.Total > framesBefore), "no frame was drawn");
             var layout = main.Viewport.Layout;
             return (main.Window.ClientSizePixels, (layout.ViewportWidth, layout.ViewportHeight), main.Viewport.ImageOrigin,
                 main.Viewport.ImageActualWidth, main.Viewport.ImageActualHeight);

@@ -100,6 +100,9 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
     /// <summary>Số lần đã phát <see cref="Render"/> (chẩn đoán/test).</summary>
     internal long RenderCount { get; private set; }
 
+    /// <summary>Có một khung đã yêu cầu bằng <see cref="Invalidate"/> mà chưa tới nhịp (test chờ "không còn khung treo" thay vì ngủ cố định).</summary>
+    internal bool IsRenderRequested => _renderRequested;
+
     public event EventHandler? ClientSizeChanged;
 
     public event EventHandler? DpiChanged;

@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP34
-order: 1010
+order: 1030
 summary: |-
   WP-34: IsAotCompatible cho Core/Imaging*/Platform.Windows (+App.Shared, Shell.*); 0 DllImport trong src; cong publish AOT 0 canh bao.
 ---
