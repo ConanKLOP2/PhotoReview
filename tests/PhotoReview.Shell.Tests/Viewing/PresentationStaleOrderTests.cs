@@ -204,6 +204,22 @@ public sealed class PresentationStaleOrderTests
         Assert.NotSame(current, rig.Composer.Current);
     }
 
+    [Fact(DisplayName = "STALE composer: a second file change BEFORE the first new image was ever drawn does not freeze that never-seen image for the fade")]
+    public void Composer_CrossfadeRequestedBeforeTheNewImageWasDrawn_FreezesNothingNew()
+    {
+        using var rig = new Rig();
+        rig.Apply(0);
+        rig.Apply(5);                                   // file 0 drawn
+        var seen = rig.Composer.Current!;
+        Assert.True(rig.Composer.BeginCrossfade(TimeSpan.FromMilliseconds(100)));   // fade away from file 0
+        rig.Apply(0);                                   // file 1 assigned, NOT drawn yet
+
+        var begun = rig.Composer.BeginCrossfade(TimeSpan.FromMilliseconds(100));    // a third navigation asks for a fade
+
+        Assert.False(begun);                            // file 1 was never on screen: nothing to freeze
+        Assert.Null(rig.Composer.LastDrawn);
+        Assert.Same(seen, rig.Composer.Crossfade.Outgoing);   // the running fade still shows what the user really saw
+    }
     // ---- GPU cache: device loss in the middle of an upgrade -------------------------------------
 
     [Fact(DisplayName = "STALE gpu: the device is lost mid-prefetch: the dead image never reports 'uploaded', and a re-prefetch completes exactly once")]

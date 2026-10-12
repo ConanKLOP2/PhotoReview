@@ -388,6 +388,16 @@ internal sealed class StalePreviewHarness : IDisposable
     /// <summary>Completes when the embedded-thumbnail reader has been asked for the file.</summary>
     public Task ThumbnailRequestedAsync(int index) => _controls[Paths[index]].ThumbnailRequested.Task.WaitAsync(Bound);
 
+    /// <summary>
+    /// The file's preview carries no source size (as a decoder that cannot tell), so the presenter has to read the header
+    /// afterwards; that read (<see cref="ReadInfoStartedAsync"/>) waits for <see cref="OpenReadInfo"/>.
+    /// </summary>
+    public void HoldHeaderRead(int index) => _controls[Paths[index]].HoldReadInfo = true;
+
+    public Task ReadInfoStartedAsync(int index) => _controls[Paths[index]].ReadInfoStarted.Task.WaitAsync(Bound);
+
+    public void OpenReadInfo(int index) => _controls[Paths[index]].ReadInfo.TrySetResult();
+
     /// <summary>Opens the full-resolution decode of the file (a zoom-detail original).</summary>
     public void OpenOriginal(int index) => _controls[Paths[index]].Original.TrySetResult();
 
@@ -548,6 +558,12 @@ internal sealed class StalePreviewHarness : IDisposable
 
         public TaskCompletionSource Original { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        public TaskCompletionSource ReadInfo { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ReadInfoStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool HoldReadInfo { get; set; }
+
         public TaskCompletionSource OriginalStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource<IDecodedImage?> Thumbnail { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -566,6 +582,7 @@ internal sealed class StalePreviewHarness : IDisposable
         {
             Decode.TrySetResult();
             Original.TrySetResult();
+            ReadInfo.TrySetResult();
             Thumbnail.TrySetResult(null);
         }
     }
@@ -598,10 +615,24 @@ internal sealed class StalePreviewHarness : IDisposable
 
             if (control.PreviewFailure is { } failure) throw failure;
             // A real preview is smaller than the source: 1/4 of each side, so a zoom-detail original has pixels to add.
-            return new StaleFakeImage(owner.NewShown(request.Path, ShownStage.Preview), w / 4, h / 4, true, w, h);
+            // Unless the test held the header read: then the preview does not know the source size (original = its own size).
+            return control.HoldReadInfo
+                ? new StaleFakeImage(owner.NewShown(request.Path, ShownStage.Preview), w / 4, h / 4, true, w / 4, h / 4)
+                : new StaleFakeImage(owner.NewShown(request.Path, ShownStage.Preview), w / 4, h / 4, true, w, h);
         }
 
-        public ImageInfo ReadInfo(string path) => new(OriginalSize(owner.IndexOf(path)).Width, OriginalSize(owner.IndexOf(path)).Height);
+        public ImageInfo ReadInfo(string path)
+        {
+            var control = owner._controls[path];
+            if (control.HoldReadInfo)
+            {
+                control.ReadInfoStarted.TrySetResult();
+                Await(control.ReadInfo, path);
+            }
+
+            var (w, h) = OriginalSize(owner.IndexOf(path));
+            return new ImageInfo(w, h);
+        }
 
         private void Await(TaskCompletionSource gate, string path)
         {
@@ -701,6 +732,12 @@ internal sealed class StatGateFileSystem(IFileSystem inner) : IFileSystem
         {
             if (_held.TryGetValue(path, out var gate)) gate.Release.TrySetResult();
         }
+    }
+
+    /// <summary>How many times <paramref name="path"/> has been stat-ed through this file system.</summary>
+    public int StatCount(string path)
+    {
+        lock (_lock) return _calls.GetValueOrDefault(path);
     }
 
     public FileStat? GetFileStat(string path)

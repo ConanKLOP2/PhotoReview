@@ -422,4 +422,54 @@ public sealed class StalePreviewOverwriteTests
         Assert.DoesNotContain(harness.Events, e => e.Kind == UiEventKind.Status && e.Text!.Contains("broken", StringComparison.OrdinalIgnoreCase));
         await harness.AssertSettledOnAsync(4);
         Assert.Equal(PairFiles.Length, harness.Catalog.Count);
+    }
+
+    [Fact(DisplayName = "STALE: navigating away releases the previous image's zoom original AT ONCE (not when the next image appears)")]
+    public async Task NavigationStart_ReleasesThePreviousZoomOriginalImmediately()
+    {
+        using var harness = new StalePreviewHarness(ThreeFiles);
+        await harness.NavigateAsync(0);
+        await harness.ReleasePreviewAsync(0);
+        var pending = await harness.Ui.InvokeAsync(() =>
+        {
+            harness.Presenter.SetViewerZoom(2.0);
+            return harness.Presenter.ZoomDetail.PendingLoad;
+        });
+        await harness.OriginalStartedAsync(0);
+        harness.OpenOriginal(0);
+        await pending!.WaitAsync(StalePreviewHarness.Bound);
+        Assert.True(await harness.Ui.InvokeAsync(() => harness.Presenter.ZoomDetail.IsShowingOriginal));
+
+        await harness.NavigateAsync(1);            // the next image is still loading (its decode gate is closed)
+        var (held, showing, pendingLoad) = await harness.Ui.InvokeAsync(() => (harness.Presenter.ZoomDetail.HeldOriginal,
+            harness.Presenter.ZoomDetail.IsShowingOriginal, harness.Presenter.ZoomDetail.PendingLoad));
+
+        Assert.Null(held);
+        Assert.False(showing);
+        Assert.Null(pendingLoad);
+        await harness.ReleasePreviewAsync(1);
+        harness.AssertNoStaleOverwrite("zoom original released on navigation");
+    }
+
+    [Fact(DisplayName = "STALE: a superseded navigation that was waiting for the source size does not stat the file again nor touch the new image")]
+    public async Task HeaderReadFinishingLate_OfASupersededNavigation_DoesNotStatNorTouchAnything()
+    {
+        using var harness = new StalePreviewHarness(ThreeFiles);
+        harness.HoldHeaderRead(0);
+        await harness.NavigateAsync(0);
+        harness.OpenPreview(0);
+        await harness.ReadInfoStartedAsync(0);       // file 0 IS on screen; its source size is still being read
+        await harness.NavigateAsync(1);
+        await harness.ReleasePreviewAsync(1);
+        await harness.AssertSettledOnAsync(1);
+        var statsBefore = harness.StatGate.StatCount(harness.Paths[0]);
+        var eventsBefore = harness.Events.Count;
+
+        harness.OpenReadInfo(0);
+        await harness.SettleAsync();
+
+        harness.AssertNoStaleOverwrite("late header read");
+        Assert.Equal(eventsBefore, harness.Events.Count);
+        Assert.Equal(statsBefore, harness.StatGate.StatCount(harness.Paths[0])); // no refresh stat for the superseded navigation
+        await harness.AssertSettledOnAsync(1);
     }}
