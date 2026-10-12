@@ -100,7 +100,8 @@ public sealed class PerfCompareTests : IDisposable
         var r = PerfComparer.Compare(Result([Metric("a", Quiet)]), Result([Metric("a", Scale(Quiet, 1.5))], cpu: 75));
         Assert.Equal(PerfVerdict.Inconclusive, r.Overall);
         Assert.Equal(3, r.ExitCode);
-        Assert.Contains("busy", r.Metrics[0].Reason, StringComparison.Ordinal);
+        Assert.Contains("environment noise", r.Metrics[0].Reason, StringComparison.Ordinal);
+        Assert.Contains(r.ContextNotes, n => n.Contains("machine busy", StringComparison.Ordinal));
     }
 
     [Fact]

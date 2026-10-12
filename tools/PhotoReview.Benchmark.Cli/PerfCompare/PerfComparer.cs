@@ -204,7 +204,12 @@ internal static class PerfComparer
             reason = worse < -allowed ? "improved" : "within the threshold";
         }
 
-        var noise = new List<string>(contextNoise);
+        var noise = new List<string>();
+        if (contextNoise.Count > 0)
+        {
+            noise.Add("environment noise (see notes)");
+        }
+
         var relativeSpread = Math.Abs(bMed) > 0 ? Math.Max(sigmaB, sigmaC) / Math.Abs(bMed) : 0;
         if (relativeSpread > options.MaxCoefficientOfVariation)
         {
@@ -215,7 +220,7 @@ internal static class PerfComparer
         {
             // Không báo hồi quy giả khi nhiễu lớn: kết luận bị hạ xuống INCONCLUSIVE kèm lý do (một kết quả PASS vẫn là PASS).
             verdict = PerfVerdict.Inconclusive;
-            reason = "would be " + reason + " -- but " + string.Join("; ", noise);
+            reason = "would be: " + reason + " -- inconclusive because " + string.Join("; ", noise);
         }
 
         return new MetricComparison(b.Name, b.Unit, verdict, reason, bKept.Count, cKept.Count,

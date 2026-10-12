@@ -10,6 +10,7 @@ param(
     [switch]$TestReport,
     [switch]$Parallel,
     [switch]$Hidden,
+    [switch]$PerfGate,
     [Parameter(DontShow)]
     [scriptblock]$TestCommandInvoker
 )
@@ -24,6 +25,8 @@ param(
 #                                       # (a private, non-interactive desktop) so Category=UI real-WPF
 #                                       # windows/MessageBoxes never appear on your desktop. Combine with
 #                                       # -Parallel freely (each project gets its own private desktop name).
+# ./verify-all.ps1 -PerfGate           # OPTIONAL local perf gate: --startup-probe on the published exes vs
+#                                       # tools/perf-baselines/<COMPUTERNAME>.json (skipped when no baseline; off in CI)
 # ./verify-all.ps1 -Parallel           # Run each test project's xUnit gate concurrently (one process
 #                                       # per project) instead of one after another. Cuts local wall-clock
 #                                       # roughly in half (measured 170s -> 81s on the default filter across
@@ -392,6 +395,13 @@ Invoke-Gate 'Publish framework-dependent release' {
 }
 Invoke-Gate 'Verify framework-dependent release' {
     & (Join-Path $PSScriptRoot 'verify-release.ps1') -ReleaseDirectory $ReleaseDirectory
+}
+
+# OPTIONAL (off by default, never in CI): structured perf comparison against the machine baseline. See docs/TESTING.md.
+if ($PerfGate) {
+    Invoke-Gate 'Perf gate (local, vs tools/perf-baselines/<machine>.json)' {
+        & (Join-Path $PSScriptRoot 'diag\perf-gate.ps1') -ReleaseDirectory $ReleaseDirectory
+    }
 }
 
 if ($RequireSelfContained) {
