@@ -1,3 +1,4 @@
+using System.IO;
 using PhotoReview.Benchmark.Cli.ShellHost;
 
 namespace PhotoReview.Integration.Tests.ShellHost;

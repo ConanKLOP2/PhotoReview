@@ -86,8 +86,8 @@ internal static class ProbeTrace
         return fields;
     }
 
-    /// <summary>Rút các mốc; null khi thiếu mốc <c>appStartup</c> hoặc chưa có khung đầu.</summary>
-    public static TraceMetrics? Extract(IReadOnlyList<TraceRow> rows)
+    /// <summary>Rút các mốc; null khi thiếu mốc <c>appStartup</c> hoặc chưa có khung đầu. <paramref name="postedKeys"/>: UTC ticks lúc probe post phím điều hướng.</summary>
+    public static TraceMetrics? Extract(IReadOnlyList<TraceRow> rows, IReadOnlyList<long>? postedKeys = null)
     {
         var ordered = rows.Select((r, i) => (r, i)).OrderBy(x => x.r.UtcTicks).ThenBy(x => x.i).Select(x => x.r).ToArray();
         var marks = new Dictionary<string, double>(StringComparer.Ordinal);
@@ -122,32 +122,37 @@ internal static class ProbeTrace
         var keyToFrameCached = new List<double>();
         var ramHitNavs = ordered.Where(r => r.Event == "Lookup" && r.Text == "ramHit").Select(r => r.Nav).ToHashSet(StringComparer.Ordinal);
         var withoutFrame = 0;
-        for (var i = 0; i < ordered.Length; i++)
+
+        // Mốc phím: thời điểm PROBE đã post (đồng hồ UTC cùng máy; gồm cả thời gian chờ trong hàng đợi UI) khi có; nếu không thì
+        // dòng KeyInput của app cộng độ trễ nhập liệu nó tự báo (độ trễ này không đáng tin với thông điệp được post: WPF báo hàng giây).
+        var keys = new List<(long Utc, double Delay)>();
+        if (postedKeys is not null)
         {
-            var key = ordered[i];
-            if (key.Event != "KeyInput" || !NavigationKeys.Contains(key.Text, StringComparer.Ordinal))
+            keys.AddRange(postedKeys.Select(k => (k, 0.0)));
+        }
+        else
+        {
+            foreach (var row in ordered.Where(r => r.Event == "KeyInput" && NavigationKeys.Contains(r.Text, StringComparer.Ordinal)))
             {
-                continue;
+                _ = TryDouble(row.A, out var inputDelay);
+                keys.Add((row.UtcTicks, Math.Max(0, inputDelay)));
             }
+        }
 
-            TraceRow? frame = null;
-            for (var j = i + 1; j < ordered.Length && ordered[j].Event != "KeyInput"; j++)
-            {
-                if (ordered[j].Event == "RenderedFrame")
-                {
-                    frame = ordered[j];
-                    break;
-                }
-            }
-
+        keys.Sort((a, b) => a.Utc.CompareTo(b.Utc));
+        var keyUtcs = keys.Select(k => k.Utc).ToArray();
+        var frames = ordered.Where(r => r.Event == "RenderedFrame").ToArray();
+        for (var i = 0; i < keys.Count; i++)
+        {
+            var next = i + 1 < keys.Count ? keyUtcs[i + 1] : long.MaxValue;
+            var frame = frames.FirstOrDefault(f => f.UtcTicks >= keys[i].Utc && f.UtcTicks < next);
             if (frame is null)
             {
                 withoutFrame++;
                 continue;
             }
 
-            _ = TryDouble(key.A, out var inputDelay);
-            var latency = Math.Max(0, inputDelay) + ((frame.UtcTicks - key.UtcTicks) / (double)TimeSpan.TicksPerMillisecond);
+            var latency = keys[i].Delay + ((frame.UtcTicks - keys[i].Utc) / (double)TimeSpan.TicksPerMillisecond);
             keyToFrame.Add(latency);
             if (frame.Nav.Length > 0 && ramHitNavs.Contains(frame.Nav))
             {

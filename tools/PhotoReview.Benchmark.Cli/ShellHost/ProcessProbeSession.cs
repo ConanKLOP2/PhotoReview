@@ -40,6 +40,7 @@ internal sealed class ProcessProbeSession(string photoFolder, string runsRoot, i
         var note = "";
         var forcedKill = false;
         double peakMb = double.NaN;
+        var posted = new List<long>();
         try
         {
             process = Process.Start(psi) ?? throw new InvalidOperationException("Process.Start returned null");
@@ -61,6 +62,7 @@ internal sealed class ProcessProbeSession(string photoFolder, string runsRoot, i
                     for (var i = 0; i < keyCount && !process.HasExited; i++)
                     {
                         var vk = i % 2 == 0 ? VkRight : VkLeft;
+                        posted.Add(DateTime.UtcNow.Ticks);
                         PostMessage(hwnd, WmKeyDown, vk, MakeLParam(down: true));
                         Thread.Sleep(20);
                         PostMessage(hwnd, WmKeyUp, vk, MakeLParam(down: false));
@@ -107,7 +109,7 @@ internal sealed class ProcessProbeSession(string photoFolder, string runsRoot, i
         var csv = Directory.GetFiles(traceDir, "perf-*.csv").FirstOrDefault();
         if (csv is not null)
         {
-            metrics = ProbeTrace.Extract(ProbeTrace.Parse(ReadAllLinesShared(csv)));
+            metrics = ProbeTrace.Extract(ProbeTrace.Parse(ReadAllLinesShared(csv)), posted);
         }
 
         if (metrics is null)

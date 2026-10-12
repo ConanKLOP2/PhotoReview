@@ -74,6 +74,35 @@ public sealed class ProbeTraceAndRunnerTests
     }
 
     [Fact]
+    public void Extract_WithPostedKeys_MeasuresFromThePostTime_AndIgnoresTheAppReportedDelay()
+    {
+        // The app-reported KeyInput delay is bogus for a posted message (WPF reports seconds); the probe's own post times rule.
+        var lines = SampleTrace();
+        long[] posted = [Ticks(998), Ticks(1299), Ticks(1999)];
+        var metrics = ProbeTrace.Extract(ProbeTrace.Parse(lines), posted)!;
+        Assert.Equal(2, metrics.KeyToFrameMs.Count);
+        Assert.Equal(6.0, metrics.KeyToFrameMs[0], 3);   // 998 -> 1004
+        Assert.Equal(31.0, metrics.KeyToFrameMs[1], 3);  // 1299 -> 1330
+        Assert.Equal(1, metrics.KeysWithoutFrame);       // 1999 -> nothing
+        Assert.Single(metrics.KeyToFrameCachedMs);
+    }
+
+    [Fact]
+    public void Extract_PostedKeys_AFrameBelongsToTheNearestPrecedingKeyOnly()
+    {
+        // two keys 100 ms apart, one frame after the second: the first key has no frame of its own.
+        var lines = new[]
+        {
+            Row(0, "Startup", a: "10", text: "appStartup"), Row(5, "RenderedFrame", nav: "1", a: "1"),
+            Row(500, "RenderedFrame", nav: "2", a: "1"),
+        };
+        var metrics = ProbeTrace.Extract(ProbeTrace.Parse(lines), [Ticks(300), Ticks(400)])!;
+        Assert.Equal(1, metrics.KeysWithoutFrame);
+        Assert.Single(metrics.KeyToFrameMs);
+        Assert.Equal(100.0, metrics.KeyToFrameMs[0], 3);
+    }
+
+    [Fact]
     public void Extract_CachedKeyToFrame_OnlyCountsRamHitNavigations()
     {
         var metrics = ProbeTrace.Extract(ProbeTrace.Parse(SampleTrace()))!;
