@@ -348,6 +348,10 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
 
         IsClosingOrClosed = true;
         SavePlacement();
+        // Giải phóng đồ hoạ KHI HWND CÒN SỐNG: một swap chain flip-model có Present còn xếp hàng mà bị giải phóng sau khi cửa sổ đã
+        // huỷ thì lệnh Flush lúc trả thiết bị có thể kẹt vĩnh viễn (runner CI WARP + DWM: UI thread kẹt trong ClearStateAndFlush,
+        // mọi D3D11CreateDevice sau đó cùng kẹt). Khi cửa sổ còn sống DWM tiêu thụ hàng đợi và Flush về ngay (như ở Resize).
+        ReleaseRenderer();
     }
 
     private async Task CloseWhenFileActionDoneAsync()
@@ -392,6 +396,17 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
     }
 
     /// <summary>
+    /// Trả đồ hoạ theo thứ tự ngược với khởi tạo: lớp trình bày (giữ tham chiếu bitmap GPU; WP-21) -> cache ảnh GPU (trả bitmap
+    /// qua thiết bị) -> bề mặt/thiết bị D3D. Idempotent; gọi khi bắt đầu đóng (HWND còn sống) và lại từ <see cref="Dispose"/>.
+    /// </summary>
+    private void ReleaseRenderer()
+    {
+        DisposeViewing();
+        Interlocked.Exchange(ref _cache, null)?.Dispose();
+        Interlocked.Exchange(ref _surface, null)?.Dispose();
+    }
+
+    /// <summary>
     /// Giải phóng theo thứ tự ngược với khởi tạo: ngắt sự kiện (không còn gì chạm view model/cửa sổ) -> cache ảnh GPU (trả bitmap
     /// qua thiết bị) -> bề mặt/thiết bị D3D -> viewport -> cửa sổ native. Idempotent.
     /// </summary>
@@ -415,9 +430,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         _cloak.Stop();
         _image = null;
         DisposeWindowing(); // WP-25
-        DisposeViewing(); // WP-21: trước cache (lớp ảnh giữ tham chiếu bitmap GPU)
-        Interlocked.Exchange(ref _cache, null)?.Dispose();
-        Interlocked.Exchange(ref _surface, null)?.Dispose();
+        ReleaseRenderer();
         _viewport.Dispose();
         _window.Dispose();
     }
