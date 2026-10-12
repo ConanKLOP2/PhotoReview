@@ -241,12 +241,12 @@ public sealed class ExplorerOrderServiceSeamTests
     {
         var active = 0;
         var maxActive = 0;
-        var threads = new HashSet<int>();
+        var threads = new HashSet<Thread>(); // Thread objects: a recycled ManagedThreadId would hide a second pump thread
         var apartments = new HashSet<ApartmentState>();
         using var service = Create((folder, _, _, _) =>
         {
             var now = Interlocked.Increment(ref active);
-            lock (threads) { maxActive = Math.Max(maxActive, now); threads.Add(Environment.CurrentManagedThreadId); apartments.Add(Thread.CurrentThread.GetApartmentState()); }
+            lock (threads) { maxActive = Math.Max(maxActive, now); threads.Add(Thread.CurrentThread); apartments.Add(Thread.CurrentThread.GetApartmentState()); }
             Thread.SpinWait(2000);
             Interlocked.Decrement(ref active);
             return Available(folder, "a.jpg");

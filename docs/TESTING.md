@@ -52,6 +52,16 @@ G-PIX (WP-28): `tests/Fixtures/golden/pixel/*.png` are the last frame of the sam
 
 Never assert a wall-clock budget in a gated test: a full parallel run on a shared runner makes it flake (`GroupEntries` 10k paths: 4-7 ms alone, 27-65 ms inside the full `Core.Tests` run). Guard hot paths with a deterministic proxy instead (`GC.GetAllocatedBytesForCurrentThread()` bound, operation counts) and keep stopwatch numbers in a `Category=Manual` report test (example: `CaptureGroupBuilderTests`).
 
+## Thread identity and timing under load
+
+Three CI flakes in 24 hours (2026-10-12) shared one cause: a test trusted a thread id or the clock of a loaded runner. Rules (audit table: [NOWPF-THREADAUDIT-TESTS](refactoring/decisions/NOWPF-THREADAUDIT-TESTS.md)):
+
+- **Never compare the `ManagedThreadId` of a thread that has died** with a later thread: ids are recycled (a dead decode thread's id was handed to a thread-pool thread). Record `Thread.CurrentThread` and use `Assert.Same`/`Assert.NotSame`.
+- **A thread-pool thread is not a "caller"** when the assertion is "the work did not run on the caller": after the first `await`/`yield` it goes back to the pool and may run the work itself (same id, a false failure). Make the caller a `new Thread` that blocks on `.GetAwaiter().GetResult()` (like an awaiting UI thread) and compare `Thread` objects. A dedicated, live UI/dispatcher thread of the test is safe to compare by id.
+- **No real-time windows**: do not open a keep-alive/deadline window with the wall clock and expect N events inside it. Inject a clock seam and advance it from the test, then wait on observed state (`SpinWait.SpinUntil(..., Bound)`). A rate check may only be an upper bound against elapsed time (load makes the code slower, never faster); liveness is a bounded wait.
+- The `TEST-THREADID` architecture rule rejects a new `Assert.Equal/NotEqual` on a thread id (`...ThreadId`, `callerThread`, `workerThread`, ...); audited-safe uses sit in `test-quality-allowlist.txt`.
+- To prove a fix, repeat the test >= 300 times in one process while ~12 busy threads occupy the cores, before and after.
+
 ## RAW corpus tests (manual CI)
 
 The regular CI never fetches the RAW sample corpus (`tools/fetch-raw-samples.ps1`, 23 CC0 files, ~590 MB), so tests that need a real camera file return early there. Run the manual workflow **RAW corpus tests (manual)** (`.github/workflows/raw-corpus.yml`, Actions > Run workflow; the file must exist on the default branch) to fetch the corpus and run `Imaging.Tests` (including `Category=Native`) with `PHOTOREVIEW_RAW_CORPUS_STRICT=1` and `PHOTOREVIEW_LIBRAW_STRICT_CORPUS=1`: a missing sample or `libraw.dll` then fails the test instead of skipping it. Locally, set the same variables after `fetch-raw-samples.ps1` to reproduce.
