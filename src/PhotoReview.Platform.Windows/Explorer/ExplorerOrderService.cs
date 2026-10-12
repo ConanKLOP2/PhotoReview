@@ -1,8 +1,8 @@
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using PhotoReview.Platform.Windows.Shell;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 
@@ -95,30 +95,13 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     private int _disposed;
 
     /// <summary>
-    /// How the query reaches the Explorer windows: <see cref="IsAvailable"/> says whether the shell automation object exists at
-    /// all, <see cref="OpenWindows"/> creates it and returns it with the enumerable <c>Windows()</c> collection (both are released
-    /// by the caller). The default talks to <c>Shell.Application</c>; tests hand in fake window objects.
+    /// How the query reaches the Explorer windows: <see cref="IsAvailable"/> says whether the shell automation exists at all,
+    /// <see cref="Open"/> creates the window collection (released by the caller). The default is <c>CLSID_ShellWindows</c> through
+    /// typed vtable slots (WP-33: no <c>Shell.Application</c>, <c>dynamic</c> or reflection); tests hand in fake windows.
     /// </summary>
-    internal sealed record ShellAccess(Func<bool> IsAvailable, Func<(object? Shell, object Windows)> OpenWindows)
+    internal sealed record ShellAccess(Func<bool> IsAvailable, Func<IExplorerWindowSource> Open)
     {
-        public static readonly ShellAccess Real = new(
-            () => Type.GetTypeFromProgID("Shell.Application") is not null,
-            () =>
-            {
-                var shellType = Type.GetTypeFromProgID("Shell.Application")!;
-                object? shell = null;
-                try
-                {
-                    shell = Activator.CreateInstance(shellType);
-                    var windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null, CultureInfo.InvariantCulture);
-                    return (shell, windows!);
-                }
-                catch
-                {
-                    Release(shell);
-                    throw;
-                }
-            });
+        public static readonly ShellAccess Real = new(() => true, ShellWindowsSource.Open);
     }
 
     public ExplorerOrderService(ILog? log = null) : this(log, null) { }
@@ -331,19 +314,23 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         // or a stale/superseded query keeps occupying that thread and delays whatever
         // query was actually issued for it next (e.g. a fast folder switch).
         if (cancellationToken.IsCancellationRequested) return Unavailable(folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
-        object? shell = null, windows = null;
+        IExplorerWindowSource? source = null;
         try
         {
-            (shell, windows) = _shell.OpenWindows();
-            return ExplorerWindowSelector.Select(folder, ComEnumeration.Enumerate(windows!),
-                window => (string?)((dynamic)window).LocationURL,
+            try { source = _shell.Open(); }
+            catch (COMException ex) when (ex.HResult == ExplorerComInterop.ClassNotRegistered)
+            {
+                return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.ShellUnavailable);
+            }
+            return ExplorerWindowSelector.Select(folder, source.Windows,
+                window => window.LocationUrl,
                 window => TryReadNativeView(window, folder, progress, batchSize, cancellationToken),
-                Release, _log, queryTimer, cancellationToken);
+                window => window.Dispose(), _log, queryTimer, cancellationToken);
         }
-        finally { Release(windows); Release(shell); }
+        finally { source?.Dispose(); }
     }
 
-    internal ExplorerViewSnapshot TryReadNativeView(object window, string folder,
+    internal ExplorerViewSnapshot TryReadNativeView(IExplorerWindow window, string folder,
         IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
     {
         var timer = Stopwatch.StartNew();
@@ -352,7 +339,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         IntPtr windowPtr = IntPtr.Zero, servicePtr = IntPtr.Zero, browserPtr = IntPtr.Zero, shellViewPtr = IntPtr.Zero, folderViewPtr = IntPtr.Zero;
         try
         {
-            windowPtr = Marshal.GetIUnknownForObject(window);
+            windowPtr = window.AcquireUnknown();
             var serviceIid = ExplorerComInterop.IidServiceProvider;
             var providerResult = Marshal.QueryInterface(windowPtr, in serviceIid, out servicePtr);
             if (providerResult < 0 || servicePtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, "QueryInterface(IServiceProvider)", $"0x{providerResult:X8}"));
@@ -388,13 +375,13 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 
             var paths = new List<string>(count);
             var comCalls = 1;
-            var getItem = ExplorerNativeVtable.ResolveGetItem(folderViewPtr);
+            var getItemFunction = ExplorerNativeVtable.ResolveGetItem(folderViewPtr);
             // COM does not guarantee every IShellItem from IFolderView2.GetItem shares the
             // same implementation/vtable (in practice they usually do, within one folder
             // view), so a delegate resolved from one item's vtable slot cannot be safely
             // reused with another item's `this` pointer. Cache per distinct vtable address
             // instead of per call: the common case (one shared vtable) still resolves once.
-            var getDisplayNameByVtable = new Dictionary<IntPtr, ExplorerNativeVtable.GetDisplayNameDelegate>();
+            var getDisplayNameByVtable = new Dictionary<IntPtr, IntPtr>();
             for (var index = 0; index < count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -403,14 +390,14 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                 {
                     var itemIid = ExplorerComInterop.IidShellItem;
                     getItemCalls++;
-                    var itemResult = getItem(folderViewPtr, index, ref itemIid, out itemPtr);
+                    var itemResult = ExplorerNativeVtable.GetItem(getItemFunction, folderViewPtr, index, ref itemIid, out itemPtr);
                     comCalls++;
                     if (itemResult < 0 || itemPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, $"IFolderView2.GetItem({index})", $"0x{itemResult:X8}"));
                     var itemVtable = Marshal.ReadIntPtr(itemPtr);
                     if (!getDisplayNameByVtable.TryGetValue(itemVtable, out var getDisplayName))
                         getDisplayNameByVtable[itemVtable] = getDisplayName = ExplorerNativeVtable.ResolveGetDisplayName(itemPtr);
                     displayNameCalls++;
-                    var nameResult = getDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
+                    var nameResult = ExplorerNativeVtable.GetDisplayName(getDisplayName, itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
                     comCalls++;
                     if (nameResult < 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, $"IShellItem.GetDisplayName({index})", $"0x{nameResult:X8}"));
                     try { paths.Add(Marshal.PtrToStringUni(namePtr) ?? string.Empty); }
@@ -532,5 +519,4 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 
     internal static ExplorerViewSnapshot Unavailable(string folder, ExplorerOrderStatus status, string reason)
         => new(folder, [], [], ExplorerGroupState.Unknown, status, reason, DateTime.UtcNow);
-    internal static void Release(object? value) { if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value); }
 }

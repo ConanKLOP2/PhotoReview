@@ -115,6 +115,20 @@ public sealed class ExplorerWindowSelectorTests
         Assert.Equal(1, good.Released);
     }
 
+    [Fact(DisplayName = "A window without IWebBrowserApp (E_NOINTERFACE -> InvalidCastException) is skipped quietly, like a closing one")]
+    public void WindowWithoutTheBrowserInterfaceIsSkippedWithoutALogEntry()
+    {
+        var log = new ListLog();
+        var notABrowser = new FakeWindow(null, locationError: new InvalidCastException("E_NOINTERFACE"));
+        var good = Showing("file:///C:/photos/", () => Available("a.jpg"));
+
+        var snapshot = Select([notABrowser, good], log: log);
+
+        Assert.Equal(ExplorerOrderStatus.Available, snapshot.Status);
+        Assert.Empty(log.Errors);
+        Assert.Equal(1, notABrowser.Released);
+    }
+
     [Fact]
     public void UnexpectedLocationErrorIsLoggedAndSkipped()
     {

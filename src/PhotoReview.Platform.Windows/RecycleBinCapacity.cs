@@ -131,7 +131,7 @@ internal static class RecycleBinCapacityGuard
 /// throw, which <see cref="RecycleBinCapacityGuard.Evaluate"/> turns into <see cref="RecycleCapacityVerdict.Unknown"/>.
 /// No file data is read.
 /// </summary>
-internal sealed class WindowsRecycleBinSettingsSource : IRecycleBinSettingsSource
+internal sealed partial class WindowsRecycleBinSettingsSource : IRecycleBinSettingsSource
 {
     public static readonly WindowsRecycleBinSettingsSource Instance = new();
 
@@ -233,15 +233,26 @@ internal sealed class WindowsRecycleBinSettingsSource : IRecycleBinSettingsSourc
         return key?.GetValue(name);
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetVolumePathNameW", SetLastError = true, ExactSpelling = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetVolumePathName(string fileName, [Out] char[] volumePathName, int bufferLength);
+    // WP-33 / L-AOT: source-generated P/Invoke (same kernel32 entry points as the former DllImport declarations).
+    private static unsafe bool GetVolumePathName(string fileName, char[] volumePathName, int bufferLength)
+    {
+        fixed (char* buffer = volumePathName) return GetVolumePathNameNative(fileName, buffer, bufferLength);
+    }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetVolumeNameForVolumeMountPointW", SetLastError = true, ExactSpelling = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetVolumeNameForVolumeMountPoint(string volumeMountPoint, [Out] char[] volumeName, int bufferLength);
+    private static unsafe bool GetVolumeNameForVolumeMountPoint(string volumeMountPoint, char[] volumeName, int bufferLength)
+    {
+        fixed (char* buffer = volumeName) return GetVolumeNameForVolumeMountPointNative(volumeMountPoint, buffer, bufferLength);
+    }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetDiskFreeSpaceExW", SetLastError = true, ExactSpelling = true)]
+    [LibraryImport("kernel32.dll", EntryPoint = "GetVolumePathNameW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetDiskFreeSpaceEx(string directoryName, out ulong freeBytesAvailable, out ulong totalNumberOfBytes, out ulong totalNumberOfFreeBytes);
+    private static unsafe partial bool GetVolumePathNameNative(string fileName, char* volumePathName, int bufferLength);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetVolumeNameForVolumeMountPointW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static unsafe partial bool GetVolumeNameForVolumeMountPointNative(string volumeMountPoint, char* volumeName, int bufferLength);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetDiskFreeSpaceExW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetDiskFreeSpaceEx(string directoryName, out ulong freeBytesAvailable, out ulong totalNumberOfBytes, out ulong totalNumberOfFreeBytes);
 }

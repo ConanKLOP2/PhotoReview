@@ -95,13 +95,12 @@ public sealed class WindowsRecycleBinCandidateTests
         Assert.True(RecycleCandidateSelector.IsMatch(new RecycleCandidate(@"C:\", "same", 42, timestamp), @"C:\same.jpg", 42, timestamp));
     }
 
-    [Fact(DisplayName = "A late-bound property failure on one bin item skips that item; unrelated failures still abort")]
-    public void PerItemFailure_IncludesRuntimeBinderButNotUnrelatedErrors()
+    [Fact(DisplayName = "A COM, cast or format failure on one bin item skips that item; unrelated failures still abort")]
+    public void PerItemFailure_IncludesComCastAndFormatButNotUnrelatedErrors()
     {
         Assert.True(RecycleItemFailure.IsPerItem(System.Runtime.InteropServices.Marshal.GetExceptionForHR(unchecked((int)0x80004005))!));
         Assert.True(RecycleItemFailure.IsPerItem(new InvalidCastException()));
         Assert.True(RecycleItemFailure.IsPerItem(new FormatException()));
-        Assert.True(RecycleItemFailure.IsPerItem(new Microsoft.CSharp.RuntimeBinder.RuntimeBinderException("no member")));
         Assert.False(RecycleItemFailure.IsPerItem(new InvalidOperationException()));
         Assert.False(RecycleItemFailure.IsPerItem(new ArgumentNullException("x")));
     }

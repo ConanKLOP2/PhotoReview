@@ -394,8 +394,13 @@ public sealed class ExplorerNativeViewTests : IDisposable
     }
 
     [ComVisible(true)]
-    public sealed class FakeExplorerWindow : IFakeServiceProvider
+    public sealed class FakeExplorerWindow : IFakeServiceProvider, IExplorerWindow
     {
+        public int Disposed { get; private set; }
+        string? IExplorerWindow.LocationUrl => LocationURL;
+        IntPtr IExplorerWindow.AcquireUnknown() => Marshal.GetIUnknownForObject(this);
+        void IDisposable.Dispose() => Disposed++;
+
         internal Func<IntPtr>? Browser { get; set; }
         internal int ServiceHr { get; set; }
         public string LocationURL { get; set; } = string.Empty;
@@ -419,6 +424,21 @@ public sealed class ExplorerNativeViewTests : IDisposable
         var view = new View(_root, MakeFiles(fileNames));
         _disposables.Add(view);
         return view;
+    }
+
+    /// <summary>A window that does not answer IServiceProvider: a plain managed object behind a COM callable wrapper.</summary>
+    private sealed class PlainWindow : IExplorerWindow
+    {
+        public string? LocationUrl => null;
+        public IntPtr AcquireUnknown() => Marshal.GetIUnknownForObject(new object());
+        public void Dispose() { }
+    }
+
+    private sealed class ListSource(params IExplorerWindow[] windows) : IExplorerWindowSource
+    {
+        public int Disposed { get; private set; }
+        public IEnumerable<IExplorerWindow> Windows => windows;
+        public void Dispose() => Disposed++;
     }
 
     private static FakeExplorerWindow WindowFor(View view, string? location = null)
@@ -615,7 +635,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
     [Fact]
     public void Window_WithoutIServiceProvider_IsNativeViewUnavailable()
     {
-        var snapshot = _service.TryReadNativeView(new object(), _root, null, 16, CancellationToken.None);
+        var snapshot = _service.TryReadNativeView(new PlainWindow(), _root, null, 16, CancellationToken.None);
 
         Assert.Equal(ExplorerOrderStatus.NativeViewUnavailable, snapshot.Status);
         Assert.StartsWith(ExplorerReason.ComCallFailed + "|QueryInterface(IServiceProvider)|0x80004002", snapshot.Reason, StringComparison.Ordinal);
@@ -772,7 +792,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
         var other = NewView("x.jpg");
         var unrelated = WindowFor(other, "file:///Z:/nowhere/");
         var matching = WindowFor(view);
-        var service = ServiceWith(new(() => true, () => (null, new List<object> { unrelated, matching })));
+        var service = ServiceWith(new(() => true, () => new ListSource(unrelated, matching)));
 
         var snapshot = await service.TryGetSnapshotAsync(_root, TimeSpan.FromSeconds(30), CancellationToken.None);
 
@@ -787,7 +807,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
     public async Task Query_NoWindowShowsTheFolder_IsNoMatchingWindow()
     {
         var view = NewView("a.jpg");
-        var service = ServiceWith(new(() => true, () => (null, new List<object> { WindowFor(view, "file:///Z:/nowhere/") })));
+        var service = ServiceWith(new(() => true, () => new ListSource(WindowFor(view, "file:///Z:/nowhere/"))));
 
         var snapshot = await service.TryGetSnapshotAsync(_root, TimeSpan.FromSeconds(30), CancellationToken.None);
 
@@ -799,7 +819,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
     public async Task Query_ShellAutomationMissing_IsNativeViewUnavailable()
     {
         var opened = false;
-        var service = ServiceWith(new(() => false, () => { opened = true; return (null, new List<object>()); }));
+        var service = ServiceWith(new(() => false, () => { opened = true; return new ListSource(); }));
 
         var snapshot = await service.TryGetSnapshotAsync(_root, TimeSpan.FromSeconds(30), CancellationToken.None);
 
@@ -814,7 +834,7 @@ public sealed class ExplorerNativeViewTests : IDisposable
         using var cts = new CancellationTokenSource();
         var opened = false;
         // The caller gives up after the pump thread started the query but before it reached the shell.
-        var service = ServiceWith(new(() => { cts.Cancel(); return true; }, () => { opened = true; return (null, new List<object>()); }));
+        var service = ServiceWith(new(() => { cts.Cancel(); return true; }, () => { opened = true; return new ListSource(); }));
 
         var snapshot = await service.TryGetSnapshotAsync(_root, TimeSpan.FromSeconds(30), cts.Token);
 
@@ -845,15 +865,5 @@ public sealed class ExplorerNativeViewTests : IDisposable
         Assert.True(task.IsFaulted);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => task);
         pump.Dispose(); // idempotent
-    }
-
-    [Fact]
-    public void Release_NullAndManagedObjects_AreNoOps()
-    {
-        ExplorerOrderService.Release(null);
-        ExplorerOrderService.Release(new object()); // not a COM object: left to the GC
-        ExplorerOrderService.Release(new List<int>());
-
-        Assert.Equal(ExplorerOrderStatus.Canceled, ExplorerOrderService.Unavailable(_root, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled).Status);
     }
 }
