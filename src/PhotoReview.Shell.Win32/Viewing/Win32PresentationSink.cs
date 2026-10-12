@@ -26,6 +26,7 @@ internal sealed class Win32PresentationSink : IPresentationSink
     private readonly IUiDispatcher? _dispatcher;
     private readonly ReviewMetrics? _metrics;
     private int _crossThreadLogged;
+    private int _queued; // updates posted to the dispatcher that have not run yet (FIFO guard)
 
     internal Win32PresentationSink(ShellPresentationHub hub, MainViewModelSinkCallbacks callbacks, IUiDispatcher? dispatcher = null,
         ReviewMetrics? metrics = null)
@@ -56,24 +57,43 @@ internal sealed class Win32PresentationSink : IPresentationSink
 
     private void InvokeUi(Action action)
     {
-        if (_dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+        if (_dispatcher is { } dispatcher)
         {
-            _metrics?.RecordCrossThreadPresent();
-            if (AppLog.Enabled && Interlocked.Exchange(ref _crossThreadLogged, 1) == 0)
+            var onUiThread = dispatcher.CheckAccess();
+            // An update from the UI thread must not overtake an earlier cross-thread one that is still queued: it would run first and
+            // the older image / status would then land on top of the newer one. While anything is queued, everything is queued.
+            if (!onUiThread || Volatile.Read(ref _queued) > 0)
             {
-                AppLog.Warn("Win32PresentationSink: update arrived off the UI thread (managed thread "
-                    + $"{Environment.CurrentManagedThreadId}); marshalled to the UI dispatcher. ADR 0005 expects 0.");
-            }
+                if (!onUiThread)
+                {
+                    _metrics?.RecordCrossThreadPresent();
+                    if (AppLog.Enabled && Interlocked.Exchange(ref _crossThreadLogged, 1) == 0)
+                    {
+                        AppLog.Warn("Win32PresentationSink: update arrived off the UI thread (managed thread "
+                            + $"{Environment.CurrentManagedThreadId}); marshalled to the UI dispatcher. ADR 0005 expects 0.");
+                    }
+                }
 
-            // Không chặn thread gọi (ADR 0005: không block trên Task); thứ tự giữ nguyên vì dispatcher chạy theo FIFO.
-            dispatcher.Post(action);
-            return;
+                // Kh�ng ch?n thread g?i (ADR 0005: kh�ng block tr�n Task); th? t? gi? nguy�n v� dispatcher ch?y theo FIFO.
+                Interlocked.Increment(ref _queued);
+                dispatcher.Post(() =>
+                {
+                    try
+                    {
+                        action();
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _queued);
+                    }
+                });
+                return;
+            }
         }
 
         action();
     }
 }
-
 /// <summary>C-16: <see cref="IPresentationSinkFactory"/> của shell Win32 (đăng ký bởi <c>AddShellViewing</c>).</summary>
 internal sealed class Win32PresentationSinkFactory(ShellPresentationHub hub, IUiDispatcher? dispatcher = null, ReviewMetrics? metrics = null)
     : IPresentationSinkFactory
