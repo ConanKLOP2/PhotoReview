@@ -15,7 +15,12 @@
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- perf(startup): biên dịch trước (R2R) mã của exe và gói khi publish, như bản WPF (ảnh đầu không bị JIT chặn). Chỉ publish. -->
-    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(ShellAot)' != 'true'">true</PublishReadyToRun>
+    <!-- WP-32 spike S1: `-p:ShellAot=true` publishes Native AOT (PublishAot is set here, not on the command line, so it does not
+         flow to the netstandard analyzer projects, which NETSDK1207 rejects). -->
+    <PublishAot Condition="'$(ShellAot)' == 'true'">true</PublishAot>
+    <!-- Without this the AOT/trim feature switch is false: PhotoReviewPerf events are no-ops and PHOTOREVIEW_PERF_TRACE writes an empty CSV. -->
+    <EventSourceSupport Condition="'$(ShellAot)' == 'true'">true</EventSourceSupport>
   </PropertyGroup>
 
   <ItemGroup>
