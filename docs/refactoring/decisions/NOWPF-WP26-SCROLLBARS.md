@@ -70,11 +70,38 @@ Không test nào dựa vào thời gian thật: nhịp lặp/độ trễ do đ�
 
 ## 4. Đột biến
 
-MUTATION_PLACEHOLDER
+35 đột biến thủ công (mỗi cái: sửa một chỗ trong `Shell.Win32` -> build -> chạy `ScrollBar|Viewport|Input` của Shell.Tests, riêng E01/E02 chạy
+`ShellScrollBarEndToEnd` trên desktop ẩn), **35/35 bị diệt**:
+
+- Hình học (13): mẫu số kích thước con trượt, vị trí theo trọn rãnh thay vì quãng đi được, sàn `Max` -> `Min`, bỏ kẹp trên, bỏ kẹp dưới,
+  thanh hiện khi ảnh vừa khung, rãnh trước/sau đảo nhau, lề `Track` lẫn trục, ô góc khi chỉ một thanh, hit-test con trượt bằng cả thanh,
+  biên phải đóng, con trượt luôn hiện, chiều thanh dọc đảo.
+- Điều khiển/vẽ (20): không capture khi nhấn con trượt, không nhả capture, DPI nhân thay vì chia, màu pressed = hover, hover khi đang giữ rãnh,
+  ComparePanel không che, trang nửa vùng nhìn, lần lặp đầu chờ khoảng lặp thay vì độ trễ, nhấn lề thanh lọt xuống ảnh, nhấn thanh không
+  dừng đà kinetic, bỏ điểm nắm (con trượt nhảy tới con trỏ), kéo đọc sai trục, hover không xoá khi rời cửa sổ, nhả nút không bị nuốt,
+  lặp không dừng khi con trượt tới con trỏ, xin WM_MOUSELEAVE mỗi lần di chuyển, dải compare không cắt clip, trang đi sai hướng, màu hover
+  lệch #6A6A6A, không gỡ đồng hồ khung sau khi nhả.
+- Tích hợp (2): đăng ký thanh cuộn SAU `RegisterInput` (ảnh nuốt nhấn trên thanh; e2e đỏ ở "AndAPressOnTheBarNeverPansTheImage"), bỏ
+  `DrawScrollBars` khỏi khung (e2e đỏ nhờ `DrawnFrames`).
+- Lần chạy đầu của script đột biến cho ba cái SỐNG SÓT giả (C13/C14/C20) và hai cái không build (C15/C16): do lỗi của chính script
+  (toán tử `+` đứng sau dấu phẩy làm hỏng mảng đột biến) và vì đột biến làm trường không còn được đọc (CS0414)/mã không tới được (CS0162).
+  Sửa script/đột biến rồi chạy lại toàn bộ: 35/35 đỏ. Không có đột biến tương đương.
+- Không phát hiện lỗi thật trong mã nguồn bằng đột biến; lỗi thật duy nhất trong gói là kiểm thử: `ScrollBarWpfParityTests` ban đầu tạo
+  `System.Windows.Application` ở một luồng STA riêng khiến 4 test cầu cửa sổ phụ (WP-19b) trong cùng process đỏ ("different thread owns it");
+  nay nạp XAML thật bằng `XamlReader` từ bản sao file nguồn, không tạo Application.
 
 ## 5. Số đo
 
-PERF_PLACEHOLDER
+Chi tiết: [perf/2026-10-12-wp26-scrollbars.md](../perf/2026-10-12-wp26-scrollbars.md). Máy dev, Release:
+
+| Việc | Chi phí |
+|---|---|
+| Hit-test một điểm (tính hình học + hit) | ~2,2 us |
+| Ghi lệnh vẽ thanh cuộn (không D2D) | ~2,7 us/khung |
+| `WM_MOUSEMOVE` khi kéo (hình học + `ScrollTo` + layout, đồng bộ) | ~3,6 us (cửa sổ giả); trên HWND thật p50 0,044 / p95 0,063 ms |
+| Vẽ thật WARP 1200x800 (gồm đọc lại pixel) | ~6,5 ms/khung (chủ yếu là đọc lại; 3 `Fill*` không đáng kể) |
+
+Thanh cuộn không thêm gì vào đường nóng của khung ngoài 3-4 lệnh tô khi có thanh; khi ảnh vừa khung (Fit) hàm vẽ thoát ngay.
 
 ## 6. Việc còn lại / bàn giao
 

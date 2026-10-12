@@ -234,6 +234,38 @@ public sealed partial class ShellScrollBarEndToEndTests
         StopAndAssertClean(run);
     }
 
+    [Fact]
+    public void ThumbDragLatency_IsMeasuredAtTheHandler_WhichAppliesTheOffsetSynchronously()
+    {
+        using var run = StartWithBigImage("sb-latency");
+        var main = run.Main!;
+        ZoomToActualSize(run);
+        var (layout, dpi) = Snapshot(run);
+        var box = layout.Vertical;
+        var (px, py) = ToPixels(box.Thumb.X + 4, box.Thumb.Y + (box.Thumb.Height / 2), dpi);
+        var travelPixels = Math.Max(2, (int)(box.Travel * dpi) - 2);
+
+        Send(run, WindowMessages.WmLButtonDown, MkLButton, px, py);
+        var samples = new List<double>();
+        for (var i = 0; i < 200; i++)
+        {
+            var target = py + (int)((i % 2 == 0 ? 1 : 0.2) * travelPixels / 2);
+            var start = System.Diagnostics.Stopwatch.GetTimestamp();
+            Send(run, WindowMessages.WmMouseMove, MkLButton, px, target);
+            samples.Add((System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+        }
+
+        Send(run, WindowMessages.WmLButtonUp, 0, px, py);
+        samples.Sort();
+        var p50 = samples[samples.Count / 2];
+        var p95 = samples[(int)(samples.Count * 0.95)];
+        var max = samples[^1];
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "pr-wp26-drag-latency.txt"),
+            $"WM_MOUSEMOVE khi keo con truot (SendMessage -> offset da ap): p50 {p50:F3} ms, p95 {p95:F3} ms, max {max:F3} ms ({samples.Count} mau)");
+        Assert.True(p95 < 50, $"p95 {p95:F2} ms");
+        StopAndAssertClean(run);
+    }
+
     [System.Runtime.InteropServices.LibraryImport("user32.dll", EntryPoint = "ClientToScreen")]
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
     private static partial bool ClientToScreen(nint hwnd, ref ScreenPoint point);
