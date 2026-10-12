@@ -33,6 +33,13 @@ internal static class PixelGoldenRecorder
 
     internal static async Task<PixelFrame> RenderAsync(GoldenWpfView view, PixelGoldenCase c)
     {
+        await PrepareAsync(view, c);
+        return Capture(view, c);
+    }
+
+    /// <summary>Everything of <see cref="RenderAsync"/> except the capture (the compare recorder lays its panel over this state).</summary>
+    internal static async Task PrepareAsync(GoldenWpfView view, PixelGoldenCase c)
+    {
         view.ApplySettings(c.LinearScaling ? "{\"scalingQuality\":\"Linear\"}" : "{}");
         view.SetClient(c.ClientWidth, c.ClientHeight);
         view.SetDpi(c.Dpi);
@@ -59,12 +66,12 @@ internal static class PixelGoldenRecorder
         }
 
         ArrangeHud(view, c);
-        return Capture(view, c);
     }
 
-    private static BitmapSource CreateBitmap(PixelGoldenCase c)
+    internal static BitmapSource CreateBitmap(PixelGoldenCase c)
     {
-        var scene = PixelGoldenScenes.Create(c.Scene, c.ImageWidth, c.ImageHeight);
+        // WP-28b: a RAW preview is a smaller bitmap than the declared size (ShownWidth/ShownHeight); the layout is the original's.
+        var scene = PixelGoldenScenes.Create(c.Scene, c.ShownWidth, c.ShownHeight);
         var raw = BitmapSource.Create(scene.Width, scene.Height, 96, 96, PixelFormats.Pbgra32, null, scene.Bgra, scene.Width * 4);
         raw.Freeze();
         if (c.ExifOrientation == 1)
@@ -129,7 +136,7 @@ internal static class PixelGoldenRecorder
         view.Relayout();
     }
 
-    private static PixelFrame Capture(GoldenWpfView view, PixelGoldenCase c)
+    internal static PixelFrame Capture(GoldenWpfView view, PixelGoldenCase c)
     {
         var root = (FrameworkElement)view.Window.Content;
         var width = c.PixelWidth;

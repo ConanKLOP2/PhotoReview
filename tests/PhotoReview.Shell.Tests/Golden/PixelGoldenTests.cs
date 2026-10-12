@@ -171,15 +171,22 @@ public sealed class PixelGoldenTests(ITestOutputHelper output)
     [Fact]
     public void GoldenFiles_AreExactlyTheCatalogCases_AndFitTheBudget()
     {
+        // WP-28b: the extension frames (compare, F11/DPI, RAW preview size) are listed by PixelGoldenExtCatalog; the base frames
+        // and the extension each keep their own 5 MB budget.
+        var extension = PixelGoldenExtCatalog.GoldenNames.ToHashSet(StringComparer.Ordinal);
         var expected = PixelGoldenCatalog.All.Select(c => c.Name)
             .Concat(PixelGoldenCatalog.All.Where(c => c.Hud).Select(c => PixelGoldenCatalog.WithoutHud(c).Name))
+            .Concat(extension)
             .Order(StringComparer.Ordinal).ToList();
         Assert.True(Directory.Exists(PixelGoldenFiles.Directory), "tests/Fixtures/golden/pixel is missing");
         var files = Directory.EnumerateFiles(PixelGoldenFiles.Directory, "*.png").ToList();
         var names = files.Select(f => Path.GetFileNameWithoutExtension(f)!).Order(StringComparer.Ordinal).ToList();
 
         Assert.Equal(expected, names);
-        Assert.True(files.Sum(f => new FileInfo(f).Length) <= 5L * 1024 * 1024, "G-PIX golden exceeds 5 MB");
+        Assert.True(files.Where(f => !extension.Contains(Path.GetFileNameWithoutExtension(f)!)).Sum(f => new FileInfo(f).Length)
+            <= 5L * 1024 * 1024, "G-PIX base golden exceeds 5 MB");
+        Assert.True(files.Where(f => extension.Contains(Path.GetFileNameWithoutExtension(f)!)).Sum(f => new FileInfo(f).Length)
+            <= 5L * 1024 * 1024, "G-PIX extension golden exceeds 5 MB");
     }
 
     [Fact]

@@ -65,6 +65,21 @@ public sealed record PixelGoldenCase(
 {
     public bool IsFit => ZoomPercent == 0;
 
+    /// <summary>
+    /// WP-28b: pixel width of the bitmap actually shown, when it is not the declared (original) size - a RAW's embedded preview
+    /// is shown first, stretched to the layout of the full picture. 0 = the bitmap has the declared size.
+    /// </summary>
+    public int BitmapWidth { get; init; }
+
+    /// <summary>See <see cref="BitmapWidth"/>.</summary>
+    public int BitmapHeight { get; init; }
+
+    /// <summary>Width of the bitmap the viewer shows (the scene is generated at this size).</summary>
+    public int ShownWidth => BitmapWidth > 0 ? BitmapWidth : ImageWidth;
+
+    /// <summary>Height of the bitmap the viewer shows.</summary>
+    public int ShownHeight => BitmapHeight > 0 ? BitmapHeight : ImageHeight;
+
     /// <summary>Upright (post-orientation) picture size, pixels.</summary>
     public int OrientedWidth => ExifOrientation is >= 5 and <= 8 ? ImageHeight : ImageWidth;
 
