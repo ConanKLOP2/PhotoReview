@@ -28,7 +28,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
     // ---- Undo ----------------------------------------------------------------------------------------------------------------
 
     /// <summary>The healthy part: the action ran and was registered for Ctrl+Z; only the undo itself is numbered.</summary>
-    private static async Task<FaultRig> AfterAction(bool group, FileOperationType operation)
+    internal static async Task<FaultRig> AfterAction(bool group, FileOperationType operation)
     {
         var rig = await (group ? GroupRig() : SingleRig());
         var destination = operation == FileOperationType.Move ? "sel" : null;
@@ -50,7 +50,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
         return rig;
     }
 
-    private static async Task Undo(FaultRig rig) => rig.Outcomes.Add(await rig.Undo.UndoLastAsync());
+    internal static async Task Undo(FaultRig rig) => rig.Outcomes.Add(await rig.Undo.UndoLastAsync());
 
     /// <summary>
     /// After a transient failure of an undo the in-memory undo stack must be truthful and the undo retryable: a single Move stays on the
@@ -94,7 +94,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
 
     // ---- Recovery retry --------------------------------------------------------------------------------------------------------
 
-    private static async Task<FaultRig> WithFailedSingle(FileOperationType type)
+    internal static async Task<FaultRig> WithFailedSingle(FileOperationType type)
     {
         var rig = await SingleRig();
         var stat = rig.Disk.GetFileStat(A)!;
@@ -116,7 +116,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
     public Task RetryCopy_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("RetryCopy", () => WithFailedSingle(FileOperationType.Copy), Retry);
 
     /// <summary>A group action that died after its first member: a.jpg already moved to sel (or already in the bin), the RAW and the XMP untouched.</summary>
-    private static async Task<FaultRig> WithHalfDoneGroup(FileOperationType type)
+    internal static async Task<FaultRig> WithHalfDoneGroup(FileOperationType type)
     {
         var rig = await GroupRig();
         var members = GroupNames.Select(name =>

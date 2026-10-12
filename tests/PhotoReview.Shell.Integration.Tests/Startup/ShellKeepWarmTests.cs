@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using PhotoReview.Shell.Rendering;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 using PhotoReview.Shell.Win32.Startup;
@@ -19,6 +20,20 @@ public sealed class ShellKeepWarmTests
     private const uint WmKeyDown = 0x0100;
     private const uint WmMouseMove = 0x0200;
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Đồng hồ tiêm được của chính sách giữ ấm + luồng nền (ShellStartupOptions.KeepWarmTimestamp): throttle 100 ms và cửa sổ giữ ấm
+    /// chỉ tiến khi test <see cref="AdvanceMs"/>, không phụ thuộc lịch luồng/tải của runner (trước đây: Pacing.PauseMs 900/250/300 ms
+    /// và hai tin nhắn liên tiếp có thể cách nhau &gt; ThrottleMs trên CI chậm => kích hoạt lần 2 ngoài ý muốn).
+    /// </summary>
+    private sealed class FakeClock
+    {
+        private long _ticks = Stopwatch.Frequency; // khác 0 để không trùng giá trị mặc định
+
+        public long Now() => Interlocked.Read(ref _ticks);
+
+        public void AdvanceMs(double milliseconds) => Interlocked.Add(ref _ticks, (long)(milliseconds * Stopwatch.Frequency / 1000.0));
+    }
 
     private sealed class FakeWork : IGpuKeepAliveWork
     {
@@ -57,11 +72,13 @@ public sealed class ShellKeepWarmTests
     [Fact]
     public void ActiveWindowInteraction_WarmsTheGpuThenStops_AndClosingReturnsTheDevice()
     {
+        var clock = new FakeClock();
         var work = new FakeWork();
         using var run = StartShell(o => o with
         {
             KeepWarm = new KeepWarmOptions(Enabled: true, WindowMs: 400, IntervalMs: 5),
             KeepWarmWork = () => work,
+            KeepWarmTimestamp = clock.Now,
         }, out _);
         var main = run.Main!;
         Assert.NotNull(main.KeepAlive);
@@ -72,9 +89,11 @@ public sealed class ShellKeepWarmTests
 
         Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound), "tương tác của cửa sổ active không kích hoạt giữ ấm");
         Assert.True(SpinWait.SpinUntil(() => main.KeepWarm!.Activations >= 1, Bound));
-        Pacing.PauseMs(900); // > WindowMs (400)
+        var keepAlive = main.KeepAlive!;
+        clock.AdvanceMs(401); // > WindowMs (400): hạn chót đã qua theo đồng hồ tiêm
+        // Luồng nền thoát vòng chạm và quay lại ngủ trên event (điều kiện, không phải thời gian cố định); từ đó không còn gì chạy.
+        Assert.True(SpinWait.SpinUntil(() => keepAlive.IdleWaits >= 2 && keepAlive.IsBlocked, Bound), "hết khoảng giữ ấm mà luồng nền vẫn chạm");
         var settled = work.Touches;
-        Pacing.PauseMs(250);
         Assert.Equal(settled, work.Touches); // hết khoảng giữ ấm: im lặng
 
         Stop(run);
@@ -96,8 +115,7 @@ public sealed class ShellKeepWarmTests
 
         Send(run, WmActivate, 0); // WA_INACTIVE
         Send(run, WmMouseMove, 0, 0);
-        Send(run, WmKeyDown, 0x41);
-        Pacing.PauseMs(300);
+        Send(run, WmKeyDown, 0x41); // SendMessage đồng bộ: chuỗi handler đã chạy xong, không cần chờ
 
         Assert.Equal(0, main.KeepWarm!.Activations);
         Assert.Equal(0, work.Touches);
@@ -109,19 +127,21 @@ public sealed class ShellKeepWarmTests
     [Fact]
     public void Deactivation_StopsFurtherExtensions()
     {
+        var clock = new FakeClock();
         var work = new FakeWork();
         using var run = StartShell(o => o with
         {
             KeepWarm = new KeepWarmOptions(true, 1000, 5),
             KeepWarmWork = () => work,
+            KeepWarmTimestamp = clock.Now,
         }, out _);
         var main = run.Main!;
         Send(run, WmActivate, 1);
-        Send(run, WmKeyDown, 0x41);
-        Assert.True(SpinWait.SpinUntil(() => main.KeepWarm!.Activations == 1, Bound));
+        Send(run, WmKeyDown, 0x41); // cùng tick giả với WmActivate: bị throttle chặn, Activations không tăng
+        Assert.Equal(1, main.KeepWarm!.Activations);
 
         Send(run, WmActivate, 0);
-        Pacing.PauseMs(KeepWarmController.ThrottleMs + 50); // qua ngưỡng throttle: nếu không chặn theo active thì sẽ kích hoạt lần 2
+        clock.AdvanceMs(KeepWarmController.ThrottleMs + 50); // qua ngưỡng throttle: nếu không chặn theo active thì sẽ kích hoạt lần 2
         Send(run, WmKeyDown, 0x41);
 
         Assert.Equal(1, main.KeepWarm!.Activations);

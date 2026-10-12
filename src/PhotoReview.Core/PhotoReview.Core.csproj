@@ -3,6 +3,10 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Platforms>AnyCPU;x64</Platforms>
+    <!-- WP-34: analyzer AOT/trim bật; cổng thật là publish AOT của PhotoReview.exe (tools/check-aot-warnings.ps1). -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- WP-34: [LibraryImport] (P/Invoke source-gen) cần unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- I18N (ADR 0006): English is embedded as the always-complete fallback; every catalog is also copied to

@@ -258,9 +258,9 @@ public partial class MainWindow : Window
         if (_viewModel.PrewarmInitialImage(path) is not null) PhotoReviewPerf.StartupMark("initialDecodeStarted");
     }
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
-    private static extern bool GetClientRect(IntPtr hwnd, out NativeRect rect);
+    private static partial bool GetClientRect(IntPtr hwnd, out NativeRect rect);
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct NativeRect { public int Left, Top, Right, Bottom; }

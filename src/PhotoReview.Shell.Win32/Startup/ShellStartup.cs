@@ -41,6 +41,9 @@ internal sealed record ShellStartupOptions
     /// <summary>WP21-STALL: seam việc giữ ấm (test giả, không cần GPU thật). Null = thiết bị offscreen riêng trên GPU thật.</summary>
     public Func<PhotoReview.Shell.Rendering.IGpuKeepAliveWork?>? KeepWarmWork { get; init; }
 
+    /// <summary>WP21-STALL: đồng hồ của chính sách giữ ấm (test tiêm giả; null = <c>Stopwatch.GetTimestamp</c>).</summary>
+    public Func<long>? KeepWarmTimestamp { get; init; }
+
     private static string InstancePrefixFromEnvironment() =>
         Environment.GetEnvironmentVariable("PHOTOREVIEW_SHELL_INSTANCE_PREFIX") is { Length: > 0 } value ? value : ShellInstanceNames.Prefix;
 
@@ -420,6 +423,7 @@ internal sealed class ShellStartup : IDisposable
 
         var viewModel = services.GetRequiredService<MainViewModel>();
         viewModel.FolderOwnership = _instanceScope;
+        services.GetRequiredService<ShellNoticeSink>().Attach(message => viewModel.StatusText = message);
         // Xác minh thủ công/agent: PHOTOREVIEW_DIAG_INSTANCE_LABEL đánh dấu thanh tiêu đề để không nhầm với cửa sổ thật.
         if (DiagOptions.InstanceLabel is { } label)
         {
@@ -430,7 +434,8 @@ internal sealed class ShellStartup : IDisposable
             _cloak, _placementStore, NativeWindowPlacement.Instance, displayClock, log, _mark,
             new ShellMainWindowOptions(_options.PreferWarp, _launch.Smoke ? null : placementFile, activate,
                 SettingsStore: store, ZoomPrompt: services.GetService<IZoomPromptService>(), Windowing: _options.Windowing,
-                KeepWarm: _options.KeepWarm, KeepWarmWork: _options.KeepWarmWork, FrameLogPath: _options.FrameLogPath));
+                KeepWarm: _options.KeepWarm, KeepWarmWork: _options.KeepWarmWork, FrameLogPath: _options.FrameLogPath,
+        KeepWarmTimestamp: _options.KeepWarmTimestamp));
         _forwardHandler = new ForwardedOpenHandler(_main, log);
         _main.AttachRenderer();
         _main.AttachOverlay(services, _frameClock); // WP-23: HUD có mặt từ khung đầu

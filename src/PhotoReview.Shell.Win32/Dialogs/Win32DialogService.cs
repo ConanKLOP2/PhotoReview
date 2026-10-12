@@ -36,19 +36,35 @@ internal sealed class Win32DialogService : IDialogService
     private readonly ITaskDialogPort _taskDialogs;
     private readonly FolderPicker _folderPicker;
     private readonly Lazy<ISecondaryWindowPort?> _secondary;
+    private readonly SecondaryWindowFallback? _fallback;
 
-    public Win32DialogService(Func<nint> ownerProvider, FolderPicker folderPicker, Lazy<ISecondaryWindowPort?> secondary)
-        : this(ownerProvider, new NativeTaskDialogPort(), folderPicker, secondary)
+    public Win32DialogService(Func<nint> ownerProvider, FolderPicker folderPicker, Lazy<ISecondaryWindowPort?> secondary,
+        SecondaryWindowFallback? fallback = null)
+        : this(ownerProvider, new NativeTaskDialogPort(), folderPicker, secondary, fallback)
     {
     }
 
     internal Win32DialogService(Func<nint> ownerProvider, ITaskDialogPort taskDialogs, FolderPicker folderPicker,
-        Lazy<ISecondaryWindowPort?> secondary)
+        Lazy<ISecondaryWindowPort?> secondary, SecondaryWindowFallback? fallback = null)
     {
         _ownerProvider = ownerProvider;
         _taskDialogs = taskDialogs;
         _folderPicker = folderPicker;
         _secondary = secondary;
+        _fallback = fallback;
+    }
+
+    /// <summary>Cổng cửa sổ phụ, hoặc null khi vắng hay nạp cầu thất bại (khi đó <see cref="_fallback"/> trả lời).</summary>
+    private ISecondaryWindowPort? Port()
+    {
+        try
+        {
+            return _secondary.Value;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null;
+        }
     }
 
     public bool ShowConfirmation(string title, string message)
@@ -67,19 +83,34 @@ internal sealed class Win32DialogService : IDialogService
         => ShowBatchReview(paths.Select(path => new BatchReviewItem(path, null)).ToList());
 
     public bool ShowBatchReview(IReadOnlyList<BatchReviewItem> items)
-        => _secondary.Value?.ShowBatchReview(_ownerProvider(), items) ?? false;
+        => Port() is { } port ? port.ShowBatchReview(_ownerProvider(), items) : _fallback?.BatchReview() ?? false;
 
-    public void ShowRecovery() => _secondary.Value?.ShowRecovery(_ownerProvider());
+    public void ShowRecovery()
+    {
+        if (Port() is { } port) port.ShowRecovery(_ownerProvider());
+        else _fallback?.Recovery();
+    }
 
-    public void ShowDiagnostics() => _secondary.Value?.ShowDiagnostics(_ownerProvider());
+    public void ShowDiagnostics()
+    {
+        if (Port() is { } port) port.ShowDiagnostics(_ownerProvider());
+        else _fallback?.Diagnostics();
+    }
 
     public bool ShowSettings() => ShowSettings(SettingsTarget.Default);
 
     public bool ShowSettings(SettingsTarget target)
-        => _secondary.Value?.ShowSettings(_ownerProvider(), target) ?? false;
+        => Port() is { } port ? port.ShowSettings(_ownerProvider(), target) : _fallback?.OpenSettings() ?? false;
 
-    public void ShowBenchmark(string? folder = null) => _secondary.Value?.ShowBenchmark(_ownerProvider(), folder);
+    public void ShowBenchmark(string? folder = null)
+    {
+        if (Port() is { } port) port.ShowBenchmark(_ownerProvider(), folder);
+        else _fallback?.Benchmark();
+    }
 
     public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries)
-        => _secondary.Value?.ShowSkippedFiles(_ownerProvider(), entries);
+    {
+        if (Port() is { } port) port.ShowSkippedFiles(_ownerProvider(), entries);
+        else _fallback?.SkippedFiles();
+    }
 }

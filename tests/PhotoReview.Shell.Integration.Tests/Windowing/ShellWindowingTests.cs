@@ -585,7 +585,8 @@ public sealed unsafe class ShellWindowingTests
             // Cùng số pixel (rect gợi ý = rect hiện tại) nhưng DPI khác: bề mặt phải nhận tỉ lệ mới ở khung kế (không chỉ khi cỡ đổi).
             PendingUser32.SendMessage(main.Hwnd, WindowMessages.WmDpiChanged, newDpi | (newDpi << 16), (nint)(&outer));
             var before = main.Surface!.DpiScale;
-            main.RenderNow();
+            // RenderNow đơn lẻ có thể bị FramePacer hoãn trước khi bề mặt nhận tỉ lệ mới: vẽ lại tới khi khung thật được vẽ.
+            ShellFrames.RenderUntil(main, () => main.Surface!.DpiScale == main.Window.DpiScale);
             return (before, main.Surface!.DpiScale, main.Window.DpiScale);
         });
 

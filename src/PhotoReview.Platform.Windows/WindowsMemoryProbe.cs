@@ -3,7 +3,7 @@ using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Platform.Windows;
 
-public sealed class WindowsMemoryProbe : IMemoryProbe
+public sealed partial class WindowsMemoryProbe : IMemoryProbe
 {
     public static readonly WindowsMemoryProbe Instance = new();
     private readonly ILog _log;
@@ -27,9 +27,9 @@ public sealed class WindowsMemoryProbe : IMemoryProbe
         public ulong AvailableExtendedVirtual;
     }
 
-    [DllImport("kernel32.dll", SetLastError = true)]
+    [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GlobalMemoryStatusEx(ref Status status);
+    private static partial bool GlobalMemoryStatusEx(ref Status status);
 
     public bool HasHeadroom(double maximumLoad, long reserveBytes) =>
         EvaluateHeadroom(GetSnapshot(), maximumLoad, reserveBytes);

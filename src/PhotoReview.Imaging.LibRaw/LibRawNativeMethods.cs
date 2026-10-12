@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 namespace PhotoReview.Imaging.LibRaw;
 
-internal static class LibRawNativeMethods
+internal static partial class LibRawNativeMethods
 {
     internal const string LibraryName = "libraw.dll";
     internal const int ImageBitmap = 2;
@@ -16,50 +16,79 @@ internal static class LibRawNativeMethods
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate int ProgressCallback(IntPtr data, int stage, int iteration, int expected);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_init", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern IntPtr LibRawInit(uint flags);
+    /// <summary>
+    /// Every libraw_* entry point declared in this class, as a static list (WP-34: the former reflection over [DllImport] attributes is
+    /// not AOT/trim safe, and [LibraryImport] declarations carry no readable entry point at run time). LibRawAvailabilityTests scans this
+    /// file's source and fails when a declared EntryPoint is missing here (or listed but no longer declared).
+    /// </summary>
+    internal static readonly string[] EntryPoints =
+    [
+        "libraw_init", "libraw_close", "libraw_open_wfile", "libraw_open_buffer", "libraw_unpack", "libraw_unpack_thumb",
+        "libraw_dcraw_process", "libraw_dcraw_make_mem_image", "libraw_dcraw_make_mem_thumb", "libraw_dcraw_clear_mem",
+        "libraw_adjust_sizes_info_only", "libraw_get_iwidth", "libraw_get_iheight", "libraw_get_raw_width", "libraw_get_raw_height",
+        "libraw_get_decoder_info", "libraw_get_iparams", "libraw_set_progress_handler", "libraw_set_output_color", "libraw_set_output_bps",
+        "libraw_set_no_auto_bright", "libraw_version", "libraw_strerror",
+    ];
 
-    [DllImport(LibraryName, EntryPoint = "libraw_close", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void LibRawClose(IntPtr handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial IntPtr LibRawInit(uint flags);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_open_wfile", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true, CharSet = CharSet.Unicode)]
-    internal static extern int LibRawOpenWFile(SafeLibRawHandle handle, string path);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_close")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial void LibRawClose(IntPtr handle);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_open_buffer", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawOpenBuffer(SafeLibRawHandle handle, IntPtr buffer, nuint size);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_open_wfile", StringMarshalling = StringMarshalling.Utf16)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawOpenWFile(SafeLibRawHandle handle, string path);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_unpack", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawUnpack(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_open_buffer")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawOpenBuffer(SafeLibRawHandle handle, IntPtr buffer, nuint size);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_unpack_thumb", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawUnpackThumb(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_unpack")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawUnpack(SafeLibRawHandle handle);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_dcraw_process", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawDcrawProcess(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_unpack_thumb")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawUnpackThumb(SafeLibRawHandle handle);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_dcraw_make_mem_image", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern IntPtr LibRawDcrawMakeMemImage(SafeLibRawHandle handle, out int errorCode);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_dcraw_process")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawDcrawProcess(SafeLibRawHandle handle);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_dcraw_make_mem_thumb", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern IntPtr LibRawDcrawMakeMemThumb(SafeLibRawHandle handle, out int errorCode);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_dcraw_make_mem_image")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial IntPtr LibRawDcrawMakeMemImage(SafeLibRawHandle handle, out int errorCode);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_dcraw_clear_mem", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void LibRawDcrawClearMem(IntPtr image);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_dcraw_make_mem_thumb")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial IntPtr LibRawDcrawMakeMemThumb(SafeLibRawHandle handle, out int errorCode);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_adjust_sizes_info_only", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawAdjustSizesInfoOnly(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_dcraw_clear_mem")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial void LibRawDcrawClearMem(IntPtr image);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_get_iwidth", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawGetIWidth(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_adjust_sizes_info_only")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawAdjustSizesInfoOnly(SafeLibRawHandle handle);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_get_iheight", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawGetIHeight(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_get_iwidth")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawGetIWidth(SafeLibRawHandle handle);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_get_raw_width", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawGetRawWidth(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_get_iheight")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawGetIHeight(SafeLibRawHandle handle);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_get_raw_height", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern int LibRawGetRawHeight(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_get_raw_width")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawGetRawWidth(SafeLibRawHandle handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "libraw_get_raw_height")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int LibRawGetRawHeight(SafeLibRawHandle handle);
 
     /// <summary>libraw_decoder_info_t: the selected load_raw decoder's name (static C string) and flags; valid once the file is open.</summary>
     [StructLayout(LayoutKind.Sequential)]
@@ -69,15 +98,17 @@ internal static class LibRawNativeMethods
         internal uint Flags;
     }
 
-    [DllImport(LibraryName, EntryPoint = "libraw_get_decoder_info", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern int LibRawGetDecoderInfo(SafeLibRawHandle handle, out DecoderInfo info);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_get_decoder_info")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    private static partial int LibRawGetDecoderInfo(SafeLibRawHandle handle, out DecoderInfo info);
 
     /// <summary>The decoder name LibRaw picked while opening the file (e.g. "lossless_dng_load_raw()"), or null when unavailable.</summary>
     internal static string? TryGetDecoderName(SafeLibRawHandle handle) =>
         LibRawGetDecoderInfo(handle, out var info) == 0 && info.Name != IntPtr.Zero ? Marshal.PtrToStringAnsi(info.Name) : null;
 
-    [DllImport(LibraryName, EntryPoint = "libraw_get_iparams", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern IntPtr LibRawGetIParams(SafeLibRawHandle handle);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_get_iparams")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    private static partial IntPtr LibRawGetIParams(SafeLibRawHandle handle);
 
     // libraw_iparams_t (LibRaw 0.22.x, x64 MSVC, libraw_types.h of 0.22.2; ints 4 B, no packing pragma). libraw_get_iparams returns a
     // pointer to the struct itself, so only offsets INSIDE it matter: guard[4] + make/model/software/normalized_make/normalized_model
@@ -109,20 +140,25 @@ internal static class LibRawNativeMethods
     internal static DecodeMemoryGuard.RawStructure? TryGetRawStructure(SafeLibRawHandle handle) =>
         LibRawAvailability.IsExactPinnedVersion ? TryReadRawStructure(LibRawGetIParams(handle)) : null;
 
-    [DllImport(LibraryName, EntryPoint = "libraw_set_progress_handler", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void LibRawSetProgressHandler(SafeLibRawHandle handle, ProgressCallback callback, IntPtr data);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_set_progress_handler")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial void LibRawSetProgressHandler(SafeLibRawHandle handle, ProgressCallback callback, IntPtr data);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_set_output_color", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void LibRawSetOutputColor(SafeLibRawHandle handle, int value);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_set_output_color")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial void LibRawSetOutputColor(SafeLibRawHandle handle, int value);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_set_output_bps", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void LibRawSetOutputBps(SafeLibRawHandle handle, int value);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_set_output_bps")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial void LibRawSetOutputBps(SafeLibRawHandle handle, int value);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_set_no_auto_bright", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void LibRawSetNoAutoBright(SafeLibRawHandle handle, int value);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_set_no_auto_bright")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial void LibRawSetNoAutoBright(SafeLibRawHandle handle, int value);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_version", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern IntPtr LibRawVersion();
+    [LibraryImport(LibraryName, EntryPoint = "libraw_version")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    private static partial IntPtr LibRawVersion();
 
     /// <summary>The loaded runtime's version string (for example "0.22.2-Release").</summary>
     internal static string? GetVersionString() => Marshal.PtrToStringAnsi(LibRawVersion());
@@ -182,8 +218,9 @@ internal static class LibRawNativeMethods
     internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int outputColor, int outputBps, int noAutoBright) =>
         TrySetUseCameraWb(handle, outputColor, outputBps, noAutoBright, () => LibRawAvailability.IsExactPinnedVersion, PinnedWhiteBalanceLayout);
 
-    [DllImport(LibraryName, EntryPoint = "libraw_strerror", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern IntPtr LibRawStrError(int errorCode);
+    [LibraryImport(LibraryName, EntryPoint = "libraw_strerror")]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial IntPtr LibRawStrError(int errorCode);
 
     internal static string FormatError(int errorCode)
     {

@@ -755,5 +755,12 @@
   "settings.shell.status.unavailable": "Status line: no exe path (the app runs through the dotnet host).",
   "settings.shell.status.error": "Status line: the registry read/write failed; {message} is the system's error text.",
   "settings.shell.hint": "Help text under the Explorer integration buttons.",
-  "settings.contextMenu.item.refresh": "Label of the Refresh tick box in the right-click menu list; same wording as the Refresh menu item."
+  "settings.contextMenu.item.refresh": "Label of the Refresh tick box in the right-click menu list; same wording as the Refresh menu item.",
+  "status.secondaryUnavailable.settings": "Status line shown when the Settings command runs in the Native AOT build (no WPF windows); config.json then opens in the default editor.",
+  "status.secondaryUnavailable.settingsFailed": "Status line when even the fallback editor could not open config.json; {path} is the full path of config.json.",
+  "status.secondaryUnavailable.diagnostics": "Status line for the Diagnostics command in the Native AOT build.",
+  "status.secondaryUnavailable.recovery": "Status line for the Recovery command in the Native AOT build; no data is changed.",
+  "status.secondaryUnavailable.skippedFiles": "Status line for the skipped-files list in the Native AOT build.",
+  "status.secondaryUnavailable.batchReview": "Status line for the batch review in the Native AOT build; the batch is not run.",
+  "status.secondaryUnavailable.benchmark": "Status line for the Benchmark command in the Native AOT build."
 }

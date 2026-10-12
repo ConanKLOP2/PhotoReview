@@ -23,6 +23,24 @@ internal sealed class FaultBin(FaultInjectionFileSystem fs) : IRecycleBin
 
     public List<Item> Items { get; } = [];
 
+    /// <summary>False simulates a volume without a Recycle Bin (removable/network drive): only an explicit opt-in may then delete, permanently.</summary>
+    public bool VolumeHasBin { get; set; } = true;
+
+    /// <summary>Paths the service deleted PERMANENTLY (an intended, user-confirmed loss; never in <see cref="Items"/>).</summary>
+    public List<string> PermanentlyDeleted { get; } = [];
+
+    public bool CanRecycle(string path) => VolumeHasBin;
+
+    public void DeletePermanently(string path)
+    {
+        if (VolumeHasBin) throw new InvalidOperationException("DeletePermanently called for a volume that has a Recycle Bin");
+        fs.Mutate("delete-permanent", () =>
+        {
+            fs.Disk.Delete(path);
+            PermanentlyDeleted.Add(path);
+        });
+    }
+
     public void SendToRecycleBin(string path)
     {
         var stat = fs.GetFileStat(path) ?? throw new FileNotFoundException("gone", path);
@@ -47,7 +65,7 @@ internal sealed class FaultBin(FaultInjectionFileSystem fs) : IRecycleBin
                 Items.Remove(item);
             });
         }
-        catch (IOException) when (!fs.Dead)
+        catch (Exception ex) when (!fs.Dead && ex is IOException or UnauthorizedAccessException)
         {
             return false; // like WindowsRecycleBin.TryRestore, which turns every shell failure into "false" and never throws
         }
@@ -76,6 +94,11 @@ internal sealed class FaultRig
     public InMemoryFileSystem Disk { get; } = new();
     public FaultInjectionFileSystem Fs { get; }
     public FaultBin Bin { get; }
+
+    /// <summary>The user's cancellation: a <see cref="FaultKind.CancelAfter"/> fault cancels it right after the numbered call's effect. Scenarios that want to observe it pass <see cref="Token"/> to the service.</summary>
+    public CancellationTokenSource Cts { get; private set; } = new();
+
+    public CancellationToken Token => Cts.Token;
     public StepClock Clock { get; } = new();
     public OperationJournal Journal { get; private set; }
     public FileActionService Service { get; private set; }
@@ -90,6 +113,7 @@ internal sealed class FaultRig
     public FaultRig()
     {
         Fs = new FaultInjectionFileSystem(Disk);
+        Fs.CancelHook = () => Cts.Cancel();
         Bin = new FaultBin(Fs);
         Journal = NewJournal();
         Service = new FileActionService(Journal, Fs, Clock, Bin);
@@ -104,7 +128,8 @@ internal sealed class FaultRig
 
     public bool KnownName(string path) => _contentByName.ContainsKey(Path.GetFileName(path));
 
-    public static IEnumerable<string> Folders => [Photos, Sel, Other];
+    /// <summary>The folders every snapshot lists (non-recursive each): the seed folders, the usual destination and one nested destination (<c>sel\sub</c>).</summary>
+    public static IEnumerable<string> Folders => [Photos, Sel, Other, @"C:\photos\sel\sub"];
 
     public FaultRig Seed(string folder, params string[] names)
     {
@@ -126,6 +151,7 @@ internal sealed class FaultRig
     public OperationJournal Restart()
     {
         Fs.Arm(null);
+        Cts = new CancellationTokenSource();
         Journal = NewJournal();
         Service = new FileActionService(Journal, Fs, Clock, Bin);
         Undo = new UndoService(Journal, Fs, Bin, Service, clock: Clock);

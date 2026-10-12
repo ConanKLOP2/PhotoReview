@@ -10,12 +10,12 @@ namespace PhotoReview.Platform.Windows;
 /// unsupported attribute or a missing dwmapi returns false and the window simply stays visible.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public static class WindowsDwmCloak
+public static partial class WindowsDwmCloak
 {
     private const int DwmwaCloak = 13;
 
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
     /// <summary>Cloaks (<paramref name="cloaked"/> true) or uncloaks the window; returns whether DWM accepted it.</summary>
     public static bool TrySetCloaked(IntPtr handle, bool cloaked)

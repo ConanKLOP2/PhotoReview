@@ -22,6 +22,15 @@ public enum FaultKind
 
     /// <summary>Like <see cref="CrashPartial"/> but the process survives (disk full mid-copy / mid-append).</summary>
     FailPartial,
+
+    /// <summary>Like <see cref="FailOnce"/> but the call fails with an <see cref="UnauthorizedAccessException"/> (a read-only/ACL-denied file or folder, an AV lock): a second exception family the services must treat as a clean, journaled failure.</summary>
+    FailUnauthorized,
+
+    /// <summary>
+    /// The call takes full effect and then the user's cancellation is requested (via <see cref="FaultInjectionFileSystem.CancelHook"/>; no exception comes from the call itself):
+    /// the service observes it at its next cancellation check. NOT part of the default kinds of the matrix: only scenarios that pass the rig's token to the service can observe it.
+    /// </summary>
+    CancelAfter,
 }
 
 /// <summary>A fault at mutating call number <see cref="At"/> (1-based, counted since <see cref="FaultInjectionFileSystem.Arm"/>).</summary>
@@ -44,6 +53,9 @@ public sealed class FaultInjectionFileSystem(InMemoryFileSystem disk) : IFileSys
     private FaultPlan? _plan;
 
     public InMemoryFileSystem Disk { get; } = disk;
+
+    /// <summary>Invoked right after the effect of a <see cref="FaultKind.CancelAfter"/> call (the rig points it at its CancellationTokenSource).</summary>
+    public Action? CancelHook { get; set; }
 
     /// <summary>True once a crash kind fired: the process is dead.</summary>
     public bool Dead { get; private set; }
@@ -99,6 +111,12 @@ public sealed class FaultInjectionFileSystem(InMemoryFileSystem disk) : IFileSys
                 throw new ProcessCrashedException();
             case FaultKind.FailOnce:
                 throw new IOException("simulated transient failure");
+            case FaultKind.FailUnauthorized:
+                throw new UnauthorizedAccessException("Access to the path is denied (simulated).");
+            case FaultKind.CancelAfter:
+                effect();
+                CancelHook?.Invoke();
+                break;
             case FaultKind.CrashAfter:
                 effect();
                 Dead = true;
