@@ -17,7 +17,7 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 | NE-4 | Menu chuột phải: (a) menu native + dark qua uxtheme | (b) tự vẽ | Chỉ lớp menu Shell | CHƯA XÁC NHẬN |
 | NE-6 | Single-instance beta: (a) prefix pipe riêng cho bản Win32, hợp nhất ở P6 | (b) dùng chung pipe | Đổi một hằng prefix | CHƯA XÁC NHẬN |
 | NE-7 | (a) đóng băng tính năng UI mới trên bản WPF từ đầu đợt 3 | (b) song song hai bản | Mở lại tính năng WPF | CHƯA XÁC NHẬN |
-| NE-9 | (a) D2D cubic/linear; G-PIX theo PSNR + xem bằng mắt | (b) thu nhỏ CPU bằng WIC Fant mỗi bước zoom | Đổi bộ lọc trong WP-15 | CHƯA XÁC NHẬN |
+| NE-9 | (a) D2D cubic/linear; G-PIX theo PSNR + xem bằng mắt. ĐÃ ĐO (WP-28): ảnh chụp Fit 40,5-44,5 dB, zoom khác 100 % 44-60 dB (ngưỡng 32/28); mẫu vạch 1-2 px 21,8-26,8 dB vì WPF Fant răng cưa ở 2:1 | (b) thu nhỏ CPU bằng WIC Fant mỗi bước zoom (số đo cho thấy không cần) | Đổi bộ lọc trong WP-15 | CHƯA XÁC NHẬN |
 | WP04-JPEG | Cache JPEG qua WIC chậm hơn +17-30 % (cầu WPF thêm 2 bản chép khung, ~+4 ms/preview nền): (a) chấp nhận tới WP-06, WP-06 bắt buộc tiêm codec | (b) lối tắt băng-dải, cần mở rộng C-02 đóng băng | Không đổi mặc định (codec WPF mặc định); đổi ở WP-06 | CHƯA XÁC NHẬN |
 | STARTUP-1 | Bản .jpg dùng publish R2R 15 MB (người dùng ĐÃ chọn, xác nhận) | 174 MB self-contained + composite | Đổi khoá registry | ĐÃ XÁC NHẬN |
 | STARTUP-2 | ĐÃ ĐO 2026-10-11, KHÔNG làm: bỏ hẳn toolbar/ContextMenu/overlay khỏi XAML chỉ bớt 0-17 ms (nhiễu); InitializeComponent ~200 ms là chi phí khởi tạo lạnh chung của WPF (BAML, ResourceDictionary, theme, binding). Đòn bẩy thật còn lại: self-contained + R2R composite (-140..-160 ms, 174 MB) hoặc bỏ XAML chrome ở bản NoWpf | giữ nguyên | Không cần (chưa làm) | CHƯA XÁC NHẬN |
@@ -34,6 +34,8 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 | WP25-SURFACE-DPI | Bề mặt D2D `Resize` cả khi chỉ DPI đổi (cùng số pixel) | chỉ khi cỡ pixel đổi | một điều kiện ở `ShellMainWindow.Frame.cs` | CHƯA XÁC NHẬN |
 | WP26-COMPARE | Khi so sánh đang hiện, thanh cuộn của `ImageScroll` vẫn còn thấy và nhấn được ở dải 8 DIP quanh `ComparePanel` (đúng như bản WPF; thanh nằm dưới panel `Margin=8`) | (b) ẩn hẳn thanh cuộn khi so sánh (đẹp hơn, lệch WPF) | Một điều kiện ở `ShellScrollBars.Draw/HitTest` | CHƯA XÁC NHẬN |
 | WP24-ANCHOR | Menu chuột phải mở bằng phím Menu/Shift+F10 neo ở GIỮA vùng client (WPF khi `CursorLeft == -1` có thể neo khác; chưa kiểm chứng trên WPF thật) | neo ở góc trên trái client / vị trí con trỏ cuối | Một hàm `ClientCenterScreenPixel` ở `ContextMenuMessageHandler` | CHƯA XÁC NHẬN |
+| WP28-HALFPIXEL | Ở 100 % tại nửa pixel thiết bị (client lẻ, offset cuộn phân số ở DPI > 1) shell snap vào lưới pixel (sắc nét, lệch <= 0,5 px; ảnh chụp 28,3 dB, mẫu vạch 11,6 dB) còn WPF nội suy làm mờ | (b) bỏ snap khi góc rơi vào nửa pixel để mờ giống WPF | Một nhánh ở `D2DDrawContext.DrawImage` (`DrawGeometry.TrySnapPixelExact`) | CHƯA XÁC NHẬN |
+| WP28-REFERENCE | Golden G-PIX là đầu ra bộ raster phần mềm của WPF (`RenderTargetBitmap`); chưa so với ảnh chụp màn hình thật của đường phần cứng | (b) ghi golden bằng chụp cửa sổ thật trên desktop tương tác | Đổi `Capture` của `PixelGoldenRecorder` + ghi lại | CHƯA XÁC NHẬN |
 
 ## Không làm mà không hỏi (vẫn cần người dùng)
 - NE-1/2/5/8 đã chốt trước đó. Chế độ chạy nền/khay, Native AOT (cài MSVC + SDK 4-5 GB), xoá dữ liệu người dùng, bất cứ thay đổi
