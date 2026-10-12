@@ -19,6 +19,7 @@ Find a document by purpose. Read tiers: **T0** (every session, â‰¤18 KB total) Â
 | [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md) + [`decisions/`](refactoring/decisions/) | Q-* index + one file per decision | T1, decision lookup |
 | [`refactoring/PERF-STATUS.md`](refactoring/PERF-STATUS.md) + [`perf/`](refactoring/perf/) | Methodology + one file per measurement | T1, perf work |
 | [`refactoring/HISTORY.md`](refactoring/HISTORY.md) | One line per finished group; how to recover removed plans from git | T1, "what was done before" |
+| [`refactoring/decisions/NO-WPF-EXEC-PLAN.md`](refactoring/decisions/NO-WPF-EXEC-PLAN.md) + [`-WP.md`](refactoring/decisions/NO-WPF-EXEC-PLAN-WP.md), [`NOWPF-HANDOFF-20261010.md`](refactoring/decisions/NOWPF-HANDOFF-20261010.md), [`NOWPF-UNCONFIRMED-DECISIONS-20261010.md`](refactoring/decisions/NOWPF-UNCONFIRMED-DECISIONS-20261010.md) | NO-WPF plan (work packages by wave), handoff state, unconfirmed decisions; `NOWPF-WP*` fragments per package | T1, NO-WPF work |
 | [`refactoring/I18N-PLAN.md`](refactoring/I18N-PLAN.md) | Multi-language design (L00-L12, done) | T1, UI text |
 | [`refactoring/raw/`](refactoring/raw/PROGRESS.md) | Camera RAW (ADR 0009, merged in #239): `PROGRESS.md` (post-merge status, open items), `DECISIONS.md` (Q-RAW) | T1, RAW work |
 | [`../README.md`](../README.md) | Overview, setup, build, settings | T1, first-time setup |
