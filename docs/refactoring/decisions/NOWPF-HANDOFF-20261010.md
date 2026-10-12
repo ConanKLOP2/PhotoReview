@@ -10,6 +10,19 @@ summary: |-
 Kế hoạch gốc: [NO-WPF-EXEC-PLAN](NO-WPF-EXEC-PLAN.md) và thẻ gói [NO-WPF-EXEC-PLAN-WP](NO-WPF-EXEC-PLAN-WP.md).
 Mỗi gói đã merge có fragment `NOWPF-WPxx-*.md` cạnh file này. Người dùng nói chuyện bằng tiếng Việt.
 
+## 0. Trạng thái 2026-10-12 (ĐỌC TRƯỚC; các mục 2 và 2b bên dưới là lịch sử, đã xong)
+- **Đã merge (master xanh, ~`8822b1cd`):** WP-01..08, 10, 11, 12, 13a/b, 14..18, 19a/b, 20..26, 28, 29, 30; hợp đồng v1.1/v1.2;
+  WP21-STALL (`GpuKeepAlive`, key->frame P95 ~220 -> 8,8 ms). Shell Win32 (`PhotoReview.exe`) chạy thật: ảnh đầu ~470 ms so với
+  WPF ~1.200 ms, working set -16 %. Gói release có cả hai exe (`tools/publish-release.ps1`, 17,6 MB).
+- **Chưa làm:** WP-27 (xem bằng mắt: menu tối, emoji màu, F11 hai màn hình), WP-31 (tài liệu), WP-32..37 (Native AOT cần MSVC+SDK do
+  người dùng cài, `IsAotCompatible`, cửa sổ phụ thay WPF, xoá bản WPF). Gate đợt 3 còn hụt: cửa sổ thấy 356 ms (mục tiêu 150),
+  key->frame P95 8,8 ms (mục tiêu 3), Settings lần sau 289 ms (mục tiêu 150).
+- **Chờ người dùng:** duyệt các dòng CHƯA XÁC NHẬN trong `NOWPF-UNCONFIRMED-DECISIONS-20261010.md` (NE-3/4/6/7/9, WP20-VISIBLE,
+  WP21-PRESENT/STALL, WP23-*, WP24-ANCHOR, WP25-*, WP26-COMPARE, WP28-*, hợp đồng v1.2, trần OPEN-DECISIONS 48 KB).
+- **Vận hành:** quy tắc agent ở `docs/AGENT-HYGIENE.md` (timeout, scratchpad riêng, `tools/agent-finish-check.ps1`, không giết
+  testhost của agent khác). CI từng đỏ dây chuyền vì thiết bị D3D kẹt khi đóng cửa sổ (đã sửa: giải phóng đồ hoạ trong `OnClosing`).
+  Ổ C đầy do hang dump của lượt mutation: luôn thêm `--blame-hang-dump-type none` khi chạy `dotnet test` cục bộ.
+
 ## 1. Đã vào master
 - Phản hồi người dùng 2026-10-09 (#383-#391): External Editor luôn hiện, Copy tên/đường dẫn, menu gọn, Fit width thứ hai (phím 4)
   và chuột giữa gán được, mở file đúng vị trí, undo Delete tại chỗ, từ chối Delete khi ổ không có Thùng rác, nhãn zoom,
