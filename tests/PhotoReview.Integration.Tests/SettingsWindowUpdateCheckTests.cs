@@ -110,8 +110,7 @@ public sealed class SettingsWindowUpdateCheckTests
         {
             var opened = new List<string>();
             window.OpenUrl = opened.Add;
-            typeof(SettingsWindow).GetField("_updateUrl", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .SetValue(window, "https://evil.example/x.exe");
+            window.Presenter.UpdateUrl = "https://evil.example/x.exe";
             Click(window.OpenUpdatePageButton);
             Assert.Empty(opened);
             return Task.CompletedTask;
