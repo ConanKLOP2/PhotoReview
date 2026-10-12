@@ -706,6 +706,14 @@ public sealed class ShellAssociationScriptTests : IDisposable
     public void Dispose()
     {
         Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(_keyName, throwOnMissingSubKey: false);
+        // Leave no empty parent behind (another test class instance may still use it: only an empty one is removed).
+        try
+        {
+            using var parent = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\PhotoReviewTests");
+            if (parent is { SubKeyCount: 0, ValueCount: 0 })
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(@"Software\PhotoReviewTests", throwOnMissingSubKey: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { /* best effort */ }
         _root.Dispose();
     }
 

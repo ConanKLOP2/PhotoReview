@@ -70,5 +70,24 @@ dẫn" tự trỏ về exe đang chạy; khoá verb của nút đó vẫn là `P
 
 ## 5. Đột biến thủ công
 
-Xem bảng trong mô tả PR / cuối tài liệu này khi chạy xong: thiếu tệp shell, hash native sai, deps.json nêu DLL vắng, exe rỗng, `-Smoke`
-bị bỏ, ProgId sai, thiếu cờ opt-in, ghi đè mặc định `.jpg`, uninstall xoá nhầm khoá WPF, quên `-ClassesPath`.
+15/15 bị bắt (chạy bộ test tương ứng sau mỗi đột biến, khôi phục tệp sau đó):
+
+| # | Đột biến | Bị bắt bởi |
+|---|---|---|
+| 1-2 | bỏ `PhotoReview.exe` / `Shell.WpfBridge.dll` khỏi danh sách bắt buộc | `VerifyRelease_MissingShellFile_Fails` |
+| 3 | bỏ kiểm exe shell rỗng | `VerifyRelease_EmptyShellExe_Fails` |
+| 4 | bỏ nhánh assembly vắng trong deps.json | `VerifyRelease_DepsNamesMissingAssembly_Fails` |
+| 5 | `-Smoke` bị bỏ qua | `VerifyRelease_SmokeWithFakeShellExe_Fails` |
+| 6 | bản shell dùng ProgId của WPF | `Shell_Force_RegistersOwnProgIdAndVerbs` |
+| 7 | bỏ cờ opt-in (`-Force`/YES) | `Shell_WithoutForce_NonInteractive_WritesNothing` |
+| 8 | `New-Item -Force` lại xoá `OpenWithProgids` | `Shell_Force_LeavesWpfAndUserDefaultsAlone` |
+| 9 | bỏ `ShouldProcess` (`-WhatIf` vẫn ghi) | `Shell_WhatIf_WritesNothing` |
+| 10 | khoá verb shell = khoá WPF | `Shell_Force_RegistersOwnProgIdAndVerbs` / `..._Unchanged` |
+| 11-12 | uninstall shell xoá nhầm khoá/ProgId của WPF | `Shell_Uninstall_RemovesOnlyShellRegistration` |
+| 13 | `ci.yml` bỏ `-Smoke` | `CiAndRelease_PublishBothExecutablesTheSameWay` |
+| 14 | `publish-release.ps1` bỏ project shell | cùng test |
+| 15 | `release.yml` quay lại `dotnet publish` một project | cùng test |
+
+**Lỗi cũ được sửa trên đường đi**: `install-photo-review-association.ps1` dùng `New-Item -Force` trên khoá `<ext>\OpenWithProgids` đã có,
+mà `-Force` ĐẶT LẠI khoá (xoá mọi giá trị) nên cài bản WPF xoá luôn mục "Open with" của ứng dụng khác (và của bản shell). Nay chỉ tạo khoá
+khi chưa có. Hành vi bản WPF khác duy nhất: không còn xoá mục của app khác.
