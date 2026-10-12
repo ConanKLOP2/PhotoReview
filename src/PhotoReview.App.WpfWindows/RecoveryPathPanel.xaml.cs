@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using PhotoReview.App.Presenters;
 
 namespace PhotoReview.App;
 
@@ -27,7 +28,7 @@ public partial class RecoveryPathPanel : UserControl
         TitleText.Text = view.Title;
         PathBox.Text = view.Path;
         StatusText.Text = view.StatusText;
-        StatusText.Foreground = view.StatusBrush;
+        StatusText.Foreground = RecoveryBrushes.For(view.StatusTone);
         NowText.Text = view.NowText;
         JournalText.Text = view.JournalText;
         NoteText.Text = view.Note ?? string.Empty;
@@ -52,7 +53,7 @@ public partial class RecoveryPathPanel : UserControl
                 StartExplorer(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
                 return;
             }
-            var folder = RecoveryPresenter.NearestExistingFolder(path, Directory.Exists);
+            var folder = RecoveryPresentation.NearestExistingFolder(path, Directory.Exists);
             if (folder is null) return;
             StartExplorer(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
         }

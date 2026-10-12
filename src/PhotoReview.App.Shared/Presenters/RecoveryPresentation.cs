@@ -1,59 +1,47 @@
 using System.Globalization;
-using System.IO;
-using System.Windows.Media;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
-namespace PhotoReview.App;
-
-/// <summary>Verdict filter offered by the Recovery window. Order matches the ComboBox items.</summary>
-public enum RecoveryFilter
-{
-    All,
-    CanRetry,
-    AlreadyDone,
-    Problems,
-}
+namespace PhotoReview.App.Presenters;
 
 /// <summary>What the details panel shows for one path (source or destination).</summary>
 internal sealed record RecoveryPathView(
     string Title,
     string Path,
     string StatusText,
-    Brush StatusBrush,
+    RecoveryTone StatusTone,
     string NowText,
     string JournalText,
     string? Note);
 
+/// <summary>One capture-group member line of the details panel.</summary>
+internal sealed record RecoveryGroupMemberView(string Status, string Source, string Destination);
+
 /// <summary>
-/// Pure mapping from <see cref="RecoveryCheckResult"/> to localized text and colors for the Recovery window
-/// (no WPF windows involved, so it is unit-testable). A verdict is always shown as text; the color is only a hint.
+/// Pure mapping from <see cref="RecoveryCheckResult"/> to localized text and colour tones for the Recovery window (no UI
+/// types involved, so it is unit-testable and shared by any view). WP-35 G0: moved out of the WPF assembly unchanged
+/// except that a colour is a <see cref="RecoveryTone"/> the view turns into a brush.
 /// </summary>
-internal static class RecoveryPresenter
+internal static class RecoveryPresentation
 {
-    private static readonly Brush Good = Frozen(0x6C, 0xCB, 0x7A);
-    private static readonly Brush Info = Frozen(0x6F, 0xB1, 0xFF);
-    private static readonly Brush Warn = Frozen(0xF0, 0xB0, 0x40);
-    private static readonly Brush Bad = Frozen(0xFF, 0x6B, 0x6B);
-    private static readonly Brush Neutral = Frozen(0xB0, 0xB0, 0xB0);
-
-    private static SolidColorBrush Frozen(byte r, byte g, byte b)
+    /// <summary>The documented hint colour of a tone (0xRRGGBB): the view paints with exactly these values.</summary>
+    public static (byte R, byte G, byte B) Rgb(RecoveryTone tone) => tone switch
     {
-        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
-        brush.Freeze();
-        return brush;
-    }
+        RecoveryTone.Good => (0x6C, 0xCB, 0x7A),
+        RecoveryTone.Info => (0x6F, 0xB1, 0xFF),
+        RecoveryTone.Warn => (0xF0, 0xB0, 0x40),
+        RecoveryTone.Bad => (0xFF, 0x6B, 0x6B),
+        _ => (0xB0, 0xB0, 0xB0),
+    };
 
-    public static Brush NeutralBrush => Neutral;
-
-    public static Brush VerdictBrush(RecoveryVerdict verdict) => verdict switch
+    public static RecoveryTone VerdictTone(RecoveryVerdict verdict) => verdict switch
     {
-        RecoveryVerdict.CanRetry => Good,
-        RecoveryVerdict.AlreadyDone => Info,
+        RecoveryVerdict.CanRetry => RecoveryTone.Good,
+        RecoveryVerdict.AlreadyDone => RecoveryTone.Info,
         RecoveryVerdict.Conflict or RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged or RecoveryVerdict.NotRecycled
-            or RecoveryVerdict.PartiallyPermanentlyDeleted => Warn,
-        RecoveryVerdict.PermanentlyDeleted or RecoveryVerdict.Lost => Bad,
-        _ => Neutral,
+            or RecoveryVerdict.PartiallyPermanentlyDeleted => RecoveryTone.Warn,
+        RecoveryVerdict.PermanentlyDeleted or RecoveryVerdict.Lost => RecoveryTone.Bad,
+        _ => RecoveryTone.Neutral,
     };
 
     public static string VerdictText(RecoveryVerdict verdict) => verdict switch
@@ -109,12 +97,12 @@ internal static class RecoveryPresenter
         _ => Tr.RecoveryPathStatusUnreadable,
     };
 
-    private static Brush PathStatusBrush(RecoveryPathStatus status) => status switch
+    public static RecoveryTone PathStatusTone(RecoveryPathStatus status) => status switch
     {
-        RecoveryPathStatus.Exists => Good,
-        RecoveryPathStatus.Changed => Warn,
-        RecoveryPathStatus.Missing => Neutral,
-        _ => Bad,
+        RecoveryPathStatus.Exists => RecoveryTone.Good,
+        RecoveryPathStatus.Changed => RecoveryTone.Warn,
+        RecoveryPathStatus.Missing => RecoveryTone.Neutral,
+        _ => RecoveryTone.Bad,
     };
 
     /// <summary>Only the retry verdict enables Retry; RecoveryRetryService still re-checks everything itself.</summary>
@@ -148,7 +136,7 @@ internal static class RecoveryPresenter
         Tr.RecoveryDetailJournal(FormatSize(entry.Size), FormatTime(entry.LastWriteUtc));
 
     public static RecoveryPathView PathView(string title, RecoveryPathCheck check, JournalEntry entry, bool folderMissingNote) =>
-        new(title, check.Path, Tr.RecoveryDetailStatus(PathStatusText(check.Status)), PathStatusBrush(check.Status),
+        new(title, check.Path, Tr.RecoveryDetailStatus(PathStatusText(check.Status)), PathStatusTone(check.Status),
             NowText(check), JournalText(entry), folderMissingNote ? Tr.RecoveryDetailFolderMissing : null);
 
     /// <summary>Status line of one capture-group member in the details panel.</summary>
@@ -195,7 +183,7 @@ internal static class RecoveryPresenter
                 : Tr.RecoveryRetryConfirmCancelled(OperationText(entry.Type), cancelledCount);
         }
         if (entry.GroupMembers is not { Count: > 0 } members)
-            return Tr.DialogConfirmRetryMessage(OperationText(entry.Type), Path.GetFileName(entry.Source));
+            return Tr.DialogConfirmRetryMessage(OperationText(entry.Type), System.IO.Path.GetFileName(entry.Source));
         if (entry.Type == FileOperationType.Recycle && entry.Undo == true)
             return Tr.RecoveryGroupRetryConfirmRestore(members.Count);
         if (entry.Type == FileOperationType.Recycle && allowPermanentDelete)
@@ -237,12 +225,12 @@ internal static class RecoveryPresenter
     {
         ArgumentNullException.ThrowIfNull(directoryExists);
         string? current;
-        try { current = Path.GetDirectoryName(path); }
+        try { current = System.IO.Path.GetDirectoryName(path); }
         catch (ArgumentException) { return null; }
         while (!string.IsNullOrEmpty(current))
         {
             if (directoryExists(current)) return current;
-            current = Path.GetDirectoryName(current);
+            current = System.IO.Path.GetDirectoryName(current);
         }
         return null;
     }
