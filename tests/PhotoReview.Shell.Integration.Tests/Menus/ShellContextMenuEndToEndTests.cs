@@ -78,8 +78,7 @@ public sealed partial class ShellContextMenuEndToEndTests
 
     private static bool WaitUntil(Func<bool> condition) => SpinWait.SpinUntil(condition, Bound);
 
-    private static string Diag(ShellRun run) =>
-        $"marks=[{string.Join(", ", run.MarkNames)}] error={run.Error} exit={run.ExitCode} firstPresent={run.Main?.FirstPresentDone}";
+    private static string Diag(ShellRun run) => run.Diagnostics;
 
     private static ShellRun Start(string label, string[] folders, int width, int height, IZoomPromptService? prompt = null)
     {
