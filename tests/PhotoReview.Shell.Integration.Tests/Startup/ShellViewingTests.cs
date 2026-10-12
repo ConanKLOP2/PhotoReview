@@ -42,7 +42,7 @@ public sealed class ShellViewingTests
     private static void Stop(ShellRun run)
     {
         run.RequestClose();
-        Assert.True(run.WaitForExit(Bound), "shell không thoát sau WM_CLOSE");
+        Assert.True(run.WaitForExit(Bound), "shell không thoát sau WM_CLOSE: " + run.Diagnostics);
         Assert.Null(run.Error);
         Assert.Equal(0, run.ExitCode);
     }

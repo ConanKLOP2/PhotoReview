@@ -36,8 +36,7 @@ public sealed partial class ShellInputEndToEndTests
 
     private static bool WaitUntil(Func<bool> condition, TimeSpan? timeout = null) => SpinWait.SpinUntil(condition, timeout ?? Bound);
 
-    private static string Diag(ShellRun run) =>
-        $"marks=[{string.Join(", ", run.MarkNames)}] error={run.Error} exit={run.ExitCode} firstPresent={run.Main?.FirstPresentDone}";
+    private static string Diag(ShellRun run) => run.Diagnostics;
 
     private static ShellRun StartWithImages(string label, params (string Name, int Width, int Height)[] images) =>
         StartWithImages(label, configure: null, images);

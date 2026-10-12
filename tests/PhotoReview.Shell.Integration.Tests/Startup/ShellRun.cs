@@ -89,9 +89,30 @@ internal sealed class ShellRun : IDisposable
         return MarkNames.Contains(name);
     }
 
-    public bool WaitForMain(TimeSpan? timeout = null) => _mainReady.Wait(timeout ?? DefaultWait);
+    public bool WaitForMain(TimeSpan? timeout = null) => CaptureOnTimeout(_mainReady.Wait(timeout ?? DefaultWait));
 
-    public bool WaitForExit(TimeSpan? timeout = null) => _exited.Wait(timeout ?? DefaultWait);
+    public bool WaitForExit(TimeSpan? timeout = null) => CaptureOnTimeout(_exited.Wait(timeout ?? DefaultWait));
+
+    /// <summary>
+    /// Bảng thread + stack managed của tiến trình test, chụp NGAY khi một lần chờ hết hạn (lúc shell còn treo, trước khi dọn);
+    /// rỗng nếu chưa có lần chờ nào hết hạn. Thông báo lỗi của test nên kèm nó (<see cref="Diagnostics"/>).
+    /// </summary>
+    public string HangReport { get; private set; } = "";
+
+    /// <summary>Trạng thái chẩn đoán dùng chung cho thông báo lỗi: mốc, lỗi, mã thoát, khung đầu và báo cáo treo (nếu có).</summary>
+    public string Diagnostics =>
+        $"marks=[{string.Join(", ", MarkNames)}] error={Error} exit={ExitCode} firstPresent={Main?.FirstPresentDone}"
+        + (HangReport.Length == 0 ? "" : Environment.NewLine + HangReport);
+
+    private bool CaptureOnTimeout(bool signaled)
+    {
+        if (!signaled && HangReport.Length == 0)
+        {
+            HangReport = HangDiagnostics.Capture();
+        }
+
+        return signaled;
+    }
 
     /// <summary>Thời điểm (Stopwatch) của mốc đầu tiên tên <paramref name="name"/>, hoặc null.</summary>
     public long? TimestampOf(string name)

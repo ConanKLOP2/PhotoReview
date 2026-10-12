@@ -34,8 +34,7 @@ public sealed class ShellStartupTests
         }
     }
 
-    private static string Diag(ShellRun run) =>
-        $"marks=[{string.Join(", ", run.MarkNames)}] error={run.Error} exit={run.ExitCode} firstPresent={run.Main?.FirstPresentDone}";
+    private static string Diag(ShellRun run) => run.Diagnostics;
 
     private static bool WaitUntil(Func<bool> condition, TimeSpan? timeout = null)
     {
