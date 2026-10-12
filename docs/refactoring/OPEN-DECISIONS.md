@@ -153,4 +153,5 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 | NOWPF-WP33 | WP-33: COM shell/Recycle Bin typed (IFileOperation, IShellItem2); AOT 80->0 IL. [Detail](decisions/NOWPF-WP33-COM-SHELL.md) |
 | NOWPF-WP36 | WP-36: bản Native AOT của PhotoReview.exe là artifact tùy chọn riêng (không cầu WPF); mặc định vẫn R2R hybrid. [Detail](decisions/NOWPF-WP36-PUBLISH-AOT.md) |
 | NOWPF-THREADAUDIT-TESTS | RÃ  soÃ¡t thread-id/thá»i gian test: sá»­a 5, luáº­t má»›i. [Detail](decisions/NOWPF-THREADAUDIT-TESTS.md) |
+| NOWPF-WP34 | WP-34: IsAotCompatible cho Core/Imaging*/Platform.Windows (+App.Shared, Shell.*); 0 DllImport trong src; cong publish AOT 0 canh bao. [Detail](decisions/NOWPF-WP34-AOT-COMPATIBLE.md) |
 <!-- END GENERATED DECIDED TABLE -->
