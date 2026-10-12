@@ -54,7 +54,6 @@ Mục tiêu: key->frame P95 <= 20 ms ĐẠT (8,8); khung >= 100 ms < 1 % ĐẠT 
 | | (b) TẮT mặc định, bật bằng env/Settings | Không đổi tiêu thụ điện | Gate đợt 3 vẫn hụt; hầu hết người dùng không biết bật |
 | Cửa sổ giữ ấm | (a) 5 s (đang làm) | Phủ nhịp duyệt thường (<= 3 s/ảnh), tắt nhanh | Phím sau khoảng nghỉ > 5 s vẫn bị chặn ~0,47 s ở 25-50 % số lần |
 | | (b) giữ ấm LIÊN TỤC khi cửa sổ active | Không còn khung bị chặn khi đang dùng | Tiêu thụ nền liên tục khi cửa sổ mở (pin, nhiệt) |
-| | (c) 5 s + nâng khi chuột di chuyển trong cửa sổ | Phủ người dùng chuột trước khi bấm phím | Đã có (chuột trong danh sách tương tác); không thêm gì |
 | Khi dùng pin | (a) không đổi (đang làm) | Đơn giản | Chưa đo pin |
 | | (b) tắt giữ ấm khi `SystemPowerStatus` pin/tiết kiệm | Tiết kiệm | Quay lại ~0,47 s chặn trên pin |
 
@@ -68,4 +67,8 @@ chỉ khi người dùng thấy chặn dù đã giữ ấm. Hoàn tác: đặt `
   luôn trả false), `FrameLogTests`, `DeviceKeepAliveNativeTests` (`Category=Native`, WARP: 200 lần chạm không rò bitmap).
 - `Shell.Integration.Tests`: `ShellKeepWarmTests` (shell thật, desktop ẩn, việc giả): tương tác của cửa sổ active chạy rồi tự dừng + đóng cửa sổ trả thiết bị; không
   active/đã mất active/công tắc tắt/WARP = không có gì.
-- Đột biến: xem mục dưới (cập nhật khi xong).
+- Đột biến thủ công (sonnet, worktree riêng): 34 đột biến chọn lọc (KeepWarmController/Options, GpuKeepAlive, FrameLog, nối cửa sổ). 28 bị bắt ngay; 6 sống sót
+  đã lấp bằng test mới (`AfterTheDeadline_TheThreadSleepsInsteadOfSpinning`, `HugeInterval_IsClampedToOneSecond_...`, `Record_IsFlushedImmediately_...`,
+  `NewInstances_AppendToAnExistingFile`, `FrameLogVariable_WritesFrames_AndClosingTheWindowReleasesTheFile` x2 đột biến); 2 tương đương (kiểm `_stop || _failed` đầu
+  `Activate` chỉ là tối ưu; cận dưới của kẹp interval: timer OS vẫn ra ~1 ms). Không phát hiện lỗi thật. Phần `DeviceResources.TouchGpu`/`Flush` trên GPU thật
+  không kiểm được bằng test tự động (CI chỉ có WARP): chứng minh bằng số đo ở perf note (mục 3: thiếu Flush = không có tác dụng).

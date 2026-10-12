@@ -72,9 +72,9 @@ public sealed class ShellKeepWarmTests
 
         Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound), "tương tác của cửa sổ active không kích hoạt giữ ấm");
         Assert.True(SpinWait.SpinUntil(() => main.KeepWarm!.Activations >= 1, Bound));
-        Thread.Sleep(900); // > WindowMs (400)
+        Pacing.PauseMs(900); // > WindowMs (400)
         var settled = work.Touches;
-        Thread.Sleep(250);
+        Pacing.PauseMs(250);
         Assert.Equal(settled, work.Touches); // hết khoảng giữ ấm: im lặng
 
         Stop(run);
@@ -97,7 +97,7 @@ public sealed class ShellKeepWarmTests
         Send(run, WmActivate, 0); // WA_INACTIVE
         Send(run, WmMouseMove, 0, 0);
         Send(run, WmKeyDown, 0x41);
-        Thread.Sleep(300);
+        Pacing.PauseMs(300);
 
         Assert.Equal(0, main.KeepWarm!.Activations);
         Assert.Equal(0, work.Touches);
@@ -121,12 +121,38 @@ public sealed class ShellKeepWarmTests
         Assert.True(SpinWait.SpinUntil(() => main.KeepWarm!.Activations == 1, Bound));
 
         Send(run, WmActivate, 0);
-        Thread.Sleep(KeepWarmController.ThrottleMs + 50); // qua ngưỡng throttle: nếu không chặn theo active thì sẽ kích hoạt lần 2
+        Pacing.PauseMs(KeepWarmController.ThrottleMs + 50); // qua ngưỡng throttle: nếu không chặn theo active thì sẽ kích hoạt lần 2
         Send(run, WmKeyDown, 0x41);
 
         Assert.Equal(1, main.KeepWarm!.Activations);
 
         Stop(run);
+    }
+
+    [Fact]
+    public void FrameLog_WritesFrames_AndClosingTheWindowReleasesTheFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "framelog-" + Guid.NewGuid().ToString("N") + ".log");
+        try
+        {
+            using var run = StartShell(o => o with { KeepWarm = new KeepWarmOptions(Enabled: false), FrameLogPath = path }, out _);
+
+            Stop(run);
+
+            var lines = File.ReadAllLines(path); // ném IOException nếu cửa sổ đóng mà không trả tệp
+            Assert.NotEmpty(lines);
+            Assert.StartsWith("F gap=", lines[0]);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     [Fact]

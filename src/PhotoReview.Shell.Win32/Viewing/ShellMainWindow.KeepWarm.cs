@@ -19,7 +19,7 @@ internal sealed partial class ShellMainWindow
 
     private void RegisterKeepWarm()
     {
-        _frameLog = FrameLog.FromEnvironment();
+        _frameLog = _options.FrameLogPath is { Length: > 0 } logPath ? FrameLog.FromEnvironment(_ => logPath) : FrameLog.FromEnvironment();
         var options = _options.KeepWarm ?? KeepWarmOptions.FromEnvironment();
         if (!options.Enabled || (_options.PreferWarp && _options.KeepWarmWork is null))
         {

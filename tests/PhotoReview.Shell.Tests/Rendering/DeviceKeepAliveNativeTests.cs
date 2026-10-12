@@ -38,13 +38,15 @@ public sealed class DeviceKeepAliveNativeTests
         var work = GpuKeepAlive.OpenHardwareWork();
         if (work is null)
         {
-            return; // runner CI: chỉ có WARP, giữ ấm không có nghĩa
+            Assert.Null(work); // runner CI: chỉ có WARP, giữ ấm không có nghĩa
+            return;
         }
 
         using (work)
         {
             work.Touch();
             work.Touch();
+            Assert.NotNull(work);
         }
     }
 

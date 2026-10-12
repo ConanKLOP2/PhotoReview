@@ -35,6 +35,9 @@ internal sealed record ShellStartupOptions
     /// <summary>WP21-STALL: cấu hình giữ GPU ấm (test). Null = biến môi trường <c>PHOTOREVIEW_GPU_KEEPWARM*</c>, mặc định bật.</summary>
     public PhotoReview.Shell.Win32.Viewing.KeepWarmOptions? KeepWarm { get; init; }
 
+    /// <summary>WP21-STALL: tệp nhật ký khung (test). Null = biến môi trường <c>PHOTOREVIEW_FRAME_LOG</c>.</summary>
+    public string? FrameLogPath { get; init; }
+
     /// <summary>WP21-STALL: seam việc giữ ấm (test giả, không cần GPU thật). Null = thiết bị offscreen riêng trên GPU thật.</summary>
     public Func<PhotoReview.Shell.Rendering.IGpuKeepAliveWork?>? KeepWarmWork { get; init; }
 
@@ -427,7 +430,7 @@ internal sealed class ShellStartup : IDisposable
             _cloak, _placementStore, NativeWindowPlacement.Instance, displayClock, log, _mark,
             new ShellMainWindowOptions(_options.PreferWarp, _launch.Smoke ? null : placementFile, activate,
                 SettingsStore: store, ZoomPrompt: services.GetService<IZoomPromptService>(), Windowing: _options.Windowing,
-                KeepWarm: _options.KeepWarm, KeepWarmWork: _options.KeepWarmWork));
+                KeepWarm: _options.KeepWarm, KeepWarmWork: _options.KeepWarmWork, FrameLogPath: _options.FrameLogPath));
         _forwardHandler = new ForwardedOpenHandler(_main, log);
         _main.AttachRenderer();
         _main.AttachOverlay(services, _frameClock); // WP-23: HUD có mặt từ khung đầu

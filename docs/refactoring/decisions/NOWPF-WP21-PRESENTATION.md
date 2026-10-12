@@ -56,6 +56,9 @@ kích hoạt cửa sổ không đổi gì. `Present(0)` ~1,2 ms. Chính sách đ
 
 ## 4. Còn lại, CHƯA XÁC NHẬN (cần chủ dự án)
 
+> Cập nhật 2026-10-12: nguyên nhân gốc ĐÃ XÁC ĐỊNH và đã sửa bằng giữ GPU ấm - xem [NOWPF-WP21STALL](NOWPF-WP21STALL-GPU-KEEPWARM.md). Phần dưới giữ làm lịch sử
+> (giả thuyết DWM/swap chain ở đây SAI: chặn ở lần nộp việc đầu cho GPU Intel sau khi nó rỗi; WARP không bị).
+
 Sau `Present(0)`, nhịp khung dày đều (pan/crossfade 60 Hz) P95 ~5 ms, nhưng khung ĐƠN LẺ sau khoảng nghỉ 100-450 ms (một lần bấm phím điều hướng/zoom) bị
 `ID2D1DeviceContext::EndDraw` chặn ~0,44-0,5 s ở ~25-40 % số lần trên máy dev (cả `Present(0)`, cả WARP có biểu hiện tương tự ở Present); không tái hiện ở nhịp 16 ms.
 Nguyên nhân gốc chưa xác định, không do adapter (Intel UHD 630 là adapter của màn hình), buffer, swap effect, latency, timer. Có thể là hành vi quản lý nguồn

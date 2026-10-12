@@ -26,10 +26,12 @@ namespace PhotoReview.Shell.Win32;
 /// <param name="InputEnvironment">WP-22: seam đọc hệ thống của nhập liệu (test); null = Win32 thật.</param>
 /// <param name="Windowing">WP-25: seam F11/monitor/DWM của cửa sổ hoá (test); null = Win32 thật.</param>
 /// <param name="KeepWarm">WP21-STALL: cấu hình giữ GPU ấm; null = đọc biến môi trường <c>PHOTOREVIEW_GPU_KEEPWARM*</c> (mặc định bật).</param>
+/// <param name="FrameLogPath">WP21-STALL: tệp nhật ký khung (test); null = biến môi trường <c>PHOTOREVIEW_FRAME_LOG</c>, mặc định tắt.</param>
 /// <param name="KeepWarmWork">WP21-STALL: seam việc giữ ấm (test dùng giả); null = thiết bị D3D/D2D offscreen riêng trên GPU thật.</param>
 internal sealed record ShellMainWindowOptions(bool PreferWarp = false, string? PlacementFile = null, bool Activate = true,
     SettingsStore? SettingsStore = null, IZoomPromptService? ZoomPrompt = null, ShellInputEnvironment? InputEnvironment = null,
-    ShellWindowingSeams? Windowing = null, KeepWarmOptions? KeepWarm = null, Func<IGpuKeepAliveWork?>? KeepWarmWork = null);
+    ShellWindowingSeams? Windowing = null, KeepWarmOptions? KeepWarm = null, Func<IGpuKeepAliveWork?>? KeepWarmWork = null,
+    string? FrameLogPath = null);
 
 /// <summary>
 /// Cửa sổ chính của shell Win32 (NO-WPF-EXEC-PLAN C-15/C-16, WP-20 giai đoạn A): sở hữu <see cref="ShellWindow"/> + bề mặt Direct2D +

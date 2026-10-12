@@ -68,6 +68,49 @@ public sealed class FrameLogTests
     }
 
     [Fact]
+    public void Record_IsFlushedImmediately_WhileTheLogIsStillOpen()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "framelog-" + Guid.NewGuid().ToString("N") + ".log");
+        try
+        {
+            using var log = new FrameLog(path);
+            log.Record(frameStart: 5, frameEnd: 5 + (Stopwatch.Frequency / 100), endDrawMs: 1, presentMs: 0.5);
+
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            Assert.StartsWith("F gap=0.0 frame=10.00", reader.ReadToEnd()); // công cụ đo đọc tệp khi tiến trình còn chạy
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void NewInstances_AppendToAnExistingFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "framelog-" + Guid.NewGuid().ToString("N") + ".log");
+        try
+        {
+            using (var first = new FrameLog(path))
+            {
+                first.Record(1, 2, 0, 0);
+            }
+
+            using (var second = new FrameLog(path))
+            {
+                second.Record(1, 2, 0, 0);
+            }
+
+            Assert.Equal(2, File.ReadAllLines(path).Length);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Record_AfterDispose_IsANoOp()
     {
         var path = Path.Combine(Path.GetTempPath(), "framelog-" + Guid.NewGuid().ToString("N") + ".log");

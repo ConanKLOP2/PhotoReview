@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using PhotoReview.Shell.Rendering;
 
 namespace PhotoReview.Shell.Tests.Rendering;
@@ -29,8 +30,11 @@ public sealed class GpuKeepAliveTests
 
         public Exception? FailWith { get; set; }
 
+        public uint NativeThreadId { get; private set; }
+
         public void Touch()
         {
+            NativeThreadId = GetCurrentThreadId();
             lock (TouchThreads)
             {
                 TouchThreads.Add(Environment.CurrentManagedThreadId);
@@ -51,6 +55,8 @@ public sealed class GpuKeepAliveTests
         }
     }
 
+    private static void Pause(int ms) => SpinWait.SpinUntil(() => false, ms);
+
     private static long After(int ms) => Stopwatch.GetTimestamp() + (ms * Stopwatch.Frequency / 1000);
 
     private static GpuKeepAlive Create(FakeWork work, int intervalMs = 5)
@@ -68,7 +74,7 @@ public sealed class GpuKeepAliveTests
         var work = new FakeWork();
         using var keepAlive = Create(work);
 
-        Thread.Sleep(50);
+        Pause(50);
 
         Assert.False(keepAlive.HasThread);
         Assert.Null(work.OpenThreadId);
@@ -88,9 +94,9 @@ public sealed class GpuKeepAliveTests
         Assert.True(keepAlive.HasThread);
         Assert.NotEqual(Environment.CurrentManagedThreadId, work.OpenThreadId);
         Assert.Equal(work.OpenThreadId, Assert.Single(work.TouchThreads)); // mở và chạm trên cùng một luồng nền
-        Thread.Sleep(450); // quá hạn chót (150 ms) rất xa
+        Pause(450); // quá hạn chót (150 ms) rất xa
         var stopped = work.Touches;
-        Thread.Sleep(200);
+        Pause(200);
         Assert.Equal(stopped, work.Touches); // hết khoảng hiệu lực: không chạm nữa
         Assert.Equal(stopped, keepAlive.Ticks);
         Assert.False(work.IsDisposed); // thiết bị giữ lại cho lần tương tác sau (không mở lại mỗi lần)
@@ -109,7 +115,7 @@ public sealed class GpuKeepAliveTests
 
         keepAlive.Activate(After(60));
         Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound));
-        Thread.Sleep(250);
+        Pause(250);
         var before = work.Touches;
 
         keepAlive.Activate(After(200));
@@ -127,9 +133,9 @@ public sealed class GpuKeepAliveTests
         keepAlive.Activate(After(1500));
         keepAlive.Activate(After(1)); // hạn chót cũ hơn không được rút ngắn
         Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound));
-        Thread.Sleep(300);
+        Pause(300);
         var a = work.Touches;
-        Thread.Sleep(100);
+        Pause(100);
 
         Assert.True(work.Touches > a, "khoảng giữ ấm bị rút ngắn bởi hạn chót cũ hơn");
     }
@@ -141,11 +147,71 @@ public sealed class GpuKeepAliveTests
         using var keepAlive = Create(work, intervalMs: 50);
 
         keepAlive.Activate(After(400));
-        Thread.Sleep(450);
+        Pause(450);
 
         // 400 ms / 50 ms = ~8 lần; vòng không ngủ sẽ ra hàng chục nghìn.
         Assert.InRange(work.Touches, 3, 14);
     }
+
+    [Fact]
+    public void AfterTheDeadline_TheThreadSleepsInsteadOfSpinning()
+    {
+        var work = new FakeWork();
+        using var keepAlive = Create(work, intervalMs: 5);
+        keepAlive.Activate(After(100));
+        Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound));
+        Pause(400); // quá hạn chót rất xa: luồng phải đã ngủ trên event
+
+        var before = ThreadCpuTime(work.NativeThreadId);
+        Pause(400);
+        var used = ThreadCpuTime(work.NativeThreadId) - before;
+
+        // Vòng bận ăn ~400 ms CPU trong 400 ms; luồng ngủ gần như 0.
+        Assert.True(used.TotalMilliseconds < 150, $"luồng giữ ấm tốn {used.TotalMilliseconds:F0} ms CPU khi hết hạn (vòng bận?)");
+    }
+
+    [Fact]
+    public void NonPositiveInterval_IsClampedToOneMillisecond_NotABusyLoop()
+    {
+        var work = new FakeWork();
+        using var keepAlive = Create(work, intervalMs: -5);
+
+        keepAlive.Activate(After(300));
+        Pause(450);
+
+        // 300 ms / 1 ms = tối đa ~300; không kẹp thì hàng chục nghìn.
+        Assert.InRange(work.Touches, 2, 500);
+    }
+
+    [Fact]
+    public void HugeInterval_IsClampedToOneSecond_SoTheDeviceStillGetsTouched()
+    {
+        var work = new FakeWork();
+        using var keepAlive = Create(work, intervalMs: 60_000);
+
+        keepAlive.Activate(After(2500));
+        Pause(2900);
+
+        // Kẹp về 1000 ms: chạm ở ~0, ~1 s, ~2 s. Không kẹp thì chạm đúng một lần rồi ngủ 60 s.
+        Assert.True(work.Touches >= 2, $"chỉ {work.Touches} lần chạm trong 2,9 s");
+    }
+
+    private static TimeSpan ThreadCpuTime(uint nativeThreadId)
+    {
+        using var process = Process.GetCurrentProcess();
+        foreach (ProcessThread thread in process.Threads)
+        {
+            if (thread.Id == (int)nativeThreadId)
+            {
+                return thread.TotalProcessorTime;
+            }
+        }
+
+        throw new InvalidOperationException("không thấy luồng giữ ấm trong tiến trình");
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
 
     [Fact]
     public void NoGpu_DisablesItselfWithoutThrowing()
@@ -197,7 +263,7 @@ public sealed class GpuKeepAliveTests
         Assert.True(work.IsDisposed, "Dispose phải chờ luồng giữ ấm trả thiết bị");
         var touches = work.Touches;
         keepAlive.Activate(After(60_000));
-        Thread.Sleep(100);
+        Pause(100);
         Assert.Equal(touches, work.Touches);
         Assert.True(keepAlive.IsDisabled);
         keepAlive.Dispose(); // idempotent
