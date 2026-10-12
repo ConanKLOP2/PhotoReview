@@ -822,6 +822,51 @@ public sealed class ShellComWp33Tests
         Assert.Throws<ObjectDisposedException>(() => window.LocationUrl);
     }
 
+    private sealed class CountingWindow(string? location, IntPtr unknown) : IExplorerWindow
+    {
+        public int Disposed { get; private set; }
+        public string? LocationUrl => location;
+        public IntPtr AcquireUnknown() => unknown;
+        public void Dispose() => Disposed++;
+    }
+
+    private sealed class CountingSource(params IExplorerWindow[] windows) : IExplorerWindowSource
+    {
+        public int Disposed { get; private set; }
+        public IEnumerable<IExplorerWindow> Windows => windows;
+        public void Dispose() => Disposed++;
+    }
+
+    [Fact]
+    public async Task Service_ReleasesEveryWindowAndTheSource_WhateverTheOutcome()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PhotoReviewWp33_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            // 1) not the folder 2) the folder, but a window that answers no IServiceProvider (the read fails) 3) not the folder.
+            using var plain = new FakeNativeCom(); // QueryInterface(IServiceProvider) -> E_NOINTERFACE
+            var other1 = new CountingWindow("file:///Z:/nowhere/", 0);
+            var matching = new CountingWindow(new Uri(folder + @"").AbsoluteUri, plain.Acquire());
+            var other2 = new CountingWindow("file:///Y:/elsewhere/", 0);
+            var source = new CountingSource(other1, matching, other2);
+            using var service = new ExplorerOrderService(null, null, shell: new ExplorerOrderService.ShellAccess(() => true, () => source));
+
+            var snapshot = await service.TryGetSnapshotAsync(folder, TimeSpan.FromSeconds(30), CancellationToken.None);
+
+            Assert.Equal(ExplorerOrderStatus.NativeViewUnavailable, snapshot.Status);
+            Assert.Equal(1, other1.Disposed);
+            Assert.Equal(1, matching.Disposed);
+            Assert.Equal(1, other2.Disposed);
+            Assert.Equal(1, source.Disposed);
+            Assert.Equal(0, plain.Refs); // the reference AcquireUnknown handed out was released by the read
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+    }
+
     [Fact]
     public async Task Service_ShellClassNotRegistered_IsReportedAsShellUnavailable()
     {
