@@ -226,10 +226,10 @@ public sealed partial class ShellScrollBarEndToEndTests
         Assert.Equal(after.TrackLength * layout.ViewportHeight / layout.ExtentHeight, after.Thumb.Height, 4);
 
         // Khung có thanh cuộn vẫn vẽ + Present được trên bề mặt thật (lỗi vẽ bị bắt và không tăng bộ đếm).
-        var total = run.OnUi(() => main.Stats.Total);
-        var drawn = run.OnUi(() => main.ScrollBars.DrawnFrames);
-        run.OnUi(() => main.RenderNow());
-        Assert.True(run.OnUi(() => main.Stats.Total) > total, "khung có thanh cuộn không Present được");
+        // Hai bộ đếm đọc trong CÙNG một lượt UI: đọc ở hai lượt, một khung nhịp chen giữa làm Total đã tăng mà drawn đọc sau nó.
+        var (total, drawn) = run.OnUi(() => (main.Stats.Total, main.ScrollBars.DrawnFrames));
+        // RenderNow đơn lẻ có thể bị FramePacer hoãn (swap chain chưa sẵn sàng): gọi lại tới khi có khung (ShellFrames).
+        Assert.True(run.OnUi(() => ShellFrames.RenderUntil(main, () => main.Stats.Total > total)), "khung có thanh cuộn không Present được");
         Assert.True(run.OnUi(() => main.ScrollBars.DrawnFrames) > drawn, "khung thật không vẽ thanh cuộn (DrawScrollBars chưa được gọi)");
         StopAndAssertClean(run);
     }

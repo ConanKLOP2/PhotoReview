@@ -11,7 +11,7 @@ namespace PhotoReview.Shell.WpfBridge;
 /// WPF lười (<c>OnExplicitShutdown</c>, không <c>Run</c>) nếu thread chưa có; dispatcher WPF chạy nhờ message loop Win32 của shell
 /// (Dispatcher gửi WM_* vào cửa sổ ẩn của nó, loop <c>DispatchMessage</c> chung) và nhờ <see cref="RaiseThreadMessage"/> cho phím.
 /// </summary>
-internal static class WpfSession
+internal static partial class WpfSession
 {
     private const uint MbOk = 0x0;
     private const uint MbIconWarning = 0x30;
@@ -110,10 +110,10 @@ internal static class WpfSession
 
     private static bool IsValidWindow(nint hwnd) => hwnd != 0 && IsWindow(hwnd);
 
-    [DllImport("user32.dll")]
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindow(nint hwnd);
+    private static partial bool IsWindow(nint hwnd);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int MessageBoxW(nint hwnd, string text, string caption, uint type);
+    [LibraryImport("user32.dll", EntryPoint = "MessageBoxW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int MessageBoxW(nint hwnd, string text, string caption, uint type);
 }

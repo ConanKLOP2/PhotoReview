@@ -1,6 +1,6 @@
 ---
 id: NOWPF-FAULTINJ-JOURNAL
-order: 1020
+order: 1040
 summary: |-
   Bước 1 "chứng minh bằng số" (2026-10-12): ma trận điểm lỗi x thao tác cho Move/Copy/Recycle/Undo/Retry/Dismiss/journal. Ma trận 15 thao tác x 8 loại lỗi: 36 ô đã có từ PR #349, 48 ô LẤP ở PR này, 5 ô còn THIẾU (biến thể cùng mã); phần lấp gồm UnauthorizedAccess, hủy giữa chừng, retry bị ngắt sau crash thật, hai lỗi liên tiếp qua restart, Dismiss, xoá vĩnh viễn không Thùng rác, thư mục đích rỗng, reconcile bị ngắt cho Copy nhóm/Recycle/Undo). Không đổi mã sản phẩm, không tìm thấy lỗi dữ liệu thật. Đột biến: 29 chạy, 24 bị bắt ngay, 1 chỉ bị bộ rộng bắt, 2 tương đương, 2 lỗ hổng test thật đã lấp (retry nhóm Superseded, retry ghi Failed khi Prepared lỗi). Còn mở: 3 quan sát hành vi cần chủ dự án quyết (thư mục đích rỗng sau rollback/crash/undo, mục Delete Failed cũ sau khi Retry Move xong, B-01 cross-volume + journal Fast).
 ---

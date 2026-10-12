@@ -91,13 +91,7 @@ public static class LibRawAvailability
 
     private static string[] BuildRequiredExports()
     {
-        var names = new SortedSet<string>(StringComparer.Ordinal) { "libraw_version" };
-        foreach (var method in typeof(LibRawNativeMethods).GetMethods(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static))
-        {
-            var import = method.GetCustomAttribute<DllImportAttribute>();
-            if (import is not null && !string.IsNullOrEmpty(import.EntryPoint)) names.Add(import.EntryPoint);
-        }
-
+        var names = new SortedSet<string>(LibRawNativeMethods.EntryPoints, StringComparer.Ordinal) { "libraw_version" };
         return [.. names];
     }
 

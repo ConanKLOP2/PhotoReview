@@ -12,7 +12,7 @@ namespace PhotoReview.Core.IO;
 /// has no multi-step failure mode that can leave the target name missing. Needs Windows 10 1709+ on NTFS; anywhere else
 /// the rename fails, the target is untouched and compaction is simply skipped.
 /// </summary>
-public sealed class PhysicalJournalCompactionFiles : IJournalCompactionFiles
+public sealed partial class PhysicalJournalCompactionFiles : IJournalCompactionFiles
 {
     public Stream OpenReadDenyWriters(string path)
     {
@@ -100,7 +100,7 @@ public sealed class PhysicalJournalCompactionFiles : IJournalCompactionFiles
         }
     }
 
-    private static class NativeMethods
+    private static partial class NativeMethods
     {
         internal const uint GenericWrite = 0x40000000;
         internal const uint Delete = 0x00010000;
@@ -111,14 +111,14 @@ public sealed class PhysicalJournalCompactionFiles : IJournalCompactionFiles
         internal const int FileRenameFlagReplaceIfExists = 0x1;
         internal const int FileRenameFlagPosixSemantics = 0x2;
 
-        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
+        [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        internal static extern SafeFileHandle CreateFileW(string fileName, uint desiredAccess, uint shareMode, IntPtr securityAttributes,
+        internal static partial SafeFileHandle CreateFileW(string fileName, uint desiredAccess, uint shareMode, IntPtr securityAttributes,
             uint creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
 
-        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+        [LibraryImport("kernel32.dll", EntryPoint = "SetFileInformationByHandle", SetLastError = true)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        internal static extern bool SetFileInformationByHandle(SafeFileHandle file, int fileInformationClass, IntPtr information, uint bufferSize);
+        internal static partial bool SetFileInformationByHandle(SafeFileHandle file, int fileInformationClass, IntPtr information, uint bufferSize);
     }
 }
