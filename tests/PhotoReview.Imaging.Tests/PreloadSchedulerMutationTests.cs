@@ -66,8 +66,8 @@ public sealed partial class PreloadSchedulerMutationTests : IDisposable
         private readonly ConcurrentDictionary<string, TaskCompletionSource> _started = new(StringComparer.OrdinalIgnoreCase);
 
         public ConcurrentQueue<string> Started { get; } = new();
-        public ConcurrentDictionary<string, int> PreloadThread { get; } = new(StringComparer.OrdinalIgnoreCase);
-        public ConcurrentDictionary<string, int> KeyThread { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public ConcurrentDictionary<string, Thread> PreloadThread { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public ConcurrentDictionary<string, Thread> KeyThread { get; } = new(StringComparer.OrdinalIgnoreCase);
         public ConcurrentDictionary<string, int> KeyCalls { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Func<string, CancellationToken, Task>? OnPreload { get; set; }
         public Func<string, Exception?>? KeyFailure { get; set; }
@@ -92,7 +92,7 @@ public sealed partial class PreloadSchedulerMutationTests : IDisposable
 
         public ImageCacheKey GetCurrentCacheKey(CatalogEntry entry)
         {
-            KeyThread[entry.Path] = Environment.CurrentManagedThreadId;
+            KeyThread[entry.Path] = Thread.CurrentThread;
             KeyCalls.AddOrUpdate(entry.Path, 1, (_, n) => n + 1);
             if (KeyFailure?.Invoke(entry.Path) is { } failure) throw failure;
             return GetCurrentCacheKey(entry.Path);
@@ -100,7 +100,7 @@ public sealed partial class PreloadSchedulerMutationTests : IDisposable
 
         public async Task PreloadAsync(string path, CancellationToken cancellationToken = default)
         {
-            PreloadThread[path] = Environment.CurrentManagedThreadId;
+            PreloadThread[path] = Thread.CurrentThread;
             Started.Enqueue(path);
             StartedSignal(path).TrySetResult();
             // A real decode never completes synchronously: run the rest off the scheduler's thread.
@@ -488,6 +488,25 @@ public sealed partial class PreloadSchedulerMutationTests : IDisposable
 
     // ---- caller-thread window -------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Starts <paramref name="start"/> on a brand-new dedicated thread (which ends after its synchronous part) and returns that
+    /// <see cref="Thread"/> once the returned task completes.
+    /// </summary>
+    private static async Task<Thread> RunFromDedicatedThread(Func<Task> start)
+    {
+        Thread? caller = null;
+        var started = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            caller = Thread.CurrentThread;
+            try { started.SetResult(start()); }
+            catch (Exception ex) { started.SetException(ex); }
+        }) { IsBackground = true };
+        thread.Start();
+        await (await started.Task.WaitAsync(Guard)).WaitAsync(Guard);
+        return caller!;
+    }
+
     [Theory(DisplayName = "Only the preload window is examined on the caller's thread; everything beyond it continues on the thread pool")]
     [InlineData(1)]
     [InlineData(-1)]
@@ -499,19 +518,19 @@ public sealed partial class PreloadSchedulerMutationTests : IDisposable
         var pace = new NavigationPace(clock.Now);
         if (direction < 0) { pace.Record(11); pace.Record(10); }
         var scheduler = Create(target, entries, workers: 16, new PreloadWindow(3, 2), wholeFolder: true, pace: pace);
-        var caller = Environment.CurrentManagedThreadId;
-
-        await scheduler.PreloadAroundAsync(10).WaitAsync(Guard);
+        // A dedicated caller thread: a thread-pool caller is handed back to the pool at the first yield and can then run
+        // "beyond the window" work itself (CI flake), and managed thread ids are reused once a thread ends: compare Thread objects.
+        var caller = await RunFromDedicatedThread(() => scheduler.PreloadAroundAsync(10));
 
         var onCaller = new HashSet<int> { 10 + direction, 10 + 2 * direction, 10 + 3 * direction, 10 - direction, 10 - 2 * direction };
         for (var i = 0; i < entries.Length; i++)
         {
             if (i == 10) continue;
             Assert.True(target.KeyThread.ContainsKey(entries[i].Path), $"index {i} was never examined (whole folder expected)");
-            Assert.Equal(onCaller.Contains(i), target.KeyThread[entries[i].Path] == caller);
+            Assert.Equal(onCaller.Contains(i), ReferenceEquals(target.KeyThread[entries[i].Path], caller));
         }
         for (var i = 0; i < entries.Length; i++)
-            if (i != 10 && onCaller.Contains(i)) Assert.Equal(caller, target.PreloadThread[entries[i].Path]);
+            if (i != 10 && onCaller.Contains(i)) Assert.Same(caller, target.PreloadThread[entries[i].Path]);
     }
 
     [Fact(DisplayName = "The first window decodes (up to the worker count) start on the caller's thread, before the first yield")]
@@ -520,14 +539,12 @@ public sealed partial class PreloadSchedulerMutationTests : IDisposable
         var entries = Entries(12);
         var target = new Target();
         var scheduler = Create(target, entries, workers: 3, new PreloadWindow(8, 0));
-        var caller = Environment.CurrentManagedThreadId;
+        var caller = await RunFromDedicatedThread(() => scheduler.PreloadAroundAsync(0));
 
-        await scheduler.PreloadAroundAsync(0).WaitAsync(Guard);
-
-        Assert.Equal(caller, target.PreloadThread[entries[1].Path]);
-        Assert.Equal(caller, target.PreloadThread[entries[2].Path]);
-        Assert.Equal(caller, target.PreloadThread[entries[3].Path]);
-        Assert.NotEqual(caller, target.PreloadThread[entries[8].Path]); // started after the batch yield
+        Assert.Same(caller, target.PreloadThread[entries[1].Path]);
+        Assert.Same(caller, target.PreloadThread[entries[2].Path]);
+        Assert.Same(caller, target.PreloadThread[entries[3].Path]);
+        Assert.NotSame(caller, target.PreloadThread[entries[8].Path]); // started after the batch yield
     }
 
     // ---- whole-folder fill limit ----------------------------------------------------------------------------------
