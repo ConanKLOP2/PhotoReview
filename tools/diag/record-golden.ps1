@@ -4,7 +4,8 @@
 
 .DESCRIPTION
     The golden files are the equivalence reference of the Win32 shell (docs/refactoring/decisions/NO-WPF-EXEC-PLAN.md section 7.3):
-    G-VIEW viewport-layout, G-INPUT input-scripts, G-KEY key-names, G-MENU context-menu, G-OVL overlay-boxes. They are recorded by the
+    G-VIEW viewport-layout, G-INPUT input-scripts, G-KEY key-names, G-MENU context-menu, G-OVL overlay-boxes, and (WP-28) the
+    G-PIX reference frames tests/Fixtures/golden/pixel/*.png (RenderTargetBitmap of the WPF window). They are recorded by the
     real WPF MainWindow (never shown: laid out at fixed client sizes), on the private hidden desktop of tools/run-tests-hidden.ps1,
     with PHOTOREVIEW_GOLDEN_RECORD=1 (the recorders refuse to write without it). Output is deterministic (no timestamp, no machine
     name): running it twice on the same build must leave `git diff` empty. A non-empty diff after a WPF change is the behaviour change
@@ -42,7 +43,8 @@ $guard = @('--blame-hang', '--blame-hang-timeout', '120s', '--blame-hang-dump-ty
 try {
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'tools\run-tests-hidden.ps1') `
         $integration -c Release --no-build --filter 'FullyQualifiedName~GoldenRecordTests' @guard
-    if ($LASTEXITCODE -ne 0) { throw 'recording viewport/input/menu/overlay golden failed' }
+    # The filter also matches PixelGoldenRecordTests (G-PIX frames).
+    if ($LASTEXITCODE -ne 0) { throw 'recording viewport/input/menu/overlay/pixel golden failed' }
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'tools\run-tests-hidden.ps1') `
         $appTests -c Release --no-build --filter 'FullyQualifiedName~KeyNameGoldenTests.RecordKeyNames' @guard
     if ($LASTEXITCODE -ne 0) { throw 'recording key-names golden failed' }
