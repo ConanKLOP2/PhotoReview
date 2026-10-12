@@ -22,7 +22,7 @@ tham chiếu CPU), [WP-21](NOWPF-WP21-PRESENTATION.md), [WP-23](NOWPF-WP23-OVERL
 | Bảo vệ golden | `PixelGoldenWpfConformanceTests` (`Category=UI`) | ghi lại trên WPF mỗi lần chạy, PSNR >= 42 dB so với PNG đã commit; tên file == danh mục; <= 5 MB |
 | Test shell | `tests/PhotoReview.Shell.Tests/Golden/PixelGoldenTests.cs`, `PixelGoldenShellRenderer.cs` | `ScrollBarRig` (viewport + ViewerState thật) + `PresentationComposer`/`ImageLayer` + `D2DRenderSurface.CreateOffscreenSurface` (WARP) + `ShellScrollBars`; kích thước theo ca, không phụ thuộc màn hình runner. `Category=Integration` -> CHẠY TRÊN CI |
 | Test HUD | `PixelGoldenHudTests.cs` (`Category=Native`: DirectWrite thật, như G-OVL shell) | hộp panel từ pixel, vùng ngoài panel, màu thân panel |
-| Test công cụ | `PixelGoldenSupportTests.cs` (40 test, không cần GPU) | PSNR/SSIM/MAE/dịch/hộp/PNG/ảnh diff trên khung nhỏ làm tay + phán quyết ở biên ngưỡng |
+| Test công cụ | `PixelGoldenSupportTests.cs` (38 test, không cần GPU) | PSNR/SSIM/MAE/dịch/hộp/PNG/ảnh diff trên khung nhỏ làm tay + phán quyết ở biên ngưỡng |
 | Báo cáo | `tools/diag/pixel-golden-report.ps1` | số đo từng ca + ảnh diff vào `work\pixel-golden-report` (`-IncludeHud` thêm HUD); test cổng cũng ghi ảnh diff vào `%TEMP%\PhotoReview-pixel-golden` (hoặc `PHOTOREVIEW_PIXEL_REPORT_DIR`) và nêu đường dẫn trong thông báo lỗi |
 
 Tái tạo golden: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/diag/record-golden.ps1` (hoặc chỉ khung pixel:
@@ -73,10 +73,36 @@ Chữ không được so (ClearType của WPF vs DirectWrite), theo 7.3 (2).
 
 ## 5. Kiểm chứng
 
-- Build Release 0 cảnh báo / 0 lỗi; `PixelGolden*` 78 test xanh (Shell.Tests: 37 ca + 8x2 orientation + 3 HUD + kiểm danh mục/golden + 40 test công cụ);
-  `PixelGoldenWpfConformanceTests` xanh trên desktop ẩn; Architecture, Shell, Shell.Integration, Core, Imaging, App, Integration (lọc CI) xanh.
-- Đột biến thủ công: xem bảng ở PR/mục 6.
+- Build Release 0 cảnh báo / 0 lỗi; `PixelGolden*` 95 test xanh (Shell.Tests: 26 ca ảnh + 8x2 orientation + 9 ca "100 % = bản sao tới pixel nguyên gần nhất" +
+  3 HUD + 4 kiểm danh mục/golden/canvas/báo cáo + 38 test công cụ); `PixelGoldenWpfConformanceTests` xanh trên desktop ẩn; Architecture, Shell,
+  Shell.Integration, Core, Imaging, App, Integration (lọc CI) xanh.
+- Số đo chạy lại bằng `tools/diag/pixel-golden-report.ps1 -IncludeHud`.
 
-## 6. Đột biến
+## 6. Đột biến (28, thủ công: sửa một chỗ -> build -> `FullyQualifiedName~PixelGolden` -> trả lại bằng `git checkout`)
 
-(bảng điền sau khi chạy; mỗi dòng: sửa gì, test nào đỏ, hoặc đột biến sống sót + test lấp)
+28/28 bị bắt (một ca sống sót lần đầu, đã lấp bằng test, chạy lại thì đỏ).
+
+| # | Đột biến (mã) | Test đỏ |
+|---|---|---|
+| P01 | `ImageTransforms` ma trận orientation 6 đổi dấu | `ExifOrientation_RawBufferWithTheRendererMatrix` (6) |
+| P02 | `PixelOps.CopyTransposed` orientation 6 = 8 | `ExifOrientation_DecodedBuffer` (6) |
+| P03 | bitmap D2D tạo `R8G8B8A8` thay `B8G8R8A8` (kênh màu R/B) | 45 test |
+| P04 | `ImageLayer.TryDraw` opacity mặc định 0,97 (alpha) | 15 test (mọi ca 100 % giống hệt) |
+| P05 | layout: gốc ảnh x + 1 px | 35 test |
+| P06 | `ViewportState.ImageOrigin` trừ thêm 1 px offset ngang | 34 test |
+| P07 | `TrySnapPixelExact` làm tròn lên thay vì gần nhất | SỐNG SÓT lần đầu (cả hai trong ngưỡng 1 px); lấp: `OneToOne_IsTheSourceCopiedToTheNearestWholePixel` (9 ca, 3 đỏ) |
+| P08 | HighQuality -> NearestNeighbor | 6 ca Fit/zoom |
+| P09 | Linear -> cubic | 4 ca (`*-linear`, `z50-chart-linear`) |
+| P10 | màu con trượt #4A4A4A -> #5A5A5A | 16 ca (thanh cuộn) |
+| P11 | độ dày thanh cuộn 10 -> 12 | 15 ca |
+| P12 | `RenderColors.DarkCanvas` 0x10 -> 0x11 | 18 ca |
+| P13 | `ShellMainWindow.CanvasColor` 0x10 -> 0x12 (hằng của cửa sổ, test không dùng) | `Canvas_OfTheShellWindowAndTheRenderer_IsTheWpfDarkCanvas` (SỐNG SÓT nếu thiếu test này; test viết trước khi chạy) |
+| P14 | `ImageLayer` orientation 2 không đi qua ma trận | `ExifOrientation_RawBufferWithTheRendererMatrix` (2) |
+| P15 | `CalculateDisplaySize` bỏ DPI | 2 ca DPI |
+| T01-T10 | ngưỡng hình học 1 -> 3; ngưỡng Fit 32 -> 22; Identical cho phép 1; peak PSNR 255 -> 250; hoà dịch ưu tiên khác 0; mép dưới bị bỏ; PNG đảo kênh; sàn SSIM zoom; sàn thanh cuộn; dung sai phát hiện panel | `PixelGoldenSupportTests` (ngưỡng ghim, biên từng mép, PSNR 48,13, dịch hoà, PNG, hộp thay đổi) |
+| W01 | recorder WPF: orientation 6 xoay 270 | `PixelGoldenWpfConformanceTests` (orient-6 PSNR 13,8 dB) |
+| W02 | WPF: thanh cuộn tối 10 -> 12 DIP | conformance (z100-photo-origin 30,1 dB) |
+| W03 | WPF: `ScalingQualityConverter` HighQuality -> NearestNeighbor | conformance (fit-photo-landscape 35,2 dB) |
+
+Ghi chú: P01-P15 và T01-T10 chạy trên `Shell.Tests`; W01-W03 build `Integration.Tests` và chạy `PixelGoldenWpfConformanceTests` trên desktop ẩn.
+Đột biến mã WPF (W02, W03) chỉ tạm thời, đã hoàn tác (`git status` sạch).
