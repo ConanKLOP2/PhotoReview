@@ -9,11 +9,11 @@ namespace PhotoReview.Benchmark.Cli.ShellHost;
 /// </summary>
 internal static class StartupProbeCommand
 {
-    internal sealed record Parsed(string? ShellExe, string? WpfExe, string Source, int Count, int Rounds, int Warmup, int Seed, int Keys, string Out);
+    internal sealed record Parsed(string? ShellExe, string? WpfExe, string Source, int Count, int Rounds, int Warmup, int Seed, int Keys, string Out, string? PerfJson = null);
 
     public static Parsed Parse(IReadOnlyList<string> args)
     {
-        string? shell = null, wpf = null, source = null, outDir = null;
+        string? shell = null, wpf = null, source = null, outDir = null, perfJson = null;
         int count = 10, rounds = 8, warmup = 1, seed = 1, keys = 12;
         for (var i = 1; i < args.Count; i++)
         {
@@ -35,6 +35,7 @@ internal static class StartupProbeCommand
                 case "--wpf": wpf = Value(); break;
                 case "--source": source = Value(); break;
                 case "--out": outDir = Value(); break;
+                case "--perf-json": perfJson = Value(); break;
                 case "--count": count = Int("--count", 3, 200); break;
                 case "--rounds": rounds = Int("--rounds", 1, 200); break;
                 case "--warmup": warmup = Int("--warmup", 0, 10); break;
@@ -50,7 +51,7 @@ internal static class StartupProbeCommand
         }
 
         return new Parsed(shell, wpf, source ?? throw new ArgumentException("--source is required"), count, rounds, warmup, seed, keys,
-            outDir ?? Path.Combine(Path.GetTempPath(), "pr-startup-probe-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)));
+            outDir ?? Path.Combine(Path.GetTempPath(), "pr-startup-probe-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)), perfJson);
     }
 
     public static int Run(IReadOnlyList<string> args)
@@ -76,7 +77,34 @@ internal static class StartupProbeCommand
         ProbeReport.Write(p.Out, outcome);
         Console.WriteLine(ProbeReport.ToMarkdown(outcome));
         Console.WriteLine("REPORT: " + Path.Combine(p.Out, "summary.md"));
+        WritePerfJson(p, options, outcome);
         return outcome.Runs.Any(r => !r.IsWarmup && r.Ok) ? 0 : 1;
+    }
+
+    /// <summary>Kết quả có cấu trúc (schema versioned) cho <c>compare</c>: <c>--perf-json</c>, hoặc <c>work/perf/</c> khi tìm thấy gốc repo, luôn cả bản trong <c>--out</c>.</summary>
+    private static void WritePerfJson(Parsed p, ProbeOptions options, ProbeOutcome outcome)
+    {
+        var root = PerfCompare.PerfEnvironmentProbe.FindRepoRoot();
+        var env = PerfCompare.PerfEnvironmentProbe.Capture(root);
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["count"] = p.Count.ToString(CultureInfo.InvariantCulture),
+            ["keys"] = p.Keys.ToString(CultureInfo.InvariantCulture),
+            ["seed"] = p.Seed.ToString(CultureInfo.InvariantCulture),
+            ["apps"] = string.Join(',', options.Apps.Select(a => a.Id)),
+        };
+        var result = PerfCompare.PerfResultBuilder.FromStartupProbe(outcome, options, parameters, env);
+        var json = PerfCompare.PerfResultJson.Write(result);
+        var inOut = Path.Combine(p.Out, "perf-result.json");
+        File.WriteAllText(inOut, json, new System.Text.UTF8Encoding(false));
+        var target = p.PerfJson ?? (root is null ? null : PerfCompare.PerfCompareCommand.DefaultPath(root, p.Out, result));
+        if (target is not null)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(target))!);
+            File.WriteAllText(target, json, new System.Text.UTF8Encoding(false));
+        }
+
+        Console.WriteLine("PERF-JSON: " + (target ?? inOut));
     }
 
     private static void CopySubset(string source, string target, int count)
