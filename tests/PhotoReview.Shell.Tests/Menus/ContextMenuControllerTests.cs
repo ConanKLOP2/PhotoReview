@@ -94,7 +94,7 @@ internal sealed class FakeContextMenuActions : IContextMenuActions
 /// kiểm chính các handler *_Click tương ứng qua id).
 /// </summary>
 [Trait("Category", "HotPath")]
-public sealed class ContextMenuControllerTests
+public sealed class ContextMenuControllerTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static (ContextMenuController Controller, FakeContextMenuActions Actions, FakePopupMenuHost Host) Create(
         AppSettings? settings = null)
@@ -143,6 +143,25 @@ public sealed class ContextMenuControllerTests
         await controller.ShowAsync(new PointD(10, 20));
 
         Assert.Equal([expected], actions.Log);
+    }
+
+    [Fact]
+    public void BuildModel_AllItemsVisible_CostIsReported_NotAsserted()
+    {
+        // Số đo (không khẳng định thời gian: runner CI chậm/nhiễu): chi phí dựng mô hình đầy đủ mỗi lần mở menu.
+        var (controller, _, _) = Create(NothingHidden());
+        _ = controller.BuildModel(); // khởi động JIT
+        const int runs = 2000;
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        var count = 0;
+        for (var i = 0; i < runs; i++)
+        {
+            count = controller.BuildModel().Count;
+        }
+
+        var micros = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds * 1000 / runs;
+        output.WriteLine($"BuildModel (tat ca muc hien): {micros:F1} us/lan, {count} muc cap tren");
+        Assert.True(count >= 15);
     }
 
     [Fact]
