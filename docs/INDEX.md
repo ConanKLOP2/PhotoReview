@@ -13,6 +13,7 @@ Find a document by purpose. Read tiers: **T0** (every session, ≤18 KB total) �
 | [`adr/`](adr/) | Decisions 0001 decoder · 0002 UI framework · 0003 journal startup · 0004 no Presentation project · 0005 UI-thread affinity · 0006 localization catalogs · 0007 I/O durability · 0008 zoom = source pixel · 0009 camera RAW support | T1, relevant area |
 | [`LESSONS-CONCURRENCY-VI.md`](LESSONS-CONCURRENCY-VI.md) | NGINX + double booking: bài học đồng thời và danh sách kiểm tra (Vietnamese) | T1, concurrency/I-O design |
 | [`TRANSLATING.md`](TRANSLATING.md) | Add/fix a language (JSON catalogs) | T1, translations |
+| [`AGENT-HYGIENE.md`](AGENT-HYGIENE.md) | Rules + `tools/agent-finish-check.ps1` so agents never hang/orphan processes or collide | T1, briefing/running subagents |
 | [`TESTING.md`](TESTING.md) | Test categories, filters, local runners, hang guard | T1 |
 | [`MUTATION-TESTING.md`](MUTATION-TESTING.md) | Stryker.NET: safe run recipe, 2026-10-03 baseline scores, highest-value gaps | T1, test quality |
 | [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md) + [`decisions/`](refactoring/decisions/) | Q-* index + one file per decision | T1, decision lookup |
