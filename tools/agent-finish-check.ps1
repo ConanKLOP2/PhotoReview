@@ -61,9 +61,14 @@ if ($common) {
     $commonPath = if ([System.IO.Path]::IsPathRooted($common)) { $common } else { Join-Path $root $common }
     $main = Split-Path -Parent (Resolve-Path -LiteralPath $commonPath).Path
     if ($main -and ($main -ne $root)) {
+        # Only files created after this worktree existed are this agent's doing; older empty strays are not.
+        $since = (Get-Item -LiteralPath $root).CreationTime
         $zero = git -C $main ls-files --others --exclude-standard 2>$null | ForEach-Object {
             $f = Join-Path $main $_
-            if ((Test-Path -LiteralPath $f -PathType Leaf) -and ((Get-Item -LiteralPath $f).Length -eq 0)) { $_ }
+            if (Test-Path -LiteralPath $f -PathType Leaf) {
+                $item = Get-Item -LiteralPath $f
+                if (($item.Length -eq 0) -and ($item.CreationTime -ge $since)) { $_ }
+            }
         }
         if ($zero) { $issues.Add("zero-byte untracked file(s) in the main checkout (created by a wrong relative path?): $($zero -join ', ')") }
     }
