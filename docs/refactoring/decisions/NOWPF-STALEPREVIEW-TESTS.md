@@ -77,8 +77,59 @@ một stat treo (chia sẻ mạng) của ảnh cũ làm stat đầu của ảnh 
 
 ## 5. Đột biến (hai bước, docs/MUTATION-TESTING.md)
 
-MUTATION_TABLE
+30 đột biến chọn lọc (sửa MỘT chỗ, build, chạy test phủ chỗ đó, hoàn nguyên) trong `ImagePresenter`, `ZoomDetailLoader`,
+`PreviewImageService`, `PresentationComposer`, `GpuImageCache`, `PresentationPrefetcher`; script chạy trong worktree riêng.
+
+- Bước 1 (test phủ vùng đó: App.Tests lớp `ImagePresenterTests*`/`StalePreview*`/`ZoomDetail*`/`CompareViewModel*`, Imaging.Tests
+  `PreviewImageService*`, Shell.Tests `Viewing`+`GpuImageCache`): **18 bị giết**, 9 sống, 3 không biên dịch (bộ lọc hằng `when(true/false)`
+  bị CS7095/CS8359, `++` bỏ thì CS0649) rồi viết lại thành dạng hợp lệ.
+- Bước 2 (9 sống + 3 viết lại, chạy TOÀN BỘ App.Tests/Imaging.Tests/Shell.Tests + ShellViewingTests/ShellStalePreviewTests trên desktop
+  ẩn): giết thêm **6**; 6 còn sống, đều tương đương (xem dưới).
+
+| Đột biến | Kết quả | Bị giết bởi |
+|---|---|---|
+| M01 bỏ kiểm token sau thumbnail | giết (bước 1) | `Burst_TwoFiles_EveryThumbnailAndPreviewOrder`, `LateThumbnailOfAnOlderNavigation` |
+| M02 bỏ kiểm token sau preview | giết (1) | `JoinedPreloadDecodes_...`, `ClearCacheDuringDecodes_...`, các chuỗi vét cạn |
+| M03 bỏ kiểm token sau stat đầu | giết (1) | `JoinedPreloadDecodes_...` |
+| M05b lỗi chung của nav cũ vẫn xử lý (`when(... \|\| ex is not null)`) | giết (2) | `ComparePartnerFailingLate_...` |
+| M07 bỏ `_zoomDetail.Reset()` đầu điều hướng | sống ở bước 1, giết (2) | `NavigationStart_ReleasesThePreviousZoomOriginalImmediately` (test mới) |
+| M08 bỏ kiểm token trước stat làm mới | sống ở bước 1, giết (2) | `HeaderReadFinishingLate_OfASupersededNavigation_...` (test mới: đếm stat) |
+| M09 bỏ `IsNavigationCurrent` ở catch lỗi partner compare | giết (1) | `ComparePartnerFailingLate_...` |
+| M10 bỏ kiểm token trong `ZoomDetailLoader.LoadAsync` | giết (1) | `ZoomDetailLoaderGapTests.ASupersededTarget_...` |
+| P01 `_cache.Set` không kiểm epoch | giết (1) | `PreviewImageServiceGapTests.ClearCache_DuringInflightDecode_...` |
+| P03 bỏ `MatchesCurrentSource` sau decode | giết (1) | `PreviewImageServiceFaultTests.SourceReplacedDuringDecode_...` |
+| P04b joiner không thử lại khi creator bị huỷ | giết (2) | `ViewerJoiner_CreatorCancelledBeforeSlot_...` |
+| P05 `ClearCache` không bump epoch | giết (1) | `PreviewImageServicePersistStaleTests...` |
+| C01 `SetIncoming` không xoá pending | giết (1) | `RandomNavigation_AlwaysEndsOnTheLastAssignedImage` |
+| C02 `isFileChange` không thay ngay | giết (1) | `Composer_EverySequenceOfFiveEvents_...` (test mới) |
+| C03 hạn chót cũ không kiểm token | giết (1) | `StaleDeadline_OfASupersededUpgrade_...` |
+| C05 thăng cấp không chờ upload | giết (1) | `Upgrade_KeepsTheOldBitmapOnScreenUntil...` |
+| C06 `LastDrawn` bỏ so id | sống ở bước 1, giết (2) | `Composer_CrossfadeRequestedBeforeTheNewImageWasDrawn_...` (test mới) |
+| C07b token hạn chót tăng sau khi dùng | giết (2) | `PendingUpgrade_AfterTheDeadline_IsPromoted...` |
+| C08 pending không xoá sau thăng cấp | giết (1) | `Composer_DeviceLostDuringPendingUpgrade_...` |
+| G01 dải của ảnh đã giải phóng vẫn chạy | giết (1) | `Prefetch_EvictedBeforeStripesRun_StopsUploading` |
+| G02 mất thiết bị không xoá cache | giết (1) | `Composer_DeviceLostDuringPendingUpgrade_...`, `GpuCache_DeviceLostMidPrefetch_...` |
+| F01 `Apply` không kiểm thế hệ | giết (1) | `Prefetcher_LateLookupResultOfAnOlderNavigation_...` (test mới) |
+| F02 lượt thử lại không kiểm thế hệ | giết (1) | `RetryPassesOfAnOlderNavigation_AreDropped` |
+| F03 thế hệ không tăng | giết (1) | `RetryPassesOfAnOlderNavigation_...` |
+
+Còn sống sau bước 2 (6) - đều TƯƠNG ĐƯƠNG, vì có lớp phòng thủ thứ hai cùng chỗ:
+
+| Đột biến | Vì sao tương đương |
+|---|---|
+| M04 catch FileNotFound bỏ kiểm token | bên trong vẫn `if (!IsNavigationCurrent(token)) return` sau stat lại, trước khi chạm catalog |
+| M06 `if (!loaded) return` (bỏ kiểm token) | `CompareViewModel.LoadAsync` chỉ trả true khi token còn hiện hành ở lần kiểm cuối, không có await giữa hai chỗ |
+| M11 bỏ kiểm token trong `LoadAsync` (còn `ReferenceEquals`) | `Update()` kiểm lại token trước khi hiện; và `Reset()` đã đặt `_target = null` |
+| P02 bỏ `ThrowIfCancellationRequested` sau khi lấy khe | `ReadAsync(token)` đã thấy token trước; chỉ còn cửa sổ nano-giây giữa hai dòng, không tạo lại được tất định |
+| C04 bỏ so `_pending.Id` ở `OnUploadCompleted` | `TryPromotePending` kiểm lại upload của chính `_pending` |
+| G03 `IsFullyUploaded` bỏ `!IsReleased` | ảnh đã giải phóng luôn bị gỡ khỏi `_entries` trước khi đánh dấu |
 
 ## 6. Kiểm chứng
 
-VERIFICATION
+- Build Release `PhotoReview.slnx`: 0 cảnh báo.
+- `Category!=Manual&Category!=Native` (CI filter, UI chạy trên desktop ẩn): App.Tests, Imaging.Tests, Shell.Tests, Shell.Integration.Tests,
+  Architecture.Tests xanh (số liệu ở mô tả PR).
+- Bộ mới lặp 200 lần, mỗi lần một tiến trình `dotnet test --no-build` (2 luồng nền): 0 lỗi; ba bộ vét cạn (`Burst_*`) lặp mỗi
+  10 lần. Không `Thread.Sleep`/`Task.Delay`/`ManagedThreadId` (luật TEST-FLAKY, TEST-THREADID).
+- Chi phí: lớp `StalePreviewOverwriteTests` ~25 s trên máy rảnh (phần lớn là 3 bộ vét cạn); `PresentationStaleOrderTests` < 2 s;
+  `ShellStalePreviewTests` ~4 s (desktop ẩn).
