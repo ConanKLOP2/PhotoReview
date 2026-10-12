@@ -807,6 +807,34 @@ public sealed class ShellStartupTests
     }
 
     [Fact]
+    public void Closing_ReleasesTheRenderSurface_WhileTheWindowIsStillAlive()
+    {
+        // Gốc của dây chuyền treo trên CI (runner WARP + DWM): swap chain flip-model còn Present xếp hàng bị giải phóng SAU khi HWND
+        // đã huỷ thì ClearState/Flush kẹt vĩnh viễn trên UI thread (và mọi D3D11CreateDevice sau đó). Thiết bị phải được trả khi
+        // cửa sổ còn sống: ngay trong Closing (handler của test đăng ký sau handler của cửa sổ chính nên chạy sau nó).
+        var root = ShellRun.NewRoot("closing-gpu");
+        using var run = ShellRun.Start(root, [TestJpeg.WriteTo(Path.Combine(root, "photos", "a.jpg"))]);
+        Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + Diag(run));
+        Assert.True(WaitUntil(() => run.Main!.FirstImagePresented), "ảnh đầu không được vẽ: " + Diag(run));
+        var main = run.Main!;
+        using var observed = new ManualResetEventSlim();
+        var surfaceReleased = false;
+        var windowAlive = false;
+        run.OnUi(() => main.Window.Closing += (_, _) =>
+        {
+            surfaceReleased = main.Surface is null && main.ImageCache is null;
+            windowAlive = !main.Window.IsDestroyed;
+            observed.Set();
+        });
+
+        StopAndAssertClean(run);
+
+        Assert.True(observed.IsSet, "Closing không được phát");
+        Assert.True(windowAlive, "HWND đã huỷ trước Closing");
+        Assert.True(surfaceReleased, "bề mặt D3D/D2D và cache GPU phải được trả khi bắt đầu đóng, trước khi HWND bị huỷ");
+    }
+
+    [Fact]
     public void Startup_ShutdownIsClean_NoWindowDispatcherOrGuiObjectLeak()
     {
         var root = ShellRun.NewRoot("leak");
