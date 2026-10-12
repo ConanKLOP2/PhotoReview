@@ -44,7 +44,8 @@ internal static class PixelGoldenShellRenderer
         ArgumentNullException.ThrowIfNull(c);
         var oriented = c.OrientedWidth;
         var orientedHeight = c.OrientedHeight;
-        using var rig = new ScrollBarRig(c.ClientWidth, c.ClientHeight, oriented, orientedHeight, c.Dpi, actualSize: false);
+        using var rig = new ScrollBarRig(c.ClientWidth, c.ClientHeight, oriented, orientedHeight, c.Dpi, actualSize: false,
+            bitmapWidth: c.BitmapWidth, bitmapHeight: c.BitmapHeight);
         rig.Viewer.ScalingQuality = c.LinearScaling ? ScalingQuality.Linear : ScalingQuality.HighQuality;
         if (!c.IsFit)
         {
@@ -63,7 +64,7 @@ internal static class PixelGoldenShellRenderer
         var destination = new RectD(origin.X, origin.Y, rig.Viewport.ImageActualWidth, rig.Viewport.ImageActualHeight);
         var viewLayout = rig.Viewport.Layout;
 
-        using var raw = ToPixelBuffer(PixelGoldenScenes.Create(c.Scene, c.ImageWidth, c.ImageHeight));
+        using var raw = ToPixelBuffer(PixelGoldenScenes.Create(c.Scene, c.ShownWidth, c.ShownHeight));
         using var upright = route == ShellPictureRoute.Decoded && c.ExifOrientation != 1
             ? PixelOps.ApplyOrientation(raw, c.ExifOrientation)
             : null;

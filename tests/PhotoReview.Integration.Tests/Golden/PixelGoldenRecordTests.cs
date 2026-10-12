@@ -27,7 +27,9 @@ public sealed class PixelGoldenRecordTests
         }
 
         // A stale file of a removed case must not linger: the shell test refuses orphans.
-        var wanted = PixelGoldenRecorder.RecordedCases.Select(c => c.Name + ".png").ToHashSet(StringComparer.Ordinal);
+        // (WP-28b: the extension frames are recorded by PixelExtGoldenRecordTests and kept here.)
+        var wanted = PixelGoldenRecorder.RecordedCases.Select(c => c.Name)
+            .Concat(PixelGoldenExtCatalog.GoldenNames).Select(n => n + ".png").ToHashSet(StringComparer.Ordinal);
         foreach (var file in Directory.EnumerateFiles(PixelGoldenFiles.Directory, "*.png"))
         {
             if (!wanted.Contains(Path.GetFileName(file)))
