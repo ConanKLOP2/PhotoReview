@@ -84,6 +84,38 @@ public sealed class PixelGoldenExtTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Compare_CellPicture_IsDrawnWithTheSameHighQualityFilterAsAMainPictureInThatBox()
+    {
+        // WPF gives CompareLeftImage the same BitmapScalingMode as MainImage (Viewer.ScalingQuality = HighQuality here). A 4x downscale
+        // is where a cheaper filter would show: the cell must equal the picture drawn as the main image into the cell's box, per pixel.
+        var c = PixelGoldenExtCatalog.CompareCase("cmp-photo-pair-none");
+        var shell = PixelGoldenCompareRenderer.Render(c);
+        var side = c.Left!;
+        var client = new PhotoReview.App.Input.SizeD(c.ClientWidth, c.ClientHeight);
+        var box = PhotoReview.Shell.Win32.Viewing.CompareLayout.Image(client, PhotoReview.Shell.Win32.Viewing.CompareSide.Left,
+            side.OrientedWidth, side.OrientedHeight);
+
+        using var picture = PixelGoldenShellRenderer.ToPixelBuffer(PixelGoldenScenes.Create(side.Scene, side.Width, side.Height));
+        using var surface = PhotoReview.Shell.Rendering.D2DRenderSurface.CreateOffscreenSurface(c.PixelWidth, c.PixelHeight, c.Dpi);
+        var dispatcher = new PhotoReview.Shell.Tests.Rendering.ManualDispatcher();
+        using var cache = new PhotoReview.Shell.Rendering.GpuImageCache(surface, dispatcher);
+        using var composer = new PhotoReview.Shell.Win32.Viewing.PresentationComposer(cache, dispatcher,
+            new PhotoReview.Shell.Tests.Overlay.FakeFrameClock(), () => { }, ticksPerSecond: 1000, timestamp: () => 0);
+        composer.Set(picture);
+        var inputs = new PhotoReview.Shell.Win32.Viewing.PresentationInputs(client, box, PhotoReview.Core.Model.ScalingQuality.HighQuality,
+            PhotoReview.Core.Model.ScalingQuality.HighQuality, c.Dpi, false, default);
+        using var pixels = PhotoReview.Shell.Tests.Rendering.RenderTestImages.Render(surface, dc =>
+        {
+            dc.Clear(PhotoReview.Shell.Rendering.RenderColors.DarkCanvas);
+            composer.Draw(dc, inputs);
+        });
+        var main = PixelGoldenShellRenderer.ToFrame(pixels);
+
+        var cell = shell.LeftImage!.Value.Inflate(-1);
+        Assert.Equal(0, PixelMetrics.MaxAbsoluteError(main, shell.Frame, cell));
+    }
+
+    [Fact]
     public void Compare_DifferentOrientationsInTheTwoCells_ShowBothUpright()
     {
         // exif 1 (stored landscape) and exif 6 (stored landscape, shown portrait): the cells must be a landscape and a portrait picture.
