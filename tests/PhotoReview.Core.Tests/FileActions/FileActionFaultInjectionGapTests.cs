@@ -54,6 +54,42 @@ public sealed class FileActionFaultInjectionGapTests
     public Task RetryInterrupted_GroupRecycle() => FaultInjectionSecondOrder.AssertRetryInterruptedAsync("GroupRecycle>retry", GroupRig,
         rig => DoGroup(rig, FileOperationType.Recycle, null));
 
+    private static Task<FaultRig> AfterUndoable(bool group, FileOperationType operation) =>
+        FileActionFaultInjectionRecoveryTests.AfterAction(group, operation);
+
+    [Fact(DisplayName = "Undo of a Move crashed anywhere, then its Recovery retry interrupted anywhere: nothing lost")]
+    public Task RetryInterrupted_UndoMove() => FaultInjectionSecondOrder.AssertRetryInterruptedAsync("UndoMove>retry",
+        () => AfterUndoable(false, FileOperationType.Move), FileActionFaultInjectionRecoveryTests.Undo);
+
+    [Fact(DisplayName = "Undo of a group Move crashed anywhere, then its Recovery retry interrupted anywhere: no member lost")]
+    public Task RetryInterrupted_UndoGroupMove() => FaultInjectionSecondOrder.AssertRetryInterruptedAsync("UndoGroupMove>retry",
+        () => AfterUndoable(true, FileOperationType.Move), FileActionFaultInjectionRecoveryTests.Undo);
+
+    // ---- 1b. The startup reconcile is interrupted (cells the first PR left open) ---------------------------------------------
+
+    [Fact(DisplayName = "Reconcile interrupted after a group Copy crash: the next start reaches the same verdict")]
+    public Task ReconcileInterrupted_GroupCopy() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileGroupCopy", GroupRig,
+        rig => DoGroup(rig, FileOperationType.Copy));
+
+    [Fact(DisplayName = "Reconcile interrupted after a single Delete crash: the next start reaches the same verdict")]
+    public Task ReconcileInterrupted_Recycle() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileRecycle", SingleRig,
+        rig => Do(rig, new FileActionRequest(A, FileOperationType.Recycle, null)));
+
+    [Fact(DisplayName = "Reconcile interrupted after a permanent Delete crash: the next start reaches the same verdict")]
+    public Task ReconcileInterrupted_PermanentDelete() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcilePermanent", NoBinGroup, PermanentGroup);
+
+    [Fact(DisplayName = "Reconcile interrupted after an Undo of a Move crash: the next start reaches the same verdict")]
+    public Task ReconcileInterrupted_UndoMove() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileUndoMove",
+        () => AfterUndoable(false, FileOperationType.Move), FileActionFaultInjectionRecoveryTests.Undo);
+
+    [Fact(DisplayName = "Reconcile interrupted after an Undo of a group Move crash: the next start reaches the same verdict")]
+    public Task ReconcileInterrupted_UndoGroupMove() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileUndoGroupMove",
+        () => AfterUndoable(true, FileOperationType.Move), FileActionFaultInjectionRecoveryTests.Undo);
+
+    [Fact(DisplayName = "Reconcile interrupted after an Undo of a group Delete crash: the next start reaches the same verdict")]
+    public Task ReconcileInterrupted_UndoGroupRecycle() => FaultInjectionMatrix.AssertReconcileInterruptedAsync("ReconcileUndoGroupRecycle",
+        () => AfterUndoable(true, FileOperationType.Recycle), FileActionFaultInjectionRecoveryTests.Undo);
+
     // ---- 2. Two faulted starts in a row ---------------------------------------------------------------------------------------
 
     [Fact(DisplayName = "Move crashed anywhere, restart, the same Move again faulted anywhere: no overwrite, no loss")]
@@ -174,6 +210,16 @@ public sealed class FileActionFaultInjectionGapTests
         var latest = Assert.Single(rig.Latest().Values);
         Assert.Equal(JournalState.Failed, latest.State);
     }
+
+    [Fact(DisplayName = "Cancel after any call of a permanent delete (no bin): stays inside the action, journaled")]
+    public Task Cancel_PermanentDelete() => FaultInjectionMatrix.AssertAllFaultPointsAsync("Cancel PermanentDelete", NoBinSingle,
+        rig => DoCancellable(rig, new FileActionRequest(A, FileOperationType.Recycle, null, AllowPermanentDelete: true)), PermanentStaysInScope, kinds: CancelOnly);
+
+    [Fact(DisplayName = "Cancel after any call of a permanent group delete (no bin): stays inside the action, journaled")]
+    public Task Cancel_PermanentDeleteGroup() => FaultInjectionMatrix.AssertAllFaultPointsAsync("Cancel PermanentDeleteGroup", NoBinGroup,
+        async rig => rig.Outcomes.Add(await rig.Service.ExecuteGroupAsync(
+            new CaptureGroupActionRequest(FaultRig.Capture(), FileOperationType.Recycle, null, AllowPermanentDelete: true), rig.Token)),
+        PermanentStaysInScope, kinds: CancelOnly);
 
     // ---- 4. Dismiss of a Recovery item (an append of its own) ------------------------------------------------------------------
 

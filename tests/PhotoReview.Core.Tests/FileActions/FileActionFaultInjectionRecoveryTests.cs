@@ -28,7 +28,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
     // ---- Undo ----------------------------------------------------------------------------------------------------------------
 
     /// <summary>The healthy part: the action ran and was registered for Ctrl+Z; only the undo itself is numbered.</summary>
-    private static async Task<FaultRig> AfterAction(bool group, FileOperationType operation)
+    internal static async Task<FaultRig> AfterAction(bool group, FileOperationType operation)
     {
         var rig = await (group ? GroupRig() : SingleRig());
         var destination = operation == FileOperationType.Move ? "sel" : null;
@@ -50,7 +50,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
         return rig;
     }
 
-    private static async Task Undo(FaultRig rig) => rig.Outcomes.Add(await rig.Undo.UndoLastAsync());
+    internal static async Task Undo(FaultRig rig) => rig.Outcomes.Add(await rig.Undo.UndoLastAsync());
 
     /// <summary>
     /// After a transient failure of an undo the in-memory undo stack must be truthful and the undo retryable: a single Move stays on the
