@@ -110,6 +110,44 @@ public sealed class RecoveryRetryRaceTests
         Assert.Empty(_journalA.ReadPendingAndFailedOperations());
     }
 
+    [Fact(DisplayName = "P02 (group): loser's Prepared lands after the winner's Committed; its failure is not journaled over the winner's Committed")]
+    public async Task ConcurrentGroupRetry_LoserPreparedAfterWinnerCommitted_IsSupersededAndWritesNoFailedLine()
+    {
+        string[] names = ["a.jpg", "b.jpg"];
+        var members = names.Select(name =>
+        {
+            var source = Path.Combine(@"C:\photos", name);
+            _fs.WriteAllTextAtomic(source, "photo-" + name);
+            var stat = _fs.GetFileStat(source)!;
+            return new JournalGroupMember(source, Path.Combine(@"D:\sorted", name), stat.Length, stat.LastWriteUtc);
+        }).ToArray();
+        _journalA.Append(new JournalEntry("op-race-g", FileOperationType.Move, JournalState.Failed, members[0].Source, members[0].Destination,
+            members[0].Size, members[0].LastWriteUtc, _clock.UtcNow, "The process cannot access the file", GroupId: "g1", GroupMembers: members));
+        var snapshot = Assert.Single(_journalA.ReadFailedOperations());
+
+        RecoveryRetryResult? winner = null;
+        _fs.OpenAppendHook = _ =>
+        {
+            if (winner is not null) return null;
+            winner = new RecoveryRetryResult(false, "running", null);
+            winner = _processA.RetryMoveOrCopyAsync(snapshot).GetAwaiter().GetResult();
+            return null;
+        };
+
+        var loser = await _processB.RetryMoveOrCopyAsync(snapshot);
+        _fs.OpenAppendHook = null;
+
+        Assert.NotNull(winner);
+        Assert.True(winner.Succeeded);
+        Assert.False(loser.Succeeded);
+        Assert.True(loser.Superseded);
+        Assert.Equal(Tr.CoreRecoveryAlreadyHandled, loser.Message);
+        Assert.Null(loser.Entry);
+        Assert.All(members, member => Assert.True(_fs.FileExists(member.Destination!) && !_fs.FileExists(member.Source)));
+        Assert.DoesNotContain(_journalA.ReadFailedOperations(), e => e.Id == "op-race-g");
+        Assert.DoesNotContain(History().Skip(1), e => e.State == JournalState.Failed);
+    }
+
     [Fact(DisplayName = "P02: a retry that starts after the other process's Prepared is refused, the first retry commits")]
     public async Task ConcurrentRetry_SecondStartsAfterFirstPrepared_IsRefusedAndFirstCommits()
     {
