@@ -36,6 +36,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- WP-26: hai file theme that cho ScrollBarWpfParityTests (nap bang XamlReader, khong can Application). -->
+    <None Include="..\..\src\PhotoReview.App.WpfWindows\Themes\DarkPalette.xaml;..\..\src\PhotoReview.App.WpfWindows\Themes\DarkScrollBars.xaml" Link="Themes\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- UI thread that (dispatcher + vong lap) dung chung voi Shell.Tests. -->
     <Compile Include="..\PhotoReview.Shell.Tests\Hosting\UiThread.cs" Link="Hosting\UiThread.cs" />
   </ItemGroup>

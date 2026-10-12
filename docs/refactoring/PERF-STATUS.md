@@ -52,3 +52,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-12 -- WP-23 overlay HUD: khung HUD đầy đủ GPU CPU submit P50 0,34 / P95 0,47 ms (tới khi GPU xong P50 1,0 ms); khởi động thêm ~10 ms (~2 %) sau khi tooltip tạo muộn + làm nóng DirectWrite trên pool](perf/2026-10-12-wp23-overlay-hud.md)
 - [2026-10-12 -- WP-22 shell input: key->handler/layout 0.14/0.18 ms p50, key->frame ~260 ms (Present(1) blocks, WP-21)](perf/2026-10-12-wp22-input.md)
 - [2026-10-12 -- WP-21 trình bày ảnh Win32: Present(1) chặn UI thread P50 222 ms mọi khung -> Present(0) ~1,2 ms; pan 60 Hz P95 5 ms; khung đơn lẻ sau nghỉ 100-450 ms vẫn có thể chặn ~0,5 s (EndDraw, chưa rõ nguyên nhân, CHƯA XÁC NHẬN)](perf/2026-10-12-wp21-presentation.md)
+- [2026-10-12 -- WP-26 thanh cuộn tự vẽ: kéo con trượt trên HWND thật p50 0,044 / p95 0,063 ms, hit-test ~2 us, vẽ ~3 us/khung (không đáng kể)](perf/2026-10-12-wp26-scrollbars.md)

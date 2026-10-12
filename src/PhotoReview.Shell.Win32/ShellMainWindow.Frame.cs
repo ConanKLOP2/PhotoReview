@@ -118,7 +118,11 @@ internal sealed partial class ShellMainWindow
     }
 
     /// <summary>WP-21: ảnh chính, lớp ảnh cũ crossfade, compare (<c>ShellMainWindow.Viewing.cs</c>). WP-23 vẽ overlay sau nó.</summary>
-    private void DrawContent(D2DDrawContext context) => DrawPresentation(context);
+    private void DrawContent(D2DDrawContext context)
+    {
+        DrawPresentation(context);
+        DrawScrollBars(context); // WP-26: thanh cuộn của ImageScroll nằm trên ảnh, dưới overlay
+    }
 
     private void OnFramePresented()
     {
