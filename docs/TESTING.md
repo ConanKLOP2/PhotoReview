@@ -42,6 +42,12 @@ Seven xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`,
 
 [Stryker.NET](MUTATION-TESTING.md) measures how well the tests pin behaviour (manual, not part of CI): how to run it safely and the 2026-10-03 baseline.
 
+## Shell tests (NO-WPF)
+
+`PhotoReview.Shell.Tests` (no WPF, runs in CI) covers the Win32 shell logic and Direct2D rendering; its pixel checks run on WARP (`Category=Integration`). `PhotoReview.Shell.Integration.Tests` drives the real `PhotoReview.exe` window (`Category=UI`): run it on the hidden desktop with `tools/run-tests-hidden.ps1 tests/PhotoReview.Shell.Integration.Tests` (arguments go to `dotnet test`). `PhotoReview.exe --smoke` is the quick check: it creates the window and exits 0.
+
+The golden references are shared by the WPF build and the shell: `tests/Fixtures/golden/*.v1.json` (G-VIEW `viewport-layout`, G-INPUT `input-scripts`, G-KEY `key-names`, G-MENU `context-menu`, G-OVL `overlay-boxes`) and `pixel/*.png` (G-PIX). Re-record only on purpose, with `PHOTOREVIEW_GOLDEN_RECORD=1` through `tools/diag/record-golden.ps1` (the recorders refuse to write without it). `PHOTOREVIEW_REGENERATE_CONTRACTS=1` regenerates the frozen public-surface file checked by `Architecture.Tests/ContractSurfaceTests` (lead only, `Category=Manual`).
+
 ## Golden files (NO-WPF equivalence reference)
 
 `tests/Fixtures/golden/*.v1.json` are recorded from the real WPF `MainWindow` (`tools/diag/record-golden.ps1`, hidden desktop, deterministic output) and are the reference the Win32 shell must reproduce. `Integration.Tests/Golden/GoldenWpfConformanceTests` (`Category=UI`) replays them on WPF every run, so a WPF behaviour change turns it red until the diff is reviewed and the golden re-recorded on purpose; never hand-edit them. Detail: [NOWPF-WP10-GOLDEN-RECORDER](refactoring/decisions/NOWPF-WP10-GOLDEN-RECORDER.md).

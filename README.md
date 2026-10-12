@@ -84,6 +84,8 @@ The release zip holds two executables in one folder (framework-dependent, ReadyT
 - `PhotoReview.App.exe`: the WPF app. Default; your existing file associations and Explorer menu point to it and are never changed by the other exe.
 - `PhotoReview.exe`: the Win32 + Direct2D shell, a parallel build that is being completed step by step (single-instance prefix `PhotoReviewShell`, so the two can run side by side). `PhotoReview.exe --smoke` creates the window and exits 0.
 
+Open a file or folder with `PhotoReview.exe <path>`: the first existing file opens and its folder is browsed; without a file, the first existing folder opens. The release zip holds 51 files (about 8.6 MB zipped, 17.6 MB unpacked; measured 2026-10-12, the WPF-only zip was 7.7 MB).
+
 Registering the shell for "Open with" is opt-in and separate (own ProgId `PhotoReview.Shell`; it does not change the default app of any file type and does not touch the WPF registration):
 
 ```powershell
@@ -193,6 +195,8 @@ Gói phát hành có hai exe trong một thư mục (phụ thuộc framework, Re
 
 - `PhotoReview.App.exe`: ứng dụng WPF. Mặc định; liên kết tệp và menu Explorer hiện có trỏ tới nó và exe kia không bao giờ đổi chúng.
 - `PhotoReview.exe`: shell Win32 + Direct2D, bản song song đang hoàn thiện dần (prefix single-instance `PhotoReviewShell` nên chạy cạnh nhau được). `PhotoReview.exe --smoke` tạo cửa sổ rồi thoát mã 0.
+
+Mở tệp hoặc thư mục bằng `PhotoReview.exe <đường-dẫn>`: tệp tồn tại đầu tiên được mở và thư mục của nó được duyệt; không có tệp thì mở thư mục tồn tại đầu tiên. Gói phát hành có 51 tệp (khoảng 8,6 MB nén, 17,6 MB giải nén; đo ngày 2026-10-12, zip chỉ WPF là 7,7 MB).
 
 Đăng ký shell vào "Open with" là tùy chọn và tách riêng (ProgId riêng `PhotoReview.Shell`; không đổi ứng dụng mặc định của loại tệp nào, không đụng đăng ký của bản WPF):
 
