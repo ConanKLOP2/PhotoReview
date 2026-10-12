@@ -51,7 +51,8 @@ internal sealed partial class ShellMainWindow
         var presentStartTicks = 0L;
         try
         {
-            if (_surface.PixelWidth != width || _surface.PixelHeight != height)
+            // WP-25: DPI đổi mà số pixel giữ nguyên (đổi màn hình DPI khác, rect gợi ý cùng cỡ) vẫn phải đặt lại tỉ lệ của bề mặt.
+            if (_surface.PixelWidth != width || _surface.PixelHeight != height || _surface.DpiScale != _window.DpiScale)
             {
                 _surface.Resize(width, height, _window.DpiScale);
             }
