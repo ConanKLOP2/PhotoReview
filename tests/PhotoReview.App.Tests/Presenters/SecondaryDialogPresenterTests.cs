@@ -100,6 +100,7 @@ public sealed class SecondaryDialogPresenterTests
     public void ActionProfiles_NextFreeShortcut()
     {
         Assert.Equal("F8", ActionProfilesPresenter.NextFreeShortcut([Action("A", "f6"), Action("B", "F7")]));
+        Assert.Equal("F12", ActionProfilesPresenter.NextFreeShortcut(Enumerable.Range(6, 6).Select(n => Action("k" + n, "F" + n)))); // F6..F11 taken: the last candidate is still offered
         var all = Enumerable.Range(6, 7).Select(n => Action("k" + n, "F" + n)).ToList();
         Assert.Equal("F6", ActionProfilesPresenter.NextFreeShortcut(all));
     }

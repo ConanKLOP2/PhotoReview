@@ -235,7 +235,8 @@ internal sealed class SettingsPresenter
     {
         var forward = ParseOrFallback(forwardText, Settings.PreloadForwardCount, PerformanceOptions.MinPreloadForwardCount, PerformanceOptions.MaxPreloadCount);
         var backward = ParseOrFallback(backwardText, Settings.PreloadBackwardCount, PerformanceOptions.MinPreloadBackwardCount, PerformanceOptions.MaxPreloadCount);
-        return (RamBudgetPolicy.MinimumCachePercent(_physicalMemoryBytes, new PreloadWindow(forward, backward)), PerformanceOptions.MaxImageCacheRamPercent);
+        PreloadWindow window = new(forward, backward);
+        return (RamBudgetPolicy.MinimumCachePercent(_physicalMemoryBytes, window), PerformanceOptions.MaxImageCacheRamPercent);
     }
 
     private static int ParseOrFallback(string? text, int fallback, int min, int max)

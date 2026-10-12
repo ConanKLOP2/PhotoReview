@@ -480,17 +480,18 @@ public sealed class SettingsPresenterTests
     [Fact(DisplayName = "The RAM slider range grows with the preload window being typed and falls back to the saved value on bad text")]
     public void RamRange_FollowsTypedPreloadWindow()
     {
-        var presenter = NewPresenter();
+        // A small machine, so that a bigger window visibly raises the floor (on 32 GB the floors round to nearly the same percent).
+        var presenter = new SettingsPresenter(new AppSettings(), physicalMemoryBytes: 8L * 1024 * 1024 * 1024);
+        var max = System.Globalization.CultureInfo.InvariantCulture;
         var small = presenter.RamCacheRange("1", "1");
-        var large = presenter.RamCacheRange(PerformanceOptions.MaxPreloadCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            PerformanceOptions.MaxPreloadCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        var saved = presenter.RamCacheRange(presenter.Settings.PreloadForwardCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            presenter.Settings.PreloadBackwardCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var large = presenter.RamCacheRange(PerformanceOptions.MaxPreloadCount.ToString(max), PerformanceOptions.MaxPreloadCount.ToString(max));
+        var saved = presenter.RamCacheRange(presenter.Settings.PreloadForwardCount.ToString(max), presenter.Settings.PreloadBackwardCount.ToString(max));
 
         Assert.Equal(PerformanceOptions.MaxImageCacheRamPercent, small.Max);
-        Assert.True(large.Min >= small.Min);
+        Assert.True(large.Min > small.Min, $"large window floor {large.Min} should exceed small window floor {small.Min}");
         Assert.Equal(saved, presenter.RamCacheRange("garbage", null));
         Assert.Equal(saved, presenter.RamCacheRange("-5", "99999"));
+        Assert.NotEqual(saved, large);
     }
 
     [Fact(DisplayName = "A saved RAM percent below the window minimum is clamped up on load; the value text shows percent and GB")]
@@ -657,7 +658,7 @@ public sealed class SettingsPresenterTests
         var presenter = NewPresenter(checker: new FakeChecker(async token =>
         {
             started.SetResult();
-            await Task.Delay(Timeout.Infinite, token);
+            await new TaskCompletionSource().Task.WaitAsync(token); // never completes: only the token ends it
             return UpdateCheckResult.UpToDate("x");
         }));
 
