@@ -1,6 +1,6 @@
 # Documentation Index
 
-Find a document by purpose. Read tiers: **T0** (every session, ≤18 KB total) · **T1** (one per task, ≤24 KB per file; `architecture.md` ≤48 KB, `OPEN-DECISIONS.md` ≤49 KB) · **T2** (history only: git log). Checked by `tools/docs-budget.ps1 -Check`; links by `tools/check-doc-links.ps1`.
+Find a document by purpose. Read tiers: **T0** (every session, ≤36 KB total) · **T1** (one per task, ≤48 KB per file; `architecture.md` ≤64 KB and `OPEN-DECISIONS.md` ≤96 KB) · **T2** (history only: git log). Checked by `tools/docs-budget.ps1 -Check`; links by `tools/check-doc-links.ps1`.
 
 | File | Purpose | Tier |
 |------|---------|------|
