@@ -77,6 +77,22 @@ Unregister:
 
 The same script also adds **Browse with PhotoReview** to Explorer's right-click menu of folders (and of the empty space inside a folder); pass `-NoFolderMenu` to skip it. It is per user (HKCU, no administrator rights). The app can also add or remove it itself: Settings → General → Explorer integration (it also repairs the path after the app is moved).
 
+### Two executables (WPF app and Win32 shell)
+
+The release zip holds two executables in one folder (framework-dependent, ReadyToRun; same .NET 10 Windows Desktop Runtime):
+
+- `PhotoReview.App.exe`: the WPF app. Default; your existing file associations and Explorer menu point to it and are never changed by the other exe.
+- `PhotoReview.exe`: the Win32 + Direct2D shell, a parallel build that is being completed step by step (single-instance prefix `PhotoReviewShell`, so the two can run side by side). `PhotoReview.exe --smoke` creates the window and exits 0.
+
+Registering the shell for "Open with" is opt-in and separate (own ProgId `PhotoReview.Shell`; it does not change the default app of any file type and does not touch the WPF registration):
+
+```powershell
+.\deploy\install-photo-review-association.ps1 -Variant Shell -ExePath 'C:\path\to\PhotoReview.exe'   # asks you to type YES
+.\deploy\uninstall-photo-review-association.ps1 -Variant Shell
+```
+
+Use `-WhatIf` to see what would be written; in a non-interactive host pass `-Force` to confirm.
+
 ### Languages
 
 The UI ships in English and Vietnamese (Settings → Language; `auto` follows Windows). Texts live in plain JSON files that anyone can edit or extend without rebuilding — see [docs/TRANSLATING.md](docs/TRANSLATING.md).
@@ -170,6 +186,22 @@ Gỡ đăng ký:
 ```
 
 Script này cũng thêm mục **Browse with PhotoReview** vào menu chuột phải của thư mục (và của chỗ trống bên trong thư mục) trong Explorer; thêm `-NoFolderMenu` để bỏ qua. Chỉ cho tài khoản Windows hiện tại (HKCU, không cần quyền quản trị). Ứng dụng cũng tự thêm/gỡ được: Cài đặt → Chung → Tích hợp Explorer (và sửa lại đường dẫn khi ứng dụng bị di chuyển).
+
+### Hai exe (ứng dụng WPF và shell Win32)
+
+Gói phát hành có hai exe trong một thư mục (phụ thuộc framework, ReadyToRun; cùng .NET 10 Windows Desktop Runtime):
+
+- `PhotoReview.App.exe`: ứng dụng WPF. Mặc định; liên kết tệp và menu Explorer hiện có trỏ tới nó và exe kia không bao giờ đổi chúng.
+- `PhotoReview.exe`: shell Win32 + Direct2D, bản song song đang hoàn thiện dần (prefix single-instance `PhotoReviewShell` nên chạy cạnh nhau được). `PhotoReview.exe --smoke` tạo cửa sổ rồi thoát mã 0.
+
+Đăng ký shell vào "Open with" là tùy chọn và tách riêng (ProgId riêng `PhotoReview.Shell`; không đổi ứng dụng mặc định của loại tệp nào, không đụng đăng ký của bản WPF):
+
+```powershell
+.\deploy\install-photo-review-association.ps1 -Variant Shell -ExePath 'C:\duong-dan\PhotoReview.exe'   # yêu cầu gõ YES
+.\deploy\uninstall-photo-review-association.ps1 -Variant Shell
+```
+
+Dùng `-WhatIf` để xem sẽ ghi gì; host không tương tác thì thêm `-Force` để xác nhận.
 
 ### Ngôn ngữ
 

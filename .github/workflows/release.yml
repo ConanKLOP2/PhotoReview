@@ -120,22 +120,26 @@ jobs:
       - name: Restore
         run: dotnet restore PhotoReview.slnx
 
-      - name: Publish (framework-dependent)
-        run: dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --no-restore --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
+      # NO-WPF (WP-30): the same script as ci.yml publishes both executables (PhotoReview.App.exe + PhotoReview.exe) into one folder.
+      - name: Publish (framework-dependent, both executables)
+        shell: powershell
+        run: ./tools/publish-release.ps1 -NoRestore -OutputDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 
       - name: Verify release folder
         shell: powershell
-        run: ./tools/verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
+        run: ./tools/verify-release.ps1 -Smoke -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 
       - name: Check the built version matches the tag
         shell: pwsh
         env:
           TAG: ${{ inputs.tag }}
         run: |
-          $v = (Get-Item 'src/PhotoReview.App/bin/Release/net10.0-windows/publish/PhotoReview.App.dll').VersionInfo.ProductVersion
-          Write-Host "Built $v for $env:TAG"
           $expected = $env:TAG.TrimStart('v')
-          if (-not $v.StartsWith("$expected+")) { throw "Built version '$v' does not match tag '$env:TAG'" }
+          foreach ($dll in 'PhotoReview.App.dll', 'PhotoReview.dll') {
+            $v = (Get-Item "src/PhotoReview.App/bin/Release/net10.0-windows/publish/$dll").VersionInfo.ProductVersion
+            Write-Host "Built $dll $v for $env:TAG"
+            if (-not $v.StartsWith("$expected+")) { throw "Built version '$v' ($dll) does not match tag '$env:TAG'" }
+          }
 
       - name: Zip and create the release
         shell: pwsh
@@ -148,6 +152,7 @@ jobs:
           $zip = "PhotoReview-$env:TAG-win-x64.zip"
           Compress-Archive -Path "$pub/*" -DestinationPath $zip
           $sha = (Get-FileHash "$pub/PhotoReview.App.exe" -Algorithm SHA256).Hash
+          $shellSha = (Get-FileHash "$pub/PhotoReview.exe" -Algorithm SHA256).Hash
           $zipSha = (Get-FileHash $zip -Algorithm SHA256).Hash
           # Previous release = the highest published (non-draft) release below this tag, so re-releasing an older
           # tag still compares against its real predecessor, not just "the latest one".
@@ -204,10 +209,12 @@ jobs:
             $changes = "## Changes since $prev`n`n" + ($sections -join "`n")
           }
           $notes = @"
-          Requires Windows 10/11 x64 and the **.NET 10 Windows Desktop Runtime**. Unzip and run ``PhotoReview.App.exe``.
+          Requires Windows 10/11 x64 and the **.NET 10 Windows Desktop Runtime**. Unzip and run ``PhotoReview.App.exe`` (the WPF app).
+          ``PhotoReview.exe`` (the Win32 + Direct2D shell) is a parallel build in the same folder; it does not change your file associations.
 
           SHA256 of ``$zip``: ``$zipSha``
           SHA256 of ``PhotoReview.App.exe``: ``$sha``
+          SHA256 of ``PhotoReview.exe``: ``$shellSha``
 
           $changes
           "@
@@ -217,4 +224,4 @@ jobs:
           if ($env:DRAFT -eq 'true') { $ghArgs += '--draft' }
           gh @ghArgs
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
-          "Release $env:TAG created (draft=$env:DRAFT, changes since $prev), zip $zip (SHA256 $zipSha), exe SHA256 $sha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "Release $env:TAG created (draft=$env:DRAFT, changes since $prev), zip $zip (SHA256 $zipSha), App exe SHA256 $sha, shell exe SHA256 $shellSha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
