@@ -7,7 +7,7 @@ summary: |-
 
 # NOWPF-WP35-G0R - tách Recovery khỏi WPF (PR 2, 2026-10-13)
 
-Thẻ: WP-35; tiếp [NOWPF-WP35-G0](NOWPF-WP35-G0-PRESENTERS.md) (PR 1) và [NOWPF-WP35-SPIKE-S3](NOWPF-WP35-SPIKE-S3.md). An toàn dữ liệu: cửa sổ này gọi thao tác tệp thật
+Thẻ: WP-35; tiếp `NOWPF-WP35-G0-PRESENTERS` (PR 1, #480) và [NOWPF-WP35-SPIKE-S3](NOWPF-WP35-SPIKE-S3.md). An toàn dữ liệu: cửa sổ này gọi thao tác tệp thật
 (Retry = di chuyển/sao chép, Clear = ghi journal), nên tách riêng và giữ NGUYÊN thứ tự/điều kiện; ADR 0003/0005/0007 không đổi.
 
 ## 1. Đã làm
