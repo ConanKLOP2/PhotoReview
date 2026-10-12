@@ -1,3 +1,4 @@
+using PhotoReview.App.Presenters;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
@@ -120,7 +121,7 @@ public sealed class ReviewRound7WindowTests
                 typeof(SettingsWindow).GetMethod("Save_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .Invoke(window, [window, new RoutedEventArgs()]);
 
-                Assert.Equal([ActionProfilesWindow.FindDestinationProblem([bad])!], warnings);
+                Assert.Equal([ActionProfilesPresenter.FindDestinationProblem([bad])!], warnings);
                 Assert.Null(window.DialogResult);
             }
             finally { window.Close(); }
@@ -138,11 +139,11 @@ public sealed class ReviewRound7WindowTests
         var actions = ReviewAction.Defaults();
 
         // The target is an existing directory: File.WriteAllText throws UnauthorizedAccessException.
-        var error = ActionProfilesWindow.TryExport(root.Path, actions);
+        var error = ActionProfilesPresenter.TryExport(root.Path, actions);
         Assert.False(string.IsNullOrWhiteSpace(error));
 
         var file = Path.Combine(root.Path, "actions.json");
-        Assert.Null(ActionProfilesWindow.TryExport(file, actions));
+        Assert.Null(ActionProfilesPresenter.TryExport(file, actions));
         Assert.True(File.Exists(file));
     }
 }

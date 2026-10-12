@@ -563,7 +563,7 @@ public sealed class SettingsWindowRedesignTests
     [Fact(DisplayName = "Left navigation selects the matching page and remembers the last page for the session")]
     public async Task Navigation_SelectsMatchingPage_AndRemembersLastPageForTheSession()
     {
-        var lastPageField = typeof(SettingsWindow).GetField("s_lastPageKey", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var lastPageField = typeof(PhotoReview.App.Presenters.SettingsPresenter).GetField("s_lastPageKey", BindingFlags.Static | BindingFlags.NonPublic)!;
         var original = lastPageField.GetValue(null);
         try
         {
