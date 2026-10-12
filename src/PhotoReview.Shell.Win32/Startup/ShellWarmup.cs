@@ -68,6 +68,11 @@ internal static class ShellWarmup
             var image = cache.GetOrUpload(pixels);
             var context = warm.BeginDrawContext();
             context.DrawImage(image, new PhotoReview.App.Input.RectD(0, 0, 1000, 700), null, ImageInterpolation.HighQualityCubic);
+            // WP-23: chữ của HUD - khởi tạo DirectWrite (factory, bộ font, font fallback cho emoji của toolbar) + đường vẽ chữ
+            // màu của D2D trên pool, để khung đầu trên UI thread không trả chi phí lần đầu (~6 ms).
+            using var text = new DWriteTextRenderer();
+            using var layout = text.CreateLayout("Aa Ee 📂 ⚙ ⋮ 100% IMG_0001.JPG", new TextStyle("Segoe UI", 12), 300, TextTrimming.CharacterEllipsis);
+            context.DrawText(layout, new PhotoReview.App.Input.PointD(0, 0), new ColorF(1, 1, 1, 1));
             warm.EndDrawAndPresent();
             PhotoReviewPerf.StartupMark("graphicsWarm");
         }

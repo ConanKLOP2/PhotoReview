@@ -124,6 +124,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
     /// </summary>
     private void RegisterFeatures()
     {
+        RegisterScrollBars(); // WP-26: thanh cuộn tự vẽ (PHẢI đứng trước RegisterInput: handler chuột của nó thấy nhấn trước ảnh)
         RegisterInput(); // WP-22: chuột, phím, wheel, touchpad, kéo-thả
         RegisterWindowing(); // WP-25: F11, đa màn hình, thanh tiêu đề tối, placement khi đóng
         RegisterContextMenu(); // WP-24: menu chuột phải, submenu Zoom
@@ -426,6 +427,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         _window.DpiChanged -= OnDpiChanged;
         _window.Closing -= OnClosing;
         _window.Closed -= OnClosed;
+        DisposeOverlay(); // WP-23
         _sizeSource.Get = static () => (0, 0);
         _cloak.Stop();
         _image = null;

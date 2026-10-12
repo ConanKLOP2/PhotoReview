@@ -122,6 +122,17 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
         _handlers = [.. _handlers, handler];
     }
 
+    /// <summary>
+    /// WP-23: đặt handler lên ĐẦU chuỗi (overlay phải thấy chuột/phím trước ảnh bất kể thứ tự đăng ký của các gói). Chỉ dùng
+    /// cho overlay; handler thường dùng <see cref="AddMessageHandler"/>.
+    /// </summary>
+    internal void InsertMessageHandlerFirst(IWindowMessageHandler handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        VerifyAccess();
+        _handlers = [handler, .. _handlers];
+    }
+
     public void Invalidate()
     {
         VerifyAccess();
