@@ -49,5 +49,6 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-10-11 -- WP-12 WIC sang [GeneratedComInterface]: decode P50 -1,7 %/+1,6 % (nền nhiễu +1,9 %), cache JPEG encode -5,7 %, decode -6,2 %, không hồi quy > 5 %; mutation 25/25](perf/2026-10-11-wp12-wic-generated-com.md)
 - [2026-10-11 -- WP-17 chữ DirectWrite + overlay: layout miss P50 0,10 ms, hit ~0, khung 5 panel submit P50 0,47 / P95 1,4 ms (GPU thật, tải nền ~23 %); G-OVL lệch 0,017 DIP](perf/2026-10-11-wp17-text-overlay.md)
 - [2026-10-12 -- WP-20 startup shell (PhotoReview.exe Win32): first image R2R median vs the WPF app, window-visible milestones](perf/2026-10-12-wp20-startup-shell.md)
+- [2026-10-12 -- WP-23 overlay HUD: khung HUD đầy đủ GPU CPU submit P50 0,34 / P95 0,47 ms (tới khi GPU xong P50 1,0 ms); khởi động thêm ~10 ms (~2 %) sau khi tooltip tạo muộn + làm nóng DirectWrite trên pool](perf/2026-10-12-wp23-overlay-hud.md)
 - [2026-10-12 -- WP-22 shell input: key->handler/layout 0.14/0.18 ms p50, key->frame ~260 ms (Present(1) blocks, WP-21)](perf/2026-10-12-wp22-input.md)
 - [2026-10-12 -- WP-21 trình bày ảnh Win32: Present(1) chặn UI thread P50 222 ms mọi khung -> Present(0) ~1,2 ms; pan 60 Hz P95 5 ms; khung đơn lẻ sau nghỉ 100-450 ms vẫn có thể chặn ~0,5 s (EndDraw, chưa rõ nguyên nhân, CHƯA XÁC NHẬN)](perf/2026-10-12-wp21-presentation.md)

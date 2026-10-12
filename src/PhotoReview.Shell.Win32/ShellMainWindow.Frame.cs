@@ -71,6 +71,7 @@ internal sealed partial class ShellMainWindow
             {
                 context.Clear(CanvasColor);
                 DrawContent(context);
+                DrawOverlay(context); // WP-23: HUD sau lớp ảnh, cùng khung
             }
             finally
             {

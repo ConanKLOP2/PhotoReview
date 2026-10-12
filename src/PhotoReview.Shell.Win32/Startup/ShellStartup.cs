@@ -420,6 +420,7 @@ internal sealed class ShellStartup : IDisposable
                 SettingsStore: store, ZoomPrompt: services.GetService<IZoomPromptService>()));
         _forwardHandler = new ForwardedOpenHandler(_main, log);
         _main.AttachRenderer();
+        _main.AttachOverlay(services, _frameClock); // WP-23: HUD có mặt từ khung đầu
         _mark("mainWindowConstructed");
 
         // Khung đầu NGAY (canvas): cửa sổ được bỏ cloak sau Present đầu thay vì chờ ảnh (thẻ: cửa sổ thấy được <= 150 ms).

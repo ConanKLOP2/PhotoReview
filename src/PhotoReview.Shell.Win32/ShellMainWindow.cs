@@ -422,6 +422,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
         _window.DpiChanged -= OnDpiChanged;
         _window.Closing -= OnClosing;
         _window.Closed -= OnClosed;
+        DisposeOverlay(); // WP-23
         _sizeSource.Get = static () => (0, 0);
         _cloak.Stop();
         _image = null;
