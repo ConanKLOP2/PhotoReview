@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP28
-order: 920
+order: 930
 summary: |-
   WP-28 (đợt 3 NO-WPF, 2026-10-12): golden pixel G-PIX. 40 khung tham chiếu PNG (3,1 MB) ghi từ MainWindow WPF thật (RenderTargetBitmap, desktop ẩn) và bộ so sánh với khung cuối của shell Win32 (layout + composer + D2D WARP + thanh cuộn thật), 37 ca: Fit/zoom 25..400 %/100 % (DPI 1, 1,25, 1,5)/Linear/orientation EXIF 1..8/HUD bật-tắt; ngưỡng mục 7.3 (2) chạy trên CI (Category=Integration). ĐO THẬT (NE-9): ảnh chụp Fit PSNR 40,5-44,5 dB (ngưỡng 32), zoom khác 100 % 44-60 dB (ngưỡng 28), Linear giống tới ±1; 100 % DPI 1 giống từng byte, DPI 1,5 lệch ±1 mức (WPF); orientation 8/8 giống từng byte; hình học lệch 0 px (nửa pixel: 1 px); HUD hộp panel lệch 0-1 px. Mẫu "worst case" 1-2 px (WPF Fant không phải trung bình diện tích đúng ở 2:1): 21,8-26,8 dB, ghim sàn riêng. Bắt được 2 khác biệt thật: shell snap 100 % vào lưới pixel còn WPF làm mờ ở nửa pixel (WP28-HALFPIXEL); tham chiếu là bộ raster phần mềm của WPF (WP28-REFERENCE, CHƯA XÁC NHẬN).
 ---
