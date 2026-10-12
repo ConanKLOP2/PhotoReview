@@ -72,7 +72,7 @@ internal static class HangDiagnostics
             }
         }
 
-        return kept.Append("(").Append(skipped).Append(" thread khác không có frame PhotoReview)").ToString();
+        return kept.Append('(').Append(skipped).Append(" thread khác không có frame PhotoReview)").ToString();
     }
 
     private static void AppendStacks(StringBuilder text, int pid)
