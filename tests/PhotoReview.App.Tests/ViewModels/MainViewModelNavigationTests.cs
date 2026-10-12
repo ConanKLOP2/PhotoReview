@@ -12,6 +12,7 @@ using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
@@ -116,6 +117,21 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
     /// <param name="sharedSessionWriter">Production wiring: the presenter, the folder coordinator and the view model all
     /// write the session through ONE debounced <see cref="SessionWriter"/> (otherwise the presenter saves directly).</param>
     private SessionWriter? _lastSessionWriter;
+
+    /// <summary>
+    /// Reads the persisted session only after the view model's debounced <see cref="SessionWriter"/> has settled.
+    /// The writer's 500 ms timer saves on a pool thread, and a read racing the atomic replace of the session file
+    /// sees "no session" (SessionStore.Load maps the sharing violation to an empty state): that made the
+    /// assertions below fail intermittently on a slow runner. <c>FlushAsync</c> writes the newest pending state
+    /// (waiting for a write in flight) and <c>WhenIdleAsync</c> covers a timer write that had already drained its batch.
+    /// </summary>
+    private async Task<SessionState> LoadSettledSessionAsync(string folder)
+    {
+        var writer = _lastSessionWriter ?? throw new InvalidOperationException("CreateViewModel was not called.");
+        await writer.FlushAsync();
+        await writer.WhenIdleAsync();
+        return _sessionStore.Load(folder);
+    }
 
     private (MainViewModel ViewModel, ImagePresenter Presenter, FolderLoadCoordinator Coordinator) CreateViewModel(bool sharedSessionWriter = false)
     {
@@ -418,7 +434,7 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         Assert.Contains(f1, vm.Session.Skipped);
         Assert.Equal(1, vm.CurrentIndex);
 
-        var saved = _sessionStore.Load(folder);
+        var saved = await LoadSettledSessionAsync(folder);
         Assert.NotNull(saved);
         Assert.Contains(f1, saved.Skipped);
     }
@@ -440,7 +456,7 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
 
         Assert.NotNull(vm.Session);
         Assert.Single(vm.Session.Skipped, f1);
-        Assert.Single(_sessionStore.Load(folder).Skipped);
+        Assert.Single((await LoadSettledSessionAsync(folder)).Skipped);
     }
 
     [Fact]
