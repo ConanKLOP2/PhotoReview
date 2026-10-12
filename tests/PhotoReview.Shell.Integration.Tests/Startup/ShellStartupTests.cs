@@ -634,7 +634,7 @@ public sealed class ShellStartupTests
         var generation = surface.DeviceGeneration;
         Assert.Equal(1, run.OnUi(() => main.ImageCache!.Count));
 
-        run.OnUi(() =>
+        var recreated = run.OnUi(() =>
         {
             var armed = true;
             surface.Resources.PresentFault = hr =>
@@ -647,10 +647,11 @@ public sealed class ShellStartupTests
                 armed = false;
                 return PhotoReview.Shell.Interop.Graphics.DxgiConstants.ErrorDeviceRemoved;
             };
-            main.RenderNow();
+            // Khung có thể bị hoãn (swap chain chưa sẵn sàng): vẽ lại tới khi lỗi đã được tiêm và thiết bị được tạo lại.
+            return ShellFrames.RenderUntil(main, () => surface.DeviceGeneration > generation);
         });
 
-        Assert.True(surface.DeviceGeneration > generation, "thiết bị phải được tạo lại");
+        Assert.True(recreated, "thiết bị phải được tạo lại");
         // Khung kế (Invalidate) vẽ lại ảnh: cache được nạp lại từ PixelBuffer sau khi bị xoá lúc mất thiết bị.
         Assert.True(WaitUntil(() => run.OnUi(() => main.ImageCache!.Count) == 1), "ảnh không được vẽ lại sau khi mất thiết bị");
         Assert.True(run.OnUi(() => main.FirstImagePresented));
@@ -697,10 +698,10 @@ public sealed class ShellStartupTests
         // WM_PAINT (hệ điều hành đánh dấu vùng bẩn sau khi tạo lại swap chain) cũng gọi Invalidate: nuốt nó để chỉ còn đúng
         // một nguồn vẽ lại, là yêu cầu khung của chính đường mất thiết bị.
         run.OnUi(() => main.Window.AddMessageHandler(new SwallowPaint()));
-        SpinWait.SpinUntil(() => false, 300); // để khung đang chờ (nếu có) xong trước khi gây lỗi
-        Assert.True(WaitUntil(() => run.OnUi(() => main.ImageCache!.Count) == 1));
+        // Không còn khung nào đang chờ nhịp (khung treo sẽ tự vẽ lại và che lỗi yêu cầu khung của đường mất thiết bị).
+        Assert.True(WaitUntil(() => run.OnUi(() => !main.Window.IsRenderRequested && main.ImageCache!.Count == 1)));
 
-        run.OnUi(() =>
+        var recreated = run.OnUi(() =>
         {
             var armed = true;
             surface.Resources.PresentFault = hr =>
@@ -713,10 +714,11 @@ public sealed class ShellStartupTests
                 armed = false;
                 return PhotoReview.Shell.Interop.Graphics.DxgiConstants.ErrorDeviceRemoved;
             };
-            main.RenderNow();
+            // Khung có thể bị hoãn (swap chain chưa sẵn sàng): vẽ lại tới khi lỗi đã được tiêm và thiết bị được tạo lại.
+            return ShellFrames.RenderUntil(main, () => surface.DeviceGeneration > generation);
         });
 
-        Assert.True(surface.DeviceGeneration > generation, "thiết bị phải được tạo lại");
+        Assert.True(recreated, "thiết bị phải được tạo lại");
         Assert.True(WaitUntil(() => run.OnUi(() => main.ImageCache!.Count) == 1, TimeSpan.FromSeconds(5)),
             "ảnh không được vẽ lại sau khi mất thiết bị (không có yêu cầu khung kế)");
         StopAndAssertClean(run);
