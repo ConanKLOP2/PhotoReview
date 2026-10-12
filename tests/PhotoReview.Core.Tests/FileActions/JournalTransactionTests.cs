@@ -30,6 +30,49 @@ public sealed class JournalTransactionTests
     }
 
     [Fact]
+    public void Fail_RetryWhosePreparedAppendThrew_StillJournalsTheFailure()
+    {
+        var fs = new InMemoryFileSystem();
+        var journal = new OperationJournal(Paths, fs, new FixedClock(Stamp), appendRetryDelay: _ => { });
+        var failed = new JournalEntry("op", FileOperationType.Move, JournalState.Failed,
+            @"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp, Stamp, Error: "x", ErrorCode: JournalErrors.PendingUnconfirmed);
+        journal.Append(failed);
+        using var tx = new JournalTransaction(journal, new FixedClock(Stamp), failed with { State = JournalState.Prepared }, retryOf: failed);
+        fs.OpenAppendHook = _ => new IOException("disk full");
+        Assert.Throws<IOException>(() => tx.TryBegin());
+        fs.OpenAppendHook = null;
+        Assert.False(tx.IsPrepared);
+
+        // A retry always records its outcome (the retried item stays a Recovery item with the NEW reason), even without its own Prepared line.
+        var result = tx.Fail(new IOException("boom"), out var journalError);
+
+        Assert.Null(journalError);
+        Assert.NotNull(result);
+        Assert.Equal(JournalState.Failed, result.State);
+        var latest = Assert.Single(journal.ReadFailedOperations());
+        Assert.NotEqual("x", latest.Error);
+    }
+
+    [Fact]
+    public void Fail_FirstAttemptWhosePreparedAppendThrew_WritesNoLine()
+    {
+        var fs = new InMemoryFileSystem();
+        var journal = new OperationJournal(Paths, fs, new FixedClock(Stamp), appendRetryDelay: _ => { });
+        var prepared = new JournalEntry("op", FileOperationType.Move, JournalState.Prepared,
+            @"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp, Stamp);
+        using var tx = new JournalTransaction(journal, new FixedClock(Stamp), prepared);
+        fs.OpenAppendHook = _ => new IOException("disk full");
+        Assert.Throws<IOException>(() => tx.TryBegin());
+        fs.OpenAppendHook = null;
+
+        var result = tx.Fail(new IOException("boom"), out var journalError);
+
+        Assert.Null(result);
+        Assert.Null(journalError);
+        Assert.Empty(journal.ReadPendingAndFailedOperations());
+    }
+
+    [Fact]
     public void Fail_RetryStillCurrent_ReturnsTheFailedRecord()
     {
         var journal = new OperationJournal(Paths, new InMemoryFileSystem(), new FixedClock(Stamp));

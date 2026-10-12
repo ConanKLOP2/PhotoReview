@@ -16,9 +16,11 @@ internal static class FaultInvariants
     private static bool SourceLeftByLaterOp(FaultRig rig, string source) =>
         rig.JournalLines().Any(line => line.Type != FileOperationType.Copy && FaultRig.MembersOf(line).Any(member => Same(member.Source, source)));
 
+    private static bool IsPermanentlyDeleted(FaultRig rig, string path) => rig.Bin.PermanentlyDeleted.Contains(path, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The effect a SUCCESS report (whole action, or one completed group member) promised, on the real disk.</summary>
     public static void CheckSucceededEffect(FaultRig rig, FileOperationType operation, string source, string? destination,
-        string ctx, List<string> violations)
+        string ctx, List<string> violations, bool permanent = false)
     {
         switch (operation)
         {
@@ -32,7 +34,12 @@ internal static class FaultInvariants
                 break;
             case FileOperationType.Recycle:
                 if (rig.Disk.FileExists(source)) violations.Add($"{ctx}: Delete reported done but {source} is still in the folder");
-                if (rig.BinCount(source) != 1) violations.Add($"{ctx}: Delete reported done but {source} is not (exactly once) in the Recycle Bin");
+                if (permanent)
+                {
+                    if (!IsPermanentlyDeleted(rig, source) || rig.BinCount(source) != 0)
+                        violations.Add($"{ctx}: permanent Delete reported done but {source} was not deleted permanently exactly like that");
+                }
+                else if (rig.BinCount(source) != 1) violations.Add($"{ctx}: Delete reported done but {source} is not (exactly once) in the Recycle Bin");
                 break;
         }
     }
@@ -60,7 +67,9 @@ internal static class FaultInvariants
             var content = rig.ContentOf(name);
             var inFolder = files.Values.Any(text => text == content);
             var inBin = rig.Bin.Items.Any(item => item.Text == content);
-            if (!inFolder && !inBin) violations.Add($"{ctx}: PHOTO LOST: no complete {name} anywhere (folders or Recycle Bin)");
+            // A permanent delete (volume without a bin, user opted in) is the one INTENDED loss.
+            var gonePermanently = rig.Bin.PermanentlyDeleted.Any(path => string.Equals(Path.GetFileName(path), name, StringComparison.OrdinalIgnoreCase));
+            if (!inFolder && !inBin && !gonePermanently) violations.Add($"{ctx}: PHOTO LOST: no complete {name} anywhere (folders or Recycle Bin)");
         }
 
         // NOTHING HAPPENS WITHOUT A JOURNAL LINE: a seed file that left its place, and every file at a place that is not a seed
@@ -109,7 +118,14 @@ internal static class FaultInvariants
                         break;
                     case FileOperationType.Recycle:
                         // The photo is in exactly one place (folder or bin) in EVERY state: never both, never neither.
-                        var places = (rig.HasFull(member.Source) ? 1 : 0) + rig.BinCount(member.Source);
+                        var permanentDelete = entry.Permanent == true || member.Permanent;
+                        var places = (rig.HasFull(member.Source) ? 1 : 0) + (permanentDelete ? (IsPermanentlyDeleted(rig, member.Source) ? 1 : 0) : rig.BinCount(member.Source));
+                        if (permanentDelete && rig.BinCount(member.Source) != 0) violations.Add($"{ctx}: permanent Delete of {member.Source} put a copy in the Recycle Bin");
+                        // Another JOURNALED operation of the same file may have legitimately put it elsewhere meanwhile (a group Move that a
+                        // Recovery retry finished after the user's Delete of the same capture failed): that destination is then its place.
+                        if (places == 0 && lines.Any(other => other.Type == FileOperationType.Move && other.Id != entry.Id && FaultRig.MembersOf(other).Any(om =>
+                                Same(om.Source, member.Source) && om.Destination is not null && rig.HasFull(om.Destination))))
+                            places = 1;
                         if (places != 1) violations.Add($"{ctx}: Delete of {member.Source} (state {entry.State}, undo={entry.Undo}) leaves the photo in {places} places");
                         // The verdict is true: Committed means it left the folder (a single Delete that Ctrl+Z restored is not journaled again).
                         if (entry.State == JournalState.Committed && entry.Undo != true && !supersededByUndo && !rig.SingleRecycleMayBeRestored && rig.Disk.FileExists(member.Source))

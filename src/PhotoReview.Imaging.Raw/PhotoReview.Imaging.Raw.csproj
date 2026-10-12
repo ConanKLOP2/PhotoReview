@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Platforms>AnyCPU;x64</Platforms>
+    <!-- WP-34: analyzer AOT/trim bật; cổng thật là publish AOT của PhotoReview.exe (tools/check-aot-warnings.ps1). -->
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
   <ItemGroup>

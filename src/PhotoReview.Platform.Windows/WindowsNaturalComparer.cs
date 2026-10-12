@@ -6,12 +6,12 @@ namespace PhotoReview.Platform.Windows;
 /// <summary>
 /// Triển khai <see cref="INaturalComparer"/> sử dụng API Windows Native StrCmpLogicalW từ shlwapi.dll.
 /// </summary>
-public sealed class WindowsNaturalComparer : INaturalComparer
+public sealed partial class WindowsNaturalComparer : INaturalComparer
 {
     public static readonly WindowsNaturalComparer Instance = new();
 
-    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
-    private static extern int StrCmpLogicalW(string x, string y);
+    [LibraryImport("shlwapi.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int StrCmpLogicalW(string x, string y);
 
     public int Compare(string? x, string? y)
     {
