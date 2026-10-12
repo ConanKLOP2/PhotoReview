@@ -46,7 +46,7 @@ internal static class ExplorerWindowSelector
                 if (cancellationToken.IsCancellationRequested) return ExplorerOrderService.Unavailable(folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
                 string? location;
                 try { location = locationOf(window); }
-                catch (Exception ex) when (ex is COMException or InvalidCastException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { continue; }
+                catch (Exception ex) when (ex is COMException or InvalidCastException) { continue; }
                 catch (Exception ex) { log.Error($"Explorer window inspection failed after {inspected} window(s)", ex); continue; }
                 if (!TryCanonicalizeLocation(location, out var current) || !ExplorerSnapshotValidator.SamePath(current, folder)) continue;
 

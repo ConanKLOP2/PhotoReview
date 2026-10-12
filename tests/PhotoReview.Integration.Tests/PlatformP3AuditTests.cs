@@ -126,62 +126,8 @@ public sealed class PlatformP3AuditTests
         Assert.All(columns, c => Assert.Equal(ExplorerSortDirection.Descending, c.Direction));
     }
 
-    // ---- P-COM-01: ComEnumeration on a harmless automation object ----
-
-    private static object NewDictionary(params string[] keys)
-    {
-        var type = Type.GetTypeFromProgID("Scripting.Dictionary") ?? throw new InvalidOperationException("Scripting.Dictionary is not registered");
-        var dictionary = Activator.CreateInstance(type)!;
-        foreach (var key in keys)
-            type.InvokeMember("Add", BindingFlags.InvokeMethod, null, dictionary, [key, 1], System.Globalization.CultureInfo.InvariantCulture);
-        return dictionary;
-    }
-
-    [Fact]
-    public void Enumerate_ComCollection_YieldsItemsAndReleasesTheEnumeratorWhenDone()
-    {
-        var dictionary = NewDictionary("a", "b");
-        object? enumerator = null;
-        try
-        {
-            var items = ComEnumeration.Enumerate(dictionary, e => enumerator = e).Select(o => (string)o).ToList();
-
-            Assert.Equal(["a", "b"], items);
-            Assert.NotNull(enumerator);
-            Assert.Throws<InvalidComObjectException>(() => ((ComEnumeration.IEnumVariant)enumerator!).Next(1, new object[1], out _));
-        }
-        finally { ComEnumeration.Release(dictionary); }
-    }
-
-    [Fact]
-    public void Enumerate_AbandonedEarly_StillReleasesTheEnumerator()
-    {
-        var dictionary = NewDictionary("a", "b", "c");
-        object? enumerator = null;
-        try
-        {
-            foreach (var item in ComEnumeration.Enumerate(dictionary, e => enumerator = e))
-            {
-                Assert.Equal("a", (string)item);
-                break;
-            }
-
-            Assert.NotNull(enumerator);
-            Assert.Throws<InvalidComObjectException>(() => ((ComEnumeration.IEnumVariant)enumerator!).Next(1, new object[1], out _));
-        }
-        finally { ComEnumeration.Release(dictionary); }
-    }
-
-    [Fact]
-    public void Enumerate_NonComCollection_FallsBackToPlainEnumeration()
-    {
-        var opened = false;
-
-        var items = ComEnumeration.Enumerate(new List<object> { 1, 2 }, _ => opened = true).ToList();
-
-        Assert.Equal([1, 2], items);
-        Assert.False(opened);
-    }
+    // P-COM-01 (ComEnumeration over IDispatch/IEnumVARIANT) was retired by WP-33: the shell windows are walked through
+    // typed IShellWindows slots; see ShellComWp33Tests.
 
     // ---- P-DISP-01 ----
 
