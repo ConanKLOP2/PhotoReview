@@ -83,6 +83,53 @@ public sealed class TestQualityRulesTests
             "Fixed delays make tests slow and flaky; poll with Wait.Until (TestSupport), use a fake clock/delay seam or a signal");
     }
 
+    // An Equal/NotEqual statement whose arguments mention a thread id (…ThreadId) or a caller/worker/pool/... Thread variable.
+    // Counters such as perThread or OutstandingOnThisThread are deliberately not matched.
+    private static readonly Regex ThreadIdComparison = new(
+        @"\bAssert\s*\.\s*(?:Equal|NotEqual)\s*\([^;]*?\b(?:\w*[Tt]hreadId|(?:caller|worker|pool|mutation|continuation|owner|dispatcher|bound)\w*Thread)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    [Fact(DisplayName = "Rule TEST-THREADID: no new Assert.Equal/NotEqual on a ManagedThreadId (compare Thread objects; shrinking allowlist of audited-safe uses)")]
+    [Trait("Category", "Architecture")]
+    public void TestsDoNotCompareManagedThreadIds()
+    {
+        var actual = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var file in RepoScan.CsFiles("tests"))
+        {
+            var count = ThreadIdComparison.Count(TestIsolationRulesTests.Blank(RepoScan.Text(file)));
+            if (count > 0) actual[RepoScan.Relative(file)] = count;
+        }
+
+        AssertMatchesAllowlist("threadid", actual,
+            "A ManagedThreadId is recycled once its thread has died, and a thread-pool test thread is handed back to the pool at its first " +
+            "await (it can then run the work itself). Record Thread.CurrentThread and use Assert.Same/NotSame, and make the 'caller' a " +
+            "dedicated thread that blocks (docs/TESTING.md > Thread identity). An audited-safe use (compared with a thread that is alive " +
+            "for the whole test) goes into the allowlist with a reason in docs/refactoring/decisions/NOWPF-THREADAUDIT-TESTS.md");
+    }
+
+    [Fact(DisplayName = "Rule TEST-THREADID: the detector flags Equal/NotEqual on thread ids, not Same/NotSame on Thread objects")]
+    [Trait("Category", "Architecture")]
+    public void ThreadIdDetection_FlagsIdComparisonsOnly()
+    {
+        var flagged = new[]
+        {
+            "Assert.Equal(ui.ManagedThreadId, ranOn);",
+            "Assert.NotEqual(callerThread, mutationThread);",
+            "Assert.Equal(callerThreadId, cache.LastReadManagedThreadId);",
+            "Assert.All(safe, e => Assert.NotEqual(callerThread, e.ThreadId));",
+        };
+        var clean = new[]
+        {
+            "Assert.NotSame(callerThread, e.Thread);",
+            "Assert.Same(work.OpenThread, work.DisposeThread);",
+            "Assert.Equal(3, safe.Count);",
+            "Assert.Equal(ApartmentState.STA, thread.GetApartmentState());",
+        };
+
+        Assert.All(flagged, line => Assert.True(ThreadIdComparison.IsMatch(line), line));
+        Assert.All(clean, line => Assert.False(ThreadIdComparison.IsMatch(line), line));
+    }
+
     [Fact(DisplayName = "Rule TEST-OS: tests that touch the real Recycle Bin, spawn processes or use the shell/clipboard/registry are Native/Slow/Manual/Integration")]
     [Trait("Category", "Architecture")]
     public void RealOsResourceTestsAreCategorised()
@@ -172,7 +219,7 @@ public sealed class TestQualityRulesTests
     [Trait("Category", "Architecture")]
     public void AllowlistOnlyNamesKnownRules()
     {
-        var known = new HashSet<string>(StringComparer.Ordinal) { "assertion-free", "delay", "real-os-uncategorised", "stale-skip" };
+        var known = new HashSet<string>(StringComparer.Ordinal) { "assertion-free", "delay", "real-os-uncategorised", "stale-skip", "threadid" };
         var unknown = ReadAllowlist().Keys.Where(k => !known.Contains(k.Rule)).Select(k => k.Rule + "|" + k.Key).ToList();
 
         Assert.True(unknown.Count == 0, "Unknown rule in " + AllowlistFile + ":\n" + string.Join("\n", unknown));
