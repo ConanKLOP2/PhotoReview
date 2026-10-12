@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-G0
-order: 1020
+order: 1050
 summary: |-
   WP-35 GĐ0 (PR 1): tách logic của 6 cửa sổ phụ (Settings, ActionProfiles, ClickZoomCustom, Diagnostics, BatchReview, SkippedFiles) khỏi WPF sang presenter không-WPF trong App.Shared; cửa sổ WPF chỉ còn là view mỏng, hành vi không đổi. Recovery và Benchmark ở PR riêng.
 ---
