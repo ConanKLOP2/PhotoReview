@@ -142,6 +142,29 @@ internal static unsafe partial class D3D11
         }
     }
 
+    /// <summary>
+    /// ID3D11DeviceContext::Flush trên immediate context (WP21-STALL: nộp ngay lệnh D2D đã xếp hàng; D2D EndDraw không tự Flush khi
+    /// không Present, nên một khung tí hon không có Flush thì GPU không nhận việc).
+    /// </summary>
+    public static void Flush(ID3D11Device device)
+    {
+        device.GetImmediateContext(out nint context);
+        if (context == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            nint* vtable = *(nint**)context;
+            ((delegate* unmanaged[MemberFunction]<nint, void>)vtable[ContextSlotFlush])(context);
+        }
+        finally
+        {
+            Marshal.Release(context);
+        }
+    }
+
     /// <summary>D3D11_DEVICE_CONTEXT_TYPE của immediate context (0 = IMMEDIATE) - dùng để kiểm đúng số slot ở test.</summary>
     internal static uint GetImmediateContextType(ID3D11Device device)
     {

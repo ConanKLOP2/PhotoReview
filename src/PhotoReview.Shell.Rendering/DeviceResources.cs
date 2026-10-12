@@ -203,6 +203,21 @@ internal sealed unsafe class DeviceResources : IDisposable
     }
 
     /// <summary>
+    /// WP21-STALL: một lệnh vẽ tí hon (Clear đích) + EndDraw + <c>ID3D11DeviceContext::Flush</c>, không Present - đủ để GPU phải nhận
+    /// việc. Dùng bởi <see cref="GpuKeepAlive"/> trên thiết bị offscreen RIÊNG của luồng giữ ấm (không phải thiết bị của cửa sổ).
+    /// </summary>
+    public void TouchGpu()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        D2dColorF color = new(0, 0, 0, 1);
+        Context.BeginDraw();
+        Context.Clear(&color);
+        int hr = Context.EndDraw(null, null);
+        ComInterop.Check(hr);
+        D3D11.Flush(_d3d!);
+    }
+
+    /// <summary>
     /// Chờ GPU làm xong mọi lệnh đã gửi (sao 1 pixel của đích sang bitmap CPU-read rồi Map). Chỉ dùng để đo thời gian
     /// "vẽ xong thật" và trước khi đọc lại pixel; không gọi trên đường vẽ bình thường.
     /// </summary>

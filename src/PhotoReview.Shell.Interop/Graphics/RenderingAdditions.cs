@@ -78,6 +78,17 @@ internal static partial class GraphicsKernel32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CloseHandle(nint handle);
 
+    public const uint CreateWaitableTimerHighResolution = 0x2;
+    public const uint TimerAllAccess = 0x1F0003;
+
+    [LibraryImport("kernel32.dll", EntryPoint = "CreateWaitableTimerExW", SetLastError = true)]
+    public static partial nint CreateWaitableTimerEx(nint attributes, nint name, uint flags, uint desiredAccess);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static unsafe partial bool SetWaitableTimer(nint timer, long* dueTime, int period, nint completionRoutine, nint argument,
+        [MarshalAs(UnmanagedType.Bool)] bool resume);
+
     [LibraryImport("kernel32.dll", SetLastError = true)]
     public static partial uint WaitForSingleObjectEx(nint handle, uint milliseconds, [MarshalAs(UnmanagedType.Bool)] bool alertable);
 }
