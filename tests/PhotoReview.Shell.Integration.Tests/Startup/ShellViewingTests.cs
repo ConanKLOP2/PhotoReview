@@ -42,7 +42,7 @@ public sealed class ShellViewingTests
     private static void Stop(ShellRun run)
     {
         run.RequestClose();
-        Assert.True(run.WaitForExit(Bound), "shell không thoát sau WM_CLOSE");
+        Assert.True(run.WaitForExit(Bound), "shell không thoát sau WM_CLOSE: " + run.Diagnostics);
         Assert.Null(run.Error);
         Assert.Equal(0, run.ExitCode);
     }
@@ -510,22 +510,24 @@ public sealed class ShellViewingTests
         var token = 7_000_000 + Random.Shared.NextInt64(1, 1_000_000);
 
         // Một lượt UI: bản nâng cấp (cùng ảnh, lớn) vào hàng chờ upload dải; khung vẽ ngay sau đó vẫn là ảnh cũ.
-        var (pendingHeld, frames) = run.OnUi(() =>
+        var (pendingHeld, frames, countedWhilePending) = run.OnUi(() =>
         {
             hub.SetCurrentImage(big, isFileChange: false);
             if (!ReferenceEquals(main.Composer!.Pending, big))
             {
-                return (false, 0L);
+                return (false, 0L, 0);
             }
 
             hub.AddTrace(token, "preview", Stopwatch.GetTimestamp());
             var drawn = RenderUntilAFrameIsDrawn(main);
-            return (ReferenceEquals(main.Composer.Pending, big), drawn);
+            // Đọc số mốc TRONG cùng lượt UI: ngoài lượt này các khung kế tiếp (đồng hồ khung) có thể upload xong và phát mốc hợp lệ
+            // trước khi thread test kịp đọc (máy tải cao), làm phép đo "khung của ảnh cũ" lẫn khung của ảnh mới.
+            return (ReferenceEquals(main.Composer.Pending, big), drawn, capture.CountFor(token));
         });
 
         Assert.True(pendingHeld, "tiền đề: bản nâng cấp phải còn chờ upload trong khung đó");
         Assert.True(frames > 0, "tiền đề: phải có khung được vẽ");
-        Assert.Equal(0, capture.CountFor(token));            // khung chứa ảnh CŨ không được tính cho mốc của bản mới
+        Assert.Equal(0, countedWhilePending);                // khung chứa ảnh CŨ không được tính cho mốc của bản mới
 
         Assert.True(WaitUntil(() => capture.CountFor(token) == 3), "sau khi bản mới thành ảnh chính, mốc phải được phát");
         Assert.True(run.OnUi(() => ReferenceEquals(main.Composer!.Current, big)));
