@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using PhotoReview.Shell.Rendering;
 
 namespace PhotoReview.Shell.Tests.Rendering;
@@ -30,11 +29,8 @@ public sealed class GpuKeepAliveTests
 
         public Exception? FailWith { get; set; }
 
-        public uint NativeThreadId { get; private set; }
-
         public void Touch()
         {
-            NativeThreadId = GetCurrentThreadId();
             lock (TouchThreads)
             {
                 TouchThreads.Add(Environment.CurrentManagedThreadId);
@@ -59,13 +55,18 @@ public sealed class GpuKeepAliveTests
 
     private static long After(int ms) => Stopwatch.GetTimestamp() + (ms * Stopwatch.Frequency / 1000);
 
-    private static GpuKeepAlive Create(FakeWork work, int intervalMs = 5)
+    // Production runs the worker at BelowNormal so it never takes CPU from the UI. Under a saturated CI runner (other test
+    // classes spin on every core) a BelowNormal worker can go minutes without a quantum, so these tests run it at Normal:
+    // what is under test is the keep-alive logic, not the OS scheduler's treatment of a low-priority thread.
+    private const ThreadPriority TestPriority = ThreadPriority.Normal;
+
+    private static GpuKeepAlive Create(FakeWork work, int intervalMs = 5, Func<long>? timestamp = null)
     {
         return new GpuKeepAlive(intervalMs, () =>
         {
             work.OpenThreadId = Environment.CurrentManagedThreadId;
             return work;
-        });
+        }, timestamp, TestPriority);
     }
 
     [Fact]
@@ -111,7 +112,7 @@ public sealed class GpuKeepAliveTests
         {
             Interlocked.Increment(ref opens);
             return work;
-        });
+        }, priority: TestPriority);
 
         keepAlive.Activate(After(60));
         Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound));
@@ -156,18 +157,29 @@ public sealed class GpuKeepAliveTests
     [Fact]
     public void AfterTheDeadline_TheThreadSleepsInsteadOfSpinning()
     {
+        // Deterministic: an injected clock replaces wall time and the sleeping state is observed directly (the worker is
+        // blocked on its event) instead of being inferred from CPU time, which a loaded CI runner makes meaningless.
+        var now = 1_000L;
         var work = new FakeWork();
-        using var keepAlive = Create(work, intervalMs: 5);
-        keepAlive.Activate(After(100));
-        Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound));
-        Pause(400); // quá hạn chót rất xa: luồng phải đã ngủ trên event
+        using var keepAlive = Create(work, intervalMs: 5, timestamp: () => Volatile.Read(ref now));
 
-        var before = ThreadCpuTime(work.NativeThreadId);
-        Pause(400);
-        var used = ThreadCpuTime(work.NativeThreadId) - before;
+        keepAlive.Activate(1_100); // window still open: the worker touches repeatedly
+        Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound), "việc giữ ấm không chạy trong khoảng hiệu lực");
 
-        // Vòng bận ăn ~400 ms CPU trong 400 ms; luồng ngủ gần như 0.
-        Assert.True(used.TotalMilliseconds < 150, $"luồng giữ ấm tốn {used.TotalMilliseconds:F0} ms CPU khi hết hạn (vòng bận?)");
+        Volatile.Write(ref now, 2_000); // the deadline has passed
+        Assert.True(SpinWait.SpinUntil(() => keepAlive.IdleWaits >= 2 && keepAlive.IsBlocked, Bound),
+            "hết hạn mà luồng giữ ấm không ngủ trên event (vòng bận?)");
+        var touches = work.Touches;
+        Assert.Equal(2, keepAlive.IdleWaits); // một lần chờ đầu + một lần chờ sau hạn chót, không hơn
+        // Negative check only (cannot fail spuriously): a worker that polls on a timer would wake again within this window.
+        Assert.False(SpinWait.SpinUntil(() => keepAlive.IdleWaits != 2, 50), "luồng giữ ấm tự thức dậy khi chưa được kích hoạt");
+
+        keepAlive.Activate(1_500); // a deadline already in the past: exactly one wake-up, no touch, back to sleep
+        Assert.True(SpinWait.SpinUntil(() => keepAlive.IdleWaits >= 3 && keepAlive.IsBlocked, Bound),
+            "luồng giữ ấm không quay lại ngủ sau lần kích hoạt đã quá hạn");
+        Assert.Equal(3, keepAlive.IdleWaits);
+        Assert.Equal(touches, work.Touches);
+        Assert.Equal(touches, keepAlive.Ticks);
     }
 
     [Fact]
@@ -196,27 +208,10 @@ public sealed class GpuKeepAliveTests
         Assert.True(work.Touches >= 2, $"chỉ {work.Touches} lần chạm trong 2,9 s");
     }
 
-    private static TimeSpan ThreadCpuTime(uint nativeThreadId)
-    {
-        using var process = Process.GetCurrentProcess();
-        foreach (ProcessThread thread in process.Threads)
-        {
-            if (thread.Id == (int)nativeThreadId)
-            {
-                return thread.TotalProcessorTime;
-            }
-        }
-
-        throw new InvalidOperationException("không thấy luồng giữ ấm trong tiến trình");
-    }
-
-    [DllImport("kernel32.dll")]
-    private static extern uint GetCurrentThreadId();
-
     [Fact]
     public void NoGpu_DisablesItselfWithoutThrowing()
     {
-        using var keepAlive = new GpuKeepAlive(5, () => null);
+        using var keepAlive = new GpuKeepAlive(5, () => null, priority: TestPriority);
 
         keepAlive.Activate(After(500));
 
@@ -229,7 +224,7 @@ public sealed class GpuKeepAliveTests
     [Fact]
     public void FactoryThatThrows_DisablesItselfWithoutThrowing()
     {
-        using var keepAlive = new GpuKeepAlive(5, () => throw new InvalidOperationException("no device"));
+        using var keepAlive = new GpuKeepAlive(5, () => throw new InvalidOperationException("no device"), priority: TestPriority);
 
         keepAlive.Activate(After(500));
 

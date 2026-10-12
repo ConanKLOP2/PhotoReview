@@ -64,12 +64,15 @@ public sealed class PreviewImageServiceMutationTests : IAsyncLifetime, IDisposab
         public TaskCompletionSource? Gate { get; set; }
         public int Calls => Volatile.Read(ref _calls);
         public Task Started => _started.Task;
-        public ConcurrentQueue<(bool IsPool, ThreadPriority Priority, int ThreadId, SourceReadPriority Request)> Threads { get; } = new();
+        // The Thread OBJECT is recorded, not its ManagedThreadId: managed ids are recycled once a thread has died and been
+        // finalized, so on a long CI run the (dead) dedicated decode thread's id can be handed to a later thread-pool thread
+        // (seen: both 114 after 13 s / 4180 tests). Object identity cannot collide while the object is held here.
+        public ConcurrentQueue<(bool IsPool, ThreadPriority Priority, Thread Thread, SourceReadPriority Request)> Threads { get; } = new();
 
         public IDecodedImage Decode(DecodeRequest request)
         {
             Interlocked.Increment(ref _calls);
-            Threads.Enqueue((Thread.CurrentThread.IsThreadPoolThread, Thread.CurrentThread.Priority, Environment.CurrentManagedThreadId, request.Priority));
+            Threads.Enqueue((Thread.CurrentThread.IsThreadPoolThread, Thread.CurrentThread.Priority, Thread.CurrentThread, request.Priority));
             _started.TrySetResult();
             Gate?.Task.Wait(Timeout);
             return new WpfDecodedImage(Bitmap(), downscaled: true, originalWidth: 800, originalHeight: 600);
@@ -347,14 +350,22 @@ public sealed class PreviewImageServiceMutationTests : IAsyncLifetime, IDisposab
         var path = Source("a.jpg");
         var key = service.GetCurrentCacheKey(path);
 
-        var image = await service.DecodeOriginalAsync(path, key, CancellationToken.None).WaitAsync(Timeout);
-        var continuationThread = Environment.CurrentManagedThreadId;
+        // Awaited inside Task.Run so there is no SynchronizationContext to hide where the continuation really runs: if the
+        // service completed its task on the decode thread, this continuation would execute right there.
+        IDecodedImage? image = null;
+        Thread? continuationThread = null;
+        await Task.Run(async () =>
+        {
+            image = await service.DecodeOriginalAsync(path, key, CancellationToken.None).WaitAsync(Timeout);
+            continuationThread = Thread.CurrentThread;
+        }).WaitAsync(Timeout);
 
         Assert.NotNull(image);
+        Assert.NotNull(continuationThread);
         var decode = Assert.Single(decoder.Threads);
         Assert.False(decode.IsPool, "an original decode must run on a dedicated thread");
         Assert.Equal(ThreadPriority.AboveNormal, decode.Priority);
-        Assert.NotEqual(decode.ThreadId, continuationThread);
+        Assert.NotSame(decode.Thread, continuationThread);
     }
 
     // ---- ClearDisk during a decode --------------------------------------------------------------------------------
