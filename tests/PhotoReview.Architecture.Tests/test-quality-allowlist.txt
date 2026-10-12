@@ -4,6 +4,7 @@
 #   delay                  key = file           (count of Thread.Sleep/Task.Delay/Task.Yield: poll loops with a timeout, fake delays)
 #   real-os-uncategorised  key = file::method   (default-filter test touching a real OS resource)
 #   stale-skip             key = file::method   (Skip reason says "not implemented"; must be a tracked decision)
+#   threadid               key = file           (count of Assert.Equal/NotEqual statements on a thread id; audited-safe uses only)
 
 # Poll loops with a bounded timeout (10 ms steps) and fake/never-completing delays; replace with Wait.Until or a signal when touched.
 delay|tests/PhotoReview.App.Tests/Coordinators/FileActionGateTests.cs|1
@@ -26,3 +27,18 @@ assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/DecoderMutationFuzzTes
 assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/DecoderMutationFuzzTests.cs::MutatedImages_FailOnlyWithUnderstoodExceptions|1
 assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/PreviewCacheFileMutationTests.cs::MutatedEntries_DeepRun|1
 assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/PreviewCacheFileMutationTests.cs::MutatedEntries_EndInResultOrCorruptEntryFailure|1
+
+# threadid: audited SAFE uses (docs/refactoring/decisions/NOWPF-THREADAUDIT-TESTS.md): the id is compared with a thread that is alive for the
+# whole test (a dedicated UI/dispatcher thread, a blocked caller thread, a worker that never exits) or with the current thread in a
+# synchronous body. New code compares Thread objects (Assert.Same/NotSame) instead.
+threadid|tests/PhotoReview.App.Tests/Services/AppRound3GapTests.cs|3
+threadid|tests/PhotoReview.App.Tests/Services/DispatcherUiSchedulerTests.cs|3
+threadid|tests/PhotoReview.App.Tests/Services/WpfPresentationSinkTests.cs|2
+threadid|tests/PhotoReview.Core.Tests/Abstractions/ImmediateUiSchedulerTests.cs|1
+threadid|tests/PhotoReview.Core.Tests/FileActions/RecoveryRecycleGroupTests.cs|1
+threadid|tests/PhotoReview.Core.Tests/FileActions/RecoveryRetryServiceTests.cs|2
+threadid|tests/PhotoReview.Core.Tests/FileActions/UndoServiceGroupTests.cs|3
+threadid|tests/PhotoReview.Core.Tests/IO/NavigationStatWorkerTests.cs|1
+threadid|tests/PhotoReview.Imaging.Tests/Caching/SourceBytesCacheTests.cs|1
+threadid|tests/PhotoReview.Shell.Tests/Hosting/MessageLoopFrameClockTests.cs|1
+threadid|tests/PhotoReview.Shell.Tests/Hosting/Win32UiDispatcherTests.cs|6

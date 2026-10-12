@@ -77,6 +77,76 @@ public sealed class Win32PresentationSinkTests
         Assert.Equal(0, metrics.Snapshot().CrossThreadPresentCount);
     }
 
+    [Fact(DisplayName = "STALE sink: an update from the UI thread never overtakes an earlier cross-thread update that is still queued")]
+    public void UiThreadUpdate_WhileAnEarlierCrossThreadUpdateIsQueued_RunsAfterIt()
+    {
+        var hub = new ShellPresentationHub();
+        var dispatcher = new QueueingUiDispatcher { OnUiThread = false };
+        var order = new List<string>();
+        var sink = new Win32PresentationSink(hub, Callbacks(order), dispatcher);
+
+        sink.SetCurrentImage("old", isFileChange: true);   // a worker thread: queued, not run yet
+        dispatcher.OnUiThread = true;
+        sink.SetCurrentImage("new", isFileChange: true);   // then the UI thread, before the queue ran
+        sink.SetStatusText("status of new");
+        dispatcher.RunAll();
+
+        Assert.Equal(["viewmodel:True", "viewmodel:True", "status:status of new"], order);
+        Assert.Equal("new", hub.CurrentImage);              // the LAST update wins on the surface
+    }
+
+    [Fact(DisplayName = "STALE sink: once the cross-thread queue has drained, UI-thread updates run inline again")]
+    public void UiThreadUpdate_AfterTheQueueDrained_RunsInline()
+    {
+        var dispatcher = new QueueingUiDispatcher { OnUiThread = false };
+        var order = new List<string>();
+        var sink = new Win32PresentationSink(new ShellPresentationHub(), Callbacks(order), dispatcher);
+        sink.SetStatusText("queued");
+        dispatcher.RunAll();
+        dispatcher.OnUiThread = true;
+
+        sink.SetStatusText("inline");
+
+        Assert.Equal(["status:queued", "status:inline"], order);
+        Assert.Equal(1, dispatcher.PostCount);
+    }
+
+    /// <summary>A dispatcher that queues posts (FIFO) and can report being on / off the UI thread per call.</summary>
+    private sealed class QueueingUiDispatcher : IUiDispatcher
+    {
+        private readonly Queue<Action> _queue = new();
+
+        public bool OnUiThread { get; set; }
+
+        public int PostCount { get; private set; }
+
+        public bool CheckAccess() => OnUiThread;
+
+        public void Post(Action action) => Post(action, UiPriority.Normal);
+
+        public void Post(Action action, UiPriority priority)
+        {
+            PostCount++;
+            _queue.Enqueue(action);
+        }
+
+        public Task InvokeAsync(Action action) => InvokeAsync(action, UiPriority.Normal);
+
+        public Task InvokeAsync(Action action, UiPriority priority)
+        {
+            Post(action, priority);
+            return Task.CompletedTask;
+        }
+
+        public ValueTask YieldAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask YieldAsync(UiPriority priority, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public void RunAll()
+        {
+            while (_queue.TryDequeue(out var action)) action();
+        }
+    }
     private sealed class RecordingUiDispatcher : IUiDispatcher
     {
         public bool OnUiThread { get; init; }
