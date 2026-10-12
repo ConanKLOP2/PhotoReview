@@ -154,4 +154,8 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 | NOWPF-WP36 | WP-36: bản Native AOT của PhotoReview.exe là artifact tùy chọn riêng (không cầu WPF); mặc định vẫn R2R hybrid. [Detail](decisions/NOWPF-WP36-PUBLISH-AOT.md) |
 | NOWPF-THREADAUDIT-TESTS | RÃ  soÃ¡t thread-id/thá»i gian test: sá»­a 5, luáº­t má»›i. [Detail](decisions/NOWPF-THREADAUDIT-TESTS.md) |
 | NOWPF-WP35-SPIKE-S3 | Spike S3 (chuẩn bị WP-35, NW-3): kiểm kê 8 cửa sổ phụ WPF (~3 600 dòng, 276 chuỗi `settings.*`), so sánh 6 phương án thay (tự vẽ D2D / hộp thoại Win32 / giữ cầu WPF / tiến trình đồng hành / WebView2 / Avalonia), prototype ZoomPrompt hai kiểu. Khuyến nghị (CHƯA XÁC NHẬN): hộp thoại Win32 gốc theo giai đoạn, sau bước tách presenter khỏi WPF; D là đường lùi rẻ. [Detail](decisions/NOWPF-WP35-SPIKE-S3.md) |
+| NOWPF-STALEPREVIEW | Bước 2 kế hoạch "chứng minh bằng bằng chứng" (2026-10-13): bằng chứng TẤT ĐỊNH cho lỗi "preview CŨ ghi đè preview MỚI" trên mọi đường
+hiển thị (ImagePresenter dùng chung WPF/shell, PreviewImageService, composer/GpuImageCache/prefetcher/sink của shell Win32). Scheduler và
+decoder giả ép thứ tự hoàn tất đảo ngược; bất biến kiểm trên TOÀN BỘ nhật ký sink, không chỉ trạng thái cuối. Tìm thấy 1 lỗi thật
+(Win32PresentationSink mất FIFO khi UI thread tới sau cập nhật cross-thread còn trong hàng đợi, PR #476, đã sửa). [Detail](decisions/NOWPF-STALEPREVIEW-TESTS.md) |
 <!-- END GENERATED DECIDED TABLE -->
