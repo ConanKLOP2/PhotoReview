@@ -66,6 +66,27 @@ public sealed partial class WicGeneratedComTests : IDisposable
         Assert.Equal(0u, (uint)Marshal.Release(raw)); // no wrapper is left holding the object until a finalizer
     }
 
+    /// <summary>
+    /// Root cause of the CI flake of the test above: a failed QueryInterface is turned into an exception by
+    /// <c>Marshal.ThrowExceptionForHR</c>, which prefers the thread's pending IErrorInfo over the HRESULT. Any managed exception
+    /// that crossed a [GeneratedComClass] boundary earlier on the same (thread-pool) thread leaves such an IErrorInfo behind
+    /// (<c>Marshal.GetHRForException</c> sets it), so the cast threw THAT exception instead of InvalidCastException.
+    /// </summary>
+    [Fact(DisplayName = "Wrap of a wrong interface throws InvalidCastException even when the thread holds a stale IErrorInfo")]
+    public void Wrap_WrongInterface_IgnoresStaleErrorInfoOfTheThread()
+    {
+        var raw = NewRawScaler();
+        Marshal.AddRef(raw);
+        var before = WicCom.OutstandingOnThisThread;
+        _ = Marshal.GetHRForException(new InvalidOperationException("stale error info left by an earlier CCW call"));
+
+        var fault = Record.Exception(() => WicCom.Wrap<IWICStream>(raw));
+
+        Assert.IsType<InvalidCastException>(fault);
+        Assert.Equal(before, WicCom.OutstandingOnThisThread);
+        Assert.Equal(0u, (uint)Marshal.Release(raw));
+    }
+
     [Fact(DisplayName = "Release is idempotent and tolerates null and managed objects")]
     public void Release_NullManagedAndRepeated_AreNoOps()
     {

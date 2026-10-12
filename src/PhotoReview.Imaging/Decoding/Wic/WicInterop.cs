@@ -288,7 +288,11 @@ internal static class WicCom
         try
         {
             wrapper = Wrappers.GetOrCreateObjectForComInstance(unknown, CreateObjectFlags.UniqueInstance);
-            var typed = (T)wrapper; // QueryInterface for T's IID; a pointer that is not a T throws here
+            // QueryInterface for T's IID. The "is" test, not a cast: a failing cast raises through Marshal.ThrowExceptionForHR, which
+            // prefers the thread's pending IErrorInfo (left by any managed exception that crossed a generated CCW earlier on this
+            // thread) over the HRESULT, so the exception type would depend on what ran before. "is" never consults IErrorInfo.
+            if (wrapper is not T typed)
+                throw new InvalidCastException($"The COM object does not implement {typeof(T).Name} (E_NOINTERFACE).");
             t_outstanding++;
             return typed;
         }
