@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [string]$ReleaseDirectory = '',
-    [switch]$SelfContained
+    [switch]$SelfContained,
+    # Also start PhotoReview.exe --smoke (creates + shows the Win32 window, then exits 0). Needs a desktop session; off by
+    # default so the script stays usable on fake folders in tests. CI passes it.
+    [switch]$Smoke
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,6 +27,15 @@ $required = @(
     'PhotoReview.PerfAnalysis.dll',
     'PhotoReview.Imaging.TurboJpeg.dll',
     'PhotoReview.Imaging.LibRaw.dll',
+    # NO-WPF WP-30: the Win32 + Direct2D shell (PhotoReview.exe) ships in the same folder, with the WPF bridge it loads late
+    # for secondary windows (PhotoReview.App.WpfWindows.dll is already listed above).
+    'PhotoReview.exe',
+    'PhotoReview.dll',
+    'PhotoReview.deps.json',
+    'PhotoReview.runtimeconfig.json',
+    'PhotoReview.Shell.Interop.dll',
+    'PhotoReview.Shell.Rendering.dll',
+    'PhotoReview.Shell.WpfBridge.dll',
     'turbojpeg.dll',
     'libraw.dll',
     'LibRaw-LICENSE.LGPL',
@@ -87,8 +99,33 @@ foreach ($check in $legalMarkers) {
     }
 }
 
+# Both executables must come with every assembly their dependency manifest names: a missing library would only show up at the
+# first use in the shipped app (the shell loads the WPF bridge late, so a smoke run alone would not notice).
+foreach ($depsName in 'PhotoReview.App.deps.json', 'PhotoReview.deps.json') {
+    try { $deps = [IO.File]::ReadAllText((Join-Path $resolved $depsName), [Text.Encoding]::UTF8) | ConvertFrom-Json }
+    catch { Write-Error "$depsName is not valid JSON: $($_.Exception.Message)"; exit 1 }
+    $missingLibraries = New-Object System.Collections.Generic.List[string]
+    foreach ($target in @($deps.targets.PSObject.Properties)) {
+        foreach ($library in @($target.Value.PSObject.Properties)) {
+            if ($null -eq $library.Value.runtime) { continue }
+            foreach ($assembly in @($library.Value.runtime.PSObject.Properties)) {
+                $fileName = [IO.Path]::GetFileName([string]$assembly.Name)
+                if (-not (Test-Path -LiteralPath (Join-Path $resolved $fileName) -PathType Leaf) -and -not $missingLibraries.Contains($fileName)) {
+                    $missingLibraries.Add($fileName)
+                }
+            }
+        }
+    }
+    if ($missingLibraries.Count -gt 0) {
+        Write-Error ("$depsName names assemblies that are not in the release folder: " + ($missingLibraries -join ', '))
+        exit 1
+    }
+}
+
 $exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')
 if ($exe.Length -le 0) { Write-Error 'Release executable is empty.'; exit 1 }
+$shellExe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.exe')
+if ($shellExe.Length -le 0) { Write-Error 'Shell executable PhotoReview.exe is empty.'; exit 1 }
 $projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App\PhotoReview.App.csproj'
 # The version is computed from git by Directory.Build.targets (no <Version> in the csproj). Ask MSBuild
 # for the value the current commit produces, so a stale publish folder from another commit still fails.
@@ -105,23 +142,51 @@ if ($expectedInformational -match '-nogit' -or $expectedInformational -notmatch 
     exit 1
 }
 $expectedCommit = ([string]$expected.InformationalVersion -split '\+', 2)[1] -replace '\.dirty$', ''
+# Both entry assemblies must carry the same commit: a folder where only one of the two publishes is from this commit is stale.
+foreach ($entry in 'PhotoReview.App.dll', 'PhotoReview.dll') {
+    $dllInfo = (Get-Item -LiteralPath (Join-Path $resolved $entry)).VersionInfo
+    $actualFileVersion = $dllInfo.FileVersion
+    $actualCommit = ([string]$dllInfo.ProductVersion -split '\+', 2)[1] -replace '\.dirty$', ''
+    if ([string]$dllInfo.ProductVersion -match '-nogit' -or [string]::IsNullOrEmpty($actualCommit)) {
+        Write-Error "Release binary $entry version '$($dllInfo.ProductVersion)' has no git commit (nogit build)."
+        exit 1
+    }
+    if ($actualFileVersion -ne $expectedFileVersion) {
+        Write-Error "Release version mismatch in ${entry}: expected $expectedFileVersion, found $actualFileVersion"
+        exit 1
+    }
+    if ($actualCommit -ne $expectedCommit) {
+        Write-Error "Release commit mismatch in ${entry}: expected $expectedCommit, found $actualCommit (stale publish folder?)"
+        exit 1
+    }
+}
 $dllInfo = (Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.dll')).VersionInfo
 $actualFileVersion = $dllInfo.FileVersion
-$actualCommit = ([string]$dllInfo.ProductVersion -split '\+', 2)[1] -replace '\.dirty$', ''
-if ([string]$dllInfo.ProductVersion -match '-nogit' -or [string]::IsNullOrEmpty($actualCommit)) {
-    Write-Error "Release binary version '$($dllInfo.ProductVersion)' has no git commit (nogit build)."
-    exit 1
+
+if ($Smoke) {
+    # Own process only: started here, killed here on timeout. --smoke creates and shows the real window, then exits 0.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $shellExe.FullName
+    $psi.Arguments = '--smoke'
+    $psi.WorkingDirectory = $resolved
+    $psi.UseShellExecute = $false
+    $smokeProcess = [System.Diagnostics.Process]::Start($psi)
+    if (-not $smokeProcess.WaitForExit(60000)) {
+        try { $smokeProcess.Kill() } catch { }
+        Write-Error 'PhotoReview.exe --smoke did not exit within 60 s.'
+        exit 1
+    }
+    if ($smokeProcess.ExitCode -ne 0) {
+        Write-Error "PhotoReview.exe --smoke exited with code $($smokeProcess.ExitCode)."
+        exit 1
+    }
+    Write-Output 'PASS: PhotoReview.exe --smoke exited 0'
 }
-if ($actualFileVersion -ne $expectedFileVersion) {
-    Write-Error "Release version mismatch: expected $expectedFileVersion, found $actualFileVersion"
-    exit 1
-}
-if ($actualCommit -ne $expectedCommit) {
-    Write-Error "Release commit mismatch: expected $expectedCommit, found $actualCommit (stale publish folder?)"
-    exit 1
-}
+
 Write-Output "PASS: release files present ($resolved)"
 Write-Output "Version: $($dllInfo.ProductVersion) (file $actualFileVersion)"
 Write-Output "EXE bytes: $($exe.Length)"
 Write-Output "EXE SHA256: $((Get-FileHash -LiteralPath $exe.FullName -Algorithm SHA256).Hash)"
+Write-Output "SHELL EXE bytes: $($shellExe.Length)"
+Write-Output "SHELL EXE SHA256: $((Get-FileHash -LiteralPath $shellExe.FullName -Algorithm SHA256).Hash)"
 if ($SelfContained) { Write-Output 'PASS: self-contained runtime files present' }

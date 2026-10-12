@@ -40,6 +40,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root 'PhotoReview.slnx'
 $appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
+$shellProject = Join-Path $root 'src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj'
 . (Join-Path $PSScriptRoot 'Publish-Guard.ps1')
 $approvedPublishRoots = @((Join-Path $root 'src\PhotoReview.App\bin'), (Join-Path $root 'outputs\release'))
 
@@ -71,11 +72,16 @@ function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
     # carry the marker a previous publish wrote (see tools/Publish-Guard.ps1).
     Assert-ReleaseDirectoryOwned -Directory $Directory -ApprovedRoots $approvedPublishRoots
     if (Test-Path -LiteralPath $Directory) { Remove-Item -LiteralPath $Directory -Recurse -Force }
-    $publishArgs = @($appProject, '-c', $Configuration, '-o', $Directory, '--nologo')
-    if ($SelfContained) { $publishArgs += @('--self-contained', 'true', '-r', 'win-x64') }
-    else { $publishArgs += @('--self-contained', 'false') }
-    dotnet publish @publishArgs
-    if ($LASTEXITCODE -eq 0) { Set-ReleaseDirectoryMarker $Directory }
+    # NO-WPF WP-30: both executables (PhotoReview.App.exe, PhotoReview.exe) go into the same folder (same order as
+    # tools/publish-release.ps1, which CI and release.yml use).
+    foreach ($project in @($appProject, $shellProject)) {
+        $publishArgs = @($project, '-c', $Configuration, '-o', $Directory, '--nologo')
+        if ($SelfContained) { $publishArgs += @('--self-contained', 'true', '-r', 'win-x64') }
+        else { $publishArgs += @('--self-contained', 'false') }
+        dotnet publish @publishArgs
+        if ($LASTEXITCODE -ne 0) { return }
+    }
+    Set-ReleaseDirectoryMarker $Directory
 }
 
 function Find-TrxFiles {

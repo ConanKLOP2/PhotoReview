@@ -90,6 +90,39 @@ public sealed class TestFilterDriftTests
         }
     }
 
+    [Fact(DisplayName = "Rule WP-30: CI and release.yml publish BOTH executables through tools/publish-release.ps1 into the same folder and verify it with -Smoke")]
+    public void CiAndRelease_PublishBothExecutablesTheSameWay()
+    {
+        const string folder = "src/PhotoReview.App/bin/Release/net10.0-windows/publish";
+        foreach (var workflow in new[] { ".github/workflows/ci.yml", ".github/workflows/release.yml" })
+        {
+            var text = ReadRepoFile(workflow);
+            Assert.Contains($"./tools/publish-release.ps1 -NoRestore -OutputDirectory '{folder}'", text, StringComparison.Ordinal);
+            Assert.Contains($"./tools/verify-release.ps1 -Smoke -ReleaseDirectory '{folder}'", text, StringComparison.Ordinal);
+            // No workflow may publish a single project directly again: that would ship one executable only.
+            Assert.DoesNotContain("dotnet publish", text, StringComparison.Ordinal);
+        }
+
+        var script = ReadRepoFile("tools/publish-release.ps1");
+        Assert.Contains(@"src\PhotoReview.App\PhotoReview.App.csproj", script, StringComparison.Ordinal);
+        Assert.Contains(@"src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj", script, StringComparison.Ordinal);
+        // The local gate publishes the same two projects.
+        var gate = ReadRepoFile("tools/verify-all.ps1");
+        Assert.Contains("PhotoReview.Shell.Win32.csproj", gate, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "Rule WP-30: verify-release.ps1 requires both executables and every shell library of the package")]
+    public void VerifyRelease_ListsTheShellFiles()
+    {
+        var script = ReadRepoFile("tools/verify-release.ps1");
+        foreach (var file in new[]
+        {
+            "PhotoReview.App.exe", "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.deps.json", "PhotoReview.runtimeconfig.json",
+            "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll", "PhotoReview.Shell.WpfBridge.dll", "PhotoReview.App.WpfWindows.dll",
+        })
+            Assert.Contains($"'{file}'", script, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "Rule R2-A-12: the CI safety-net step covers every test project")]
     public void IntegrationSlowStep_CoversEveryTestProject()
     {

@@ -303,6 +303,9 @@ public sealed class ToolScriptEncodingTests : IDisposable
         "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
         "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.Shared.dll", "PhotoReview.App.WpfWindows.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll", "turbojpeg.dll",
+        // WP-30: the Win32 shell executable and the libraries only it needs.
+        "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.deps.json", "PhotoReview.runtimeconfig.json",
+        "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll", "PhotoReview.Shell.WpfBridge.dll",
         "libraw.dll", "LibRaw-LICENSE.LGPL", "LibRaw-LICENSE.CDDL", "LibRaw-SOURCE.zip", "LibRaw-NOTICE.txt", "THIRD-PARTY-NOTICES.md",
         "Languages\\en.json", "Languages\\vi.json",
     ];
@@ -507,15 +510,24 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
         "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.Shared.dll", "PhotoReview.App.WpfWindows.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll",
+        "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.runtimeconfig.json", "PhotoReview.Shell.Interop.dll",
+        "PhotoReview.Shell.Rendering.dll", "PhotoReview.Shell.WpfBridge.dll",
         "Languages\\en.json", "Languages\\vi.json",
     ];
+
+    /// <summary>A minimal valid dependency manifest; <paramref name="extraAssembly"/> adds an assembly the folder may not contain.</summary>
+    private static string Deps(string? extraAssembly = null) =>
+        "{\"runtimeTarget\":{\"name\":\".NETCoreApp,Version=v10.0\"},\"targets\":{\".NETCoreApp,Version=v10.0\":{" +
+        "\"PhotoReview.Core/1.0.0\":{\"runtime\":{\"PhotoReview.Core.dll\":{}}}" +
+        (extraAssembly is null ? "" : ",\"Extra/1.0.0\":{\"runtime\":{\"lib/net10.0/" + extraAssembly + "\":{}}}") + "}}}";
 
     /// <param name="thirdParty">Content of THIRD-PARTY-NOTICES.md in the release folder; null omits the file.</param>
     /// <param name="fullPass">
     /// Also fakes the version step so a fully valid folder can reach the final PASS line: the stub project reports exactly the version
     /// resource of a real, git-versioned assembly of this build, which is copied in as PhotoReview.App.dll.
     /// </param>
-    private (int ExitCode, string Output) Run(string lgpl, string cddl, string notice, string? thirdParty = GoodThirdParty, bool fullPass = false)
+    private (int ExitCode, string Output) Run(string lgpl, string cddl, string notice, string? thirdParty = GoodThirdParty, bool fullPass = false,
+        string? skipFile = null, string? depsExtra = null, string? emptyFile = null, bool smoke = false)
     {
         var name = "repo-" + Guid.NewGuid().ToString("N");
         var repo = _root.Dir(name);
@@ -526,7 +538,13 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         File.WriteAllText(Path.Combine(repo, "native", "libraw.sha256"), Sha(libraw));
         File.WriteAllText(Path.Combine(repo, "native", "libraw.package.sha256"), Sha(package));
         var release = _root.Dir(Path.Combine(name, "release"));
-        foreach (var file in ReleaseFileNames) _root.File(Path.Combine(name, "release", file), 1);
+        foreach (var file in ReleaseFileNames)
+        {
+            if (file == skipFile) continue;
+            _root.File(Path.Combine(name, "release", file), file == emptyFile ? [] : [1]);
+        }
+        File.WriteAllText(Path.Combine(release, "PhotoReview.App.deps.json"), Deps(depsExtra));
+        File.WriteAllText(Path.Combine(release, "PhotoReview.deps.json"), Deps());
         File.WriteAllBytes(Path.Combine(release, "turbojpeg.dll"), turbo);
         File.WriteAllBytes(Path.Combine(release, "libraw.dll"), libraw);
         File.WriteAllBytes(Path.Combine(release, "LibRaw-SOURCE.zip"), package);
@@ -538,6 +556,7 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         {
             var assembly = typeof(PhotoReview.Benchmark.Cli.RawSurvey).Assembly.Location;
             File.Copy(assembly, Path.Combine(release, "PhotoReview.App.dll"), overwrite: true);
+            if (skipFile != "PhotoReview.dll") File.Copy(assembly, Path.Combine(release, "PhotoReview.dll"), overwrite: true);
             var version = FileVersionInfo.GetVersionInfo(assembly);
             var projectDir = Path.Combine(repo, "src", "PhotoReview.App");
             Directory.CreateDirectory(projectDir);
@@ -546,7 +565,9 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
                 "</InformationalVersion></PropertyGroup><Target Name=\"PhotoReviewComputeVersion\" /></Project>");
         }
 
-        return PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release);
+        return smoke
+            ? PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release, "-Smoke")
+            : PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release);
     }
 
     private const string GoodThirdParty = "# Third-Party Software Notices\n## libjpeg-turbo\nBSD-3-Clause / IJG License / zlib License";
@@ -619,6 +640,228 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
 
         Assert.NotEqual(0, code);
         Assert.Contains("THIRD-PARTY-NOTICES.md " + expected, output, StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "verify-release (WP-30): a folder missing a shell file fails and names it")]
+    [InlineData("PhotoReview.exe")]
+    [InlineData("PhotoReview.dll")]
+    [InlineData("PhotoReview.runtimeconfig.json")]
+    [InlineData("PhotoReview.Shell.Interop.dll")]
+    [InlineData("PhotoReview.Shell.Rendering.dll")]
+    [InlineData("PhotoReview.Shell.WpfBridge.dll")]
+    public void VerifyRelease_MissingShellFile_Fails(string file)
+    {
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, skipFile: file);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("Missing release file(s): " + file, output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release (WP-30): an empty PhotoReview.exe fails")]
+    public void VerifyRelease_EmptyShellExe_Fails()
+    {
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, emptyFile: "PhotoReview.exe");
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("Shell executable PhotoReview.exe is empty", output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release (WP-30): an assembly named by a deps.json but absent from the folder fails and names it")]
+    public void VerifyRelease_DepsNamesMissingAssembly_Fails()
+    {
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, depsExtra: "PhotoReview.Gone.dll");
+
+        Assert.NotEqual(0, code);
+        // Windows PowerShell wraps long Write-Error lines at the console width: compare on collapsed whitespace.
+        var flat = System.Text.RegularExpressions.Regex.Replace(output, @"\s+", " ");
+        Assert.Contains("PhotoReview.App.deps.json names assemblies that are not in the release folder: PhotoReview.Gone.dll", flat, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release (WP-30): -Smoke fails when PhotoReview.exe cannot be started or does not exit 0 (control: same folder passes without -Smoke)")]
+    public void VerifyRelease_SmokeWithFakeShellExe_Fails()
+    {
+        var (okCode, okOutput) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true);
+        Assert.True(okCode == 0, okOutput);
+        Assert.Contains("SHELL EXE SHA256:", okOutput, StringComparison.Ordinal);
+
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, smoke: true);
+
+        Assert.NotEqual(0, code);
+        Assert.DoesNotContain("PASS: release files present", output, StringComparison.Ordinal);
+    }
+}
+
+/// <summary>
+/// deploy/install-photo-review-association.ps1 and uninstall: the Win32 shell registers under its OWN ProgId, never touches the
+/// WPF registration or any file type's default, and is opt-in. Every run targets a private HKCU key (-ClassesPath), never the
+/// real Software\Classes.
+/// </summary>
+[Trait("Category", "Integration")]
+public sealed class ShellAssociationScriptTests : IDisposable
+{
+    private readonly PhotoReview.TestSupport.TempRoot _root = new("shell-association");
+    private readonly string _keyName = @"Software\PhotoReviewTests\assoc-" + Guid.NewGuid().ToString("N");
+    private string ClassesPath => @"HKCU:\" + _keyName;
+
+    public void Dispose()
+    {
+        Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(_keyName, throwOnMissingSubKey: false);
+        // Leave no empty parent behind (another test class instance may still use it: only an empty one is removed).
+        try
+        {
+            using var parent = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\PhotoReviewTests");
+            if (parent is { SubKeyCount: 0, ValueCount: 0 })
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(@"Software\PhotoReviewTests", throwOnMissingSubKey: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { /* best effort */ }
+        _root.Dispose();
+    }
+
+    private string Exe(string name = "PhotoReview.exe") => _root.File(name, 1);
+
+    private static string Script(string name) => Path.Combine(PowerShellRunner.RepoRoot(), "deploy", name);
+
+    private (int ExitCode, string Output) Install(string exe, params string[] extra) =>
+        PowerShellRunner.Run(["-File", Script("install-photo-review-association.ps1"), "-ExePath", exe, "-ClassesPath", ClassesPath, .. extra]);
+
+    private (int ExitCode, string Output) Uninstall(params string[] extra) =>
+        PowerShellRunner.Run(["-File", Script("uninstall-photo-review-association.ps1"), "-ClassesPath", ClassesPath, .. extra]);
+
+    private Microsoft.Win32.RegistryKey? Open(string relative) => Microsoft.Win32.Registry.CurrentUser.OpenSubKey(_keyName + "\\" + relative);
+
+    private string? Default(string relative)
+    {
+        using var key = Open(relative);
+        return key?.GetValue(null) as string;
+    }
+
+    private void SeedUserJpgDefault()
+    {
+        using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(_keyName + @"\.jpg");
+        key.SetValue(null, "jpegfile");
+        using var progs = key.CreateSubKey("OpenWithProgids");
+        progs.SetValue("SomeoneElse.Viewer", "");
+    }
+
+    private static readonly string[] Extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff"];
+
+    [Fact(DisplayName = "association (WP-30): -Variant Shell without -Force in a non-interactive host writes nothing")]
+    public void Shell_WithoutForce_NonInteractive_WritesNothing()
+    {
+        var (code, _) = Install(Exe(), "-Variant", "Shell");
+
+        Assert.NotEqual(0, code);
+        Assert.Null(Open("PhotoReview.Shell"));
+        Assert.Null(Open(@"Directory\shell\PhotoReview.Shell"));
+    }
+
+    [Fact(DisplayName = "association (WP-30): -Variant Shell -WhatIf writes nothing")]
+    public void Shell_WhatIf_WritesNothing()
+    {
+        var (code, output) = Install(Exe(), "-Variant", "Shell", "-WhatIf");
+
+        Assert.True(code == 0, output);
+        Assert.Null(Open("PhotoReview.Shell"));
+        Assert.Null(Open(".jpg"));
+    }
+
+    [Fact(DisplayName = "association (WP-30): -Variant Shell -Force registers ProgId PhotoReview.Shell with the exe and %1, and its own folder verbs")]
+    public void Shell_Force_RegistersOwnProgIdAndVerbs()
+    {
+        var exe = Exe();
+
+        var (code, output) = Install(exe, "-Variant", "Shell", "-Force");
+
+        Assert.True(code == 0, output);
+        Assert.Equal("Photo Review (Win32)", Default("PhotoReview.Shell"));
+        Assert.Equal($"\"{exe}\" \"%1\"", Default(@"PhotoReview.Shell\shell\open\command"));
+        foreach (var ext in Extensions)
+        {
+            using var progs = Open(ext + @"\OpenWithProgids");
+            Assert.NotNull(progs);
+            Assert.Contains("PhotoReview.Shell", progs!.GetValueNames());
+            Assert.DoesNotContain("PhotoReview.App", progs.GetValueNames());
+        }
+        Assert.Equal($"\"{exe}\" \"%1\"", Default(@"Directory\shell\PhotoReview.Shell\command"));
+        Assert.Equal($"\"{exe}\" \"%V\"", Default(@"Directory\Background\shell\PhotoReview.Shell\command"));
+    }
+
+    [Fact(DisplayName = "association (WP-30): registering the shell never touches the WPF registration or a file type's default")]
+    public void Shell_Force_LeavesWpfAndUserDefaultsAlone()
+    {
+        SeedUserJpgDefault();
+        var wpfExe = Exe("PhotoReview.App.exe");
+        Assert.Equal(0, Install(wpfExe).ExitCode);
+
+        var (code, output) = Install(Exe(), "-Variant", "Shell", "-Force");
+
+        Assert.True(code == 0, output);
+        Assert.Equal("jpegfile", Default(".jpg"));
+        using (var progs = Open(@".jpg\OpenWithProgids"))
+            Assert.Contains("SomeoneElse.Viewer", progs!.GetValueNames());
+        Assert.Equal($"\"{wpfExe}\" \"%1\"", Default(@"PhotoReview.App\shell\open\command"));
+        Assert.Equal($"\"{wpfExe}\" \"%1\"", Default(@"Directory\shell\PhotoReview\command"));
+        Assert.Equal("Browse with PhotoReview", Default(@"Directory\shell\PhotoReview"));
+    }
+
+    [Fact(DisplayName = "association (WP-30): -NoFolderMenu skips the folder verbs for the shell variant")]
+    public void Shell_NoFolderMenu_SkipsVerbs()
+    {
+        var (code, output) = Install(Exe(), "-Variant", "Shell", "-Force", "-NoFolderMenu");
+
+        Assert.True(code == 0, output);
+        Assert.NotNull(Open("PhotoReview.Shell"));
+        Assert.Null(Open(@"Directory\shell\PhotoReview.Shell"));
+        Assert.Null(Open(@"Directory\Background\shell\PhotoReview.Shell"));
+    }
+
+    [Fact(DisplayName = "association (WP-30): the default variant keeps the WPF ProgId and verb key and needs no confirmation")]
+    public void Wpf_DefaultVariant_Unchanged()
+    {
+        var exe = Exe("PhotoReview.App.exe");
+
+        var (code, output) = Install(exe);
+
+        Assert.True(code == 0, output);
+        Assert.Equal("Photo Review", Default("PhotoReview.App"));
+        Assert.Equal($"\"{exe}\" \"%1\"", Default(@"PhotoReview.App\shell\open\command"));
+        Assert.Equal("Browse with PhotoReview", Default(@"Directory\shell\PhotoReview"));
+        Assert.Null(Open("PhotoReview.Shell"));
+        Assert.Null(Open(@"Directory\shell\PhotoReview.Shell"));
+    }
+
+    [Fact(DisplayName = "association (WP-30): uninstalling the shell variant removes only the shell keys and values")]
+    public void Shell_Uninstall_RemovesOnlyShellRegistration()
+    {
+        SeedUserJpgDefault();
+        var wpfExe = Exe("PhotoReview.App.exe");
+        Install(wpfExe);
+        Install(Exe(), "-Variant", "Shell", "-Force");
+
+        var (code, output) = Uninstall("-Variant", "Shell");
+
+        Assert.True(code == 0, output);
+        Assert.Null(Open("PhotoReview.Shell"));
+        Assert.Null(Open(@"Directory\shell\PhotoReview.Shell"));
+        Assert.Null(Open(@"Directory\Background\shell\PhotoReview.Shell"));
+        using (var progs = Open(@".jpg\OpenWithProgids"))
+        {
+            Assert.DoesNotContain("PhotoReview.Shell", progs!.GetValueNames());
+            Assert.Contains("PhotoReview.App", progs.GetValueNames());
+            Assert.Contains("SomeoneElse.Viewer", progs.GetValueNames());
+        }
+        Assert.Equal($"\"{wpfExe}\" \"%1\"", Default(@"PhotoReview.App\shell\open\command"));
+        Assert.NotNull(Open(@"Directory\shell\PhotoReview"));
+        Assert.Equal("jpegfile", Default(".jpg"));
+    }
+
+    [Fact(DisplayName = "association (WP-30): an executable that does not exist fails before any key is written")]
+    public void Shell_MissingExe_Fails()
+    {
+        var (code, _) = Install(Path.Combine(_root.Dir("nowhere"), "PhotoReview.exe"), "-Variant", "Shell", "-Force");
+
+        Assert.NotEqual(0, code);
+        Assert.Null(Open("PhotoReview.Shell"));
     }
 }
 
