@@ -116,6 +116,17 @@ if (args.Length is 2 or 4 && args[0] == "--ui-next-probe" && (args.Length == 2 |
     return;
 }
 
+if (args.Length >= 1 && args[0] == "--startup-probe")
+{
+    try { Environment.ExitCode = PhotoReview.Benchmark.Cli.ShellHost.StartupProbeCommand.Run(args); }
+    catch (Exception ex) when (ex is ArgumentException or IOException or InvalidOperationException)
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+    }
+    return;
+}
+
 if (args.Length >= 1 && args[0] == "--perf-session")
 {
     Environment.ExitCode = await PerfSession.RunAsync(args);
@@ -235,7 +246,7 @@ foreach (var mode in new[]
 {
     "--benchmark-list-profiles", "--benchmark <folder> <profile,...>", "--benchmark-all <folder> [output]", "--benchmark-actions <folder> [output]",
     "--ui-next-probe <folder> [--cache-dir DIR]", "--perf-session ...", "--preload-bench <folder> [n]", "--perf-analyze <dir> [--rules <file>]",
-    "--io-decode-split ...", "--decoder-bench ...", "--decoder-bench --raw <folder> <outDir> [iterations=3]", "--explorer-probe <folder>", "--raw-survey <dir> [--markdown <out.md>]",
+    "--startup-probe --shell <exe> [--wpf <exe>] --source <folder> [--count n --rounds n --warmup n --seed n --keys n --out dir]", "--io-decode-split ...", "--decoder-bench ...", "--decoder-bench --raw <folder> <outDir> [iterations=3]", "--explorer-probe <folder>", "--raw-survey <dir> [--markdown <out.md>]",
 })
     Console.Error.WriteLine("  " + mode);
 Environment.ExitCode = 2;
