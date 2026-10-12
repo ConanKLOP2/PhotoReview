@@ -126,6 +126,20 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         return filePath;
     }
 
+    private SessionWriter? _lastSessionWriter;
+
+    /// <summary>
+    /// Reads the persisted session only after the view model's debounced writer has settled (flush, then wait for a
+    /// timer write that was already in flight): a read racing the atomic replace of the session file sees "no session".
+    /// </summary>
+    private async Task<SessionState> LoadSettledSessionAsync(string folder)
+    {
+        var writer = _lastSessionWriter ?? throw new InvalidOperationException("CreateViewModel was not called.");
+        await writer.FlushAsync();
+        await writer.WhenIdleAsync();
+        return _sessionStore.Load(folder);
+    }
+
     private (MainViewModel ViewModel, FileActionService FileActions, UndoService Undo) CreateViewModel(IFileSystem? fs = null, SessionWriter? sessionWriter = null)
     {
         var activeFs = fs ?? _fileSystem;
@@ -134,6 +148,8 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         var undo = new UndoService(_journal, activeFs, _recycleBin, fileActions);
 
         MainViewModel? vm = null;
+        var vmSessionWriter = sessionWriter ?? new SessionWriter(_sessionStore, FileLog.Default);
+        _lastSessionWriter = vmSessionWriter;
         var presenter = new ImagePresenter(
             _catalog,
             _clock,
@@ -174,7 +190,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
             _hashService,
             _previewService,
             _thumbnailCache,
-            sessionWriter ?? new SessionWriter(_sessionStore, FileLog.Default),
+            vmSessionWriter,
             preloadController: _preloadController,
             naturalComparer: ManagedNaturalComparer.Instance);
 

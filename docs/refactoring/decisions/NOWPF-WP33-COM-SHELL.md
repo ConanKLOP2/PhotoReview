@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP33
-order: 970
+order: 980
 summary: |-
   WP-33: COM shell/Recycle Bin typed (IFileOperation, IShellItem2); AOT 80->0 IL.
 ---

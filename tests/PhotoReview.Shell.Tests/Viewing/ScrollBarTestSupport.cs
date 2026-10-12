@@ -71,10 +71,11 @@ internal sealed class FillRecorder : IDrawContext
 /// </summary>
 internal sealed class ScrollBarRig : IDisposable
 {
-    private readonly (double Width, double Height) _bitmap;
+    private (double Width, double Height) _bitmap;
 
     public ScrollBarRig(double clientWidth = 1000, double clientHeight = 600, int imageWidth = 3000, int imageHeight = 2000,
-        double dpiScale = 1.0, bool actualSize = true, bool withScrollBars = true, (int DelayMs, int IntervalMs)? repeat = null)
+        double dpiScale = 1.0, bool actualSize = true, bool withScrollBars = true, (int DelayMs, int IntervalMs)? repeat = null,
+        int bitmapWidth = 0, int bitmapHeight = 0)
     {
         Settings = new AppSettings { KineticPanEnabled = false };
         Window = new FakeShellWindow { ClientSizeDip = new SizeD(clientWidth, clientHeight), DpiScale = dpiScale };
@@ -83,7 +84,8 @@ internal sealed class ScrollBarRig : IDisposable
         Host = new RecordingInputHost();
         Viewer = new ViewerState { DpiScale = dpiScale };
         Viewer.SetSourceSize(imageWidth, imageHeight, newImage: true);
-        _bitmap = (imageWidth, imageHeight);
+        // WP-28b: a preview bitmap smaller than the declared size (RAW) still gets the layout of the original.
+        _bitmap = (bitmapWidth > 0 ? bitmapWidth : imageWidth, bitmapHeight > 0 ? bitmapHeight : imageHeight);
         Viewport = new ViewportController(Window, Dispatcher, Clock, Content, UpdateFitSize, new ViewportControllerOptions
         {
             DragMetricsPixels = () => (4, 4),
@@ -161,6 +163,14 @@ internal sealed class ScrollBarRig : IDisposable
     }
 
     public void Drain() => Dispatcher.Drain();
+
+    /// <summary>WP-28b: the displayed bitmap is replaced by one of another pixel size (preview -&gt; full decode); the layout is re-measured.</summary>
+    public void SetBitmap(int width, int height)
+    {
+        _bitmap = (width, height);
+        Viewport.InvalidateLayout();
+        Drain();
+    }
 
     public static nint Pack(int x, int y) => (nint)(((uint)(ushort)y << 16) | (ushort)x);
 

@@ -31,6 +31,26 @@ Flags verified against `dotnet tool run dotnet-stryker -- --help` (`--since[:<co
 - **`--with-baseline`** is EXPERIMENTAL and untested here; do not rely on it.
 - **No extra parallel Stryker processes beyond the 12 logical cores** (sum of all `--concurrency` values across running processes): load makes timing tests flaky, and Stryker counts those timeouts as kills.
 
+## Manual mutants by agents: two-step run (2026-10-12)
+
+A manual mutant (edit one line, rebuild, run tests, revert with `git checkout`) used to run the whole solution: 30-70 minutes per
+package and a saturated machine. Use two steps instead:
+
+1. **Targeted pass.** Run each mutant against the tests that cover the mutated code only: the owning test project filtered to the
+   class/namespace (`dotnet test <project> -c Release --no-build ... --filter "FullyQualifiedName~<Class>"`), plus the integration
+   project of the same area (for shell code: `Shell.Tests` + `Shell.Integration.Tests`; never only one class). Build once per mutant,
+   always with `--blame-hang-timeout 120s --blame-hang-dump-type none`.
+2. **Wide confirmation, survivors only.** Re-run every mutant that SURVIVED step 1 against the whole test project(s) of the area
+   (and the whole solution for shared code: constants, DI, contracts). Only a mutant that survives step 2 needs a new test; one
+   killed by a far-away test is recorded as "killed by <test>" and not duplicated.
+3. **Data-safety packages always use the wide set** for every survivor (Recycle, journal, undo, config, file actions).
+
+Record in the decision fragment: mutants run, killed in step 1, killed only in step 2 (name the test), equivalent, survivors fixed by
+a new test. A wrong filter makes every mutant look like a survivor: if step 1 kills nothing, check the filter first.
+
+Load rules while mutating (shared machine, 12 cores): at most 3 heavy agents at once; no more than 4 background burner threads in a
+repro loop; `/nodeReuse:false` on builds so idle MSBuild nodes do not pile up; run the repro loops with `--no-build`.
+
 ## Scores 2026-10-03/04 (master `20011b45` -> `3ab763f9`, Basic level)
 
 "Before" is the first measurement; "after" is the re-run once the gap tests (#269, #271-#275, ~1,700 tests in all) were added. Four ACL tests that deny `ListDirectory` and the two `mklink` junction tests are `Category=Native` (a killed host could leave a Deny ACE behind), so the filter above does not count them. Values with "about" are estimates from partial re-runs.

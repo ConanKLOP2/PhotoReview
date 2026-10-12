@@ -98,7 +98,7 @@ public sealed partial class MainViewModelFileActionTests
         Assert.Equal(1, _recycleBin.RestoreCalls);
         Assert.Equal(folder1, vm.Session?.Folder);
         // Folder 2's persisted session still points at its own file, not at the restored file of folder 1.
-        Assert.Equal(x, _sessionStore.Load(folder2).CurrentPath);
+        Assert.Equal(x, (await LoadSettledSessionAsync(folder2)).CurrentPath);
     }
 
     [Fact(DisplayName = "APP-03: a Copy finishing after a folder switch copies the file, has nothing to undo, and leaves the new folder untouched")]
