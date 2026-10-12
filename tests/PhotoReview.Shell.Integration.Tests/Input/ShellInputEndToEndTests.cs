@@ -36,8 +36,7 @@ public sealed partial class ShellInputEndToEndTests
 
     private static bool WaitUntil(Func<bool> condition, TimeSpan? timeout = null) => SpinWait.SpinUntil(condition, timeout ?? Bound);
 
-    private static string Diag(ShellRun run) =>
-        $"marks=[{string.Join(", ", run.MarkNames)}] error={run.Error} exit={run.ExitCode} firstPresent={run.Main?.FirstPresentDone}";
+    private static string Diag(ShellRun run) => run.Diagnostics;
 
     private static ShellRun StartWithImages(string label, params (string Name, int Width, int Height)[] images) =>
         StartWithImages(label, configure: null, images);
@@ -404,6 +403,9 @@ public sealed partial class ShellInputEndToEndTests
 
         run.OnUi(() => _ = main.ViewModel.NextAsync());
         Assert.True(WaitUntil(() => run.OnUi(() => main.ViewModel.CurrentIndex == 1)));
+        // CurrentIndex đổi ĐỒNG BỘ khi NextAsync bắt đầu; đà chỉ dừng khi chế độ xem được đặt lại cho ảnh mới (ZoomModeChanged,
+        // sau khi ảnh về). Chờ tới lúc đó, nếu không lúc runner chậm đà còn chạy và StopKinetic() trả true (cờ ngẫu nhiên).
+        Assert.True(WaitUntil(() => run.OnUi(() => main.ViewModel.Viewer.DisplayZoomPercent != 100)), "ảnh kế không về / chưa về Fit");
 
         Assert.False(run.OnUi(() => main.Input.Pointer.StopKinetic()), "điều hướng phải dừng đà đang chạy");
         StopAndAssertClean(run);

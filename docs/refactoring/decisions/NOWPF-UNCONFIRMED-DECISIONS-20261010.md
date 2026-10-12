@@ -30,6 +30,7 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 | WP23-VIEWLIST | Giữ nút "Xem danh sách" ở hàng cảnh báo tệp bị bỏ qua (thẻ WP-23 ghi "skipped") | (b) bỏ nút (shell không có đường mở danh sách bị bỏ qua) | Ẩn `StatusPanel.ViewList` | CHƯA XÁC NHẬN |
 | WP21-PRESENT | Cửa sổ thường luôn `Present(0)` (không xé hình: DWM ghép trọn khung; đo `Present(1)` chặn P50 222 ms mọi khung); F11 `Present(1)` + chờ waitable không chặn, tự hạ cấp nếu chặn. Nâng cấp preview -> full upload nền rồi mới thay | (b) giữ `Present(1)` cả cửa sổ thường (tearing-free chắc chắn nhưng UI thread chặn); (c) luôn `Present(0)` kể cả F11 (xé hình ở independent flip) | `FramePacer.ModeFor` một hàm | CHƯA XÁC NHẬN |
 | WP21-STALL | Khung đơn lẻ sau khoảng nghỉ 100-450 ms có thể bị `EndDraw` chặn ~0,5 s trên máy dev (nguyên nhân gốc chưa rõ): chấp nhận, đo lại trên máy thật của người dùng (`PresentationPerfReportTests`) | (b) luồng render riêng; (c) present qua DirectComposition; (d) khung giữ ấm | Không có gì để hoàn tác | CHƯA XÁC NHẬN |
+| WP24-ANCHOR | Menu chuột phải mở bằng phím Menu/Shift+F10 neo ở GIỮA vùng client (WPF khi `CursorLeft == -1` có thể neo khác; chưa kiểm chứng trên WPF thật) | neo ở góc trên trái client / vị trí con trỏ cuối | Một hàm `ClientCenterScreenPixel` ở `ContextMenuMessageHandler` | CHƯA XÁC NHẬN |
 
 ## Không làm mà không hỏi (vẫn cần người dùng)
 - NE-1/2/5/8 đã chốt trước đó. Chế độ chạy nền/khay, Native AOT (cài MSVC + SDK 4-5 GB), xoá dữ liệu người dùng, bất cứ thay đổi
