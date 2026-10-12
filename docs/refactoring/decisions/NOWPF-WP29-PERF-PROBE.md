@@ -1,6 +1,6 @@
----
+﻿---
 id: NOWPF-WP29
-order: 920
+order: 930
 summary: |-
   WP-29 (đợt 3 NO-WPF, 2026-10-12): perf host + probe tái sử dụng đo trên BẢN PUBLISH R2R của shell Win32 và bản WPF, xen kẽ, xuất CSV/JSON/Markdown (`--startup-probe` của Benchmark.Cli, `tools/diag/startup-probe.ps1`; thống kê percentile/loại ngoại lai/lịch xen kẽ có test + mutation 20/21 đột biến bị bắt). Kết quả đợt 3 (`perf/2026-10-12-nowpf-wave3.md`): ảnh đầu shell 463-472 ms vs WPF ~1,2 s (NW-5 <= 600 đạt; <= 450 hụt 13-22 ms), cửa sổ thấy được 356 ms (hụt <= 150), WS đỉnh -16 %, KHÔNG đạt key->frame P95 <= 3 ms (shell 183-220 ms: ~15 % phím bị khung đơn lẻ chặn 200-450 ms ở EndDraw = WP21-STALL, WPF 11-17 ms) và Settings lần sau trên R2R median 289 ms (>= 150). Chưa làm: số lần chép khung, `tune-matrix -App`, GPU dedicated, zoom/pan của WPF. App không đổi.
 ---
