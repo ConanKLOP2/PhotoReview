@@ -187,9 +187,23 @@ internal interface IVBlankDriver
     DisplayTiming? DwmTiming();
 }
 
-internal sealed class NativeVBlankDriver : IVBlankDriver
+internal sealed unsafe partial class NativeVBlankDriver : IVBlankDriver
 {
     public static readonly NativeVBlankDriver Instance = new();
+
+    /// <summary>MONITORINFOEXW is 40 header bytes + WCHAR[32]; the P/Invoke passes this size as cbSize (a test pins it to 104).</summary>
+    internal static int MonitorInfoExSize => Marshal.SizeOf<MonitorInfoEx>();
+
+    /// <summary>DWM_TIMING_INFO as passed to DwmGetCompositionTimingInfo (cbSize); packed, so a test pins the size.</summary>
+    internal static int TimingInfoSize => Marshal.SizeOf<TimingInfo>();
+
+    /// <summary>The device name of a MONITORINFOEXW buffer: up to the first NUL, at most 32 characters (the former ByValTStr semantics).</summary>
+    internal static string DeviceNameFrom(ReadOnlySpan<char> buffer)
+    {
+        var limited = buffer.Length > 32 ? buffer[..32] : buffer;
+        var nul = limited.IndexOf('\0');
+        return new string(nul < 0 ? limited : limited[..nul]);
+    }
 
     public IntPtr MonitorFromWindow(IntPtr window) => MonitorFromWindow(window, MonitorDefaultToNearest);
 
@@ -211,7 +225,7 @@ internal sealed class NativeVBlankDriver : IVBlankDriver
         source = 0;
         var info = new MonitorInfoEx { Size = Marshal.SizeOf<MonitorInfoEx>() };
         if (!GetMonitorInfo(monitor, ref info)) return false;
-        var dc = CreateDC(null, info.Device, null, IntPtr.Zero);
+        var dc = CreateDC(null, info.DeviceName(), null, IntPtr.Zero);
         if (dc == IntPtr.Zero) return false;
         try
         {
@@ -245,18 +259,24 @@ internal sealed class NativeVBlankDriver : IVBlankDriver
 
     private const uint MonitorDefaultToNearest = 2;
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    [LibraryImport("user32.dll")]
+    private static partial IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct MonitorInfoEx
+    // MONITORINFOEXW: szDevice is WCHAR[32] inline. A blittable fixed buffer replaces ByValTStr so the P/Invoke is source-generated (L-AOT).
+    [StructLayout(LayoutKind.Sequential)]
+    private unsafe struct MonitorInfoEx
     {
         public int Size;
         public Rect Monitor;
         public Rect Work;
         public uint Flags;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-        public string Device;
+        public fixed char Device[32];
+
+        /// <summary>The device name up to its first NUL (the ByValTStr semantics), at most 32 characters.</summary>
+        public string DeviceName()
+        {
+            fixed (char* p = Device) return NativeVBlankDriver.DeviceNameFrom(new ReadOnlySpan<char>(p, 32));
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -265,16 +285,16 @@ internal sealed class NativeVBlankDriver : IVBlankDriver
         public int Left, Top, Right, Bottom;
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfoEx info);
+    private static partial bool GetMonitorInfo(IntPtr monitor, ref MonitorInfoEx info);
 
-    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr CreateDC(string? driver, string device, string? output, IntPtr initData);
+    [LibraryImport("gdi32.dll", EntryPoint = "CreateDCW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial IntPtr CreateDC(string? driver, string device, string? output, IntPtr initData);
 
-    [DllImport("gdi32.dll")]
+    [LibraryImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DeleteDC(IntPtr dc);
+    private static partial bool DeleteDC(IntPtr dc);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Luid
@@ -306,14 +326,14 @@ internal sealed class NativeVBlankDriver : IVBlankDriver
         public uint Adapter;
     }
 
-    [DllImport("gdi32.dll")]
-    private static extern int D3DKMTOpenAdapterFromHdc(ref OpenAdapterFromHdc data);
+    [LibraryImport("gdi32.dll")]
+    private static partial int D3DKMTOpenAdapterFromHdc(ref OpenAdapterFromHdc data);
 
-    [DllImport("gdi32.dll")]
-    private static extern int D3DKMTWaitForVerticalBlankEvent(ref WaitForVerticalBlankEvent data);
+    [LibraryImport("gdi32.dll")]
+    private static partial int D3DKMTWaitForVerticalBlankEvent(ref WaitForVerticalBlankEvent data);
 
-    [DllImport("gdi32.dll")]
-    private static extern int D3DKMTCloseAdapter(ref CloseAdapter data);
+    [LibraryImport("gdi32.dll")]
+    private static partial int D3DKMTCloseAdapter(ref CloseAdapter data);
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     private struct UnsignedRatio
@@ -368,6 +388,6 @@ internal sealed class NativeVBlankDriver : IVBlankDriver
         public ulong CBuffersEmpty;
     }
 
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmGetCompositionTimingInfo(IntPtr hwnd, ref TimingInfo info);
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmGetCompositionTimingInfo(IntPtr hwnd, ref TimingInfo info);
 }

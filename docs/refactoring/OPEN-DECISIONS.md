@@ -151,4 +151,5 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 | NOWPF-WP32 | WP-32 spike S1 AOT: khả thi; ảnh đầu 355-390 ms (R2R 821-933). [Detail](decisions/NOWPF-WP32-AOT-SPIKE.md) |
 | NOWPF-WP28B | WP-28b (NO-WPF, 2026-10-12): mo rong G-PIX: 16 khung WPF moi (compare 2 anh, F11/DPI man hinh gia, bitmap RAW doi kich thuoc) + crossfade 0-100 % so voi blend doc lap. Do: vien/canvas compare giong tung byte, anh o PSNR >= 40,6 dB, F11/DPI lech 0 px, blend lech <= 1 muc; 18 dot bien, 17 bat, 1 tuong duong. WP28B-FIRSTFRAME: khung dau sau doi layout o thu nho > 4x la Linear (CHUA XAC NHAN). Chua kiem RAW that. [Detail](decisions/NOWPF-WP28B-GOLDEN-PIXEL-EXT.md) |
 | NOWPF-WP33 | WP-33: COM shell/Recycle Bin typed (IFileOperation, IShellItem2); AOT 80->0 IL. [Detail](decisions/NOWPF-WP33-COM-SHELL.md) |
+| NOWPF-WP34 | WP-34: IsAotCompatible cho Core/Imaging*/Platform.Windows (+App.Shared, Shell.*); 0 DllImport trong src; cong publish AOT 0 canh bao. [Detail](decisions/NOWPF-WP34-AOT-COMPATIBLE.md) |
 <!-- END GENERATED DECIDED TABLE -->
