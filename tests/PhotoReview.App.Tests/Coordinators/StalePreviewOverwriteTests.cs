@@ -382,4 +382,44 @@ public sealed class StalePreviewOverwriteTests
         Assert.Contains("b (1).jpg", harness.Presenter.StatusText, StringComparison.Ordinal);
         Assert.DoesNotContain("a (1).jpg", harness.Presenter.StatusText, StringComparison.Ordinal);
     }
-}
+
+    [Fact(DisplayName = "STALE: the refresh stat after an image was presented finishes after the user moved on: the old image's Ready status and session are not applied")]
+    public async Task PostPresentStat_OfASupersededNavigation_FinishingLate_AppliesNothing()
+    {
+        using var harness = new StalePreviewHarness(ThreeFiles);
+        harness.StatGate.HoldSecondStat(harness.Paths[0]);
+        await harness.NavigateAsync(0);
+        harness.OpenPreview(0);
+        await harness.StatGate.SecondStatStarted(harness.Paths[0]).WaitAsync(StalePreviewHarness.Bound); // file 0 IS on screen
+        var onScreen = await harness.Ui.InvokeAsync(() => harness.Presenter.CurrentImage as ShownImage);
+        Assert.Equal(harness.Paths[0], onScreen!.Path, StringComparer.OrdinalIgnoreCase);
+        await harness.NavigateAsync(1);
+        harness.OpenPreview(1);
+
+        harness.StatGate.ReleaseSecondStat(harness.Paths[0]);
+        await harness.SettleAsync();
+
+        harness.AssertNoStaleOverwrite("late refresh stat");
+        await harness.AssertSettledOnAsync(1);
+    }
+
+    [Fact(DisplayName = "STALE compare: the compare partner of a superseded navigation FAILS late: the new image and its status are untouched")]
+    public async Task ComparePartnerFailingLate_OfASupersededNavigation_ChangesNothing()
+    {
+        using var harness = new StalePreviewHarness(PairFiles);
+        harness.FailPreview(1, new InvalidOperationException("partner is broken"));
+        await harness.NavigateAsync(0);
+        harness.OpenPreview(0);
+        await harness.PreviewStartedAsync(1);         // inside compare loading
+        await harness.NavigateAsync(4);
+        await harness.ReleasePreviewAsync(4);
+        await harness.AssertSettledOnAsync(4);
+
+        harness.OpenPreview(1);                       // the partner decode now throws, after the user left
+        await harness.SettleAsync();
+
+        harness.AssertNoStaleOverwrite("late partner failure");
+        Assert.DoesNotContain(harness.Events, e => e.Kind == UiEventKind.Status && e.Text!.Contains("broken", StringComparison.OrdinalIgnoreCase));
+        await harness.AssertSettledOnAsync(4);
+        Assert.Equal(PairFiles.Length, harness.Catalog.Count);
+    }}

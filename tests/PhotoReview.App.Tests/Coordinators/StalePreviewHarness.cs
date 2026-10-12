@@ -2,8 +2,10 @@ using System.Collections.Concurrent;
 using System.IO;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.ViewModels;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging;
@@ -219,10 +221,17 @@ internal sealed class StalePreviewHarness : IDisposable
             embeddedThumbnailReader: ReadThumbnailAsync);
         Settings = new AppSettings { LoadingMode = LoadingMode.Preview, CompareSizeEnabled = compareSize, CompareHashEnabled = false };
         Preload = new StalePreloadController();
+        StatGate = new StatGateFileSystem(new PhysicalFileSystem());
         Presenter = new ImagePresenter(
             Catalog, Clock, Service, Thumbnails, Preload, Compare, new FileHashService(), Metrics, () => Settings,
-            sessionStore: null, Sink, fileSystem: null, getSession: () => null);
+            sessionStore: null, Sink, fileSystem: StatGate, getSession: () => null)
+        {
+            StatWorker = new NavigationStatWorker(),
+        };
     }
+
+    /// <summary>The file system the presenter stats through: the SECOND stat of a held file (the refresh after the image was presented) can be paused.</summary>
+    public StatGateFileSystem StatGate { get; }
 
     public IReadOnlyList<string> Paths { get; }
 
@@ -663,4 +672,70 @@ internal sealed class StalePreloadController : IPreloadController
     public void ClearPreloadedKeys()
     {
     }
+}
+
+/// <summary>Real file system whose second stat of a held path (the post-present refresh) waits for the test.</summary>
+internal sealed class StatGateFileSystem(IFileSystem inner) : IFileSystem
+{
+    private readonly object _lock = new();
+    private readonly Dictionary<string, int> _calls = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (TaskCompletionSource Started, TaskCompletionSource Release)> _held = new(StringComparer.OrdinalIgnoreCase);
+
+    public void HoldSecondStat(string path)
+    {
+        lock (_lock)
+        {
+            _held[path] = (new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
+                new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        }
+    }
+
+    public Task SecondStatStarted(string path)
+    {
+        lock (_lock) return _held[path].Started.Task;
+    }
+
+    public void ReleaseSecondStat(string path)
+    {
+        lock (_lock)
+        {
+            if (_held.TryGetValue(path, out var gate)) gate.Release.TrySetResult();
+        }
+    }
+
+    public FileStat? GetFileStat(string path)
+    {
+        (TaskCompletionSource Started, TaskCompletionSource Release)? gate = null;
+        lock (_lock)
+        {
+            _calls[path] = _calls.GetValueOrDefault(path) + 1;
+            if (_calls[path] == 2 && _held.TryGetValue(path, out var held)) gate = held;
+        }
+
+        if (gate is { } g)
+        {
+            g.Started.TrySetResult();
+            if (!g.Release.Task.Wait(StalePreviewHarness.Bound)) throw new TimeoutException("stat gate for " + path + " was never released");
+        }
+
+        return inner.GetFileStat(path);
+    }
+
+    public bool FileExists(string path) => inner.FileExists(path);
+    public bool DirectoryExists(string path) => inner.DirectoryExists(path);
+    public void Move(string source, string destination) => inner.Move(source, destination);
+    public void Copy(string source, string destination) => inner.Copy(source, destination);
+    public void Delete(string path) => inner.Delete(path);
+    public Stream OpenReadShared(string path, int bufferSize = 65536) => inner.OpenReadShared(path, bufferSize);
+    public Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
+    public void WriteAllTextAtomic(string path, string text, bool durable = true) => inner.WriteAllTextAtomic(path, text, durable);
+    public string ReadAllText(string path) => inner.ReadAllText(path);
+    public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
+    public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
+        inner.EnumerateFilesWithStat(directory, include, onSkipped);
+    public bool TryProbeReadable(string path, out string? failure) => inner.TryProbeReadable(path, out failure);
+    public IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
+        inner.EnumerateReadableFilesWithStat(directory, include, onSkipped);
+    public IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
+    public void CreateDirectory(string path) => inner.CreateDirectory(path);
 }
