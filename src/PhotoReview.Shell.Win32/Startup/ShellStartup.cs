@@ -444,13 +444,7 @@ internal sealed class ShellStartup : IDisposable
         // Cửa sổ phụ WPF (modeless Benchmark, hộp modal đang chạy vòng lồng) phải đóng KHI HWND shell còn sống: huỷ owner trước thì
         // WPF không còn nhận WM_CLOSE của hộp modal để thoát vòng lồng và WM_QUIT bị nuốt (treo). Đăng ký SAU ShellMainWindow nên
         // chạy sau OnClosing của nó: Cancel = true (đang có file action) thì giữ nguyên cửa sổ phụ.
-        window.Closing += (_, e) =>
-        {
-            if (!e.Cancel)
-            {
-                CloseSecondaryWindows();
-            }
-        };
+        window.Closing += (_, e) => CloseSecondaryWindowsUnlessCancelled(e, CloseSecondaryWindows);
         _forwardHandler = new ForwardedOpenHandler(_main, log);
         _main.AttachRenderer();
         _main.AttachOverlay(services, _frameClock); // WP-23: HUD có mặt từ khung đầu
@@ -641,6 +635,15 @@ internal sealed class ShellStartup : IDisposable
         catch
         {
             // Một logger hỏng không được biến lỗi đã xử lý thành lỗi khác.
+        }
+    }
+
+    /// <summary>Ở <c>Closing</c> (đã chạy sau <c>ShellMainWindow.OnClosing</c>): chỉ đóng cửa sổ phụ khi việc đóng shell KHÔNG bị huỷ.</summary>
+    internal static void CloseSecondaryWindowsUnlessCancelled(System.ComponentModel.CancelEventArgs e, Action close)
+    {
+        if (!e.Cancel)
+        {
+            close();
         }
     }
 

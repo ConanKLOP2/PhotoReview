@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Dialogs;
+using PhotoReview.Shell.Win32.Startup;
 
 namespace PhotoReview.Shell.Integration.Tests.Startup;
 
@@ -180,4 +181,20 @@ public sealed class ShellSecondaryWindowBridgeTests
 
     [DllImport("user32.dll")]
     private static extern nint GetWindow(nint hwnd, uint command);
+}
+
+/// <summary>Quyết định đóng cửa sổ phụ ở <c>Closing</c> (không cần desktop): chỉ khi việc đóng shell không bị huỷ.</summary>
+public sealed class ShellClosingSecondaryWindowsTests
+{
+    [Fact]
+    public void Closing_ClosesTheSecondaryWindows_OnlyWhenTheCloseIsNotCancelled()
+    {
+        var closed = 0;
+
+        ShellStartup.CloseSecondaryWindowsUnlessCancelled(new System.ComponentModel.CancelEventArgs(cancel: true), () => closed++);
+        Assert.Equal(0, closed); // đang có file action: shell ở lại, cửa sổ phụ giữ nguyên
+
+        ShellStartup.CloseSecondaryWindowsUnlessCancelled(new System.ComponentModel.CancelEventArgs(cancel: false), () => closed++);
+        Assert.Equal(1, closed);
+    }
 }
