@@ -1,6 +1,6 @@
----
+﻿---
 id: NOWPF-WP21STALL
-order: 940
+order: 950
 summary: |-
   WP21-STALL (2026-10-12): nguyên nhân gốc khung đơn lẻ bị `EndDraw` chặn ~0,47 s trên Intel UHD 630 = GPU rỗi > ~25 ms thì LẦN NỘP VIỆC ĐẦU bị chặn (25-50 % số lần, càng nghỉ lâu càng hay); swap chain/buffer/latency/Flush/threading D2D-D3D không liên quan, WARP không bị. Sửa: `GpuKeepAlive` (luồng nền, thiết bị D3D/D2D offscreen riêng, lệnh tí hon + Flush mỗi 20 ms) trong 5 s sau mỗi tương tác của cửa sổ ĐANG ACTIVE; tắt `PHOTOREVIEW_GPU_KEEPWARM=0`. key->frame P95 215-229 -> 8,8 ms, khung >= 100 ms 26,5 -> 0 %, +0,6 % CPU một lõi, ~4 % engine GPU khi đang tương tác. Phím đầu sau khoảng nghỉ > 5 s vẫn có thể bị chặn. CHƯA XÁC NHẬN: bật mặc định, cửa sổ 5 s, pin.
 ---
