@@ -174,14 +174,16 @@ jobs:
           }
 
       - name: Publish Release
-        # --no-restore: the App project was already restored as part of the
-        # whole-solution restore above; dotnet publish restores again by
-        # default, which is redundant work on an unchanged dependency graph.
-        run: dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --no-restore --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
+        # NO-WPF (WP-30): ONE folder holds both executables (PhotoReview.App.exe = WPF, PhotoReview.exe = Win32 shell), R2R,
+        # framework-dependent. -NoRestore: both projects were already restored as part of the whole-solution restore above;
+        # the publish restores again by default, which is redundant work on an unchanged dependency graph.
+        shell: powershell
+        run: ./tools/publish-release.ps1 -NoRestore -OutputDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 
       - name: Verify Release
         shell: powershell
-        run: ./tools/verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
+        # -Smoke also starts the published PhotoReview.exe --smoke (create + show the Win32 window, exit 0).
+        run: ./tools/verify-release.ps1 -Smoke -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 
       - name: Upload publish artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
