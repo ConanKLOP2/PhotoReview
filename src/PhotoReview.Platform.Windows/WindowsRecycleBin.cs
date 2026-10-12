@@ -1,13 +1,13 @@
-﻿using System.Collections;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Runtime.InteropServices;
-using Microsoft.VisualBasic.FileIO;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Platform.Windows.Shell;
 
 namespace PhotoReview.Platform.Windows;
 
 /// <summary>
-/// Triển khai IRecycleBin cho Windows qua Microsoft.VisualBasic.FileIO và Shell.Application.
+/// Triển khai IRecycleBin cho Windows qua <c>IFileOperation</c> (gửi vào Thùng rác) và <c>IShellItem2</c>/<c>IContextMenu</c> (khôi phục), WP-33:
+/// khai báo [GeneratedComInterface], không Shell.Application / dynamic / Microsoft.VisualBasic.
 /// </summary>
 public sealed class WindowsRecycleBin : IRecycleBin
 {
@@ -43,15 +43,15 @@ public sealed class WindowsRecycleBin : IRecycleBin
         _fileDelete = fileDelete ?? File.Delete;
         _log = log ?? NullLog.Instance;
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _shellRecycle = shellRecycle ?? (path => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
+        _shellRecycle = shellRecycle ?? (ShellFileRecycler.Recycle);
         _shellRestore = shellRestore ?? RestoreViaShell;
     }
 
     public void SendToRecycleBin(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        // R2-F-05: removable drives and network shares have no Recycle Bin. FileSystem.DeleteFile with
-        // OnlyErrorDialogs maps to SHFileOperation FOF_ALLOWUNDO | FOF_NOCONFIRMATION, which then deletes such a file
+        // R2-F-05: removable drives and network shares have no Recycle Bin. The shell delete with FOF_ALLOWUNDO |
+        // FOF_NOCONFIRMATION (IFileOperation, formerly VB FileSystem.DeleteFile/SHFileOperation) then deletes such a file
         // PERMANENTLY without the usual prompt, while the journal would record a successful "recycle". Refuse instead;
         // fixed drives take exactly the same call as before.
         if (!RecycleEligibility.CanRecycle(path, _driveTypeOf, _mountPointOf))
@@ -128,92 +128,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
     }
 
     private bool RestoreViaShell(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
-    {
-        object? shell = null, recycle = null;
-        try
-        {
-            var shellType = Type.GetTypeFromProgID("Shell.Application");
-            if (shellType is null) return false;
-            shell = Activator.CreateInstance(shellType);
-            dynamic shellDynamic = shell!;
-            recycle = shellDynamic.Namespace(10);
-            if (recycle is null) return false;
-            dynamic recycleDynamic = recycle;
-            object? items = recycleDynamic.Items();
-            var candidates = new List<(object Item, RecycleCandidate Candidate)>();
-            try
-            {
-                foreach (dynamic item in ComEnumeration.Enumerate(items!))
-                {
-                    var kept = false;
-                    try
-                    {
-                        var deletedFrom = (string?)item.ExtendedProperty("System.Recycle.DeletedFrom");
-                        var name = (string?)item.Name;
-                        var sizeText = Convert.ToString(item.Size, CultureInfo.InvariantCulture);
-                        var modified = item.ExtendedProperty("System.DateModified");
-                        if (!long.TryParse(sizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long size)) continue;
-                        if (!DateTime.TryParse(Convert.ToString(modified, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime shellTime)) continue;
-                        // The shell hands FILETIME properties over as an unzoned DATE that holds UTC digits, not
-                        // local time (observed at UTC+7: 14:58:16 for a file written at 14:58:16Z). The local
-                        // reading stays as an alternative so a Windows build that converts still matches.
-                        var utcReading = DateTime.SpecifyKind(shellTime, DateTimeKind.Utc);
-                        var localReading = DateTime.SpecifyKind(shellTime, DateTimeKind.Local).ToUniversalTime();
-                        var candidate = new RecycleCandidate(deletedFrom, name, size, utcReading, localReading);
-                        if (RecycleCandidateSelector.IsMatch(candidate, originalPath, expectedSize, expectedLastWriteUtc))
-                        {
-                            candidates.Add((item, candidate));
-                            kept = true;
-                        }
-                    }
-                    catch (Exception ex) when (RecycleItemFailure.IsPerItem(ex))
-                    {
-                        _log.Error("Recycle Bin item inspection failed", ex);
-                    }
-                    finally
-                    {
-                        // Only the selected candidate is needed later; every other shell item wrapper is released now.
-                        if (!kept) Release(item);
-                    }
-                }
-
-                if (candidates.Count != 1) return false;
-                var selected = candidates[0].Item;
-                dynamic selectedItem = selected;
-                object? verbs = selectedItem.Verbs();
-                var verbItems = new List<object>();
-                try
-                {
-                    var verbNames = new List<string>();
-                    foreach (dynamic verb in ComEnumeration.Enumerate(verbs!))
-                    {
-                        verbItems.Add(verb);
-                        verbNames.Add((string?)verb.Name ?? string.Empty);
-                    }
-                    RestoreVerb.Invoke(verbNames,
-                        index => { dynamic chosen = verbItems[index]; chosen.DoIt(); },
-                        canonical => selectedItem.InvokeVerb(canonical));
-                }
-                finally
-                {
-                    foreach (var verb in verbItems) Release(verb);
-                    Release(verbs);
-                }
-                return WaitForRestore(originalPath, expectedSize, expectedLastWriteUtc);
-            }
-            finally
-            {
-                foreach (var candidate in candidates) Release(candidate.Item);
-                Release(items);
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.Error($"Recycle Bin restore failed: {Path.GetFileName(originalPath)}", ex);
-            return false;
-        }
-        finally { Release(recycle); Release(shell); }
-    }
+        => ComRecycleBinSession.Restore(originalPath, expectedSize, expectedLastWriteUtc, _log);
 
     /// <param name="attempts">Checks before the final one (default 30 x 60 ms, about 1.8 s: the shell restores asynchronously and can be slow on a busy disk); tests shorten it.</param>
     /// <param name="pauseMs">Pause between two checks.</param>
@@ -238,29 +153,24 @@ public sealed class WindowsRecycleBin : IRecycleBin
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
     }
-
-    private static void Release(object? value)
-    {
-        if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
-    }
 }
 
 /// <summary>
 /// Which failures while reading ONE Recycle Bin item's shell properties skip that item instead of aborting the whole
-/// restore. The items are late-bound (<c>dynamic</c>), so a property the shell does not expose surfaces as a
-/// <see cref="Microsoft.CSharp.RuntimeBinder.RuntimeBinderException"/>, not a COM error.
+/// restore: a COM error of that item (<see cref="COMException"/>), a type the item does not support
+/// (<see cref="InvalidCastException"/>) or a value the shell reports in an unusable shape (<see cref="FormatException"/>).
 /// </summary>
 internal static class RecycleItemFailure
 {
     public static bool IsPerItem(Exception ex) =>
-        ex is COMException or InvalidCastException or FormatException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException;
+        ex is COMException or InvalidCastException or FormatException;
 }
 
 /// <summary>
 /// Decides whether the shell can really recycle a path (R2-F-05). Only local fixed drives have a Recycle Bin that
 /// <c>SHFileOperation</c> uses without warning; removable, network, optical, RAM and unknown volumes delete permanently.
 /// </summary>
-internal static class RecycleEligibility
+internal static partial class RecycleEligibility
 {
     private const string ExtendedPrefix = @"\\?\";
     private const string UncPrefix = @"\\";
@@ -353,8 +263,8 @@ internal static class RecycleEligibility
     /// <summary>Mount point of the volume that really holds <paramref name="fullPath"/> (follows junctions/mounted folders), or null.</summary>
     internal static string? QueryMountPoint(string fullPath) => WindowsRecycleBinSettingsSource.GetVolumeMountPoint(fullPath);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetDriveTypeW", ExactSpelling = true)]
-    private static extern uint GetDriveType(string rootPathName);
+    [LibraryImport("kernel32.dll", EntryPoint = "GetDriveTypeW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial uint GetDriveType(string rootPathName);
 }
 
 /// <summary>
