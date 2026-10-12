@@ -34,13 +34,16 @@ namespace `PhotoReview.App`, chuyển assembly), khoá cấu hình. KHÔNG chạ
 
 ## 3. Test
 
-`RecoveryWindowPresenterTests` (24 ca, không cửa sổ): bộ lọc, bảng nút, chi tiết (chưa kiểm tra / thường / nhóm / không đích), kiểm tra nền thật trên thư mục tạm và khẳng định
+`RecoveryWindowPresenterTests` (28 ca, không cửa sổ): bộ lọc, bảng nút, chi tiết (chưa kiểm tra / thường / nhóm / không đích), kiểm tra nền thật trên thư mục tạm và khẳng định
 không tệp nào đổi, Clear (xoá/cũ/ném lỗi), Retry (bận, ném lỗi, superseded, bảng thông báo, cài đặt đọc muộn). Test cũ (RecoveryPresenter*Tests ~83 ca, RecoveryWindow* 15 ca,
 RecoveryPathPanelTests, WpfDialogHostSeamTests) trỏ vào `RecoveryPresentation` / `RecoveryBrushes` / `_presenter` và còn xanh.
 
 ## 4. Đột biến
 
-Xem cuối tệp (điền sau khi chạy).
+23 đột biến thủ công chọn lọc (bộ lọc, AllowsRetry, màu, xác nhận retry/xoá vĩnh viễn, nút, Clear lỗi/cũ, retry bận/superseded/bảng thông báo, kiểm tra nền: đặt lại hàng, huỷ, lỗi, kết quả muộn, chi tiết nhóm/không đích).
+Bước 1 diệt 18/23 (1 đột biến không biên dịch được, làm lại dạng tương đương); 4 sống cả ở bước 2 (toàn App.Tests + Integration Recovery/Accessibility) và đều là lỗ hổng test thật:
+Clear all với 0 hàng, nhánh "cancelled" + Undo không cảnh báo xoá vĩnh viễn, lỗi checker của lượt đã huỷ không được đụng nút/trạng thái của lượt mới, kết quả muộn của lượt đã huỷ không ghi vào hàng.
+Đã thêm 4 test (`RecoveryWindowPresenterTests`, 28 ca) và kiểm tra lại: R20/R21 bị diệt; còn sống: 0. Không có đột biến tương đương bị bỏ qua.
 
 ## 5. Hoàn tác
 

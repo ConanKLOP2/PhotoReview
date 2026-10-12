@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.App.Presenters;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
@@ -425,4 +426,113 @@ public sealed class RecoveryWindowPresenterTests
         var all = Enum.GetValues<RecoveryTone>().Select(RecoveryPresentation.Rgb).ToList();
         Assert.Equal(all.Count, all.Distinct().Count());
     }
-}
+
+    // ---- Gaps found by mutation (R6, R8, R20, R21) ----
+
+    [Fact(DisplayName = "Clear all is off when there are no rows, even with a dismiss delegate")]
+    public void Buttons_ClearAllNeedsRows()
+    {
+        var presenter = new RecoveryWindowPresenter([], dismiss: e => new DismissOutcome(e, []));
+        Assert.False(presenter.ButtonStates(null, 0).ClearAll);
+    }
+
+    [Fact(DisplayName = "A cancelled group Undo-of-delete retry never warns about permanent deletion")]
+    public void RetryConfirm_CancelledUndoGroup_HasNoPermanentWarning()
+    {
+        var members = new[] { new JournalGroupMember(@"C:\a\1.jpg", null, 1, Stamp, Permanent: true) };
+        var entry = new JournalEntry("g", FileOperationType.Recycle, JournalState.Failed, @"C:\a\1.jpg", null, 1, Stamp, Stamp,
+            ErrorCode: JournalErrors.CancelledByUser, Undo: true, GroupMembers: members);
+
+        var text = RecoveryPresentation.RetryConfirmText(entry, null, allowPermanentDelete: true);
+
+        Assert.Equal(Tr.RecoveryRetryConfirmCancelled(RecoveryPresentation.OperationText(FileOperationType.Recycle), 1), text);
+    }
+
+    private sealed class HookFileSystem(IFileSystem inner, Action onStat) : IFileSystem
+    {
+        public bool FileExists(string path) => inner.FileExists(path);
+        public bool DirectoryExists(string path) => inner.DirectoryExists(path);
+        public FileStat? GetFileStat(string path)
+        {
+            onStat();
+            return inner.GetFileStat(path);
+        }
+        public void Move(string source, string destination) => inner.Move(source, destination);
+        public void Copy(string source, string destination) => inner.Copy(source, destination);
+        public void Delete(string path) => inner.Delete(path);
+        public Stream OpenReadShared(string path, int bufferSize = 65536) => inner.OpenReadShared(path, bufferSize);
+        public Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
+        public void WriteAllTextAtomic(string path, string text, bool durable = true) => inner.WriteAllTextAtomic(path, text, durable);
+        public string ReadAllText(string path) => inner.ReadAllText(path);
+        public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
+        public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
+            inner.EnumerateFilesWithStat(directory, include, onSkipped);
+        public bool TryProbeReadable(string path, out string? failure) => inner.TryProbeReadable(path, out failure);
+        public IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
+            inner.EnumerateReadableFilesWithStat(directory, include, onSkipped);
+        public IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
+        public void CreateDirectory(string path) => inner.CreateDirectory(path);
+    }
+
+    [Fact(DisplayName = "A checker failure of a run that was already cancelled leaves the newer run's Re-check button and status alone")]
+    public async Task RunChecks_CancelledRunFailure_DoesNotTouchTheView()
+    {
+        RecoveryWindowPresenter? presenter = null;
+        var fileSystem = new HookFileSystem(new PhotoReview.Core.IO.PhysicalFileSystem(), () =>
+        {
+            presenter!.CancelCheck();
+            throw new InvalidOperationException("share went away");
+        });
+        presenter = new RecoveryWindowPresenter([Entry("1")], fileSystem: fileSystem);
+        var view = new FakeView();
+
+        await RunInline(() => presenter.RunChecksAsync(view));
+
+        Assert.Equal([false], view.RecheckEnabled);
+        Assert.DoesNotContain(string.Empty, view.Status);
+        Assert.Equal(0, view.Completed);
+    }
+
+    [Fact(DisplayName = "A result that arrives after the run was cancelled is not written to its row")]
+    public async Task RunChecks_LateResultOfCancelledRun_IsIgnored()
+    {
+        var queue = new QueueContext();
+        var presenter = new RecoveryWindowPresenter([Entry("1"), Entry("2")]);
+        var view = new FakeView();
+
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(queue);
+        Task run;
+        try { run = presenter.RunChecksAsync(view); }
+        finally { SynchronizationContext.SetSynchronizationContext(previous); }
+
+        // The worker has posted both results and the continuation; none has run yet.
+        Assert.True(SpinWait.SpinUntil(() => queue.Count >= 3, TimeSpan.FromSeconds(30)), "worker did not finish");
+        presenter.CancelCheck();
+        queue.Drain();
+        await run;
+
+        Assert.All(presenter.Rows, row => Assert.Null(row.Check));
+        Assert.Single(view.Status); // only the initial "0 of 2" line: no progress after the cancel
+        Assert.Equal(0, view.Completed);
+    }
+
+    private sealed class QueueContext : SynchronizationContext
+    {
+        private readonly Queue<(SendOrPostCallback, object?)> _items = new();
+        public int Count { get { lock (_items) return _items.Count; } }
+        public override void Post(SendOrPostCallback d, object? state) { lock (_items) _items.Enqueue((d, state)); }
+        public void Drain()
+        {
+            while (true)
+            {
+                (SendOrPostCallback, object?) item;
+                lock (_items)
+                {
+                    if (_items.Count == 0) return;
+                    item = _items.Dequeue();
+                }
+                item.Item1(item.Item2);
+            }
+        }
+    }}
