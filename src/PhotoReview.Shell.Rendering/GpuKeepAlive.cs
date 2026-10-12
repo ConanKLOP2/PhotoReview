@@ -34,13 +34,23 @@ internal sealed class GpuKeepAlive : IDisposable
     private long _ticks;
     private volatile bool _stop;
     private volatile bool _failed;
+    private readonly Func<long> _timestamp;
+    private readonly ThreadPriority _priority;
+    private long _idleWaits;
 
     /// <param name="intervalMs">Khoảng giữa hai lần nộp (1-1000 ms; mặc định production 20).</param>
     /// <param name="openWork">Mở việc giữ ấm, gọi trên luồng nền; null = không có GPU thật (tự tắt).</param>
-    public GpuKeepAlive(int intervalMs, Func<IGpuKeepAliveWork?> openWork)
+    /// <param name="timestamp">Đồng hồ (Stopwatch ticks); mặc định <see cref="Stopwatch.GetTimestamp"/>. Test tiêm đồng hồ giả để
+    /// hạn chót không phụ thuộc lịch luồng của máy CI.</param>
+    /// <param name="priority">Độ ưu tiên luồng nền; mặc định production <see cref="ThreadPriority.BelowNormal"/> (không giành CPU của
+    /// UI). Test dùng <see cref="ThreadPriority.Normal"/> để không bị bỏ đói khi các test khác đốt hết lõi CPU.</param>
+    public GpuKeepAlive(int intervalMs, Func<IGpuKeepAliveWork?> openWork, Func<long>? timestamp = null,
+        ThreadPriority priority = ThreadPriority.BelowNormal)
     {
         _intervalMs = Math.Clamp(intervalMs, 1, 1000);
         _openWork = openWork ?? throw new ArgumentNullException(nameof(openWork));
+        _timestamp = timestamp ?? Stopwatch.GetTimestamp;
+        _priority = priority;
     }
 
     /// <summary>Thiết bị offscreen riêng trên GPU thật; null khi chỉ có WARP.</summary>
@@ -58,6 +68,27 @@ internal sealed class GpuKeepAlive : IDisposable
 
     /// <summary>Số lệnh đã nộp (chẩn đoán/test).</summary>
     public long Ticks => Interlocked.Read(ref _ticks);
+
+    /// <summary>
+    /// Số lần luồng nền đã vào trạng thái ngủ trên event chờ kích hoạt (chẩn đoán/test). Mỗi <see cref="Activate"/> đánh thức đúng
+    /// một lần; vòng bận hoặc thăm dò theo chu kỳ sau hạn chót sẽ làm số này tăng không ngừng.
+    /// </summary>
+    public long IdleWaits => Interlocked.Read(ref _idleWaits);
+
+    /// <summary>Luồng nền đang chặn (ngủ) chứ không chạy: tín hiệu "không quay vòng" mà test quan sát được không cần đo CPU.</summary>
+    public bool IsBlocked
+    {
+        get
+        {
+            Thread? thread;
+            lock (_gate)
+            {
+                thread = _thread;
+            }
+
+            return thread is not null && (thread.ThreadState & System.Threading.ThreadState.WaitSleepJoin) != 0;
+        }
+    }
 
     /// <summary>Đã tự tắt (không có GPU thật / thiết bị hỏng) hoặc đã Dispose.</summary>
     public bool IsDisabled => _failed || _stop;
@@ -96,7 +127,7 @@ internal sealed class GpuKeepAlive : IDisposable
 
             if (_thread is null)
             {
-                _thread = new Thread(Run) { IsBackground = true, Name = "GpuKeepAlive", Priority = ThreadPriority.BelowNormal };
+                _thread = new Thread(Run) { IsBackground = true, Name = "GpuKeepAlive", Priority = _priority };
                 _thread.Start();
             }
         }
@@ -143,8 +174,9 @@ internal sealed class GpuKeepAlive : IDisposable
 
             while (!_stop)
             {
+                Interlocked.Increment(ref _idleWaits);
                 _wake.WaitOne();
-                while (!_stop && Stopwatch.GetTimestamp() < Volatile.Read(ref _untilTimestamp))
+                while (!_stop && _timestamp() < Volatile.Read(ref _untilTimestamp))
                 {
                     work.Touch();
                     Interlocked.Increment(ref _ticks);
