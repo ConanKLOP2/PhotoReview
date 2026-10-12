@@ -29,6 +29,7 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 | WP21-STALL | Khung đơn lẻ sau khoảng nghỉ 100-450 ms có thể bị `EndDraw` chặn ~0,5 s trên máy dev (nguyên nhân gốc chưa rõ): chấp nhận, đo lại trên máy thật của người dùng (`PresentationPerfReportTests`) | (b) luồng render riêng; (c) present qua DirectComposition; (d) khung giữ ấm | Không có gì để hoàn tác | CHƯA XÁC NHẬN |
 | WP25-REFIT | Đang F11, `WM_DISPLAYCHANGE`/`WM_DPICHANGED` ép lại cửa sổ lên rcMonitor của monitor gần nhất (thêm so với bản WPF) | giữ y WPF (để Windows dời, cửa sổ có thể không phủ hết) | bỏ handler / `ShellFullscreen.Refit` | CHƯA XÁC NHẬN |
 | WP25-SURFACE-DPI | Bề mặt D2D `Resize` cả khi chỉ DPI đổi (cùng số pixel) | chỉ khi cỡ pixel đổi | một điều kiện ở `ShellMainWindow.Frame.cs` | CHƯA XÁC NHẬN |
+| WP24-ANCHOR | Menu chuột phải mở bằng phím Menu/Shift+F10 neo ở GIỮA vùng client (WPF khi `CursorLeft == -1` có thể neo khác; chưa kiểm chứng trên WPF thật) | neo ở góc trên trái client / vị trí con trỏ cuối | Một hàm `ClientCenterScreenPixel` ở `ContextMenuMessageHandler` | CHƯA XÁC NHẬN |
 
 ## Không làm mà không hỏi (vẫn cần người dùng)
 - NE-1/2/5/8 đã chốt trước đó. Chế độ chạy nền/khay, Native AOT (cài MSVC + SDK 4-5 GB), xoá dữ liệu người dùng, bất cứ thay đổi

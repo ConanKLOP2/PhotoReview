@@ -126,6 +126,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
     {
         RegisterInput(); // WP-22: chuột, phím, wheel, touchpad, kéo-thả
         RegisterWindowing(); // WP-25: F11, đa màn hình, thanh tiêu đề tối, placement khi đóng
+        RegisterContextMenu(); // WP-24: menu chuột phải, submenu Zoom
     }
 
     public ShellWindow Window => _window;
