@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Input;
 using PhotoReview.App.Windowing;
 using PhotoReview.Shell.Integration.Tests.Startup;
@@ -255,6 +256,167 @@ public sealed unsafe class ShellWindowingTests
         PendingUser32.SendMessage(main.Hwnd, WindowMessages.WmKeyDown, KeyIdMapping.ToVirtualKey(KeyId.Escape), 1);
         Assert.True(WaitUntil(() => run.OnUi(() => WindowRect(main.Hwnd) == before)), "Esc không trả cửa sổ về rect cũ");
         Assert.False(run.HasExited);
+        Stop(run);
+    }
+
+    [Fact]
+    public void F11Transition_IsOneResizeStep_NoIntermediateClientSize()
+    {
+        // Thẻ WP-25 (FullscreenTransitionFrameTests): vào/ra F11 là MỘT SetWindowPos -> client đổi đúng một lần, thẳng tới cỡ cuối
+        // (không qua kích thước trung gian 1200x800 như chuỗi Maximized -> Normal -> Maximized cũ).
+        using var run = StartRun("f11steps");
+        var main = run.Main!;
+        run.OnUi(() => PlaceNormal(main.Hwnd));
+        var sizes = new List<(int, int)>();
+        EventHandler onSize = (_, _) => sizes.Add(main.Window.ClientSizePixels);
+        run.OnUi(() => main.Window.ClientSizeChanged += onSize);
+
+        var monitor = run.OnUi(() =>
+        {
+            main.ApplyFullscreen(true);
+            return MonitorRect(main.Hwnd);
+        });
+
+        Assert.Equal([(monitor.Width, monitor.Height)], sizes);
+        sizes.Clear();
+        var normalClient = run.OnUi(() =>
+        {
+            main.ApplyFullscreen(false);
+            return main.Window.ClientSizePixels;
+        });
+        Assert.Equal([normalClient], sizes);
+        run.OnUi(() => main.Window.ClientSizeChanged -= onSize);
+        Stop(run);
+    }
+
+    [Fact]
+    public void CloseDeferredByAFileAction_WhileFullscreen_KeepsFullscreenAndSavesTheStateBeforeF11OnceItCloses()
+    {
+        var root = ShellRun.NewRoot("f11defer");
+        var paths = new PhotoReview.Core.AppPaths(root, Path.Combine(root, "data"), isolateConfig: true);
+        Directory.CreateDirectory(Path.GetDirectoryName(paths.ConfigFile)!);
+        File.WriteAllText(paths.ConfigFile, System.Text.Json.JsonSerializer.Serialize(
+            new PhotoReview.Core.Settings.AppSettings { ConfirmBeforeDelete = true },
+            PhotoReview.Core.Settings.AppSettingsJsonContext.Default.AppSettings));
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var run = StartRun("f11defer", o => o with
+        {
+            ServiceOverrides = services =>
+            {
+                o.ServiceOverrides?.Invoke(services);
+                services.AddSingleton<PhotoReview.Core.Abstractions.IDialogService>(new BlockingConfirmDialog(entered, release));
+            },
+        }, root);
+        var main = run.Main!;
+        var normal = run.OnUi(() =>
+        {
+            PlaceNormal(main.Hwnd);
+            return NormalPosition(main.Hwnd);
+        });
+        Assert.True(run.OnUi(() => main.ApplyFullscreen(true)));
+        main.Dispatcher.Post(() => _ = main.ViewModel.RecycleAsync());
+        Assert.True(entered.Wait(Bound), "hộp xác nhận không hiện");
+
+        run.RequestClose();
+        SpinWait.SpinUntil(() => false, 400);
+
+        Assert.False(run.HasExited);
+        Assert.False(main.IsClosingOrClosed);
+        Assert.Equal(MonitorRect(main.Hwnd), WindowRect(main.Hwnd)); // vẫn fullscreen trong lúc hoãn
+        release.Set();
+        Assert.True(run.WaitForExit(Bound), "cửa sổ không tự đóng sau khi file action xong");
+        var saved = JsonWindowPlacementStore.ReadRaw(paths.WindowPlacementFile);
+        Assert.NotNull(saved);
+        Assert.Equal(1, saved.ShowCommand);
+        Assert.Equal(normal, (saved.NormalLeft, saved.NormalTop, saved.NormalRight, saved.NormalBottom));
+    }
+
+    /// <summary>Hộp xác nhận chạy một vòng message lồng (như hộp thoại modal) tới khi được thả; trả "không đồng ý".</summary>
+    private sealed class BlockingConfirmDialog(ManualResetEventSlim entered, ManualResetEventSlim release) : PhotoReview.Core.Abstractions.IDialogService
+    {
+        public bool ShowConfirmation(string title, string message)
+        {
+            entered.Set();
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            Msg message2;
+            while (watch.Elapsed < Bound && !release.IsSet)
+            {
+                while (User32.PeekMessage(&message2, 0, 0, 0, WindowMessages.PmRemove))
+                {
+                    User32.TranslateMessage(&message2);
+                    User32.DispatchMessage(&message2);
+                }
+
+                release.Wait(5);
+            }
+
+            return false;
+        }
+
+        public void ShowMessage(string title, string message)
+        {
+        }
+
+        public void ShowError(string title, string message)
+        {
+        }
+
+        public string? PickFolder(string? initialFolder = null) => null;
+
+        public bool ShowBatchReview(IReadOnlyList<string> paths) => false;
+
+        public void ShowRecovery()
+        {
+        }
+
+        public void ShowDiagnostics()
+        {
+        }
+
+        public bool ShowSettings() => false;
+
+        public void ShowBenchmark(string? folder = null)
+        {
+        }
+
+        public void ShowSkippedFiles(IReadOnlyList<PhotoReview.Core.Abstractions.SkippedEntry> entries)
+        {
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Manual")]
+    public void Manual_F11Latency_IsReportedOnTheUiThread()
+    {
+        // Số đo (không thuộc CI): thời gian UI thread trong ApplyFullscreen vào/ra, 30 vòng, và tổng khung vẽ giữa chúng.
+        using var run = StartRun("f11latency");
+        var main = run.Main!;
+        run.OnUi(() => PlaceNormal(main.Hwnd));
+        var enter = new List<double>();
+        var exit = new List<double>();
+        for (var i = 0; i < 30; i++)
+        {
+            enter.Add(run.OnUi(() =>
+            {
+                var t = System.Diagnostics.Stopwatch.GetTimestamp();
+                main.ApplyFullscreen(true);
+                main.RenderNow();
+                return System.Diagnostics.Stopwatch.GetElapsedTime(t).TotalMilliseconds;
+            }));
+            exit.Add(run.OnUi(() =>
+            {
+                var t = System.Diagnostics.Stopwatch.GetTimestamp();
+                main.ApplyFullscreen(false);
+                main.RenderNow();
+                return System.Diagnostics.Stopwatch.GetElapsedTime(t).TotalMilliseconds;
+            }));
+        }
+
+        enter.Sort();
+        exit.Sort();
+        var path = Path.Combine(Path.GetTempPath(), "wp25-f11-latency.txt");
+        File.WriteAllText(path, $"enter p50={enter[15]:F2} p95={enter[28]:F2} max={enter[^1]:F2} ms; exit p50={exit[15]:F2} p95={exit[28]:F2} max={exit[^1]:F2} ms");
         Stop(run);
     }
 
