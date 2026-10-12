@@ -115,14 +115,38 @@ internal sealed class ShellRun : IDisposable
 
     /// <summary>Trạng thái chẩn đoán dùng chung cho thông báo lỗi: mốc, lỗi, mã thoát, khung đầu và báo cáo treo (nếu có).</summary>
     public string Diagnostics =>
-        $"marks=[{string.Join(", ", MarkNames)}] error={Error} exit={ExitCode} firstPresent={Main?.FirstPresentDone}"
+        $"marks=[{string.Join(", ", MarkNames)}] error={Error} exit={ExitCode} firstPresent={Main?.FirstPresentDone} {_closeNote} {WindowState()}"
         + (HangReport.Length == 0 ? "" : Environment.NewLine + HangReport);
+
+    /// <summary>Đuôi log riêng của lần chạy (lỗi vòng lặp UI được ghi kể cả khi log tắt), cho báo cáo treo.</summary>
+    private string LogTail()
+    {
+        try
+        {
+            var path = Path.Combine(Root, "test-log", "app.log");
+            if (!File.Exists(path))
+            {
+                return "(không có app.log)";
+            }
+
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var length = (int)Math.Min(stream.Length, 6000);
+            stream.Seek(-length, SeekOrigin.End);
+            var buffer = new byte[length];
+            var read = stream.Read(buffer, 0, length);
+            return System.Text.Encoding.UTF8.GetString(buffer, 0, read);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "(không đọc được app.log: " + ex.Message + ")";
+        }
+    }
 
     private bool CaptureOnTimeout(bool signaled)
     {
         if (!signaled && HangReport.Length == 0)
         {
-            HangReport = HangDiagnostics.Capture();
+            HangReport = HangDiagnostics.Capture() + Environment.NewLine + "app.log tail: " + LogTail();
         }
 
         return signaled;
@@ -150,7 +174,28 @@ internal sealed class ShellRun : IDisposable
     {
         if (Main is { } main && main.Hwnd != 0)
         {
-            User32.PostMessage(main.Hwnd, User32.WmClose, 0, 0);
+            var posted = User32.PostMessage(main.Hwnd, User32.WmClose, 0, 0);
+            _closeNote = $"WM_CLOSE posted={posted} lastError={(posted ? 0 : System.Runtime.InteropServices.Marshal.GetLastPInvokeError())} hwnd=0x{main.Hwnd:X}";
+        }
+        else
+        {
+            _closeNote = "WM_CLOSE not posted: no main window";
+        }
+    }
+
+    private string _closeNote = "";
+
+    private string WindowState()
+    {
+        try
+        {
+            return Main is { } main
+                ? $"closingOrClosed={main.IsClosingOrClosed} destroyed={main.Window.IsDestroyed} fileActionInProgress={main.ViewModel.IsFileActionInProgress}"
+                : "no main window";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            return "window state unavailable: " + ex.Message;
         }
     }
 
