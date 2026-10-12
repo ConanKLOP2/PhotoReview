@@ -18,6 +18,9 @@ internal static partial class WpfSession
 
     private static readonly List<Window> Modeless = [];
 
+    /// <summary>Hộp modal đang trong <c>ShowDialog</c> (lồng nhau được): đóng được khi shell thoát giữa chừng (không treo vòng lồng).</summary>
+    private static readonly List<Window> Modal = [];
+
     public static void EnsureApplication()
     {
         if (Application.Current is null)
@@ -88,7 +91,7 @@ internal static partial class WpfSession
 
     public static void CloseAll()
     {
-        foreach (var window in Modeless.ToArray())
+        foreach (var window in Modal.ToArray().Reverse().Concat(Modeless.ToArray()))
         {
             window.Close();
         }
@@ -97,7 +100,15 @@ internal static partial class WpfSession
     private static bool? ShowModal(Window window, nint ownerHwnd)
     {
         SetOwner(window, ownerHwnd);
-        return window.ShowDialog();
+        Modal.Add(window);
+        try
+        {
+            return window.ShowDialog();
+        }
+        finally
+        {
+            Modal.Remove(window);
+        }
     }
 
     private static void SetOwner(Window window, nint ownerHwnd)

@@ -31,8 +31,9 @@ Settings/Diagnostics/Recovery... mà không có phản hồi nào.
 - Thông báo không chặn: ghi vào `MainViewModel.StatusText` qua `ShellNoticeSink` (singleton; `ShellStartup` gắn sau khi dựng view model).
 - Lỗi launcher/thông báo bị nuốt (không ném, không treo). Có cổng thật thì hành vi cũ giữ nguyên.
 - Chuỗi qua `Localizer`: 7 khóa `status.secondaryUnavailable.*` ở CUỐI `en.json`/`vi.json`/`en.notes.json`.
-- Ghi chú: `ShellCompositionRoot` hiện chỉ tìm `ISecondaryWindowPort` trong DI (`GetService`), không ai đăng ký nó trong `src/`
-  (chỉ test WpfBridge gọi `SecondaryWindowPorts.CreateLazy`), nên đường fallback này cũng chạy ở bản không-AOT cho tới khi việc nối cầu vào exe được làm.
+- Ghi chú (cập nhật 2026-10-13): việc nối cầu vào exe đã làm ở [NOWPF-SHELL-WIRE-WPF-BRIDGE](NOWPF-SHELL-WIRE-WPF-BRIDGE.md): bản không-AOT nạp cầu
+  WPF lười nên các lệnh mở cửa sổ thật; fallback này chỉ còn chạy khi cầu vắng (bản AOT, hoặc thiếu assembly) - test fallback mô phỏng bằng
+  `SecondaryWindowPortLoader` trả `null`.
 
 ## 3. Kiểm chứng
 

@@ -244,6 +244,7 @@ internal sealed class ShellStartup : IDisposable
         }
 
         _forcedExit = ExitStartupFailed; // Window.Closed (khi Dispose cửa sổ) Quit(0) trước: mã lỗi phải thắng
+        CloseSecondaryWindows();
         _main?.Dispose();
         _main = null;
         MessageLoop.Quit(ExitStartupFailed);
@@ -253,7 +254,7 @@ internal sealed class ShellStartup : IDisposable
     {
         var dispatcher = _dispatcher!;
         var hub = new ShellPresentationHub();
-        var host = new ShellHostServices(dispatcher, () => _main?.Hwnd ?? 0);
+        var host = new ShellHostServices(dispatcher, () => _main?.Hwnd ?? 0, _loop);
         var services = ShellCompositionRoot.Build(host, hub, _options.ServiceOverrides);
         _services = services;
         _mark("servicesBuilt");
@@ -401,7 +402,11 @@ internal sealed class ShellStartup : IDisposable
         var window = new ShellWindow(
             new ShellWindowOptions(Tr.AppTitle, ShellMainWindow.DefaultWidthDip, ShellMainWindow.DefaultHeightDip, SizeIsOuter: true),
             _frameClock);
-        window.Closed += (_, _) => MessageLoop.Quit(0);
+        window.Closed += (_, _) =>
+        {
+            CloseSecondaryWindows(); // dự phòng (huỷ cưỡng bức không qua Closing); idempotent
+            MessageLoop.Quit(0);
+        };
 
         // perf/startup-first-image: không bao giờ thấy bề mặt chưa vẽ (trắng) và không bao giờ thấy cửa sổ 1200x800 rồi mới nhảy
         // tới placement: cloak từ lúc có HWND, placement áp khi cửa sổ chưa hiện, rồi mới ShowWindow.
@@ -436,6 +441,10 @@ internal sealed class ShellStartup : IDisposable
                 SettingsStore: store, ZoomPrompt: services.GetService<IZoomPromptService>(), Windowing: _options.Windowing,
                 KeepWarm: _options.KeepWarm, KeepWarmWork: _options.KeepWarmWork, FrameLogPath: _options.FrameLogPath,
         KeepWarmTimestamp: _options.KeepWarmTimestamp));
+        // Cửa sổ phụ WPF (modeless Benchmark, hộp modal đang chạy vòng lồng) phải đóng KHI HWND shell còn sống: huỷ owner trước thì
+        // WPF không còn nhận WM_CLOSE của hộp modal để thoát vòng lồng và WM_QUIT bị nuốt (treo). Đăng ký SAU ShellMainWindow nên
+        // chạy sau OnClosing của nó: Cancel = true (đang có file action) thì giữ nguyên cửa sổ phụ.
+        window.Closing += (_, e) => CloseSecondaryWindowsUnlessCancelled(e, CloseSecondaryWindows);
         _forwardHandler = new ForwardedOpenHandler(_main, log);
         _main.AttachRenderer();
         _main.AttachOverlay(services, _frameClock); // WP-23: HUD có mặt từ khung đầu
@@ -466,6 +475,7 @@ internal sealed class ShellStartup : IDisposable
             {
                 if (!main.Window.IsDestroyed)
                 {
+                    CloseSecondaryWindows();
                     main.Window.Dispose();
                 }
 
@@ -628,6 +638,31 @@ internal sealed class ShellStartup : IDisposable
         }
     }
 
+    /// <summary>Ở <c>Closing</c> (đã chạy sau <c>ShellMainWindow.OnClosing</c>): chỉ đóng cửa sổ phụ khi việc đóng shell KHÔNG bị huỷ.</summary>
+    internal static void CloseSecondaryWindowsUnlessCancelled(System.ComponentModel.CancelEventArgs e, Action close)
+    {
+        if (!e.Cancel)
+        {
+            close();
+        }
+    }
+
+    /// <summary>
+    /// Đóng cửa sổ phụ WPF còn mở và gỡ bộ lọc phím (idempotent; không nạp WPF nếu cầu chưa được nạp). UI thread; lỗi dọn không
+    /// được chặn việc thoát.
+    /// </summary>
+    private void CloseSecondaryWindows()
+    {
+        try
+        {
+            _services?.GetService<Dialogs.SecondaryWindowPortHost>()?.Dispose();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LogUnhandledForced("Could not close the secondary windows", ex);
+        }
+    }
+
     /// <summary>
     /// Dọn theo thứ tự ngược khởi tạo (như <c>App.Dispose</c>): ngừng lắng nghe pipe -> cửa sổ + bề mặt -> container (SessionWriter
     /// chờ flush tối đa 2 s, cache) -> log -> khoá instance -> listener perf.
@@ -636,6 +671,7 @@ internal sealed class ShellStartup : IDisposable
     {
         _instanceScope?.StopListening();
         Interlocked.Exchange(ref _coalescer, null)?.Dispose();
+        CloseSecondaryWindows(); // cửa sổ phụ WPF đóng trước cửa sổ chủ (owner) và trước container
         Interlocked.Exchange(ref _main, null)?.Dispose();
         _cloak?.Dispose();
         _frameClock?.Dispose();

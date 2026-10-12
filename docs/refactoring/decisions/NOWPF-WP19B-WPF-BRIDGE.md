@@ -65,7 +65,7 @@ quan sát `ComponentDispatcher.ThreadPreprocessMessage`, đặt `ClickZoomPercen
 ## 4. Lệch khỏi thẻ / điểm cần nối
 
 1. `SecondaryWindowHostFactory` chuyển sang file riêng (cùng namespace, chữ ký như C-13b); thêm `ISecondaryWindowMessagePump` public ngoài danh sách khoá (không đổi `Approved/contracts.v1.txt`).
-2. `ISecondaryWindowPort` (internal, WP-19a) thêm `PromptCustomZoom`. WP-20 nối: `var ports = SecondaryWindowPorts.CreateLazy(services, messageLoop)`; `new Win32DialogService(owner, picker, ports)`;
+2. `ISecondaryWindowPort` (internal, WP-19a) thêm `PromptCustomZoom`. Việc nối vào exe đã làm ở [NOWPF-SHELL-WIRE-WPF-BRIDGE](NOWPF-SHELL-WIRE-WPF-BRIDGE.md). Hướng dẫn gốc: WP-20 nối: `var ports = SecondaryWindowPorts.CreateLazy(services, messageLoop)`; `new Win32DialogService(owner, picker, ports)`;
    `new Win32ZoomPromptService(owner, ports)` đăng ký làm `IZoomPromptService`; khi thoát gọi `Dispose` của `WpfBridgeLoader` (`ports.Value as IDisposable`) trước khi huỷ cửa sổ chủ.
 3. Chưa có: `IFileOpenDialog` cho `PickFolder` (WP-13b), nút "Browse" trong Benchmark vẫn dùng `OpenFolderDialog` của WPF (không đổi).
 4. Hộp thoại lỗi đọc journal (Recovery, RV-A14) trong shell là `MessageBoxW` có owner = HWND shell (bản WPF giữ `MessageBox` WPF).
