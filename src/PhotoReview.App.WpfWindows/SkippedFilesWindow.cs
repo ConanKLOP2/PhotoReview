@@ -1,8 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using PhotoReview.App.Presenters;
 using PhotoReview.Core.Abstractions;
-using PhotoReview.Core.Localization;
 
 namespace PhotoReview.App;
 
@@ -14,7 +14,7 @@ internal sealed class SkippedFilesWindow : Window
 {
     public SkippedFilesWindow(IReadOnlyList<SkippedEntry> entries)
     {
-        Title = Tr.MainSkippedWindowTitle;
+        Title = SkippedFilesPresenter.Title;
         Width = 720;
         Height = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -23,21 +23,21 @@ internal sealed class SkippedFilesWindow : Window
 
         var intro = new TextBlock
         {
-            Text = Tr.MainSkippedWindowIntro,
+            Text = SkippedFilesPresenter.Intro,
             Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC8, 0x57)),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
         };
         var list = new ListBox
         {
-            ItemsSource = entries.Select(FormatEntry).ToList(),
+            ItemsSource = SkippedFilesPresenter.BuildLines(entries),
             Background = new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20)),
             Foreground = new SolidColorBrush(Color.FromRgb(0xEE, 0xEE, 0xEE)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
         };
         var close = new Button
         {
-            Content = Tr.MainSkippedWindowClose,
+            Content = SkippedFilesPresenter.CloseText,
             IsCancel = true,
             IsDefault = true,
             Padding = new Thickness(16, 4, 16, 4),
@@ -57,11 +57,4 @@ internal sealed class SkippedFilesWindow : Window
         grid.Children.Add(close);
         Content = grid;
     }
-
-    /// <summary>"path  (reason)": the OS message stays verbatim inside a translated category sentence.</summary>
-    internal static string FormatEntry(SkippedEntry entry) => Tr.SkippedEntry(entry.Path, entry.Kind switch
-    {
-        SkippedKind.ListingInterrupted => Tr.SkippedReasonListingInterrupted(entry.Reason),
-        _ => Tr.SkippedReasonFileUnreadable(entry.Reason),
-    });
 }

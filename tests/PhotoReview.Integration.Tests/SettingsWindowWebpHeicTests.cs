@@ -1,3 +1,4 @@
+using PhotoReview.App.Presenters;
 using System.Reflection;
 using System.Windows;
 using PhotoReview.App;
@@ -21,7 +22,7 @@ public sealed class SettingsWindowWebpHeicTests
     {
         using var _ = TestLocalization.Use(TestLocalization.English);
 
-        var text = SettingsWindow.FormatWebpHeicCodecStatus(new WicCodecSupport(webp, heifContainer, hevc, "t"));
+        var text = SettingsPresenter.FormatWebpHeicCodecStatus(new WicCodecSupport(webp, heifContainer, hevc, "t"));
 
         Assert.Contains(expectedPart, text, StringComparison.Ordinal);
     }
@@ -31,8 +32,8 @@ public sealed class SettingsWindowWebpHeicTests
     {
         var codecs = new WicCodecSupport(true, true, false, "t");
         string english, vietnamese;
-        using (TestLocalization.Use(TestLocalization.English)) english = SettingsWindow.FormatWebpHeicCodecStatus(codecs);
-        using (TestLocalization.Use(TestLocalization.Vietnamese)) vietnamese = SettingsWindow.FormatWebpHeicCodecStatus(codecs);
+        using (TestLocalization.Use(TestLocalization.English)) english = SettingsPresenter.FormatWebpHeicCodecStatus(codecs);
+        using (TestLocalization.Use(TestLocalization.Vietnamese)) vietnamese = SettingsPresenter.FormatWebpHeicCodecStatus(codecs);
 
         Assert.NotEqual(english, vietnamese);
         Assert.Contains("HEVC Video Extensions", vietnamese, StringComparison.Ordinal);
@@ -47,7 +48,7 @@ public sealed class SettingsWindowWebpHeicTests
             try
             {
                 Assert.False(window.WebpHeicSupportEnabledCheck.IsChecked);
-                Assert.Equal(SettingsWindow.FormatWebpHeicCodecStatus(WicCodecAvailability.Current), window.WebpHeicCodecStatusText.Text);
+                Assert.Equal(SettingsPresenter.FormatWebpHeicCodecStatus(WicCodecAvailability.Current), window.WebpHeicCodecStatusText.Text);
 
                 typeof(SettingsWindow).GetMethod("Defaults_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .Invoke(window, [null, new RoutedEventArgs()]);

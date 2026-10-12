@@ -1,3 +1,4 @@
+using PhotoReview.App.Presenters;
 using PhotoReview.App;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
@@ -22,7 +23,7 @@ public sealed class ActionProfilesDestinationTests
             var window = new ActionProfilesWindow([bad]);
             try
             {
-                Assert.Equal(Tr.ActionProfilesErrorDestinationEscapes("Loai-9"), ActionProfilesWindow.FindDestinationProblem(window.Actions));
+                Assert.Equal(Tr.ActionProfilesErrorDestinationEscapes("Loai-9"), ActionProfilesPresenter.FindDestinationProblem(window.Actions));
                 Assert.Null(window.DialogResult);
             }
             finally
@@ -39,9 +40,9 @@ public sealed class ActionProfilesDestinationTests
     {
         await StaTestHost.RunAsync(() =>
         {
-            Assert.Null(ActionProfilesWindow.FindDestinationProblem(ReviewAction.Defaults()));
-            Assert.NotNull(ActionProfilesWindow.FindDestinationProblem([new ReviewAction { Name = "x", Destination = "a|b", Operation = FileOperationType.Copy }]));
-            Assert.Null(ActionProfilesWindow.FindDestinationProblem([new ReviewAction { Name = "r", Destination = "", Operation = FileOperationType.Recycle }]));
+            Assert.Null(ActionProfilesPresenter.FindDestinationProblem(ReviewAction.Defaults()));
+            Assert.NotNull(ActionProfilesPresenter.FindDestinationProblem([new ReviewAction { Name = "x", Destination = "a|b", Operation = FileOperationType.Copy }]));
+            Assert.Null(ActionProfilesPresenter.FindDestinationProblem([new ReviewAction { Name = "r", Destination = "", Operation = FileOperationType.Recycle }]));
             return Task.CompletedTask;
         });
     }

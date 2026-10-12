@@ -1,3 +1,4 @@
+using PhotoReview.App.Presenters;
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -96,7 +97,7 @@ public sealed class WpfDialogServiceContentTests
 
             var window = (BatchReviewWindow)Assert.Single(host.Dialogs);
             Assert.Equal(Tr.BatchReviewSummary(2), window.SummaryText.Text);
-            Assert.Equal(items.Select(BatchReviewWindow.BuildItem), window.FilesList.ItemsSource.Cast<object>().Select(o => o.ToString()));
+            Assert.Equal(items.Select(BatchReviewPresenter.BuildItem), window.FilesList.ItemsSource.Cast<object>().Select(o => o.ToString()));
         });
     }
 
@@ -115,7 +116,7 @@ public sealed class WpfDialogServiceContentTests
             var window = (BatchReviewWindow)Assert.Single(host.Dialogs);
             Assert.Equal(Tr.BatchReviewSummary(2), window.SummaryText.Text);
             Assert.Equal(
-                paths.Select(p => BatchReviewWindow.BuildItem(new BatchReviewItem(p, null))),
+                paths.Select(p => BatchReviewPresenter.BuildItem(new BatchReviewItem(p, null))),
                 window.FilesList.ItemsSource.Cast<object>().Select(o => o.ToString()));
         });
     }
@@ -137,7 +138,7 @@ public sealed class WpfDialogServiceContentTests
 
             var window = Assert.Single(host.Dialogs);
             var list = FindListBox(window);
-            Assert.Equal(entries.Select(SkippedFilesWindow.FormatEntry), list.ItemsSource.Cast<string>());
+            Assert.Equal(entries.Select(SkippedFilesPresenter.FormatEntry), list.ItemsSource.Cast<string>());
         });
     }
 
