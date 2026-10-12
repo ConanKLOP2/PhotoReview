@@ -99,7 +99,9 @@ internal sealed partial class ShellMainWindow
                 $"mode={mode} result={result} img={_composer?.Current?.Width}x{_composer?.Current?.Height} fade={_composer?.Crossfade.IsActive}");
         }
 
-        Stats.Record(Stopwatch.GetTimestamp() - frameStart, presentTicks);
+        var frameEnd = Stopwatch.GetTimestamp();
+        Stats.Record(frameEnd - frameStart, presentTicks);
+        _frameLog?.Record(frameStart, frameEnd, endDrawMs, surfacePresentMs); // WP21-STALL: chẩn đoán, tắt mặc định
         if (result == PresentResult.DeviceRecreated || result == PresentResult.Failed)
         {
             // Thiết bị mất: cache đã tự xoá (DeviceRecreated); vẽ lại khung ở nhịp kế (ảnh được upload lại từ PixelBuffer).

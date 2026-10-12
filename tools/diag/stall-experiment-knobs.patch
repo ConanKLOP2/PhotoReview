@@ -1,0 +1,655 @@
+﻿diff --git a/src/PhotoReview.Shell.Interop/Graphics/D3D11.cs b/src/PhotoReview.Shell.Interop/Graphics/D3D11.cs
+index ce46b0cc..fed33908 100644
+--- a/src/PhotoReview.Shell.Interop/Graphics/D3D11.cs
++++ b/src/PhotoReview.Shell.Interop/Graphics/D3D11.cs
+@@ -157,6 +157,40 @@ internal static unsafe partial class D3D11
+         }
+     }
+ 
++    /// <summary>ID3D11DeviceContext::Flush (WP21-STALL: thử đặt Flush quanh Present).</summary>
++    public static void Flush(ID3D11Device device)
++    {
++        device.GetImmediateContext(out nint context);
++        if (context == 0)
++        {
++            return;
++        }
++
++        try
++        {
++            nint* vtable = *(nint**)context;
++            ((delegate* unmanaged[MemberFunction]<nint, void>)vtable[ContextSlotFlush])(context);
++        }
++        finally
++        {
++            Marshal.Release(context);
++        }
++    }
++
++    /// <summary>Thiết bị trên một adapter DXGI cụ thể (con trỏ IDXGIAdapter thô).</summary>
++    public static int CreateDeviceOnAdapter(nint adapter, uint flags, out ID3D11Device? device, out int featureLevel)
++    {
++        int* levels = stackalloc int[]
++        {
++            D3D11Constants.FeatureLevel110, D3D11Constants.FeatureLevel101,
++            D3D11Constants.FeatureLevel100, D3D11Constants.FeatureLevel93,
++        };
++        int hr = D3D11CreateDeviceNative(adapter, D3DDriverType.Unknown, 0, flags, levels, 4, D3D11Constants.SdkVersion,
++            out nint raw, out featureLevel, 0);
++        device = hr >= 0 && raw != 0 ? ComInterop.Wrap<ID3D11Device>(raw) : null;
++        return hr;
++    }
++
+     public static int CreateDevice(D3DDriverType driverType, uint flags, out ID3D11Device? device, out int featureLevel)
+     {
+         int* levels = stackalloc int[]
+diff --git a/src/PhotoReview.Shell.Interop/Graphics/Dxgi.cs b/src/PhotoReview.Shell.Interop/Graphics/Dxgi.cs
+index 8d420d86..8ff3b5b3 100644
+--- a/src/PhotoReview.Shell.Interop/Graphics/Dxgi.cs
++++ b/src/PhotoReview.Shell.Interop/Graphics/Dxgi.cs
+@@ -261,4 +261,52 @@ internal static partial class Dxgi
+     /// <summary>CreateDXGIFactory2(flags, riid, void**). <paramref name="flags"/> 0, hoáº·c 1 = DEBUG.</summary>
+     [LibraryImport("dxgi.dll", EntryPoint = "CreateDXGIFactory2")]
+     public static partial int CreateDxgiFactory2(uint flags, in Guid riid, out nint factory);
++
++    /// <summary>
++    /// WP21-STALL: liệt kê adapter (IDXGIFactory1::EnumAdapters1). Trả con trỏ IDXGIAdapter thô (đã AddRef: người gọi
++    /// <see cref="System.Runtime.InteropServices.Marshal.Release"/>), tên, VendorId.
++    /// </summary>
++    public static unsafe List<(nint Adapter, string Name, uint Vendor)> EnumerateAdapters()
++    {
++        var list = new List<(nint, string, uint)>();
++        byte* desc = stackalloc byte[512];
++        Guid iid = typeof(IDxgiFactory1).GUID;
++        if (CreateDxgiFactory2(0, iid, out nint factoryRaw) < 0 || factoryRaw == 0)
++        {
++            return list;
++        }
++
++        IDxgiFactory1 factory = ComInterop.Wrap<IDxgiFactory1>(factoryRaw);
++        try
++        {
++            for (uint i = 0; factory.Reserved12EnumAdapters1(i, out nint adapterRaw) >= 0 && adapterRaw != 0; i++)
++            {
++                IDxgiAdapter adapter = ComInterop.Wrap<IDxgiAdapter>(adapterRaw);
++                string name = "?";
++                uint vendor = 0;
++                if (adapter.Reserved08GetDesc((nint)desc) >= 0)
++                {
++                    name = new string((char*)desc);
++                    vendor = *(uint*)(desc + 256);
++                }
++
++                // Giữ một ref thô cho người gọi, rồi trả wrapper (không Release ref của nó ở đây: Wrap sở hữu ref gốc).
++                nint raw = 0;
++                if (System.Runtime.InteropServices.ComWrappers.TryGetComInstance(adapter, out nint unknown))
++                {
++                    raw = ComInterop.QueryInterface(unknown, typeof(IDxgiAdapter).GUID);
++                    System.Runtime.InteropServices.Marshal.Release(unknown);
++                }
++
++                list.Add((raw, name, vendor));
++                ComInterop.Release(adapter);
++            }
++        }
++        finally
++        {
++            ComInterop.Release(factory);
++        }
++
++        return list;
++    }
+ }
+diff --git a/src/PhotoReview.Shell.Interop/Graphics/RenderingAdditions.cs b/src/PhotoReview.Shell.Interop/Graphics/RenderingAdditions.cs
+index c803fe15..4be75232 100644
+--- a/src/PhotoReview.Shell.Interop/Graphics/RenderingAdditions.cs
++++ b/src/PhotoReview.Shell.Interop/Graphics/RenderingAdditions.cs
+@@ -78,6 +78,24 @@ internal static partial class GraphicsKernel32
+     [return: MarshalAs(UnmanagedType.Bool)]
+     public static partial bool CloseHandle(nint handle);
+ 
++    [LibraryImport("kernel32.dll")]
++    [return: MarshalAs(UnmanagedType.Bool)]
++    public static partial bool QueryThreadCycleTime(nint thread, out ulong cycles);
++
++    [LibraryImport("kernel32.dll")]
++    public static partial nint GetCurrentThread();
++
++    public const uint CreateWaitableTimerHighResolution = 0x2;
++    public const uint TimerAllAccess = 0x1F0003;
++
++    [LibraryImport("kernel32.dll", EntryPoint = "CreateWaitableTimerExW", SetLastError = true)]
++    public static partial nint CreateWaitableTimerEx(nint attributes, nint name, uint flags, uint desiredAccess);
++
++    [LibraryImport("kernel32.dll", SetLastError = true)]
++    [return: MarshalAs(UnmanagedType.Bool)]
++    public static unsafe partial bool SetWaitableTimer(nint timer, long* dueTime, int period, nint completionRoutine, nint argument,
++        [MarshalAs(UnmanagedType.Bool)] bool resume);
++
+     [LibraryImport("kernel32.dll", SetLastError = true)]
+     public static partial uint WaitForSingleObjectEx(nint handle, uint milliseconds, [MarshalAs(UnmanagedType.Bool)] bool alertable);
+ }
+diff --git a/src/PhotoReview.Shell.Rendering/D2DRenderSurface.cs b/src/PhotoReview.Shell.Rendering/D2DRenderSurface.cs
+index 437f6f4f..cff3f7c9 100644
+--- a/src/PhotoReview.Shell.Rendering/D2DRenderSurface.cs
++++ b/src/PhotoReview.Shell.Rendering/D2DRenderSurface.cs
+@@ -127,8 +127,11 @@ public sealed class D2DRenderSurface : IRenderSurface
+         _drawing = false;
+         bool balanced = _drawContext.End();
+         long endDrawStart = System.Diagnostics.Stopwatch.GetTimestamp();
++        GraphicsKernel32.QueryThreadCycleTime(GraphicsKernel32.GetCurrentThread(), out ulong cyclesBefore);
+         int hr = _resources.EndDraw();
+         LastEndDrawTicks = System.Diagnostics.Stopwatch.GetTimestamp() - endDrawStart;
++        GraphicsKernel32.QueryThreadCycleTime(GraphicsKernel32.GetCurrentThread(), out ulong cyclesAfter);
++        LastEndDrawCycles = (long)(cyclesAfter - cyclesBefore);
+         PresentResult result;
+         if (DeviceLoss.IsDeviceLost(hr))
+         {
+@@ -196,6 +199,22 @@ public sealed class D2DRenderSurface : IRenderSurface
+     /// <summary>Chẩn đoán (WP-21): Stopwatch ticks của <c>ID2D1DeviceContext::EndDraw</c> lần gần nhất.</summary>
+     internal long LastEndDrawTicks { get; private set; }
+ 
++    /// <summary>WP21-STALL: chu kỳ CPU của luồng trong EndDraw (nhỏ so với thời gian = đang chờ, không phải đang làm).</summary>
++    internal long LastEndDrawCycles { get; private set; }
++
++    /// <summary>WP21-STALL: số lần Present(DO_NOT_WAIT) báo còn đang vẽ.</summary>
++    internal long StillDrawingCount => _resources.StillDrawingCount;
++
++    /// <summary>WP21-STALL (thí nghiệm "micro"): lệnh vẽ rỗng + EndDraw, không Present.</summary>
++    internal void TouchGpu()
++    {
++        ThrowIfInvalidThreadOrDisposed();
++        if (!_drawing)
++        {
++            _resources.TouchGpu();
++        }
++    }
++
+     /// <summary>Chẩn đoán (WP-21): Stopwatch ticks của <c>IDXGISwapChain::Present</c> lần gần nhất.</summary>
+     internal long LastPresentTicks { get; private set; }
+ 
+diff --git a/src/PhotoReview.Shell.Rendering/DeviceResources.cs b/src/PhotoReview.Shell.Rendering/DeviceResources.cs
+index 1137d1fb..63efcfab 100644
+--- a/src/PhotoReview.Shell.Rendering/DeviceResources.cs
++++ b/src/PhotoReview.Shell.Rendering/DeviceResources.cs
+@@ -14,7 +14,7 @@ namespace PhotoReview.Shell.Rendering;
+ internal sealed unsafe class DeviceResources : IDisposable
+ {
+     private const uint SwapChainBufferCount = 2;
+-    private const uint SwapChainFlags = DxgiConstants.SwapChainFlagFrameLatencyWaitableObject;
++    private const uint SwapChainFlags = DxgiConstants.SwapChainFlagFrameLatencyWaitableObject; // + 0x800 tearing (thí nghiệm) cần cùng cờ ở ResizeBuffers: xem ResizeFlags
+ 
+     private readonly nint _hwnd;
+     private readonly bool _preferWarp;
+@@ -66,6 +66,24 @@ internal sealed unsafe class DeviceResources : IDisposable
+     /// <summary>Seam test (thẻ WP-15): nhận HRESULT thật của EndDraw, trả HRESULT dùng tiếp (vd. ép D2DERR_RECREATE_TARGET).</summary>
+     internal Func<int, int>? EndDrawFault { get; set; }
+ 
++    /// <summary>WP21-STALL: số lần Present(DO_NOT_WAIT) trả DXGI_ERROR_WAS_STILL_DRAWING (thí nghiệm).</summary>
++    internal long StillDrawingCount { get; private set; }
++
++    /// <summary>WP21-STALL: tiêu một lệnh vẽ rỗng + EndDraw (không Present) để đánh thức GPU (thí nghiệm "micro").</summary>
++    internal void TouchGpu()
++    {
++        if (_context is null || _target is null)
++        {
++            return;
++        }
++
++        _context.BeginDraw();
++        D2dColorF color = new(0, 0, 0, 1);
++        _context.Clear(&color);
++        _context.EndDraw(null, null);
++        D3D11.Flush(_d3d!);
++    }
++
+     /// <summary>Seam test: như <see cref="EndDrawFault"/> cho Present (vd. ép DXGI_ERROR_DEVICE_REMOVED).</summary>
+     internal Func<int, int>? PresentFault { get; set; }
+ 
+@@ -163,7 +181,7 @@ internal sealed unsafe class DeviceResources : IDisposable
+         if (_swapChain is not null)
+         {
+             D3D11.ClearStateAndFlush(_d3d!);
+-            int hr = _swapChain.ResizeBuffers(0, (uint)PixelWidth, (uint)PixelHeight, DxgiFormat.Unknown, SwapChainFlags);
++            int hr = _swapChain.ResizeBuffers(0, (uint)PixelWidth, (uint)PixelHeight, DxgiFormat.Unknown, SwapChainFlags | (StallKnobs.Tearing ? 0x800u : 0u));
+             if (hr < 0)
+             {
+                 return hr;
+@@ -189,7 +207,24 @@ internal sealed unsafe class DeviceResources : IDisposable
+             return 0;
+         }
+ 
+-        int hr = _swapChain.Present(syncInterval, 0);
++        if (StallKnobs.Flush == "before")
++        {
++            D3D11.Flush(_d3d!);
++        }
++
++        uint flags = (StallKnobs.Tearing && syncInterval == 0 ? 0x200u : 0u) | (StallKnobs.DoNotWait ? DxgiConstants.PresentDoNotWait : 0u);
++        int hr = _swapChain.Present(syncInterval, flags);
++        if (hr == DxgiConstants.ErrorWasStillDrawing)
++        {
++            StillDrawingCount++;
++            hr = _swapChain.Present(syncInterval, flags & ~DxgiConstants.PresentDoNotWait);
++        }
++
++        if (StallKnobs.Flush == "after")
++        {
++            D3D11.Flush(_d3d!);
++        }
++
+         return PresentFault is { } fault ? fault(hr) : hr;
+     }
+ 
+@@ -243,9 +278,16 @@ internal sealed unsafe class DeviceResources : IDisposable
+     {
+         ID3D11Device? d3d = null;
+         int hr = -1;
+-        if (!_preferWarp)
++        uint d3dFlags = D3D11Constants.CreateDeviceBgraSupport | (StallKnobs.D3dSingleThreaded ? D3D11Constants.CreateDeviceSingleThreaded : 0);
++        bool knobWarp = StallKnobs.Adapter == "warp";
++        if (!_preferWarp && !knobWarp && StallKnobs.Adapter.Length > 0)
++        {
++            hr = CreateOnKnobAdapter(d3dFlags, out d3d);
++        }
++
++        if (!_preferWarp && !knobWarp && (hr < 0 || d3d is null))
+         {
+-            hr = D3D11.CreateDevice(D3DDriverType.Hardware, D3D11Constants.CreateDeviceBgraSupport, out d3d, out _);
++            hr = D3D11.CreateDevice(D3DDriverType.Hardware, d3dFlags, out d3d, out _);
+         }
+ 
+         IsWarp = false;
+@@ -257,13 +299,13 @@ internal sealed unsafe class DeviceResources : IDisposable
+         }
+ 
+         _d3d = d3d!;
+-        _factory = D2D1.CreateFactory(D2dFactoryType.SingleThreaded);
++        _factory = D2D1.CreateFactory(StallKnobs.D2dMultiThreaded ? D2dFactoryType.MultiThreaded : D2dFactoryType.SingleThreaded);
+ 
+         // Cùng một wrapper COM với _d3d (cast = QueryInterface); không Release riêng.
+         var dxgi = (IDxgiDevice)(object)_d3d;
+         ComInterop.Check(_factory.CreateDevice(dxgi, out nint deviceRaw));
+         _device = ComInterop.Wrap<ID2D1Device>(deviceRaw);
+-        ComInterop.Check(_device.CreateDeviceContext(0, out nint contextRaw));
++        ComInterop.Check(_device.CreateDeviceContext(StallKnobs.D2dMultiThreaded ? 1u : 0u, out nint contextRaw));
+         _context = ComInterop.Wrap<ID2D1DeviceContext>(contextRaw);
+         MaxBitmapSize = (int)Math.Min(_context.GetMaximumBitmapSize(), int.MaxValue);
+ 
+@@ -272,6 +314,43 @@ internal sealed unsafe class DeviceResources : IDisposable
+         _brush = ComInterop.Wrap<ID2D1SolidColorBrush>(brushRaw);
+     }
+ 
++    /// <summary>WP21-STALL (thí nghiệm): chọn adapter theo <see cref="StallKnobs.Adapter"/> ("intel", "nvidia" hoặc số thứ tự).</summary>
++    private static int CreateOnKnobAdapter(uint flags, out ID3D11Device? device)
++    {
++        device = null;
++        int result = -1;
++        var adapters = Dxgi.EnumerateAdapters();
++        try
++        {
++            for (int i = 0; i < adapters.Count && device is null; i++)
++            {
++                var (adapter, name, vendor) = adapters[i];
++                bool match = StallKnobs.Adapter switch
++                {
++                    "intel" => vendor == 0x8086,
++                    "nvidia" => vendor == 0x10DE,
++                    var s => int.TryParse(s, out int index) && index == i,
++                };
++                if (match && adapter != 0 && vendor != 0x1414)
++                {
++                    result = D3D11.CreateDeviceOnAdapter(adapter, flags, out device, out _);
++                }
++            }
++        }
++        finally
++        {
++            foreach (var (adapter, _, _) in adapters)
++            {
++                if (adapter != 0)
++                {
++                    System.Runtime.InteropServices.Marshal.Release(adapter);
++                }
++            }
++        }
++
++        return result;
++    }
++
+     private void CreateSwapChain()
+     {
+         var dxgi = (IDxgiDevice)(object)_d3d!;
+@@ -291,9 +370,9 @@ internal sealed unsafe class DeviceResources : IDisposable
+                     Format = DxgiFormat.B8G8R8A8Unorm,
+                     SampleDesc = new DxgiSampleDesc { Count = 1, Quality = 0 },
+                     BufferUsage = DxgiConstants.UsageRenderTargetOutput,
+-                    BufferCount = SwapChainBufferCount,
++                    BufferCount = (uint)Math.Clamp(StallKnobs.Buffers, 2, 6),
+                     Scaling = DxgiScaling.Stretch,
+-                    SwapEffect = DxgiSwapEffect.FlipDiscard,
++                    SwapEffect = StallKnobs.Swap == "sequential" ? DxgiSwapEffect.FlipSequential : DxgiSwapEffect.FlipDiscard,
+                     AlphaMode = DxgiAlphaMode.Ignore,
+                     Flags = SwapChainFlags,
+                 };
+@@ -312,7 +391,7 @@ internal sealed unsafe class DeviceResources : IDisposable
+ 
+         // Không quá MaxFrameLatency khung chờ trình bày; vòng lặp message (C-05) chờ waitable object trước mỗi khung.
+         var swapChain2 = (IDxgiSwapChain2)(object)_swapChain;
+-        ComInterop.Check(swapChain2.SetMaximumFrameLatency((uint)_maxFrameLatency));
++        ComInterop.Check(swapChain2.SetMaximumFrameLatency((uint)(StallKnobs.Latency > 0 ? StallKnobs.Latency : _maxFrameLatency)));
+         _waitHandle = swapChain2.GetFrameLatencyWaitableObject();
+     }
+ 
+diff --git a/src/PhotoReview.Shell.Rendering/GpuKeepAlive.cs b/src/PhotoReview.Shell.Rendering/GpuKeepAlive.cs
+new file mode 100644
+index 00000000..22ecea41
+--- /dev/null
++++ b/src/PhotoReview.Shell.Rendering/GpuKeepAlive.cs
+@@ -0,0 +1,141 @@
++using System.Diagnostics;
++using PhotoReview.Shell.Interop.Graphics;
++
++namespace PhotoReview.Shell.Rendering;
++
++/// <summary>
++/// WP21-STALL: giữ GPU "thức" bằng một luồng nền tiêu lệnh vẽ tí hon (thiết bị D3D/D2D riêng, đích offscreen 16x16, Flush) cách
++/// <c>intervalMs</c> trong khoảng <see cref="Activate"/> còn hiệu lực. Nguyên nhân gốc đã đo: sau khoảng nghỉ GPU (Intel UHD 630) lần
++/// nộp việc đầu tiên bị chặn ~0,47 s ở ~40 % số lần; nộp việc liên tục từ luồng khác thì luồng UI không bao giờ là luồng gặp
++/// lần nộp đó (và GPU không kịp nghỉ). Không có GPU thật (WARP) = không chạy. Mọi lỗi = tự tắt, không bao giờ ném ra ngoài.
++/// </summary>
++internal sealed class GpuKeepAlive : IDisposable
++{
++    private readonly int _intervalMs;
++    private readonly bool _preferWarp;
++    private readonly AutoResetEvent _wake = new(false);
++    private readonly object _gate = new();
++    private Thread? _thread;
++    private long _untilTimestamp;
++    private volatile bool _stop;
++    private volatile bool _failed;
++
++    public GpuKeepAlive(int intervalMs, bool preferWarp)
++    {
++        _intervalMs = Math.Clamp(intervalMs, 1, 1000);
++        _preferWarp = preferWarp;
++    }
++
++    /// <summary>Số lệnh tí hon đã nộp (chẩn đoán/test).</summary>
++    public long Ticks { get; private set; }
++
++    /// <summary>Đã tự tắt vì lỗi hoặc vì không có GPU thật.</summary>
++    public bool IsDisabled => _failed;
++
++    /// <summary>Kéo dài khoảng giữ ấm tới <paramref name="untilTimestamp"/> (Stopwatch ticks); khởi động luồng lần đầu.</summary>
++    public void Activate(long untilTimestamp)
++    {
++        if (_stop || _failed || _preferWarp)
++        {
++            return;
++        }
++
++        lock (_gate)
++        {
++            if (untilTimestamp > _untilTimestamp)
++            {
++                _untilTimestamp = untilTimestamp;
++            }
++
++            if (_thread is null)
++            {
++                _thread = new Thread(Run) { IsBackground = true, Name = "GpuKeepAlive", Priority = ThreadPriority.BelowNormal };
++                _thread.Start();
++            }
++        }
++
++        _wake.Set();
++    }
++
++    public void Dispose()
++    {
++        _stop = true;
++        _wake.Set();
++        Thread? thread;
++        lock (_gate)
++        {
++            thread = _thread;
++        }
++
++        thread?.Join(2000);
++        _wake.Dispose();
++    }
++
++    private unsafe void SleepAccurately(nint timer)
++    {
++        if (timer == 0)
++        {
++            Thread.Sleep(_intervalMs);
++            return;
++        }
++
++        long due = -(long)_intervalMs * 10_000; // 100 ns, âm = tương đối
++        if (GraphicsKernel32.SetWaitableTimer(timer, &due, 0, 0, 0, resume: false))
++        {
++            GraphicsKernel32.WaitForSingleObjectEx(timer, (uint)_intervalMs + 50, alertable: false);
++        }
++        else
++        {
++            Thread.Sleep(_intervalMs);
++        }
++    }
++
++    private void Run()
++    {
++        DeviceResources? resources = null;
++        try
++        {
++            resources = DeviceResources.CreateOffscreen(16, 16, 1.0, preferWarp: false);
++            if (resources.IsWarp)
++            {
++                _failed = true;
++                return;
++            }
++
++            nint timer = GraphicsKernel32.CreateWaitableTimerEx(0, 0, GraphicsKernel32.CreateWaitableTimerHighResolution, GraphicsKernel32.TimerAllAccess);
++            if (timer == 0)
++            {
++                timer = GraphicsKernel32.CreateWaitableTimerEx(0, 0, 0, GraphicsKernel32.TimerAllAccess);
++            }
++
++            try
++            {
++                while (!_stop)
++                {
++                    _wake.WaitOne();
++                    while (!_stop && Stopwatch.GetTimestamp() < Volatile.Read(ref _untilTimestamp))
++                    {
++                        resources.TouchGpu();
++                        Ticks++;
++                        SleepAccurately(timer);
++                    }
++                }
++            }
++            finally
++            {
++                if (timer != 0)
++                {
++                    GraphicsKernel32.CloseHandle(timer);
++                }
++            }
++        }
++        catch (Exception)
++        {
++            _failed = true; // thiết bị mất/không tạo được: giữ ấm là tối ưu, không phải chức năng
++        }
++        finally
++        {
++            resources?.Dispose();
++        }
++    }
++}
+diff --git a/src/PhotoReview.Shell.Rendering/StallKnobs.cs b/src/PhotoReview.Shell.Rendering/StallKnobs.cs
+new file mode 100644
+index 00000000..554690e8
+--- /dev/null
++++ b/src/PhotoReview.Shell.Rendering/StallKnobs.cs
+@@ -0,0 +1,43 @@
++namespace PhotoReview.Shell.Rendering;
++
++/// <summary>
++/// WP21-STALL: các công tắc THÍ NGHIỆM (biến môi trường <c>PHOTOREVIEW_STALL_*</c>) để xác định nguyên nhân khung đơn lẻ bị
++/// <c>EndDraw</c> chặn 200-450 ms sau khoảng nghỉ. Đọc một lần khi tiến trình khởi động; mặc định = hành vi cũ.
++/// </summary>
++internal static class StallKnobs
++{
++    private static string? Get(string name) => Environment.GetEnvironmentVariable("PHOTOREVIEW_STALL_" + name);
++
++    private static int Int(string name, int fallback) => int.TryParse(Get(name), out var v) ? v : fallback;
++
++    /// <summary>"sequential" = FLIP_SEQUENTIAL; còn lại FLIP_DISCARD.</summary>
++    public static readonly string Swap = Get("SWAP") ?? "discard";
++
++    public static readonly int Buffers = Int("BUFFERS", 2);
++
++    /// <summary>0 = không đổi (dùng RenderSurfaceOptions); khác = ép MaximumFrameLatency.</summary>
++    public static readonly int Latency = Int("LATENCY", 0);
++
++    /// <summary>"after" | "before": ID3D11DeviceContext::Flush quanh Present.</summary>
++    public static readonly string Flush = Get("FLUSH") ?? string.Empty;
++
++    public static readonly bool D2dMultiThreaded = Get("D2DMT") == "1";
++
++    public static readonly bool D3dSingleThreaded = Get("D3DST") == "1";
++
++    /// <summary>"intel" | "nvidia" | "warp" | số thứ tự adapter DXGI; rỗng = mặc định.</summary>
++    public static readonly string Adapter = Get("ADAPTER") ?? string.Empty;
++
++    public static readonly bool DoNotWait = Get("DNW") == "1";
++
++    public static readonly bool Tearing = Get("TEARING") == "1";
++
++    /// <summary>"micro" (BeginDraw/Clear/EndDraw không Present) | "frame" (vẽ + Present lại) | rỗng.</summary>
++    public static readonly string Warm = Get("WARM") ?? string.Empty;
++
++    public static readonly int WarmForMs = Int("WARM_FOR", 600);
++
++    public static readonly int WarmEveryMs = Int("WARM_EVERY", 16);
++
++    public static readonly string? Log = Get("LOG");
++}
+diff --git a/src/PhotoReview.Shell.Win32/ShellMainWindow.Frame.cs b/src/PhotoReview.Shell.Win32/ShellMainWindow.Frame.cs
+index a6d56003..0638825f 100644
+--- a/src/PhotoReview.Shell.Win32/ShellMainWindow.Frame.cs
++++ b/src/PhotoReview.Shell.Win32/ShellMainWindow.Frame.cs
+@@ -45,6 +45,15 @@ internal sealed partial class ShellMainWindow
+             return;
+         }
+ 
++        // WP21-STALL (thí nghiệm): khung giữ ấm - khung thật kéo dài cửa sổ giữ ấm, khung ấm thì không.
++        var nowTs = Stopwatch.GetTimestamp();
++        var isWarmFrame = _warmPending;
++        _warmPending = false;
++        if (!isWarmFrame)
++        {
++            _warmUntil = nowTs + (StallKnobs.WarmForMs * Stopwatch.Frequency / 1000);
++        }
++
+         PresentResult result;
+         var frameStart = Stopwatch.GetTimestamp();
+         var presentTicks = 0L;
+@@ -100,6 +109,10 @@ internal sealed partial class ShellMainWindow
+         }
+ 
+         Stats.Record(Stopwatch.GetTimestamp() - frameStart, presentTicks);
++        StallLog(nowTs, isWarmFrame, frameStart, endDrawMs, surfacePresentMs);
++        ScheduleWarm(nowTs);
++        StallLog(nowTs, isWarmFrame, frameStart, endDrawMs, surfacePresentMs);
++        ScheduleWarm(nowTs);
+         if (result == PresentResult.DeviceRecreated || result == PresentResult.Failed)
+         {
+             // Thiết bị mất: cache đã tự xoá (DeviceRecreated); vẽ lại khung ở nhịp kế (ảnh được upload lại từ PixelBuffer).
+@@ -118,6 +131,72 @@ internal sealed partial class ShellMainWindow
+         }
+     }
+ 
++    private bool _warmPending;
++    private long _warmUntil;
++    private long _lastFrameTs;
++    private System.IO.StreamWriter? _stallLog;
++
++    private bool _microChain;
++    private GpuKeepAlive? _keepAlive;
++
++    private void ScheduleWarm(long nowTs)
++    {
++        if (StallKnobs.Warm.Length == 0 || _disposed || nowTs >= _warmUntil)
++        {
++            return;
++        }
++
++        if (StallKnobs.Warm == "thread")
++        {
++            _keepAlive ??= new GpuKeepAlive(StallKnobs.WarmEveryMs, _options.PreferWarp);
++            _keepAlive.Activate(_warmUntil);
++            return;
++        }
++
++        if (StallKnobs.Warm == "micro")
++        {
++            if (!_microChain)
++            {
++                _microChain = true;
++                MicroTickLater();
++            }
++
++            return;
++        }
++
++        _warmPending = true;
++        _window.Invalidate();
++    }
++
++    private void MicroTickLater() =>
++        _ = Task.Delay(StallKnobs.WarmEveryMs).ContinueWith(_ => _dispatcher.Post(MicroTick), TaskScheduler.Default);
++
++    private void MicroTick()
++    {
++        if (_disposed || _surface is null || Stopwatch.GetTimestamp() >= _warmUntil)
++        {
++            _microChain = false;
++            return;
++        }
++
++        _surface.TouchGpu();
++        MicroTickLater();
++    }
++
++    private void StallLog(long nowTs, bool warm, long frameStart, double endDrawMs, double presentMs)
++    {
++        if (StallKnobs.Log is not { Length: > 0 } path)
++        {
++            return;
++        }
++
++        _stallLog ??= new System.IO.StreamWriter(path, append: true) { AutoFlush = true };
++        var gapMs = _lastFrameTs == 0 ? 0 : FrameStats.ToMs(nowTs - _lastFrameTs);
++        _lastFrameTs = nowTs;
++        _stallLog.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
++            $"{(warm ? "W" : "K")} gap={gapMs:F1} frame={FrameStats.ToMs(Stopwatch.GetTimestamp() - frameStart):F2} endDraw={endDrawMs:F2} present={presentMs:F2} cyclesM={_surface!.LastEndDrawCycles / 1e6:F2} still={_surface.StillDrawingCount}"));
++    }
++
+     /// <summary>WP-21: ảnh chính, lớp ảnh cũ crossfade, compare (<c>ShellMainWindow.Viewing.cs</c>). WP-23 vẽ overlay sau nó.</summary>
+     private void DrawContent(D2DDrawContext context)
+     {
+diff --git a/src/PhotoReview.Shell.Win32/ShellMainWindow.cs b/src/PhotoReview.Shell.Win32/ShellMainWindow.cs
+index b2dac620..923d7f05 100644
+--- a/src/PhotoReview.Shell.Win32/ShellMainWindow.cs
++++ b/src/PhotoReview.Shell.Win32/ShellMainWindow.cs
+@@ -403,6 +403,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
+     private void ReleaseRenderer()
+     {
+         DisposeViewing();
++        _keepAlive?.Dispose();
+         Interlocked.Exchange(ref _cache, null)?.Dispose();
+         Interlocked.Exchange(ref _surface, null)?.Dispose();
+     }
