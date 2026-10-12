@@ -79,24 +79,37 @@ public sealed class JournalDurabilityTests
     }
 
     [Fact]
-    public async Task SafeMode_PreparedAndMutationRunOffCallerThread_FastModeKeepsPreparedInline()
+    public void SafeMode_PreparedAndMutationRunOffCallerThread_FastModeKeepsPreparedInline()
     {
-        var callerThread = Environment.CurrentManagedThreadId;
+        // The caller is a dedicated thread that BLOCKS on the result (like a UI thread that awaits): nothing else can run on it, so
+        // "off the caller" is exact. A thread-pool test thread cannot serve: it is handed back to the pool at the first await and may
+        // then run the queued mutation itself (same ManagedThreadId, a false "ran on the caller"), and a dead thread's id is recycled.
+        // Threads are compared by object, never by id.
+        Thread? callerThread = null;
+        List<InMemoryFileSystem.FsEvent>? safe = null;
+        List<InMemoryFileSystem.FsEvent>? fast = null;
+        var thread = new Thread(() =>
+        {
+            callerThread = Thread.CurrentThread;
 
-        _mode = JournalDurability.PowerLossSafe;
-        _fs.WriteAllTextAtomic(@"C:\photos\a.jpg", "hello");
-        await _service.ExecuteAsync(new FileActionRequest(@"C:\photos\a.jpg", FileOperationType.Move, @"C:\photos\sel"));
-        var safe = _fs.Events.Where(e => e.Kind is "append" or "move").ToList();
-        Assert.Equal(3, safe.Count);
-        Assert.All(safe, e => Assert.NotEqual(callerThread, e.ThreadId));
+            _mode = JournalDurability.PowerLossSafe;
+            _fs.WriteAllTextAtomic(@"C:\photos\a.jpg", "hello");
+            _service.ExecuteAsync(new FileActionRequest(@"C:\photos\a.jpg", FileOperationType.Move, @"C:\photos\sel")).GetAwaiter().GetResult();
+            safe = _fs.Events.Where(e => e.Kind is "append" or "move").ToList();
 
-        _mode = JournalDurability.Fast;
-        _fs.WriteAllTextAtomic(@"C:\photos\c.jpg", "hello");
-        callerThread = Environment.CurrentManagedThreadId; // the test may have resumed on another thread after the first await
-        await _service.ExecuteAsync(new FileActionRequest(@"C:\photos\c.jpg", FileOperationType.Move, @"C:\photos\sel"));
-        var fast = _fs.Events.Where(e => e.Kind is "append" or "move").Skip(3).ToList();
-        Assert.Equal(callerThread, fast[0].ThreadId); // Prepared inline (~0.4 ms cache write)
-        Assert.NotEqual(callerThread, fast[1].ThreadId); // mutation always off-thread
+            _mode = JournalDurability.Fast;
+            _fs.WriteAllTextAtomic(@"C:\photos\c.jpg", "hello");
+            _service.ExecuteAsync(new FileActionRequest(@"C:\photos\c.jpg", FileOperationType.Move, @"C:\photos\sel")).GetAwaiter().GetResult();
+            fast = _fs.Events.Where(e => e.Kind is "append" or "move").Skip(3).ToList();
+        })
+        { IsBackground = true };
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(60)), "caller thread hung");
+
+        Assert.Equal(3, safe!.Count);
+        Assert.All(safe, e => Assert.NotSame(callerThread, e.Thread));
+        Assert.Same(callerThread, fast![0].Thread); // Prepared inline (~0.4 ms cache write)
+        Assert.NotSame(callerThread, fast[1].Thread); // mutation always off-thread
     }
 
     [Fact]

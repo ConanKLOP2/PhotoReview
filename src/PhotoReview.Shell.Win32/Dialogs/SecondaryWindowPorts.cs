@@ -22,6 +22,12 @@ internal static class SecondaryWindowPorts
     /// </summary>
     internal static ISecondaryWindowPort? TryLoad(IServiceProvider services, MessageLoop? loop)
     {
+#if SHELL_AOT
+        // WP-36: the Native AOT variant carries no WPF bridge (WpfBridgeLoader.cs is compiled out): secondary windows no-op.
+        _ = services;
+        _ = loop;
+        return null;
+#else
         try
         {
             return WpfBridgeLoader.Create(services, loop);
@@ -30,5 +36,6 @@ internal static class SecondaryWindowPorts
         {
             return null;
         }
+#endif
     }
 }

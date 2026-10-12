@@ -4,10 +4,87 @@ param(
     [switch]$SelfContained,
     # Also start PhotoReview.exe --smoke (creates + shows the Win32 window, then exits 0). Needs a desktop session; off by
     # default so the script stays usable on fake folders in tests. CI passes it.
-    [switch]$Smoke
+    [switch]$Smoke,
+    # WP-36: verify the OPTIONAL Native AOT variant of PhotoReview.exe (tools/publish-release.ps1 -Aot) in this folder too.
+    [string]$AotDirectory = '',
+    # Verify ONLY the AOT folder (the CI job that publishes just the AOT artifact has no normal release folder).
+    [switch]$AotOnly,
+    # Plausible size window of the AOT PhotoReview.exe (13.3 MB measured) and of the whole folder without *.pdb (~20 MB measured).
+    [long]$AotMinExeBytes = 5MB,
+    [long]$AotMaxExeBytes = 40MB,
+    [long]$AotMaxFolderBytes = 40MB,
+    # Test hook only: skip the "version carries a git commit" check (a runnable stand-in exe such as whoami.exe has none).
+    [switch]$AotSkipVersionCheck
 )
 
 $ErrorActionPreference = 'Stop'
+
+# WP-36: the AOT folder holds one native PhotoReview.exe and the native/data files, and NO .NET runtime and NO WPF.
+function Test-AotRelease {
+    param([string]$Dir, [string]$RepoRoot, [bool]$RunSmoke, [string]$ExpectedCommit)
+    $aot = [IO.Path]::GetFullPath($Dir)
+    if (-not (Test-Path -LiteralPath $aot -PathType Container)) { Write-Error "AOT folder not found: $aot"; exit 1 }
+    $aotRequired = @('PhotoReview.exe', 'turbojpeg.dll', 'libraw.dll', 'LibRaw-LICENSE.LGPL', 'LibRaw-LICENSE.CDDL', 'LibRaw-SOURCE.zip',
+        'LibRaw-NOTICE.txt', 'THIRD-PARTY-NOTICES.md', 'Languages\en.json', 'Languages\vi.json')
+    $aotMissing = @($aotRequired | Where-Object { -not (Test-Path -LiteralPath (Join-Path $aot $_) -PathType Leaf) })
+    if ($aotMissing.Count -gt 0) { Write-Error ('Missing AOT file(s): ' + ($aotMissing -join ', ')); exit 1 }
+    # A managed or WPF file here means the variant was not really ahead-of-time compiled / still drags the WPF bridge.
+    $forbidden = @('PhotoReview.dll', 'PhotoReview.runtimeconfig.json', 'PhotoReview.deps.json', 'PhotoReview.Shell.WpfBridge.dll',
+        'PhotoReview.App.WpfWindows.dll', 'PresentationFramework.dll', 'WindowsBase.dll', 'coreclr.dll', 'hostfxr.dll')
+    $present = @($forbidden | Where-Object { Test-Path -LiteralPath (Join-Path $aot $_) -PathType Leaf })
+    if ($present.Count -gt 0) { Write-Error ('AOT folder must not contain: ' + ($present -join ', ')); exit 1 }
+    $aotExe = Get-Item -LiteralPath (Join-Path $aot 'PhotoReview.exe')
+    if ($aotExe.Length -lt $AotMinExeBytes -or $aotExe.Length -gt $AotMaxExeBytes) {
+        Write-Error "AOT PhotoReview.exe is $($aotExe.Length) bytes, outside the plausible range $AotMinExeBytes..$AotMaxExeBytes."
+        exit 1
+    }
+    $folderBytes = (Get-ChildItem -LiteralPath $aot -Recurse -File | Where-Object { $_.Extension -ne '.pdb' } | Measure-Object -Property Length -Sum).Sum
+    if ($folderBytes -gt $AotMaxFolderBytes) {
+        Write-Error "AOT folder is $folderBytes bytes without *.pdb, above the limit $AotMaxFolderBytes."
+        exit 1
+    }
+    foreach ($native in @(@('turbojpeg.dll', 'turbojpeg.sha256'), @('libraw.dll', 'libraw.sha256'), @('LibRaw-SOURCE.zip', 'libraw.package.sha256'))) {
+        $expectedHash = (Get-Content -LiteralPath (Join-Path $RepoRoot ('native\' + $native[1])) -TotalCount 1).Trim().ToUpperInvariant()
+        $actualHash = (Get-FileHash -LiteralPath (Join-Path $aot $native[0]) -Algorithm SHA256).Hash
+        if ($actualHash -ne $expectedHash) { Write-Error "AOT $($native[0]) SHA-256 mismatch: expected $expectedHash, found $actualHash"; exit 1 }
+    }
+    $aotVersion = [string]$aotExe.VersionInfo.ProductVersion
+    $aotCommit = ($aotVersion -split '\+', 2)[1]
+    if (-not $AotSkipVersionCheck -and ($aotVersion -match '-nogit' -or [string]::IsNullOrEmpty($aotCommit))) {
+        Write-Error "AOT PhotoReview.exe version '$aotVersion' has no git commit (nogit build)."
+        exit 1
+    }
+    if ($ExpectedCommit -and (($aotCommit -replace '\.dirty$', '') -ne $ExpectedCommit)) {
+        Write-Error "AOT commit mismatch: expected $ExpectedCommit, found $aotCommit (stale AOT folder?)"
+        exit 1
+    }
+    if ($RunSmoke) {
+        # The AOT exe must not need an installed .NET: strip every DOTNET_* variable and every PATH entry that looks like a dotnet
+        # install, then run --smoke (create + show the window, exit 0) in OUR OWN process only.
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $aotExe.FullName
+        $psi.Arguments = '--smoke'
+        $psi.WorkingDirectory = $aot
+        $psi.UseShellExecute = $false
+        foreach ($name in @($psi.EnvironmentVariables.Keys | Where-Object { $_ -like 'DOTNET_*' })) { $psi.EnvironmentVariables.Remove($name) }
+        $psi.EnvironmentVariables['PATH'] = (($env:PATH -split ';') | Where-Object { $_ -and $_ -notmatch 'dotnet' }) -join ';'
+        $aotProcess = [System.Diagnostics.Process]::Start($psi)
+        if (-not $aotProcess.WaitForExit(60000)) {
+            try { $aotProcess.Kill() } catch { }
+            Write-Error 'AOT PhotoReview.exe --smoke did not exit within 60 s.'
+            exit 1
+        }
+        if ($aotProcess.ExitCode -ne 0) { Write-Error "AOT PhotoReview.exe --smoke exited with code $($aotProcess.ExitCode)."; exit 1 }
+        Write-Output 'PASS: AOT PhotoReview.exe --smoke exited 0 without a .NET runtime'
+    }
+    Write-Output ('PASS: AOT folder ok ({0}); PhotoReview.exe {1:N1} MB, folder {2:N1} MB without *.pdb, version {3}' -f $aot, ($aotExe.Length / 1MB), ($folderBytes / 1MB), $aotVersion)
+}
+
+if ($AotOnly) {
+    if ([string]::IsNullOrWhiteSpace($AotDirectory)) { Write-Error '-AotOnly needs -AotDirectory.'; exit 1 }
+    Test-AotRelease -Dir $AotDirectory -RepoRoot (Split-Path -Parent $PSScriptRoot) -RunSmoke ([bool]$Smoke) -ExpectedCommit ''
+    exit 0
+}
 
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) { $ReleaseDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App\bin\Release\net10.0-windows\publish' }
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -181,6 +258,10 @@ if ($Smoke) {
         exit 1
     }
     Write-Output 'PASS: PhotoReview.exe --smoke exited 0'
+}
+
+if (-not [string]::IsNullOrWhiteSpace($AotDirectory)) {
+    Test-AotRelease -Dir $AotDirectory -RepoRoot $repoRoot -RunSmoke ([bool]$Smoke) -ExpectedCommit $expectedCommit
 }
 
 Write-Output "PASS: release files present ($resolved)"

@@ -19,6 +19,7 @@
     <!-- WP-32 spike S1: `-p:ShellAot=true` publishes Native AOT (PublishAot is set here, not on the command line, so it does not
          flow to the netstandard analyzer projects, which NETSDK1207 rejects). -->
     <PublishAot Condition="'$(ShellAot)' == 'true'">true</PublishAot>
+    <DefineConstants Condition="'$(ShellAot)' == 'true'">$(DefineConstants);SHELL_AOT</DefineConstants>
     <!-- Without this the AOT/trim feature switch is false: PhotoReviewPerf events are no-ops and PHOTOREVIEW_PERF_TRACE writes an empty CSV. -->
     <EventSourceSupport Condition="'$(ShellAot)' == 'true'">true</EventSourceSupport>
   </PropertyGroup>
@@ -36,7 +37,18 @@
     <ProjectReference Include="..\PhotoReview.Shell.Interop\PhotoReview.Shell.Interop.csproj" />
     <ProjectReference Include="..\PhotoReview.Shell.Rendering\PhotoReview.Shell.Rendering.csproj" />
     <!-- WP-19b (NE-5, L-SHELL): cầu cửa sổ phụ WPF nạp muộn; chỉ Dialogs/WpfBridgeLoader.cs chạm tới nó. -->
+  </ItemGroup>
+
+  <!-- WP-36: the WPF bridge (Settings/Diagnostics/Recovery secondary windows) is NOT part of the Native AOT variant: WPF cannot be
+       AOT-compiled, and dropping the reference removes the WindowsDesktop framework from the publish folder (~20 MB, no .NET
+       runtime needed). WpfBridgeLoader.cs is compiled out and SecondaryWindowPorts returns null (secondary windows no-op) until
+       WP-35 replaces them. The default (hybrid R2R) build keeps the bridge. -->
+  <ItemGroup Condition="'$(ShellAot)' != 'true'">
     <ProjectReference Include="..\PhotoReview.Shell.WpfBridge\PhotoReview.Shell.WpfBridge.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ShellAot)' == 'true'">
+    <Compile Remove="Dialogs\WpfBridgeLoader.cs" />
   </ItemGroup>
 
   <ItemGroup>
