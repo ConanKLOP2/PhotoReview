@@ -153,4 +153,5 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 | NOWPF-WP33 | WP-33: COM shell/Recycle Bin typed (IFileOperation, IShellItem2); AOT 80->0 IL. [Detail](decisions/NOWPF-WP33-COM-SHELL.md) |
 | NOWPF-WP36 | WP-36: bản Native AOT của PhotoReview.exe là artifact tùy chọn riêng (không cầu WPF); mặc định vẫn R2R hybrid. [Detail](decisions/NOWPF-WP36-PUBLISH-AOT.md) |
 | NOWPF-THREADAUDIT-TESTS | RÃ  soÃ¡t thread-id/thá»i gian test: sá»­a 5, luáº­t má»›i. [Detail](decisions/NOWPF-THREADAUDIT-TESTS.md) |
+| NOWPF-WP35-SPIKE-S3 | Spike S3 (chuẩn bị WP-35, NW-3): kiểm kê 8 cửa sổ phụ WPF (~3 600 dòng, 276 chuỗi `settings.*`), so sánh 6 phương án thay (tự vẽ D2D / hộp thoại Win32 / giữ cầu WPF / tiến trình đồng hành / WebView2 / Avalonia), prototype ZoomPrompt hai kiểu. Khuyến nghị (CHƯA XÁC NHẬN): hộp thoại Win32 gốc theo giai đoạn, sau bước tách presenter khỏi WPF; D là đường lùi rẻ. [Detail](decisions/NOWPF-WP35-SPIKE-S3.md) |
 <!-- END GENERATED DECIDED TABLE -->
