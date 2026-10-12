@@ -61,7 +61,11 @@ Set-ItemProperty -Path "$classes\$progId" -Name '(Default)' -Value $friendlyName
 Set-ItemProperty -Path "$classes\$progId\shell\open\command" -Name '(Default)' -Value ('"{0}" "%1"' -f $resolvedExe)
 
 foreach ($extension in $extensions) {
-    New-Item -Path "$classes\$extension\OpenWithProgids" -Force | Out-Null
+    # Create the key only when it is missing: New-Item -Force on an existing key RESETS it and would erase the entries
+    # of every other app (and of the other PhotoReview variant) listed in Open with.
+    if (-not (Test-Path -LiteralPath "$classes\$extension\OpenWithProgids")) {
+        New-Item -Path "$classes\$extension\OpenWithProgids" -Force | Out-Null
+    }
     New-ItemProperty -Path "$classes\$extension\OpenWithProgids" -Name $progId -Value '' -PropertyType String -Force | Out-Null
 }
 

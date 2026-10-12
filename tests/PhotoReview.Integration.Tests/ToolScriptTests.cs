@@ -556,7 +556,7 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         {
             var assembly = typeof(PhotoReview.Benchmark.Cli.RawSurvey).Assembly.Location;
             File.Copy(assembly, Path.Combine(release, "PhotoReview.App.dll"), overwrite: true);
-            File.Copy(assembly, Path.Combine(release, "PhotoReview.dll"), overwrite: true);
+            if (skipFile != "PhotoReview.dll") File.Copy(assembly, Path.Combine(release, "PhotoReview.dll"), overwrite: true);
             var version = FileVersionInfo.GetVersionInfo(assembly);
             var projectDir = Path.Combine(repo, "src", "PhotoReview.App");
             Directory.CreateDirectory(projectDir);
@@ -672,7 +672,9 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, depsExtra: "PhotoReview.Gone.dll");
 
         Assert.NotEqual(0, code);
-        Assert.Contains("PhotoReview.App.deps.json names assemblies that are not in the release folder: PhotoReview.Gone.dll", output, StringComparison.Ordinal);
+        // Windows PowerShell wraps long Write-Error lines at the console width: compare on collapsed whitespace.
+        var flat = System.Text.RegularExpressions.Regex.Replace(output, @"\s+", " ");
+        Assert.Contains("PhotoReview.App.deps.json names assemblies that are not in the release folder: PhotoReview.Gone.dll", flat, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "verify-release (WP-30): -Smoke fails when PhotoReview.exe cannot be started or does not exit 0 (control: same folder passes without -Smoke)")]
