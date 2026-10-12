@@ -388,6 +388,19 @@ public sealed class SettingsPresenterTests
         Assert.False(state.ShowFolderInfo);
     }
 
+    [Fact(DisplayName = "Defaults also clears the zoom indicator and the external editor path")]
+    public void Defaults_ClearsIndicatorAndEditorPath()
+    {
+        var presenter = NewPresenter(new AppSettings { ShowZoomIndicator = true, ExternalEditorPath = "C:\\Tools\\editor.exe" });
+
+        var state = presenter.ApplyDefaults();
+
+        Assert.False(presenter.Settings.ShowZoomIndicator);
+        Assert.Equal(string.Empty, presenter.Settings.ExternalEditorPath);
+        Assert.False(state.ShowZoomIndicator);
+        Assert.Equal(string.Empty, state.ExternalEditorPath);
+    }
+
     // ---- Import / export ----
 
     [Fact(DisplayName = "Import keeps the valid part of a half-valid file, names the reset value and reloads the view once")]
@@ -492,6 +505,15 @@ public sealed class SettingsPresenterTests
         Assert.Equal(saved, presenter.RamCacheRange("garbage", null));
         Assert.Equal(saved, presenter.RamCacheRange("-5", "99999"));
         Assert.NotEqual(saved, large);
+
+        // Each box counts on its own: changing only the forward box (backward = saved) moves the floor too.
+        var savedBackward = presenter.Settings.PreloadBackwardCount.ToString(max);
+        var forwardOnly = presenter.RamCacheRange(PerformanceOptions.MaxPreloadCount.ToString(max), savedBackward);
+        var forwardSmall = presenter.RamCacheRange("1", savedBackward);
+        Assert.True(forwardOnly.Min > forwardSmall.Min, $"forward-only {forwardOnly.Min} vs {forwardSmall.Min}");
+        var backwardOnly = presenter.RamCacheRange(presenter.Settings.PreloadForwardCount.ToString(max), PerformanceOptions.MaxPreloadCount.ToString(max));
+        var backwardSmall = presenter.RamCacheRange(presenter.Settings.PreloadForwardCount.ToString(max), "0");
+        Assert.True(backwardOnly.Min > backwardSmall.Min, $"backward-only {backwardOnly.Min} vs {backwardSmall.Min}");
     }
 
     [Fact(DisplayName = "A saved RAM percent below the window minimum is clamped up on load; the value text shows percent and GB")]

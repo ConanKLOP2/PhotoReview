@@ -34,13 +34,16 @@ Thẻ: WP-35 trong [NO-WPF-EXEC-PLAN-WP](NO-WPF-EXEC-PLAN-WP.md); căn cứ: [NO
 
 ## 2. Test mới (không cần cửa sổ, `tests/PhotoReview.App.Tests/Presenters`)
 
-80 ca: `SettingsFieldMapTests` (9: mọi thuộc tính `AppSettings` có hàng hoặc nằm trong `NotEditedInDialog` có lý do; hai danh sách chỉ nêu thuộc tính thật; accessor phím tắt phủ đủ
-`ShortcutMappings` trừ alias cũ; vòng Load->Save cho từng thuộc tính vô hướng, từng phím tắt, menu chuột phải, cờ EXIF/tiêu đề), `SettingsPresenterTests` (52: thứ tự kiểm tra và
+81 ca (sau bổ sung): `SettingsFieldMapTests` (9: mọi thuộc tính `AppSettings` có hàng hoặc nằm trong `NotEditedInDialog` có lý do; hai danh sách chỉ nêu thuộc tính thật; accessor phím tắt phủ đủ
+`ShortcutMappings` trừ alias cũ; vòng Load->Save cho từng thuộc tính vô hướng, từng phím tắt, menu chuột phải, cờ EXIF/tiêu đề), `SettingsPresenterTests` (53: thứ tự kiểm tra và
 ô cần focus, tất-cả-hoặc-không ở preload/auto-hide, phím tắt, JSON action, mặc định, nhập/xuất, RAM, kiểm tra cập nhật, Explorer, trang) và `SecondaryDialogPresenterTests` (19).
 
 ## 3. Đột biến (hai bước, `docs/MUTATION-TESTING.md`)
 
-Xem mục "Kết quả đột biến" cuối tệp (điền sau khi chạy).
+25 đột biến thủ công chọn lọc (FieldMap, chuẩn hoá phím tắt/xung đột, nhập/xuất, thứ tự lưu, trường bị bỏ sót, thanh RAM, cập nhật, Explorer, ActionProfiles, ClickZoom, Diagnostics):
+bước 1 (test presenter) diệt 22/25; 2 đột biến (`ApplyDefaults` bỏ `ShowZoomIndicator` / `ExternalEditorPath`) chỉ bị diệt ở bước 2 bởi `SettingsWindowDefaultsTests` (Integration) -> thêm
+`Defaults_ClearsIndicatorAndEditorPath`; 1 sống thật (`RamCacheRange` bỏ qua ô forward vì test cũ đổi cả hai ô cùng lúc) -> test mới chỉ đổi từng ô, đột biến lại bị diệt.
+Còn sống sau khi bổ sung: 0. Lặp 100 lượt bộ `Presenters` (95 ca/lượt): 100 đạt, 0 lỗi.
 
 ## 4. Còn lại
 
