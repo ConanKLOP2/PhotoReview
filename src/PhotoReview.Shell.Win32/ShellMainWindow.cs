@@ -124,6 +124,7 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
     {
         RegisterScrollBars(); // WP-26: thanh cuộn tự vẽ (PHẢI đứng trước RegisterInput: handler chuột của nó thấy nhấn trước ảnh)
         RegisterInput(); // WP-22: chuột, phím, wheel, touchpad, kéo-thả
+        RegisterContextMenu(); // WP-24: menu chuột phải, submenu Zoom
     }
 
     public ShellWindow Window => _window;
