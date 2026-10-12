@@ -308,27 +308,44 @@ public sealed class PixelGoldenSupportTests
         Assert.DoesNotContain(PixelGoldenComparer.Violations(measure), v => v.StartsWith("geometry", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void Verdict_EdgeError_IsMeasuredFromTheShellLayoutAgainstTheDetectedPictureEdge()
+    [Theory]
+    [InlineData(10, 8, 40, 20, 0)]    // exact
+    [InlineData(13, 8, 37, 20, 3)]    // left edge only
+    [InlineData(10, 11, 40, 17, 3)]   // top edge only
+    [InlineData(10, 8, 37, 20, 3)]    // right edge only
+    [InlineData(10, 8, 40, 17, 3)]    // bottom edge only
+    [InlineData(10, 8, 41, 20, 1)]    // one pixel: within the bar
+    public void Verdict_EdgeError_IsMeasuredPerEdgeFromTheShellLayoutAgainstTheDetectedPictureEdge(int x, int y, int w, int h, int expected)
     {
-        // A 40x20 picture at (10, 8) on the canvas of a 100x60 viewport; the shell claims it is 3 px to the right.
-        var data = PixelFrame.Solid(100, 60, 0x10, 0x10, 0x10);
-        var golden = Paint(data, new FrameRect(10, 8, 40, 20), 200);
+        // A 40x20 picture at (10, 8) on the canvas of a 100x60 viewport; the shell claims another box.
+        var canvas = PixelFrame.Solid(100, 60, 0x10, 0x10, 0x10);
+        var golden = Paint(canvas, new FrameRect(10, 8, 40, 20), 200);
         var viewport = new FrameRect(0, 0, 100, 60);
 
-        var right = PixelGoldenComparer.Measure(CaseOf(PixelGoldenExpectation.Zoom), golden, golden, viewport, new FrameRect(10, 8, 40, 20));
-        var wrong = PixelGoldenComparer.Measure(CaseOf(PixelGoldenExpectation.Zoom), golden, golden, viewport, new FrameRect(13, 8, 40, 20));
+        var measure = PixelGoldenComparer.Measure(CaseOf(PixelGoldenExpectation.Zoom), golden, golden, viewport, new FrameRect(x, y, w, h));
 
-        Assert.Equal(0, right.EdgeError);
-        Assert.Equal(3, wrong.EdgeError);
-        Assert.Contains(PixelGoldenComparer.Violations(wrong), v => v.Contains("edge"));
+        Assert.Equal(expected, measure.EdgeError);
+        Assert.Equal(expected > PixelGoldenThresholds.GeometryPixels,
+            PixelGoldenComparer.Violations(measure).Any(v => v.Contains("edge", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Verdict_EdgeError_IgnoresEdgesClippedByTheViewport()
+    {
+        // The picture is larger than the viewport: nothing of its edges is visible, so nothing can be off.
+        var golden = PixelFrame.Solid(100, 60, 200, 200, 200);
+        var viewport = new FrameRect(0, 0, 100, 60);
+
+        var measure = PixelGoldenComparer.Measure(CaseOf(PixelGoldenExpectation.Zoom), golden, golden, viewport, new FrameRect(-30, -20, 300, 200));
+
+        Assert.Equal(0, measure.EdgeError);
     }
 
     [Fact]
     public void Verdict_ScrollBarStrips_AreHeldToTheirOwnFloor()
     {
         var golden = PixelFrame.Solid(60, 40, 22, 22, 22);
-        var actual = Paint(golden, new FrameRect(50, 0, 10, 40), 60); // a "thumb" 38 levels off, outside the 50x30 viewport
+        var actual = Paint(golden, new FrameRect(50, 0, 10, 40), 30); // a strip 8 levels off (33.6 dB), outside the 50x30 viewport
         var viewport = new FrameRect(0, 0, 50, 30);
 
         var measure = PixelGoldenComparer.Measure(CaseOf(PixelGoldenExpectation.Zoom), golden, actual, viewport, viewport);
@@ -338,13 +355,65 @@ public sealed class PixelGoldenSupportTests
     }
 
     [Fact]
-    public void Thresholds_AreTheSection73Bars()
+    public void Thresholds_AreTheSection73Bars_AndThePinnedMeasuredFloors()
     {
         Assert.Equal(1, PixelGoldenThresholds.GeometryPixels);
-        Assert.Equal(32.0, PixelGoldenThresholds.For(PixelGoldenExpectation.Fit).ImagePsnr);
-        Assert.Equal(28.0, PixelGoldenThresholds.For(PixelGoldenExpectation.Zoom).ImagePsnr);
-        Assert.Equal(0, PixelGoldenThresholds.For(PixelGoldenExpectation.Identical).MaxChannelDelta);
         Assert.Equal(2, PixelGoldenThresholds.PanelBoxPixels);
+        Assert.Equal(45.0, PixelGoldenThresholds.ChromePsnr);
+        // (ImagePsnr, ImageSsim, ImageMae, FramePsnr, MaxChannelDelta)
+        Assert.Equal(new PixelGoldenBar(double.PositiveInfinity, 1.0, 0.0, 60.0, 0), PixelGoldenThresholds.For(PixelGoldenExpectation.Identical));
+        Assert.Equal(new PixelGoldenBar(50.0, 0.999, 0.5, 50.0, 1), PixelGoldenThresholds.For(PixelGoldenExpectation.NearIdentical));
+        Assert.Equal(new PixelGoldenBar(32.0, 0.93, 4.0, 32.0, -1), PixelGoldenThresholds.For(PixelGoldenExpectation.Fit));
+        Assert.Equal(new PixelGoldenBar(28.0, 0.88, 6.0, 28.0, -1), PixelGoldenThresholds.For(PixelGoldenExpectation.Zoom));
+        Assert.Equal(new PixelGoldenBar(19.0, 0.40, 17.0, 19.0, -1), PixelGoldenThresholds.For(PixelGoldenExpectation.HighFrequency));
+        Assert.Equal(new PixelGoldenBar(9.0, 0.05, 60.0, 9.0, -1), PixelGoldenThresholds.For(PixelGoldenExpectation.HalfPixel));
+    }
+
+    [Fact]
+    public void Verdict_ZoomFloors_SsimAndMae_AreEnforcedIndependentlyOfPsnr()
+    {
+        // Structure lost but PSNR still fine: a fine picture replaced by its own mean colour per 8x8 block. MAE and SSIM must object.
+        var golden = PixelGoldenScenes.Create(PixelGoldenScenes.Chart, 96, 72);
+        var flat = new byte[golden.Bgra.Length];
+        for (var by = 0; by < 72; by += 8)
+        {
+            for (var bx = 0; bx < 96; bx += 8)
+            {
+                var sum = new int[3];
+                for (var y = 0; y < 8; y++)
+                {
+                    for (var x = 0; x < 8; x++)
+                    {
+                        for (var c = 0; c < 3; c++)
+                        {
+                            sum[c] += golden.Bgra[((((by + y) * 96) + bx + x) * 4) + c];
+                        }
+                    }
+                }
+
+                for (var y = 0; y < 8; y++)
+                {
+                    for (var x = 0; x < 8; x++)
+                    {
+                        for (var c = 0; c < 3; c++)
+                        {
+                            flat[((((by + y) * 96) + bx + x) * 4) + c] = (byte)(sum[c] / 64);
+                        }
+
+                        flat[((((by + y) * 96) + bx + x) * 4) + 3] = 255;
+                    }
+                }
+            }
+        }
+
+        var blurred = new PixelFrame(96, 72, flat);
+        var viewport = new FrameRect(0, 0, 96, 72);
+
+        var measure = PixelGoldenComparer.Measure(CaseOf(PixelGoldenExpectation.Zoom), golden, blurred, viewport, viewport);
+        var violations = PixelGoldenComparer.Violations(measure);
+
+        Assert.Contains(violations, v => v.Contains("SSIM", StringComparison.Ordinal));
+        Assert.Contains(violations, v => v.Contains("MAE", StringComparison.Ordinal));
     }
 
     // ---- diff image ----

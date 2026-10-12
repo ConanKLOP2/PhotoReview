@@ -94,6 +94,20 @@ public sealed class PixelGoldenTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Canvas_OfTheShellWindowAndTheRenderer_IsTheWpfDarkCanvas()
+    {
+        // The golden renderer clears with RenderColors.DarkCanvas; the window clears with its own constant. Both must be #101010.
+        var field = typeof(PhotoReview.Shell.Win32.ShellMainWindow).GetField("CanvasColor",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(field);
+        var window = (PhotoReview.Shell.Rendering.ColorF)field.GetValue(null)!;
+        var (b, g, r) = PixelGoldenCatalog.Canvas;
+
+        Assert.Equal(PhotoReview.Shell.Rendering.RenderColors.DarkCanvas, window);
+        Assert.Equal(PhotoReview.Shell.Rendering.RenderColors.FromRgb(r, g, b), window);
+    }
+
+    [Fact]
     public void Catalog_HasTheCoverageTheCardRequires()
     {
         var all = PixelGoldenCatalog.All;
