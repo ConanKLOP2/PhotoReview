@@ -79,30 +79,37 @@ public struct TjScalingFactor : IEquatable<TjScalingFactor>
     public static readonly TjScalingFactor One = new(1, 1);
 }
 
-internal static unsafe class TurboJpegNative
+internal static unsafe partial class TurboJpegNative
 {
     public const string DllName = "turbojpeg.dll";
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern IntPtr tj3Init(int initType);
+    [LibraryImport(DllName)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial IntPtr tj3Init(int initType);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern void tj3Destroy(IntPtr handle);
+    [LibraryImport(DllName)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial void tj3Destroy(IntPtr handle);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int tj3DecompressHeader(SafeTurboJpegHandle handle, byte* jpegBuf, nuint jpegSize);
+    [LibraryImport(DllName)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int tj3DecompressHeader(SafeTurboJpegHandle handle, byte* jpegBuf, nuint jpegSize);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int tj3Get(SafeTurboJpegHandle handle, int param);
+    [LibraryImport(DllName)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int tj3Get(SafeTurboJpegHandle handle, int param);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int tj3Set(SafeTurboJpegHandle handle, int param, int value);
+    [LibraryImport(DllName)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int tj3Set(SafeTurboJpegHandle handle, int param, int value);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int tj3SetScalingFactor(SafeTurboJpegHandle handle, TjScalingFactor scalingFactor);
+    [LibraryImport(DllName)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int tj3SetScalingFactor(SafeTurboJpegHandle handle, TjScalingFactor scalingFactor);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int tj3Decompress8(
+    [LibraryImport(DllName)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial int tj3Decompress8(
         SafeTurboJpegHandle handle,
         byte* jpegBuf,
         nuint jpegSize,
@@ -110,8 +117,9 @@ internal static unsafe class TurboJpegNative
         int pitch,
         int pixelFormat);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern IntPtr tj3GetErrorStr(SafeTurboJpegHandle handle);
+    [LibraryImport(DllName)]
+    [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    internal static partial IntPtr tj3GetErrorStr(SafeTurboJpegHandle handle);
 
     internal static SafeTurboJpegHandle CreateDecompressor()
     {

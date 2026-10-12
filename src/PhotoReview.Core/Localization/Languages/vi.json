@@ -962,5 +962,12 @@
   "settings.shell.status.unavailable": "Không dùng được ở đây: ứng dụng không chạy từ tệp .exe của chính nó.",
   "settings.shell.status.error": "Không đọc hoặc thay đổi được mục menu Explorer: {message}",
   "settings.shell.hint": "Thêm \"Browse with PhotoReview\" vào menu chuột phải của Explorer trên thư mục và trên chỗ trống bên trong thư mục. Chỉ cho tài khoản Windows của bạn (không cần quyền quản trị). Có hiệu lực ngay, không cần Lưu; khi gỡ chỉ xóa đúng hai mục đó.",
-  "settings.contextMenu.item.refresh": "Làm mới"
+  "settings.contextMenu.item.refresh": "Làm mới",
+  "status.secondaryUnavailable.settings": "Cửa sổ Cài đặt không có trong bản này; đang mở config.json",
+  "status.secondaryUnavailable.settingsFailed": "Cửa sổ Cài đặt không có trong bản này và không mở được config.json: {path}",
+  "status.secondaryUnavailable.diagnostics": "Cửa sổ Chẩn đoán không có trong bản này.",
+  "status.secondaryUnavailable.recovery": "Cửa sổ Phục hồi không có trong bản này; hãy chạy phục hồi ở bản đầy đủ.",
+  "status.secondaryUnavailable.skippedFiles": "Cửa sổ Tệp bị bỏ qua không có trong bản này.",
+  "status.secondaryUnavailable.batchReview": "Cửa sổ Duyệt hàng loạt không có trong bản này; không có gì bị thay đổi.",
+  "status.secondaryUnavailable.benchmark": "Cửa sổ Benchmark không có trong bản này."
 }

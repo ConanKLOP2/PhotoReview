@@ -6,6 +6,8 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\PhotoReview.ico</ApplicationIcon>
     <Platforms>AnyCPU;x64</Platforms>
+    <!-- WP-34: [LibraryImport] (P/Invoke source-gen) cần unsafe. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <!-- perf(startup): precompile the app's own assemblies (and packages) at publish so the first
          window is not JIT-bound. Measured on the release folder (open a JPEG in an 1841-file folder,
