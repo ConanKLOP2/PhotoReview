@@ -10,7 +10,7 @@ namespace PhotoReview.Shell.Integration.Tests.Startup;
 /// </summary>
 internal static class HangDiagnostics
 {
-    private const int MaxChars = 14_000;
+    private const int MaxChars = 30_000;
     private static readonly TimeSpan ToolTimeout = TimeSpan.FromSeconds(40);
 
     public static string Capture()
@@ -50,6 +50,31 @@ internal static class HangDiagnostics
         return text.Length > MaxChars ? text.ToString(0, MaxChars) + "...(cắt)" : text.ToString();
     }
 
+    /// <summary>
+    /// Giữ nguyên các thread có frame <c>PhotoReview.*</c> (trừ chính bộ chẩn đoán); các thread còn lại (testhost, pool, timer...)
+    /// chỉ đếm, để báo cáo không bị cắt trước khi tới thread UI của shell.
+    /// </summary>
+    private static string Summarize(string report)
+    {
+        var kept = new StringBuilder();
+        var skipped = 0;
+        foreach (var block in System.Text.RegularExpressions.Regex.Split(report, @"\r?\n\s*\r?\n"))
+        {
+            if (block.Contains("PhotoReview.", StringComparison.Ordinal)
+                && !block.Contains(nameof(HangDiagnostics), StringComparison.Ordinal)
+                && !block.Contains("StopAndAssertClean", StringComparison.Ordinal))
+            {
+                kept.AppendLine(block.Trim()).AppendLine();
+            }
+            else
+            {
+                skipped++;
+            }
+        }
+
+        return kept.Append("(").Append(skipped).Append(" thread khác không có frame PhotoReview)").ToString();
+    }
+
     private static void AppendStacks(StringBuilder text, int pid)
     {
         var tool = Environment.GetEnvironmentVariable("PHOTOREVIEW_DOTNET_STACK");
@@ -82,7 +107,7 @@ internal static class HangDiagnostics
                 return;
             }
 
-            text.AppendLine(output.GetAwaiter().GetResult());
+            text.AppendLine(Summarize(output.GetAwaiter().GetResult()));
             var err = error.GetAwaiter().GetResult();
             if (!string.IsNullOrWhiteSpace(err))
             {
