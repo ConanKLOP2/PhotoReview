@@ -116,13 +116,12 @@ public sealed class ContextMenuMessageHandlerTests
     }
 
     [Fact]
-    public async Task ChoosingAnItem_FromTheWindowMessage_RunsItsCommand()
+    public void ChoosingAnItem_FromTheWindowMessage_RunsItsCommand()
     {
         var (window, host, actions) = Create();
         host.Choose = "Refresh";
 
         window.Dispatch(WindowMessages.WmContextMenu, window.Hwnd, Pack(10, 10));
-        await Task.Yield();
 
         Assert.Equal(["Execute:Refresh"], actions.Log);
     }
