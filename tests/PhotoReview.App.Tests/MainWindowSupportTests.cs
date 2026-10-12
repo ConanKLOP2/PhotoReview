@@ -1,3 +1,4 @@
+using PhotoReview.App.Presenters;
 using PhotoReview.App.Viewport;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
@@ -149,8 +150,8 @@ public sealed class MainWindowSupportTests
         };
 
         foreach (var (status, text) in expected)
-            Assert.Equal(text, DiagnosticsWindow.StatusText(status));
+            Assert.Equal(text, DiagnosticsPresenter.StatusText(status));
         Assert.Equal(expected.Count, expected.Values.Distinct().Count()); // seven different texts: a swapped arm cannot hide
-        Assert.Equal("42", DiagnosticsWindow.StatusText((ExplorerOrderStatus)42));
+        Assert.Equal("42", DiagnosticsPresenter.StatusText((ExplorerOrderStatus)42));
     }
 }

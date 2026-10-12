@@ -1,3 +1,4 @@
+using PhotoReview.App.Presenters;
 using System.IO;
 using PhotoReview.App.Localization;
 using PhotoReview.App.ViewModels;
@@ -30,7 +31,7 @@ public sealed class DiagnosticsUnitsLeftoversTests : IDisposable
             foreach (var code in AllReasonCodes())
             {
                 var reason = ExplorerReason.Format(code, "d0", "d1");
-                var text = DiagnosticsWindow.ReasonText(reason);
+                var text = DiagnosticsPresenter.ReasonText(reason);
                 Assert.NotEqual(Tr.DiagExplorerReasonUnknown(reason), text);
                 Assert.NotEqual(code, text);
                 Assert.DoesNotContain('|', text); // the code|detail encoding never reaches the user
@@ -43,8 +44,8 @@ public sealed class DiagnosticsUnitsLeftoversTests : IDisposable
     {
         var reason = ExplorerReason.Format(ExplorerReason.ComCallFailed, "IFolderView2.GetItem(3)", "0x80004005");
         string english, vietnamese;
-        using (TestLocalization.Use(TestLocalization.English)) english = DiagnosticsWindow.ReasonText(reason);
-        using (TestLocalization.Use(TestLocalization.Vietnamese)) vietnamese = DiagnosticsWindow.ReasonText(reason);
+        using (TestLocalization.Use(TestLocalization.English)) english = DiagnosticsPresenter.ReasonText(reason);
+        using (TestLocalization.Use(TestLocalization.Vietnamese)) vietnamese = DiagnosticsPresenter.ReasonText(reason);
 
         Assert.Equal("Explorer call IFolderView2.GetItem(3) failed (HRESULT 0x80004005).", english);
         Assert.Equal("Lệnh gọi Explorer IFolderView2.GetItem(3) thất bại (HRESULT 0x80004005).", vietnamese);
@@ -54,7 +55,7 @@ public sealed class DiagnosticsUnitsLeftoversTests : IDisposable
     public void ReasonText_UnknownReason_IsWrappedNotDropped()
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
-        Assert.Equal("Unknown reason: from a newer build", DiagnosticsWindow.ReasonText("from a newer build"));
+        Assert.Equal("Unknown reason: from a newer build", DiagnosticsPresenter.ReasonText("from a newer build"));
     }
 
     [Theory]
@@ -77,13 +78,13 @@ public sealed class DiagnosticsUnitsLeftoversTests : IDisposable
 
         using (TestLocalization.Use(TestLocalization.English))
         {
-            Assert.Equal(@"C:\p\a.jpg  (cannot be read: OS says no)", SkippedFilesWindow.FormatEntry(file));
-            Assert.Equal(@"C:\p  (folder listing stopped early: disk gone)", SkippedFilesWindow.FormatEntry(listing));
+            Assert.Equal(@"C:\p\a.jpg  (cannot be read: OS says no)", SkippedFilesPresenter.FormatEntry(file));
+            Assert.Equal(@"C:\p  (folder listing stopped early: disk gone)", SkippedFilesPresenter.FormatEntry(listing));
         }
         using (TestLocalization.Use(TestLocalization.Vietnamese))
         {
-            Assert.Equal(@"C:\p\a.jpg  (không đọc được: OS says no)", SkippedFilesWindow.FormatEntry(file));
-            Assert.Equal(@"C:\p  (việc liệt kê thư mục dừng giữa chừng: disk gone)", SkippedFilesWindow.FormatEntry(listing));
+            Assert.Equal(@"C:\p\a.jpg  (không đọc được: OS says no)", SkippedFilesPresenter.FormatEntry(file));
+            Assert.Equal(@"C:\p  (việc liệt kê thư mục dừng giữa chừng: disk gone)", SkippedFilesPresenter.FormatEntry(listing));
         }
     }
 
