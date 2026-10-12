@@ -75,9 +75,23 @@ internal sealed class ShellRun : IDisposable
         return root;
     }
 
+    /// <summary>
+    /// Mô tả của lần chạy đã bị bỏ rơi (thread shell không thoát sau khi đóng); null = chưa có. Một thread shell kẹt giữ tài nguyên
+    /// toàn tiến trình (D3D/WARP, OLE): mọi lần chạy sau đó chỉ treo thêm <see cref="DefaultWait"/> mỗi test rồi đỏ cùng một
+    /// nguyên nhân. Thay vào đó mỗi test sau đỏ NGAY, kèm tên lần chạy kẹt đầu tiên, nên một lỗi không kéo cả dây chuyền chờ.
+    /// </summary>
+    private static volatile string? s_abandoned;
+
     public static ShellRun Start(string root, string[] args, string? prefix = null,
         Func<ShellStartupOptions, ShellStartupOptions>? configure = null)
     {
+        if (s_abandoned is { } abandoned)
+        {
+            throw new InvalidOperationException(
+                "Một lần chạy shell trước đó không thoát (thread còn sống, giữ tài nguyên toàn tiến trình) nên lần chạy này không được thử: "
+                + abandoned);
+        }
+
         var run = new ShellRun(root, args, prefix ?? "PRShellTest" + Guid.NewGuid().ToString("N")[..10], configure);
         run._thread.Start();
         return run;
@@ -234,7 +248,11 @@ internal sealed class ShellRun : IDisposable
             }
         }
 
-        _thread.Join(TimeSpan.FromSeconds(5));
+        if (!_thread.Join(TimeSpan.FromSeconds(5)) && !_exited.IsSet)
+        {
+            s_abandoned = $"root={Root} marks=[{string.Join(", ", MarkNames)}]";
+        }
+
         try
         {
             Directory.Delete(Root, recursive: true);

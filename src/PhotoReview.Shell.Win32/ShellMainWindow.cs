@@ -345,6 +345,31 @@ internal sealed partial class ShellMainWindow : IForwardedOpenTarget, IDisposabl
 
         IsClosingOrClosed = true;
         SavePlacement();
+        DrainPresentQueue();
+    }
+
+    /// <summary>
+    /// Hoàn tất hàng đợi Present TRƯỚC khi HWND bị huỷ: một khung flip-model còn xếp hàng (đồ hoạ đang vẽ/zoom/pan, crossfade) mà
+    /// cửa sổ đã chết thì <c>Flush</c> lúc giải phóng thiết bị có thể chờ mãi một buffer DWM không bao giờ trả (runner CI WARP:
+    /// UI thread kẹt trong <c>ClearStateAndFlush</c>, mọi <c>D3D11CreateDevice</c> sau đó cùng kẹt). Khi cửa sổ còn sống DWM
+    /// tiêu thụ hết hàng đợi trong vài vblank. Lỗi (thiết bị mất, đang giữa BeginDraw) bị bỏ qua: chỉ là dọn dẹp.
+    /// </summary>
+    private void DrainPresentQueue()
+    {
+        var surface = _surface;
+        if (surface is null || _disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            surface.WaitForGpu();
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or ObjectDisposedException)
+        {
+            _log.Warn("Draining the present queue before closing failed: " + ex.Message);
+        }
     }
 
     private async Task CloseWhenFileActionDoneAsync()
