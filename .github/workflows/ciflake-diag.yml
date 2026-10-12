@@ -36,6 +36,7 @@ jobs:
 
       - name: Environment
         shell: pwsh
+        continue-on-error: true
         run: |
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version | Format-List
           Get-CimInstance Win32_Processor | Select-Object Name, NumberOfLogicalProcessors | Format-List
