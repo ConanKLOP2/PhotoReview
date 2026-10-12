@@ -46,6 +46,8 @@ Seven xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`,
 
 `PhotoReview.Shell.Tests` (no WPF, runs in CI) covers the Win32 shell logic and Direct2D rendering; its pixel checks run on WARP (`Category=Integration`). `PhotoReview.Shell.Integration.Tests` drives the real `PhotoReview.exe` window (`Category=UI`): run it on the hidden desktop with `tools/run-tests-hidden.ps1 tests/PhotoReview.Shell.Integration.Tests` (arguments go to `dotnet test`). `PhotoReview.exe --smoke` is the quick check: it creates the window and exits 0.
 
+Wait on a condition, never on a count or a clock (three shell tests turned red at random on the WARP runner until they did): RenderNow may be deferred by FramePacer (swap chain not ready), so assert frame-born state only after ShellFrames.RenderUntil(main, condition) on the UI thread; read counters that you compare in ONE UI turn; and inject the clock (ShellStartupOptions.KeepWarmTimestamp) instead of pausing past a throttle or window. Wait for IsRenderRequested/IdleWaits/IsBlocked, not for a fixed number of milliseconds.
+
 The golden references are shared by the WPF build and the shell: `tests/Fixtures/golden/*.v1.json` (G-VIEW `viewport-layout`, G-INPUT `input-scripts`, G-KEY `key-names`, G-MENU `context-menu`, G-OVL `overlay-boxes`) and `pixel/*.png` (G-PIX). Re-record only on purpose, with `PHOTOREVIEW_GOLDEN_RECORD=1` through `tools/diag/record-golden.ps1` (the recorders refuse to write without it). `PHOTOREVIEW_REGENERATE_CONTRACTS=1` regenerates the frozen public-surface file checked by `Architecture.Tests/ContractSurfaceTests` (lead only, `Category=Manual`).
 
 ## Golden files (NO-WPF equivalence reference)
