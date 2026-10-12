@@ -2,7 +2,9 @@ using System.Collections;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.Shell.Interop;
+using PhotoReview.Shell.Win32.Dialogs;
 
 namespace PhotoReview.Shell.Integration.Tests.Startup;
 
@@ -25,7 +27,15 @@ public sealed class ShellSecondaryWindowBridgeTests
     {
         var root = ShellRun.NewRoot("wpfbridge");
         var jpeg = TestJpeg.WriteTo(Path.Combine(root, "photos", "a.jpg"));
-        using var run = ShellRun.Start(root, [jpeg]);
+        // Launcher giả: nếu cầu bị đột biến/vắng, cổng tạm không được mở notepad/trình soạn thảo thật của máy.
+        using var run = ShellRun.Start(root, [jpeg], configure: options => options with
+        {
+            ServiceOverrides = services =>
+            {
+                options.ServiceOverrides?.Invoke(services);
+                services.AddSingleton<IShellLauncher>(new NoLauncher());
+            },
+        });
         Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + run.Diagnostics);
         Assert.True(SpinWait.SpinUntil(() => run.Main!.FirstImagePresented, Bound), "ảnh đầu không được vẽ: " + run.Diagnostics);
         var main = run.Main!;
@@ -89,6 +99,13 @@ public sealed class ShellSecondaryWindowBridgeTests
         Assert.Null(run.Error);
         Assert.Equal(0, run.ExitCode);
         Finished(modal, "hộp modal phải trả về khi shell thoát (không treo vòng lồng)");
+    }
+
+    private sealed class NoLauncher : IShellLauncher
+    {
+        public bool TryOpenFile(string path, string verb) => true;
+
+        public bool TryRun(string fileName, string arguments) => true;
     }
 
     private static void Finished(Task task, string what) => Assert.True(task.Wait(Bound), what);

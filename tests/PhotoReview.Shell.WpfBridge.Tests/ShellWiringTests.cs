@@ -60,6 +60,8 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
                 services =>
                 {
                     services.AddSingleton<IAppPaths>(new AppPaths(root.Path, Path.Combine(root.Path, "data"), isolateConfig: true));
+                    // Cổng vắng (mô phỏng AOT/đột biến) không được mở trình soạn thảo thật của máy: launcher giả.
+                    services.AddSingleton<IShellLauncher>(new NoLauncher());
                     configure?.Invoke(services);
                 }));
             return new Wired(harness, provider, root);
@@ -277,6 +279,13 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         await harness.Ui.InvokeAsync(() => absent.Dialogs.ShowRecovery()); // cổng tạm: không cửa sổ, không ném
         Assert.Null(await harness.Ui.InvokeAsync(() => absent.Zoom.PromptCustomZoom(100)));
         Assert.Empty(harness.OwnedVisibleWindows());
+    }
+
+    private sealed class NoLauncher : IShellLauncher
+    {
+        public bool TryOpenFile(string path, string verb) => true;
+
+        public bool TryRun(string fileName, string arguments) => true;
     }
 
     private sealed class CountingPort : ISecondaryWindowPort
