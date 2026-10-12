@@ -1,4 +1,5 @@
-﻿using System.Windows.Media;
+using PhotoReview.App.Presenters;
+using System.Windows.Media;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
@@ -34,7 +35,7 @@ public sealed class RecoveryPresenterMutationGapTests
     [MemberData(nameof(VerdictColors))]
     public void VerdictBrush_IsTheDocumentedHintColourAndIsFrozen(RecoveryVerdict verdict, byte r, byte g, byte b)
     {
-        var brush = RecoveryPresenter.VerdictBrush(verdict);
+        var brush = RecoveryBrushes.For(RecoveryPresentation.VerdictTone(verdict));
 
         Assert.Equal(Color.FromRgb(r, g, b), ColorOf(brush));
         Assert.True(brush.IsFrozen); // shared statics: they must be usable from any thread
@@ -59,7 +60,7 @@ public sealed class RecoveryPresenterMutationGapTests
             RecoveryVerdict.CanRetry, [new RecoveryGroupMemberCheck(member, memberCheck)]);
 
         Assert.True(result.IsGroup);
-        Assert.True(RecoveryPresenter.AllowsRetry(result));
+        Assert.True(RecoveryPresentation.AllowsRetry(result));
     }
 
     [Fact]
@@ -67,8 +68,8 @@ public sealed class RecoveryPresenterMutationGapTests
     {
         var check = new RecoveryPathCheck(@"C:\a.jpg", RecoveryPathStatus.Exists, 1234, Stamp, true);
 
-        Assert.Equal(Tr.RecoveryDetailNowPresent(RecoveryPresenter.FormatSize(1234), RecoveryPresenter.FormatTime(Stamp)),
-            RecoveryPresenter.NowText(check));
+        Assert.Equal(Tr.RecoveryDetailNowPresent(RecoveryPresentation.FormatSize(1234), RecoveryPresentation.FormatTime(Stamp)),
+            RecoveryPresentation.NowText(check));
     }
 
     [Fact]
@@ -78,10 +79,10 @@ public sealed class RecoveryPresenterMutationGapTests
         var source = new RecoveryPathCheck(member.Source, RecoveryPathStatus.Missing, null, null, true);
         var destination = new RecoveryPathCheck(member.Destination!, RecoveryPathStatus.Exists, 1, Stamp, true);
 
-        var text = RecoveryPresenter.GroupStatusText(RecoveryVerdict.AlreadyDone, member, source, destination);
+        var text = RecoveryPresentation.GroupStatusText(RecoveryVerdict.AlreadyDone, member, source, destination);
 
-        Assert.EndsWith($"{Tr.RecoveryDetailDestination}: {RecoveryPresenter.PathStatusText(RecoveryPathStatus.Exists)}", text, StringComparison.Ordinal);
-        Assert.Contains($"{Tr.RecoveryDetailSource}: {RecoveryPresenter.PathStatusText(RecoveryPathStatus.Missing)}", text, StringComparison.Ordinal);
+        Assert.EndsWith($"{Tr.RecoveryDetailDestination}: {RecoveryPresentation.PathStatusText(RecoveryPathStatus.Exists)}", text, StringComparison.Ordinal);
+        Assert.Contains($"{Tr.RecoveryDetailSource}: {RecoveryPresentation.PathStatusText(RecoveryPathStatus.Missing)}", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -90,8 +91,8 @@ public sealed class RecoveryPresenterMutationGapTests
         var member = new JournalGroupMember(@"C:\a.cr2", @"D:\a.cr2", 1, Stamp);
         var source = new RecoveryPathCheck(member.Source, RecoveryPathStatus.Exists, 1, Stamp, true);
 
-        var text = RecoveryPresenter.GroupStatusText(RecoveryVerdict.CanRetry, member, source, null);
+        var text = RecoveryPresentation.GroupStatusText(RecoveryVerdict.CanRetry, member, source, null);
 
-        Assert.EndsWith($"{Tr.RecoveryDetailDestination}: {RecoveryPresenter.PathStatusText(RecoveryPathStatus.Missing)}", text, StringComparison.Ordinal);
+        Assert.EndsWith($"{Tr.RecoveryDetailDestination}: {RecoveryPresentation.PathStatusText(RecoveryPathStatus.Missing)}", text, StringComparison.Ordinal);
     }
 }
