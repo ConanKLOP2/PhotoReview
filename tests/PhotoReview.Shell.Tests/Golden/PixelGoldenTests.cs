@@ -93,6 +93,47 @@ public sealed class PixelGoldenTests(ITestOutputHelper output)
         Assert.Equal(0, measure.ImageMaxAbs);
     }
 
+    public static TheoryData<string> OneToOneCases()
+    {
+        var data = new TheoryData<string>();
+        foreach (var c in PixelGoldenCatalog.All.Where(c => !c.Hud && c.ZoomPercent == 100 && c.ExifOrientation == 1))
+        {
+            data.Add(c.Name);
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(OneToOneCases))]
+    public void OneToOne_IsTheSourceCopiedToTheNearestWholePixel_OfTheLayoutPosition(string caseName)
+    {
+        // At 100 % the shell copies source pixels: wherever the layout puts the picture (fractional offset, half-pixel centring,
+        // DPI 1.5) the frame must be exactly the picture at the nearest whole device pixel - never a blend and never off by one.
+        var c = PixelGoldenCatalog.Get(caseName);
+        var shell = PixelGoldenShellRenderer.Render(c);
+        var scene = PixelGoldenScenes.Create(c.Scene, c.ImageWidth, c.ImageHeight);
+        var canvas = PixelGoldenCatalog.Canvas;
+        var wrong = 0;
+        (int X, int Y)? first = null;
+        for (var y = 0; y < shell.Viewport.Height; y++)
+        {
+            for (var x = 0; x < shell.Viewport.Width; x++)
+            {
+                var ix = x - shell.Image.X;
+                var iy = y - shell.Image.Y;
+                var expected = ix >= 0 && iy >= 0 && ix < scene.Width && iy < scene.Height ? scene.At(ix, iy) : canvas;
+                if (shell.Frame.At(x, y) != expected)
+                {
+                    wrong++;
+                    first ??= (x, y);
+                }
+            }
+        }
+
+        Assert.True(wrong == 0, $"{caseName}: {wrong} px of the viewport differ from the picture placed at {shell.Image.X},{shell.Image.Y} (first at {first})");
+    }
+
     [Fact]
     public void Canvas_OfTheShellWindowAndTheRenderer_IsTheWpfDarkCanvas()
     {
