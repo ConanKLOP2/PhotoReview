@@ -94,7 +94,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
 
     // ---- Recovery retry --------------------------------------------------------------------------------------------------------
 
-    private static async Task<FaultRig> WithFailedSingle(FileOperationType type)
+    internal static async Task<FaultRig> WithFailedSingle(FileOperationType type)
     {
         var rig = await SingleRig();
         var stat = rig.Disk.GetFileStat(A)!;
@@ -116,7 +116,7 @@ public sealed class FileActionFaultInjectionRecoveryTests
     public Task RetryCopy_Matrix() => FaultInjectionMatrix.AssertAllFaultPointsAsync("RetryCopy", () => WithFailedSingle(FileOperationType.Copy), Retry);
 
     /// <summary>A group action that died after its first member: a.jpg already moved to sel (or already in the bin), the RAW and the XMP untouched.</summary>
-    private static async Task<FaultRig> WithHalfDoneGroup(FileOperationType type)
+    internal static async Task<FaultRig> WithHalfDoneGroup(FileOperationType type)
     {
         var rig = await GroupRig();
         var members = GroupNames.Select(name =>

@@ -10,7 +10,8 @@ namespace PhotoReview.Core.Tests.FileActions;
 /// </summary>
 internal static class FaultInjectionMatrix
 {
-    public static readonly FaultKind[] Kinds = Enum.GetValues<FaultKind>();
+    /// <summary>Every fault kind except <see cref="FaultKind.CancelAfter"/> (only scenarios that pass the rig's token can observe a cancellation; they ask for it explicitly).</summary>
+    public static readonly FaultKind[] Kinds = Enum.GetValues<FaultKind>().Where(kind => kind != FaultKind.CancelAfter).ToArray();
 
     /// <summary>
     /// Runs <paramref name="act"/> on a fresh rig for every injection point. <paramref name="create"/> builds the rig AND runs the
@@ -38,7 +39,7 @@ internal static class FaultInjectionMatrix
                 var ctx = $"{name} [{kind} at call #{point}/{calls.Length} = {calls[point - 1]}]";
                 var rig = await create();
                 rig.Fs.Arm(new FaultPlan(point, kind));
-                var alive = kind is FaultKind.FailOnce or FaultKind.FailPartial;
+                var alive = kind is FaultKind.FailOnce or FaultKind.FailPartial or FaultKind.FailUnauthorized or FaultKind.CancelAfter;
                 try
                 {
                     await act(rig);
@@ -175,7 +176,7 @@ internal static class FaultInjectionMatrix
             switch (outcome)
             {
                 case FileActionResult { Succeeded: true, Rejected: false } result:
-                    FaultInvariants.CheckSucceededEffect(rig, result.Operation, result.Source, result.DestinationPath, ctx + " (reported success)", violations);
+                    FaultInvariants.CheckSucceededEffect(rig, result.Operation, result.Source, result.DestinationPath, ctx + " (reported success)", violations, result.PermanentlyDeleted);
                     break;
                 case FileActionResult { Succeeded: false, Operation: FileOperationType.Move } failed when !rig.Fs.Dead:
                     if (failed.SourceRemoved == rig.Disk.FileExists(failed.Source))
@@ -191,7 +192,7 @@ internal static class FaultInjectionMatrix
                     break;
                 case CaptureGroupActionResult group:
                     foreach (var member in group.Members.Where(m => m.StateKnown && (m.Completed || group.Succeeded)))
-                        FaultInvariants.CheckSucceededEffect(rig, group.Operation, member.Member.Source, member.Member.Destination, ctx + " (reported member success)", violations);
+                        FaultInvariants.CheckSucceededEffect(rig, group.Operation, member.Member.Source, member.Member.Destination, ctx + " (reported member success)", violations, member.Member.Permanent);
                     break;
             }
         }
