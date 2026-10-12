@@ -7,7 +7,7 @@ using PhotoReview.Core.Instance;
 namespace PhotoReview.Platform.Windows;
 
 /// <summary>Second-launch side of Q-R10: hands the paths to the running owner over its per-user pipe.</summary>
-public sealed class InstanceForwardClient : IInstanceForwardClient
+public sealed partial class InstanceForwardClient : IInstanceForwardClient
 {
     private readonly string _pipeName;
     private readonly ILog _log;
@@ -95,11 +95,11 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
         }
     }
 
-    [DllImport("kernel32.dll", SetLastError = true)]
+    [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetNamedPipeServerProcessId(Microsoft.Win32.SafeHandles.SafePipeHandle pipe, out uint serverProcessId);
+    private static partial bool GetNamedPipeServerProcessId(Microsoft.Win32.SafeHandles.SafePipeHandle pipe, out uint serverProcessId);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool AllowSetForegroundWindow(uint processId);
+    private static partial bool AllowSetForegroundWindow(uint processId);
 }

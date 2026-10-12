@@ -18,6 +18,25 @@ public sealed class LibRawAvailabilityTests
         Assert.True(exports.Count >= 19, "expected all DllImport entry points, found " + exports.Count);
     }
 
+    [Fact(DisplayName = "WP-34: LibRawNativeMethods.EntryPoints lists exactly the EntryPoint of every [LibraryImport] declared in the source")]
+    public void EntryPoints_MatchTheLibraryImportDeclarations()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "PhotoReview.slnx"))) root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName, "src", "PhotoReview.Imaging.LibRaw", "LibRawNativeMethods.cs"));
+
+        var declared = System.Text.RegularExpressions.Regex
+            .Matches(source, "\\[LibraryImport\\(LibraryName, EntryPoint = \"(?<name>[a-z_0-9]+)\"")
+            .Select(m => m.Groups["name"].Value)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(declared);
+        Assert.Equal(declared, LibRawNativeMethods.EntryPoints.Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(LibRawNativeMethods.EntryPoints.Length, LibRawNativeMethods.EntryPoints.Distinct(StringComparer.Ordinal).Count());
+    }
+
     [Fact(DisplayName = "I1: the LibRaw assembly restricts native loads to its own folder (no PATH / working-directory search)")]
     public void LibRawAssembly_DefaultDllImportSearchPath_IsAssemblyDirectoryOnly()
     {

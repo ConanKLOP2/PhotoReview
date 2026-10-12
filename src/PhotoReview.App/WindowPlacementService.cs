@@ -13,7 +13,7 @@ namespace PhotoReview.App;
 /// <see cref="JsonWindowPlacementStore"/> / <see cref="WindowPlacementRules"/> (App.Shared, no WPF); this class only
 /// talks to the WPF <see cref="Window"/> and keeps the Get/SetWindowPlacement marshaling.
 /// </summary>
-internal static class WindowPlacementService
+internal static partial class WindowPlacementService
 {
     private const int ShowHide = 0;
 
@@ -175,13 +175,60 @@ internal static class WindowPlacementService
         NormalPosition = new Rectangle { Left = d.NormalLeft, Top = d.NormalTop, Right = d.NormalRight, Bottom = d.NormalBottom },
     };
 
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetWindowPlacement(IntPtr window, [In, Out] WindowPlacement placement);
+    // WINDOWPLACEMENT as a blittable struct so the P/Invokes are source-generated (LibraryImport, L-AOT); the public shape stays the
+    // WindowPlacement class (legacy file schema, tests), copied in and out around each call exactly as [In, Out] marshaling did.
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeWindowPlacement
+    {
+        public int Length;
+        public int Flags;
+        public int ShowCommand;
+        public Point MinPosition;
+        public Point MaxPosition;
+        public Rectangle NormalPosition;
+    }
 
-    [DllImport("user32.dll", SetLastError = true)]
+    internal static NativeWindowPlacement ToNative(WindowPlacement p) => new()
+    {
+        Length = p.Length,
+        Flags = p.Flags,
+        ShowCommand = p.ShowCommand,
+        MinPosition = p.MinPosition,
+        MaxPosition = p.MaxPosition,
+        NormalPosition = p.NormalPosition,
+    };
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowPlacement", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPlacement(IntPtr window, [In] WindowPlacement placement);
+    private static partial bool GetWindowPlacementNative(IntPtr window, ref NativeWindowPlacement placement);
+
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowPlacement", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetWindowPlacementNative(IntPtr window, ref NativeWindowPlacement placement);
+
+    private static bool GetWindowPlacement(IntPtr window, WindowPlacement placement)
+    {
+        var native = ToNative(placement);
+        var ok = GetWindowPlacementNative(window, ref native);
+        CopyFromNative(native, placement);
+        return ok;
+    }
+
+    internal static void CopyFromNative(in NativeWindowPlacement native, WindowPlacement placement)
+    {
+        placement.Length = native.Length;
+        placement.Flags = native.Flags;
+        placement.ShowCommand = native.ShowCommand;
+        placement.MinPosition = native.MinPosition;
+        placement.MaxPosition = native.MaxPosition;
+        placement.NormalPosition = native.NormalPosition;
+    }
+
+    private static bool SetWindowPlacement(IntPtr window, WindowPlacement placement)
+    {
+        var native = ToNative(placement);
+        return SetWindowPlacementNative(window, ref native);
+    }
 
     /// <summary>Win32 WINDOWPLACEMENT marshaling shape (also the legacy file schema; tests deserialize it directly).</summary>
     [StructLayout(LayoutKind.Sequential)]

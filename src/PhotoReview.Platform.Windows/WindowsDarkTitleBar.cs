@@ -11,7 +11,7 @@ namespace PhotoReview.Platform.Windows;
 /// returns a failing HRESULT and this class silently no-ops.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public static class WindowsDarkTitleBar
+public static partial class WindowsDarkTitleBar
 {
     // DWMWA_USE_IMMERSIVE_DARK_MODE: 20 from Windows 10 20H1 (build 18985) onward; the same value
     // was reserved as 19 in earlier Windows 10 insider builds, so both are tried.
@@ -21,11 +21,11 @@ public static class WindowsDarkTitleBar
     // DWMWA_CAPTION_COLOR: Windows 11 only.
     private const int DwmwaCaptionColor = 35;
 
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref uint value, int size);
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref uint value, int size);
 
     /// <summary>
     /// Turns on the immersive dark title bar/border for <paramref name="handle"/>. Returns whether the
