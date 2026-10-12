@@ -123,6 +123,35 @@ public sealed class TestFilterDriftTests
             Assert.Contains($"'{file}'", script, StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "Rule WP-36: the optional Native AOT variant is a separate non-blocking CI job and is never part of the normal release folder")]
+    public void Ci_PublishesAotAsSeparateNonBlockingArtifact()
+    {
+        var ci = ReadRepoFile(".github/workflows/ci.yml");
+        var start = ci.IndexOf("  publish-aot:", StringComparison.Ordinal);
+        Assert.True(start >= 0, "publish-aot job not found in ci.yml");
+        var next = ci.IndexOf("\n  tag-version:", start, StringComparison.Ordinal);
+        var job = ci[start..next];
+
+        Assert.Contains("continue-on-error: true", job, StringComparison.Ordinal);
+        Assert.Contains("./tools/publish-release.ps1 -AotOnly -RequireAot", job, StringComparison.Ordinal);
+        Assert.Contains("./tools/verify-release.ps1 -AotOnly -Smoke -AotDirectory", job, StringComparison.Ordinal);
+        Assert.Contains("name: release-publish-aot", job, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet publish", job, StringComparison.Ordinal);
+        // The release gate (tag-version) must not wait for, or depend on, the experimental variant.
+        var tag = ci[next..];
+        Assert.DoesNotContain("publish-aot", tag[..Math.Min(tag.Length, 400)], StringComparison.Ordinal);
+
+        // The normal release script/workflow publish the same two projects as before: the AOT variant is opt-in (-Aot).
+        var release = ReadRepoFile(".github/workflows/release.yml");
+        Assert.DoesNotContain("ShellAot", release, StringComparison.Ordinal);
+        Assert.DoesNotContain("-Aot", release, StringComparison.Ordinal);
+
+        // The AOT build drops the WPF bridge and keeps EventSourceSupport (without it PHOTOREVIEW_PERF_TRACE and startup-probe are blind).
+        var csproj = ReadRepoFile("src/PhotoReview.Shell.Win32/PhotoReview.Shell.Win32.csproj");
+        Assert.Contains("<EventSourceSupport Condition=\"'$(ShellAot)' == 'true'\">true</EventSourceSupport>", csproj, StringComparison.Ordinal);
+        Assert.Contains("<ItemGroup Condition=\"'$(ShellAot)' != 'true'\">", csproj, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "Rule R2-A-12: the CI safety-net step covers every test project")]
     public void IntegrationSlowStep_CoversEveryTestProject()
     {

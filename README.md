@@ -83,6 +83,7 @@ The release zip holds two executables in one folder (framework-dependent, ReadyT
 
 - `PhotoReview.App.exe`: the WPF app. Default; your existing file associations and Explorer menu point to it and are never changed by the other exe.
 - `PhotoReview.exe`: the Win32 + Direct2D shell, a parallel build that is being completed step by step (single-instance prefix `PhotoReviewShell`, so the two can run side by side). `PhotoReview.exe --smoke` creates the window and exits 0.
+- Optional Native AOT build of `PhotoReview.exe` (experimental, NOT in the release zip): `tools/publish-release.ps1 -AotOnly -RequireAot` (needs the Visual Studio C++ build tools; CI artifact `release-publish-aot`). One 11 MB exe + native DLLs (about 19 MB, no .NET install needed), first image ~2.5x faster than R2R. **Limitation: the secondary windows (Settings, Diagnostics, Recovery) do not open** in this build until WP-35; use the default `PhotoReview.exe` / `PhotoReview.App.exe` for those.
 
 Open a file or folder with `PhotoReview.exe <path>`: the first existing file opens and its folder is browsed; without a file, the first existing folder opens. The release zip holds 51 files (about 8.6 MB zipped, 17.6 MB unpacked; measured 2026-10-12, the WPF-only zip was 7.7 MB).
 
@@ -195,6 +196,7 @@ Gói phát hành có hai exe trong một thư mục (phụ thuộc framework, Re
 
 - `PhotoReview.App.exe`: ứng dụng WPF. Mặc định; liên kết tệp và menu Explorer hiện có trỏ tới nó và exe kia không bao giờ đổi chúng.
 - `PhotoReview.exe`: shell Win32 + Direct2D, bản song song đang hoàn thiện dần (prefix single-instance `PhotoReviewShell` nên chạy cạnh nhau được). `PhotoReview.exe --smoke` tạo cửa sổ rồi thoát mã 0.
+- Bản Native AOT tùy chọn của `PhotoReview.exe` (thử nghiệm, KHÔNG nằm trong zip phát hành): `tools/publish-release.ps1 -AotOnly -RequireAot` (cần Visual Studio C++ build tools; artifact CI `release-publish-aot`). Một exe 11 MB + DLL native (khoảng 19 MB, không cần cài .NET), ảnh đầu nhanh hơn R2R khoảng 2,5 lần. **Giới hạn: cửa sổ phụ (Settings, Diagnostics, Recovery) không mở** trong bản này cho tới WP-35; dùng `PhotoReview.exe` / `PhotoReview.App.exe` mặc định cho các cửa sổ đó.
 
 Mở tệp hoặc thư mục bằng `PhotoReview.exe <đường-dẫn>`: tệp tồn tại đầu tiên được mở và thư mục của nó được duyệt; không có tệp thì mở thư mục tồn tại đầu tiên. Gói phát hành có 51 tệp (khoảng 8,6 MB nén, 17,6 MB giải nén; đo ngày 2026-10-12, zip chỉ WPF là 7,7 MB).
 
