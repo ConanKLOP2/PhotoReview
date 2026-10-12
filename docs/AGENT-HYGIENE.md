@@ -32,6 +32,9 @@ report keeps the agent "running" in the UI, sometimes for hours. The work is don
 7. **Do not touch the main checkout.** It holds the user's uncommitted work. Work in `.claude/worktrees/<name>`.
 8. **Report the truth about hangs.** If something hung, say what, where (stack/log), and what was done; do not retry blindly.
 
+- **Be a good neighbour on a shared 12-core machine:** no more than 4 background burner threads in a repro loop, builds with
+  `/nodeReuse:false`, repro loops with `--no-build`, mutants in two steps (see `docs/MUTATION-TESTING.md`).
+
 ## 3. Rules for the lead (this session)
 
 - After an agent reports done, if the UI still shows it running: `TaskStop` it (the PR is already pushed), then run
