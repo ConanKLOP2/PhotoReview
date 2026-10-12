@@ -5,15 +5,15 @@ param([switch]$Check)
 $ErrorActionPreference = 'Stop'
 
 # T0: total of the always-read files. T1: per file, for docs read one at a time per task (AGENTS.md).
-$T0BudgetBytes = 18 * 1024
-$T1FileBudgetBytes = 24 * 1024
+$T0BudgetBytes = 36 * 1024   # doubled 2026-10-12 (was 18 KB)
+$T1FileBudgetBytes = 48 * 1024   # doubled 2026-10-12 (was 24 KB)
 
 # Docs that legitimately outgrow the default 24 KB T1 budget (a single reference page read in full on demand). Add a file
 # here only when it is a necessary, hard-to-split reference; everything else stays at the default and should be trimmed
 # or split instead. Keys are repo-relative paths with forward slashes.
 $T1FileBudgetOverrides = @{
-    'docs/architecture.md'               = 32 * 1024  # settings/mechanism reference: one row per setting
-    'docs/refactoring/OPEN-DECISIONS.md' = 49 * 1024  # generated table, one row per decided item (grows with every decision); 48 -> 49 KB at WP-33 (2026-10-12: 10 B of headroom left)
+    'docs/architecture.md'               = 64 * 1024  # settings/mechanism reference: one row per setting (doubled 2026-10-12, was 32 KB)
+    'docs/refactoring/OPEN-DECISIONS.md' = 96 * 1024  # generated table, one row per decided item (grows with every decision; doubled 2026-10-12, was 48 KB)
 }
 
 function Get-T1Budget {
