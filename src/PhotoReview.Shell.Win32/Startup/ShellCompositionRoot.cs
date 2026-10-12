@@ -36,6 +36,7 @@ internal static class ShellCompositionRoot
     {
         // 1. Dịch vụ do host Win32 cấp (đồ thị dùng chung resolve lười, thiếu thì ném).
         services.AddSingleton(hub);
+        services.AddSingleton<ShellNoticeSink>();
         services.AddSingleton<IUiScheduler>(host.Dispatcher);
         services.AddSingleton<IUiDispatcher>(host.Dispatcher);
         services.AddSingleton<IClipboardService>(_ => new Win32ClipboardService(host.OwnerWindow));
@@ -45,7 +46,11 @@ internal static class ShellCompositionRoot
             host.OwnerWindow,
             sp.GetRequiredService<FolderPicker>(),
             // WP-19b đăng ký ISecondaryWindowPort (cửa sổ phụ WPF nạp muộn); chưa có thì các lệnh mở cửa sổ phụ là no-op.
-            new Lazy<ISecondaryWindowPort?>(() => sp.GetService<ISecondaryWindowPort>())));
+            new Lazy<ISecondaryWindowPort?>(() => sp.GetService<ISecondaryWindowPort>()),
+            // Cổng vắng (bản Native AOT / nạp cầu lỗi): Settings mở config.json, cửa sổ khác báo "không có trong bản này"
+            // qua dòng trạng thái của view model thật (ShellNoticeSink: MainViewModel là transient, không resolve lại được).
+            new SecondaryWindowFallback(sp.GetRequiredService<IAppPaths>(), sp.GetService<IShellLauncher>() ?? ProcessShellLauncher.Instance,
+                sp.GetRequiredService<ShellNoticeSink>().Show)));
 
         // 2. Đồ thị dùng chung: codec nền tảng = PixelBuffer, không decoder WPF (INV-12 theo NE-8: WicDirect). ThumbnailDecoder
         // là trường dự trữ (v1.3 bỏ): từ WP-06 ThumbnailCache nhận codec, nên chỉ cần một decoder hợp lệ để qua kiểm null.
@@ -73,4 +78,17 @@ internal static class ShellCompositionRoot
 internal sealed class ShellFolderPickerAdapter(FolderPicker picker) : IFolderPicker
 {
     public string? PickFolder(string title, string? initialFolder) => picker.Pick(title, initialFolder);
+}
+
+/// <summary>
+/// Thông báo không chặn của shell cho các lệnh không có cửa sổ (<c>SecondaryWindowFallback</c>): ghi vào dòng trạng thái của
+/// view model thật. <c>ShellStartup</c> gắn <see cref="Attach"/> sau khi dựng cửa sổ chính; trước đó thông báo bị bỏ.
+/// </summary>
+internal sealed class ShellNoticeSink
+{
+    private Action<string>? _show;
+
+    internal void Attach(Action<string>? show) => _show = show;
+
+    internal void Show(string message) => _show?.Invoke(message);
 }

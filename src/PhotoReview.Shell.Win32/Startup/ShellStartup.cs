@@ -420,6 +420,7 @@ internal sealed class ShellStartup : IDisposable
 
         var viewModel = services.GetRequiredService<MainViewModel>();
         viewModel.FolderOwnership = _instanceScope;
+        services.GetRequiredService<ShellNoticeSink>().Attach(message => viewModel.StatusText = message);
         // Xác minh thủ công/agent: PHOTOREVIEW_DIAG_INSTANCE_LABEL đánh dấu thanh tiêu đề để không nhầm với cửa sổ thật.
         if (DiagOptions.InstanceLabel is { } label)
         {

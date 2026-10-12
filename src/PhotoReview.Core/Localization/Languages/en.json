@@ -970,5 +970,12 @@
   "settings.shell.status.unavailable": "Not available here: the app is not running from its own .exe file.",
   "settings.shell.status.error": "Could not read or change the Explorer menu entry: {message}",
   "settings.shell.hint": "Adds \"Browse with PhotoReview\" to Explorer's right-click menu on folders and on empty space inside a folder. Only for your Windows user (no administrator rights). It applies immediately, not on Save; removing it deletes just those two entries.",
-  "settings.contextMenu.item.refresh": "Refresh"
+  "settings.contextMenu.item.refresh": "Refresh",
+  "status.secondaryUnavailable.settings": "Settings window is not available in this build; opening config.json",
+  "status.secondaryUnavailable.settingsFailed": "Settings window is not available in this build and config.json could not be opened: {path}",
+  "status.secondaryUnavailable.diagnostics": "Diagnostics window is not available in this build.",
+  "status.secondaryUnavailable.recovery": "Recovery window is not available in this build; run recovery in the full build.",
+  "status.secondaryUnavailable.skippedFiles": "Skipped-files window is not available in this build.",
+  "status.secondaryUnavailable.batchReview": "Batch review window is not available in this build; nothing was changed.",
+  "status.secondaryUnavailable.benchmark": "Benchmark window is not available in this build."
 }
