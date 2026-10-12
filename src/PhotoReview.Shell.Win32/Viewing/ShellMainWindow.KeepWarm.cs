@@ -26,8 +26,8 @@ internal sealed partial class ShellMainWindow
             return; // tắt, hoặc WARP (CPU raster, không có GPU để giữ ấm; test có thể đưa việc giả): không luồng/thiết bị/handler
         }
 
-        _keepAlive = new GpuKeepAlive(options.IntervalMs, _options.KeepWarmWork ?? GpuKeepAlive.OpenHardwareWork);
-        _keepWarm = new KeepWarmController(options, () => _window.IsActive, _keepAlive.Activate);
+        _keepAlive = new GpuKeepAlive(options.IntervalMs, _options.KeepWarmWork ?? GpuKeepAlive.OpenHardwareWork, _options.KeepWarmTimestamp);
+        _keepWarm = new KeepWarmController(options, () => _window.IsActive, _keepAlive.Activate, _options.KeepWarmTimestamp);
         _window.InsertMessageHandlerFirst(_keepWarm);
     }
 
