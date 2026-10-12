@@ -903,3 +903,207 @@ public sealed class FetchRawSamplesSelfTestTests
         }
     }
 }
+
+/// <summary>
+/// WP-36: tools/verify-release.ps1 -AotOnly (the optional Native AOT variant of PhotoReview.exe) and tools/publish-release.ps1 -Aot
+/// (MSVC detection, skip vs fail) in a fake repository. No dotnet publish runs here: the MSVC check fails before any build.
+/// </summary>
+[Trait("Category", "Integration")]
+public sealed class AotReleaseScriptTests : IDisposable
+{
+    private readonly PhotoReview.TestSupport.TempRoot _root = new("aot-release");
+    public void Dispose() => _root.Dispose();
+
+    private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
+    private static readonly string[] AotFiles =
+    [
+        "LibRaw-LICENSE.LGPL", "LibRaw-LICENSE.CDDL", "LibRaw-NOTICE.txt", "THIRD-PARTY-NOTICES.md", "Languages\\en.json", "Languages\\vi.json",
+    ];
+
+    /// <summary>
+    /// A fake AOT folder. PhotoReview.exe is a copy of a real, git-versioned assembly (carries the version resource the check reads;
+    /// it is not runnable, which is what the smoke test relies on).
+    /// </summary>
+    private (int ExitCode, string Output) Verify(string? skipFile = null, string? extraFile = null, string? exeContent = null,
+        string? turboContent = null, bool smoke = false, string? standInExe = null, params string[] extraArgs)
+    {
+        var name = "repo-" + Guid.NewGuid().ToString("N");
+        var repo = _root.Dir(name);
+        PowerShellRunner.CopyScript(repo, "verify-release.ps1");
+        byte[] turbo = [1], libraw = [2], package = [3];
+        Directory.CreateDirectory(Path.Combine(repo, "native"));
+        File.WriteAllText(Path.Combine(repo, "native", "turbojpeg.sha256"), Sha(turbo));
+        File.WriteAllText(Path.Combine(repo, "native", "libraw.sha256"), Sha(libraw));
+        File.WriteAllText(Path.Combine(repo, "native", "libraw.package.sha256"), Sha(package));
+        var aot = _root.Dir(Path.Combine(name, "aot"));
+        foreach (var file in AotFiles) if (file != skipFile) _root.File(Path.Combine(name, "aot", file), [1]);
+        if (skipFile != "turbojpeg.dll") File.WriteAllBytes(Path.Combine(aot, "turbojpeg.dll"), turboContent is null ? turbo : [9, 9]);
+        if (skipFile != "libraw.dll") File.WriteAllBytes(Path.Combine(aot, "libraw.dll"), libraw);
+        if (skipFile != "LibRaw-SOURCE.zip") File.WriteAllBytes(Path.Combine(aot, "LibRaw-SOURCE.zip"), package);
+        if (skipFile != "PhotoReview.exe")
+        {
+            var exe = Path.Combine(aot, "PhotoReview.exe");
+            if (standInExe is not null) File.Copy(standInExe, exe, overwrite: true);
+            else if (exeContent is null) File.Copy(typeof(PhotoReview.Benchmark.Cli.RawSurvey).Assembly.Location, exe, overwrite: true);
+            else File.WriteAllText(exe, exeContent);
+        }
+        if (extraFile is not null) File.WriteAllBytes(Path.Combine(aot, extraFile), [1]);
+
+        var args = new List<string> { "-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-AotOnly", "-AotDirectory", aot };
+        if (smoke) args.Add("-Smoke");
+        args.AddRange(extraArgs);
+        return PowerShellRunner.Run([.. args]);
+    }
+
+    private static string Flat(string output) => System.Text.RegularExpressions.Regex.Replace(output, @"\s+", " ");
+
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): a complete AOT folder passes (control for the failing cases)")]
+    public void Aot_CompleteFolder_Passes()
+    {
+        var (code, output) = Verify(extraArgs: ["-AotMinExeBytes", "1"]);
+
+        Assert.True(code == 0, output);
+        Assert.Contains("PASS: AOT folder ok", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "verify-release -AotOnly (WP-36): a folder missing a file fails and names it")]
+    [InlineData("PhotoReview.exe")]
+    [InlineData("turbojpeg.dll")]
+    [InlineData("libraw.dll")]
+    [InlineData("THIRD-PARTY-NOTICES.md")]
+    [InlineData("Languages\\vi.json")]
+    public void Aot_MissingFile_Fails(string file)
+    {
+        var (code, output) = Verify(skipFile: file, extraArgs: ["-AotMinExeBytes", "1"]);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("Missing AOT file(s): " + file, Flat(output), StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "verify-release -AotOnly (WP-36): a managed, WPF or runtime file in the folder fails (not a real AOT, or the bridge leaked)")]
+    [InlineData("PhotoReview.dll")]
+    [InlineData("PhotoReview.Shell.WpfBridge.dll")]
+    [InlineData("PresentationFramework.dll")]
+    [InlineData("coreclr.dll")]
+    public void Aot_ForbiddenFile_Fails(string file)
+    {
+        var (code, output) = Verify(extraFile: file, extraArgs: ["-AotMinExeBytes", "1"]);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("AOT folder must not contain: " + file, Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): an exe below the plausible size window fails (default window starts at 5 MB)")]
+    public void Aot_ExeTooSmall_Fails()
+    {
+        var (code, output) = Verify();
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("outside the plausible range", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): an exe above the maximum fails")]
+    public void Aot_ExeTooLarge_Fails()
+    {
+        var (code, output) = Verify(extraArgs: ["-AotMinExeBytes", "1", "-AotMaxExeBytes", "10"]);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("outside the plausible range", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): a folder above the size limit (without *.pdb) fails")]
+    public void Aot_FolderTooLarge_Fails()
+    {
+        var (code, output) = Verify(extraArgs: ["-AotMinExeBytes", "1", "-AotMaxFolderBytes", "100"]);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("above the limit 100", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): a native DLL that does not match its pinned SHA-256 fails")]
+    public void Aot_NativeHashMismatch_Fails()
+    {
+        var (code, output) = Verify(turboContent: "wrong", extraArgs: ["-AotMinExeBytes", "1"]);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("AOT turbojpeg.dll SHA-256 mismatch", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): an exe without a git commit in its version fails")]
+    public void Aot_NoCommitInVersion_Fails()
+    {
+        var (code, output) = Verify(exeContent: "not a pe file", extraArgs: ["-AotMinExeBytes", "1"]);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("has no git commit", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): -Smoke fails when the AOT exe cannot be started (control: same folder passes without -Smoke)")]
+    public void Aot_SmokeWithFakeExe_Fails()
+    {
+        var (okCode, okOutput) = Verify(extraArgs: ["-AotMinExeBytes", "1"]);
+        Assert.True(okCode == 0, okOutput);
+
+        var (code, output) = Verify(smoke: true, extraArgs: ["-AotMinExeBytes", "1"]);
+
+        Assert.NotEqual(0, code);
+        Assert.DoesNotContain("--smoke exited 0", output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): -Smoke runs the exe WITH --smoke and a non-zero exit code fails (whoami.exe rejects --smoke with exit 1 and returns 0 without arguments)")]
+    public void Aot_SmokeRunsExeWithSmokeArgumentAndChecksExitCode()
+    {
+        var whoami = Path.Combine(Environment.SystemDirectory, "whoami.exe");
+        var (code, output) = Verify(smoke: true, standInExe: whoami, extraArgs: ["-AotMinExeBytes", "1", "-AotSkipVersionCheck"]);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("--smoke exited with code", Flat(output), StringComparison.Ordinal);
+    }
+    [Fact(DisplayName = "verify-release -AotOnly (WP-36): without -AotDirectory the script fails instead of silently passing")]
+    public void Aot_WithoutDirectory_Fails()
+    {
+        var repo = _root.Dir("repo-" + Guid.NewGuid().ToString("N"));
+        PowerShellRunner.CopyScript(repo, "verify-release.ps1");
+
+        var (code, output) = PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-AotOnly");
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("-AotOnly needs -AotDirectory", Flat(output), StringComparison.Ordinal);
+    }
+
+    private (int ExitCode, string Output) Publish(params string[] args)
+    {
+        var repo = _root.Dir("repo-" + Guid.NewGuid().ToString("N"));
+        PowerShellRunner.CopyScript(repo, "publish-release.ps1");
+        var missingVsWhere = Path.Combine(repo, "no-such-vswhere.exe");
+        return PowerShellRunner.Run(["-File", Path.Combine(repo, "tools", "publish-release.ps1"), "-VsWherePath", missingVsWhere, .. args]);
+    }
+
+    [Fact(DisplayName = "publish-release -Aot (WP-36): without MSVC the AOT step is skipped with a warning and the script still succeeds")]
+    public void Publish_AotWithoutMsvc_SkipsWithWarning()
+    {
+        var (code, output) = Publish("-AotOnly", "-Aot");
+
+        Assert.True(code == 0, output);
+        Assert.Contains("Skipping the optional AOT variant", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "publish-release -RequireAot (WP-36): without MSVC the script fails and says why")]
+    public void Publish_RequireAotWithoutMsvc_Fails()
+    {
+        var (code, output) = Publish("-AotOnly", "-RequireAot");
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("AOT publish required but not possible", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "publish-release -AotOnly (WP-36): without -Aot or -RequireAot it refuses (it would publish nothing)")]
+    public void Publish_AotOnlyWithoutAot_Fails()
+    {
+        var (code, output) = Publish("-AotOnly");
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("-AotOnly needs -Aot or -RequireAot", Flat(output), StringComparison.Ordinal);
+    }
+}
