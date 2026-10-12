@@ -205,33 +205,34 @@ internal static class ScrollBarGeometry
             return ScrollBarPart.Corner;
         }
 
-        foreach (var box in new[] { layout.Vertical, layout.Horizontal })
+        var part = HitBox(layout.Vertical, point);
+        return part != ScrollBarPart.None ? part : HitBox(layout.Horizontal, point);
+    }
+
+    private static ScrollBarPart HitBox(in ScrollBarBox box, PointD point)
+    {
+        if (!box.Visible || !Inside(box.Bar, point))
         {
-            if (!box.Visible || !Inside(box.Bar, point))
-            {
-                continue;
-            }
-
-            if (box.ThumbVisible && Inside(box.Thumb, point))
-            {
-                return ScrollBarPart.Thumb;
-            }
-
-            if (Inside(box.Track, point))
-            {
-                var along = box.Along(point);
-                if (!box.ThumbVisible)
-                {
-                    return ScrollBarPart.Background;
-                }
-
-                return along < box.ThumbStart ? ScrollBarPart.TrackBefore : ScrollBarPart.TrackAfter;
-            }
-
-            return ScrollBarPart.Background;
+            return ScrollBarPart.None;
         }
 
-        return ScrollBarPart.None;
+        if (box.ThumbVisible && Inside(box.Thumb, point))
+        {
+            return ScrollBarPart.Thumb;
+        }
+
+        if (Inside(box.Track, point))
+        {
+            var along = box.Along(point);
+            if (!box.ThumbVisible)
+            {
+                return ScrollBarPart.Background;
+            }
+
+            return along < box.ThumbStart ? ScrollBarPart.TrackBefore : ScrollBarPart.TrackAfter;
+        }
+
+        return ScrollBarPart.Background;
     }
 
     /// <summary>Trục của thanh cuộn chứa điểm (kể cả ô góc: dọc).</summary>

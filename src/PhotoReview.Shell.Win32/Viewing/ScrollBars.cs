@@ -448,28 +448,30 @@ internal sealed class ShellScrollBars : IWindowMessageHandler, IDisposable
     private void DrawBars(IDrawContext context, in ScrollBarLayout layout)
     {
         var hovered = HoveredThumbAxis;
-        foreach (var box in new[] { layout.Vertical, layout.Horizontal })
-        {
-            if (!box.Visible)
-            {
-                continue;
-            }
-
-            context.FillRectangle(box.Bar, ScrollBarColors.Track);
-            if (!box.ThumbVisible)
-            {
-                continue;
-            }
-
-            var pressed = _dragging && _dragAxis == box.Axis;
-            var color = pressed ? ScrollBarColors.ThumbPressed : hovered == box.Axis ? ScrollBarColors.ThumbHover : ScrollBarColors.Thumb;
-            context.FillRoundedRectangle(box.Thumb, _options.Metrics.ThumbRadius, color);
-        }
-
+        DrawBox(context, layout.Vertical, hovered);
+        DrawBox(context, layout.Horizontal, hovered);
         if (layout.HasCorner)
         {
             context.FillRectangle(layout.Corner, ScrollBarColors.Track);
         }
+    }
+
+    private void DrawBox(IDrawContext context, in ScrollBarBox box, ScrollAxis? hovered)
+    {
+        if (!box.Visible)
+        {
+            return;
+        }
+
+        context.FillRectangle(box.Bar, ScrollBarColors.Track);
+        if (!box.ThumbVisible)
+        {
+            return;
+        }
+
+        var pressed = _dragging && _dragAxis == box.Axis;
+        var color = pressed ? ScrollBarColors.ThumbPressed : hovered == box.Axis ? ScrollBarColors.ThumbHover : ScrollBarColors.Thumb;
+        context.FillRoundedRectangle(box.Thumb, _options.Metrics.ThumbRadius, color);
     }
 
     public void Dispose()
