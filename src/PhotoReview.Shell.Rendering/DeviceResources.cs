@@ -394,8 +394,6 @@ internal sealed unsafe class DeviceResources : IDisposable
             _waitHandle = 0;
         }
 
-        ComInterop.Release(_swapChain);
-        _swapChain = null;
         ComInterop.Release(_brush);
         _brush = null;
         ComInterop.Release(_context);
@@ -406,7 +404,15 @@ internal sealed unsafe class DeviceResources : IDisposable
         _factory = null;
         if (_d3d is not null)
         {
+            // ClearState + Flush khi swap chain CÒN sống (khuyến nghị tháo flip-model): giải phóng swap chain trước khi flush để lại
+            // việc huỷ nó + các Present xếp hàng cho chính lệnh Flush, và trên runner CI (WARP + DWM) lệnh đó kẹt vĩnh viễn.
             D3D11.ClearStateAndFlush(_d3d);
+        }
+
+        ComInterop.Release(_swapChain);
+        _swapChain = null;
+        if (_d3d is not null)
+        {
             ComInterop.Release(_d3d);
             _d3d = null;
         }

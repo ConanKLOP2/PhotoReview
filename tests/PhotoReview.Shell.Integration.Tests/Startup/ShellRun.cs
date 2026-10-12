@@ -75,9 +75,23 @@ internal sealed class ShellRun : IDisposable
         return root;
     }
 
+    /// <summary>
+    /// Mô tả của lần chạy đã bị bỏ rơi (thread shell không thoát sau khi đóng); null = chưa có. Một thread shell kẹt giữ tài nguyên
+    /// toàn tiến trình (D3D/WARP, OLE): mọi lần chạy sau đó chỉ treo thêm <see cref="DefaultWait"/> mỗi test rồi đỏ cùng một
+    /// nguyên nhân. Thay vào đó mỗi test sau đỏ NGAY, kèm tên lần chạy kẹt đầu tiên, nên một lỗi không kéo cả dây chuyền chờ.
+    /// </summary>
+    private static volatile string? s_abandoned;
+
     public static ShellRun Start(string root, string[] args, string? prefix = null,
         Func<ShellStartupOptions, ShellStartupOptions>? configure = null)
     {
+        if (s_abandoned is { } abandoned)
+        {
+            throw new InvalidOperationException(
+                "Một lần chạy shell trước đó không thoát (thread còn sống, giữ tài nguyên toàn tiến trình) nên lần chạy này không được thử: "
+                + abandoned);
+        }
+
         var run = new ShellRun(root, args, prefix ?? "PRShellTest" + Guid.NewGuid().ToString("N")[..10], configure);
         run._thread.Start();
         return run;
@@ -89,9 +103,54 @@ internal sealed class ShellRun : IDisposable
         return MarkNames.Contains(name);
     }
 
-    public bool WaitForMain(TimeSpan? timeout = null) => _mainReady.Wait(timeout ?? DefaultWait);
+    public bool WaitForMain(TimeSpan? timeout = null) => CaptureOnTimeout(_mainReady.Wait(timeout ?? DefaultWait));
 
-    public bool WaitForExit(TimeSpan? timeout = null) => _exited.Wait(timeout ?? DefaultWait);
+    public bool WaitForExit(TimeSpan? timeout = null) => CaptureOnTimeout(_exited.Wait(timeout ?? DefaultWait));
+
+    /// <summary>
+    /// Bảng thread + stack managed của tiến trình test, chụp NGAY khi một lần chờ hết hạn (lúc shell còn treo, trước khi dọn);
+    /// rỗng nếu chưa có lần chờ nào hết hạn. Thông báo lỗi của test nên kèm nó (<see cref="Diagnostics"/>).
+    /// </summary>
+    public string HangReport { get; private set; } = "";
+
+    /// <summary>Trạng thái chẩn đoán dùng chung cho thông báo lỗi: mốc, lỗi, mã thoát, khung đầu và báo cáo treo (nếu có).</summary>
+    public string Diagnostics =>
+        $"marks=[{string.Join(", ", MarkNames)}] error={Error} exit={ExitCode} firstPresent={Main?.FirstPresentDone} {_closeNote} {WindowState()}"
+        + (HangReport.Length == 0 ? "" : Environment.NewLine + HangReport);
+
+    /// <summary>Đuôi log riêng của lần chạy (lỗi vòng lặp UI được ghi kể cả khi log tắt), cho báo cáo treo.</summary>
+    private string LogTail()
+    {
+        try
+        {
+            var path = Path.Combine(Root, "test-log", "app.log");
+            if (!File.Exists(path))
+            {
+                return "(không có app.log)";
+            }
+
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var length = (int)Math.Min(stream.Length, 6000);
+            stream.Seek(-length, SeekOrigin.End);
+            var buffer = new byte[length];
+            var read = stream.Read(buffer, 0, length);
+            return System.Text.Encoding.UTF8.GetString(buffer, 0, read);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "(không đọc được app.log: " + ex.Message + ")";
+        }
+    }
+
+    private bool CaptureOnTimeout(bool signaled)
+    {
+        if (!signaled && HangReport.Length == 0)
+        {
+            HangReport = HangDiagnostics.Capture() + Environment.NewLine + "app.log tail: " + LogTail();
+        }
+
+        return signaled;
+    }
 
     /// <summary>Thời điểm (Stopwatch) của mốc đầu tiên tên <paramref name="name"/>, hoặc null.</summary>
     public long? TimestampOf(string name)
@@ -115,7 +174,28 @@ internal sealed class ShellRun : IDisposable
     {
         if (Main is { } main && main.Hwnd != 0)
         {
-            User32.PostMessage(main.Hwnd, User32.WmClose, 0, 0);
+            var posted = User32.PostMessage(main.Hwnd, User32.WmClose, 0, 0);
+            _closeNote = $"WM_CLOSE posted={posted} lastError={(posted ? 0 : System.Runtime.InteropServices.Marshal.GetLastPInvokeError())} hwnd=0x{main.Hwnd:X}";
+        }
+        else
+        {
+            _closeNote = "WM_CLOSE not posted: no main window";
+        }
+    }
+
+    private string _closeNote = "";
+
+    private string WindowState()
+    {
+        try
+        {
+            return Main is { } main
+                ? $"closingOrClosed={main.IsClosingOrClosed} destroyed={main.Window.IsDestroyed} fileActionInProgress={main.ViewModel.IsFileActionInProgress}"
+                : "no main window";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            return "window state unavailable: " + ex.Message;
         }
     }
 
@@ -213,7 +293,11 @@ internal sealed class ShellRun : IDisposable
             }
         }
 
-        _thread.Join(TimeSpan.FromSeconds(5));
+        if (!_thread.Join(TimeSpan.FromSeconds(5)) && !_exited.IsSet)
+        {
+            s_abandoned = $"root={Root} marks=[{string.Join(", ", MarkNames)}]";
+        }
+
         try
         {
             Directory.Delete(Root, recursive: true);
