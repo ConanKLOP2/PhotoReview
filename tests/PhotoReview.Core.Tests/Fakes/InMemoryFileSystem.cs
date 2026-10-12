@@ -63,12 +63,14 @@ public sealed class InMemoryFileSystem : IFileSystem
     public int? CopyFailsAfterBytes { get; set; }
 
     /// <summary>Ordered trace of journal stream opens and file mutations (IO03 ordering/thread tests).</summary>
-    public sealed record FsEvent(string Kind, bool Durable, int ThreadId, string Path);
+    /// <remarks>Compare <see cref="Thread"/> (object identity), never <see cref="ThreadId"/>: managed ids are recycled once a thread has died
+    /// and a thread-pool caller is handed back to the pool at its first await, so it can legitimately run the work itself.</remarks>
+    public sealed record FsEvent(string Kind, bool Durable, int ThreadId, string Path, Thread Thread);
     private readonly List<FsEvent> _events = [];
     public IReadOnlyList<FsEvent> Events { get { lock (_events) return _events.ToList(); } }
     private void Record(string kind, string path, bool durable = false)
     {
-        lock (_events) _events.Add(new FsEvent(kind, durable, Environment.CurrentManagedThreadId, path));
+        lock (_events) _events.Add(new FsEvent(kind, durable, Environment.CurrentManagedThreadId, path, Thread.CurrentThread));
     }
 
     public InMemoryFileSystem()
