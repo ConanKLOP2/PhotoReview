@@ -160,10 +160,27 @@ public sealed class PixelGoldenExtTests(ITestOutputHelper output)
             Assert.False(window.LastComposed.Degraded);
         }
 
-        AssertSameFrame(fresh.Frame, settled.Frame, "settled frame after the change vs a window that was in that state all along");
+        AssertSameFrame(fresh.Frame, settled.Frame, "settled frame after the change vs a window that was in that state all along",
+            target.Expectation == PixelGoldenExpectation.Fit);
         PixelGoldenTests.Verify(target, settled, new NullOutput());
     }
-    private static void AssertSameFrame(PixelFrame expected, PixelFrame actual, string what)
+    /// <summary>
+    /// WP28B-WARP-EDGE. Two draws of the SAME bytes with the SAME parameters on a WARP device are not always the same bytes when the
+    /// picture is scaled with the high quality filter (HighQualityCubic = D2D's multi-pass scale effect): the first draw of a
+    /// geometry in a process that has drawn another scaled geometry before can differ from every later draw of it by 1 level in one
+    /// channel on single pixels of the columns x = W/2 - 1 and x = W - 1 (the seam of the two halves and the last column). Measured on
+    /// 600x400 (RawPreviewToFullDecode, Fit), 15 process histories: 0, 55, 64, 71, 163, 292 px (0.12 % at most), max delta 1, columns
+    /// 299 and 599 only; every later draw is byte identical again. It does not come from the product (same inputs, no clock, no
+    /// shared state: the Ids, the cache and the time are fixed) and it is not the first-frame Linear policy (the frame is HQ,
+    /// <c>Degraded</c> is false). 1:1 copies (100 %, NearestNeighbor) never show it and stay byte exact.
+    /// So a scaled frame is "the same" within 1 level on at most two full columns of pixels (the seam + the last column: 0.33 % of
+    /// 600x400). Anything a real defect does is far outside both numbers: Linear instead of HQ, another size, a shifted box or
+    /// another picture differ by 2+ levels on a large share of the frame (PSNR 45 dB between the two filters = ~1.4 levels RMS).
+    /// </summary>
+    internal const int WarpScaledMaxDelta = 1;
+
+    private static int WarpScaledMaxPixels(PixelFrame frame) => 2 * frame.Height;
+    private static void AssertSameFrame(PixelFrame expected, PixelFrame actual, string what, bool scaledWithHqFilter = false)
     {
         Assert.Equal((expected.Width, expected.Height), (actual.Width, actual.Height));
         var differing = 0;
@@ -185,7 +202,10 @@ public sealed class PixelGoldenExtTests(ITestOutputHelper output)
             }
         }
 
-        Assert.True(differing == 0, $"{what}: {differing} px differ (max delta {max}, first at {first})");
+        var allowed = scaledWithHqFilter ? WarpScaledMaxPixels(expected) : 0;
+        var allowedDelta = scaledWithHqFilter ? WarpScaledMaxDelta : 0;
+        Assert.True(differing <= allowed && max <= allowedDelta,
+            $"{what}: {differing} px differ (max delta {max}, first at {first}); allowed {allowed} px with delta <= {allowedDelta}");
     }
 
     private sealed class NullOutput : ITestOutputHelper
@@ -246,7 +266,7 @@ public sealed class PixelGoldenExtTests(ITestOutputHelper output)
         var after = window.Frame();
         Assert.False(window.LastComposed.Degraded);
         Assert.Equal(before.Image, firstAfter.Image);
-        AssertSameFrame(before.Frame, after.Frame, "settled frame after F11 exit vs before F11");
+        AssertSameFrame(before.Frame, after.Frame, "settled frame after F11 exit vs before F11", scaledWithHqFilter: true);
         Assert.Equal(before.Image, after.Image);
     }
 
@@ -317,7 +337,8 @@ public sealed class PixelGoldenExtTests(ITestOutputHelper output)
         // Both frames are the golden of their own bitmap, and the swapped frame is what a fresh full-size window draws.
         PixelGoldenTests.Verify(preview, first, new NullOutput());
         PixelGoldenTests.Verify(full, second, new NullOutput());
-        AssertSameFrame(PixelGoldenShellRenderer.Render(full).Frame, second.Frame, "swapped bitmap vs fresh full-size window");
+        AssertSameFrame(PixelGoldenShellRenderer.Render(full).Frame, second.Frame, "swapped bitmap vs fresh full-size window",
+            full.Expectation == PixelGoldenExpectation.Fit);
         // Same picture at two resolutions: the frames are alike (the preview is only blurrier), never a different image.
         var all = new FrameRect(1, 1, first.Frame.Width - 2, first.Frame.Height - 2);
         Assert.True(PixelMetrics.Psnr(first.Frame, second.Frame, all) >= 22.0,

@@ -199,6 +199,65 @@ jobs:
           name: test-results
           path: TestResults
 
+  # NO-WPF (WP-36): the OPTIONAL Native AOT variant of PhotoReview.exe (no WPF bridge: the Settings/Diagnostics/Recovery windows
+  # do not open until WP-35). A separate artifact, never part of release-publish and never a release gate: continue-on-error, no
+  # `needs` link from tag-version. It runs beside build-test-publish so it does not lengthen the pipeline. windows-latest already
+  # has Visual Studio (MSVC + vswhere); publish-release.ps1 puts vswhere on PATH for ILCompiler and, with -RequireAot, fails when
+  # MSVC is missing. The wall time of the step is written to the job summary.
+  publish-aot:
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Cache .NET SDK
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\hostedtoolcache\windows\dotnet
+          key: ${{ runner.os }}-dotnet-sdk-${{ hashFiles('global.json') }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Fetch native binaries
+        shell: powershell
+        run: ./tools/fetch-native.ps1
+
+      - name: Fetch LibRaw native binary
+        shell: powershell
+        run: ./tools/fetch-libraw.ps1
+
+      - name: Publish Native AOT variant
+        shell: powershell
+        run: |
+          $watch = [Diagnostics.Stopwatch]::StartNew()
+          ./tools/publish-release.ps1 -AotOnly -RequireAot -AotOutputDirectory 'aot-publish'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "AOT publish step: $([int]$watch.Elapsed.TotalSeconds) s" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Verify Native AOT variant
+        shell: powershell
+        # -Smoke runs the AOT PhotoReview.exe --smoke with every DOTNET_* variable and dotnet PATH entry removed (no runtime needed).
+        run: ./tools/verify-release.ps1 -AotOnly -Smoke -AotDirectory 'aot-publish'
+
+      - name: Upload AOT artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: release-publish-aot
+          path: aot-publish
+
   # One tag per merge to master: v<MajorMinor>.<N>, the same number the build embeds
   # (Directory.Build.targets). Runs only after build + tests + publish and the repo checks succeeded. No release is created
   # here: a human runs the Release workflow (Actions > Release > Run workflow) for the tag they want.
