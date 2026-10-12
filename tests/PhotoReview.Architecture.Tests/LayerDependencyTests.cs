@@ -156,6 +156,25 @@ public sealed class LayerDependencyTests
             $"Platform.Windows has forbidden WPF dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
     }
 
+    [Fact(DisplayName = "Rule 8b (WP-33): Platform.Windows has no late-bound dependency (RuntimeBinder/dynamic, VB runtime, expression trees) - AOT/trim safe")]
+    public void PlatformWindows_HasNoLateBoundDependencies()
+    {
+        var platformTypes = Types.InAssembly(typeof(PhotoReview.Platform.Windows.WindowsRecycleBin).Assembly);
+
+        var result = platformTypes
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "Microsoft.CSharp",
+                "Microsoft.VisualBasic",
+                "System.Linq.Expressions",
+                "System.Dynamic")
+            .GetResult();
+
+        Assert.True(
+            result.IsSuccessful,
+            $"Platform.Windows has late-bound dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
+    }
+
     [Fact(DisplayName = "Rule 7: Benchmarking does not depend on App, the WPF bridge or any WPF/WinForms assembly (WP-06)")]
     public void Benchmarking_DoesNotDependOn_App()
     {
