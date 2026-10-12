@@ -225,8 +225,8 @@ public sealed class ShellComWp33Tests
     [Fact]
     public void Release_ManagedFakeAndNull_AreNoOps()
     {
-        ShellCom.Release(null);
-        ShellCom.Release(new FakeShellItem("x"));
+        Assert.Null(Record.Exception(() => ShellCom.Release(null)));
+        Assert.Null(Record.Exception(() => ShellCom.Release(new FakeShellItem("x"))));
     }
 
     [Fact]
@@ -350,7 +350,8 @@ public sealed class ShellComWp33Tests
     [InlineData(1)]                                // S_FALSE
     [InlineData(unchecked((int)0x800704C7))]       // ERROR_CANCELLED: not an error here, the caller sees the file still in place
     [InlineData(unchecked((int)0x80004004))]       // E_ABORT
-    public void Throw_SuccessAndCancellation_DoNotThrow(int hr) => ShellFileRecycler.Throw(hr, @"C:\photos\a.jpg");
+    public void Throw_SuccessAndCancellation_DoNotThrow(int hr)
+        => Assert.Null(Record.Exception(() => ShellFileRecycler.Throw(hr, @"C:\photos\a.jpg")));
 
     [Fact]
     public void RecycleFlagConstants_MatchTheSdkValues()
@@ -791,11 +792,11 @@ public sealed class ShellComWp33Tests
         using var failing = Browser("x", hr: HrFail);
         using var nothing = Browser(null);
 
-        using (var window = new ShellWindow(noInterface.Acquire()))
+        using (var window = new ShellWebBrowser(noInterface.Acquire()))
             Assert.Throws<InvalidCastException>(() => window.LocationUrl); // E_NOINTERFACE maps to InvalidCastException; the selector skips it
-        using (var window = new ShellWindow(failing.Acquire()))
+        using (var window = new ShellWebBrowser(failing.Acquire()))
             Assert.Throws<COMException>(() => window.LocationUrl);
-        using (var window = new ShellWindow(nothing.Acquire()))
+        using (var window = new ShellWebBrowser(nothing.Acquire()))
             Assert.Null(window.LocationUrl);
 
         // The interface pointer from QueryInterface is released on every path.
@@ -808,7 +809,7 @@ public sealed class ShellComWp33Tests
     public void ShellWindow_AcquireUnknown_IsANewReference_AndDisposeReleasesTheOwnedOneOnce()
     {
         using var native = Browser("file:///C:/a/");
-        var window = new ShellWindow(native.Acquire());
+        var window = new ShellWebBrowser(native.Acquire());
 
         var extra = window.AcquireUnknown();
         Assert.Equal(native.Pointer, extra);

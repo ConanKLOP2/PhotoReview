@@ -78,7 +78,7 @@ internal sealed class ShellWindowsSource : IExplorerWindowSource
         {
             ShellCom.Check(ExplorerNativeVtable.ShellWindowsItem(self, index, out var dispatch));
             if (dispatch == 0) continue; // the window closed between Count and Item
-            yield return new ShellWindow(dispatch);
+            yield return new ShellWebBrowser(dispatch);
         }
     }
 
@@ -90,18 +90,18 @@ internal sealed class ShellWindowsSource : IExplorerWindowSource
 }
 
 /// <summary>An <c>IWebBrowser2</c> window object (an <c>IDispatch</c> pointer owned here).</summary>
-internal sealed class ShellWindow : IExplorerWindow
+internal sealed class ShellWebBrowser : IExplorerWindow
 {
     private nint _dispatch;
 
-    internal ShellWindow(nint dispatch) => _dispatch = dispatch;
+    internal ShellWebBrowser(nint dispatch) => _dispatch = dispatch;
 
     public string? LocationUrl
     {
         get
         {
             var self = _dispatch;
-            ObjectDisposedException.ThrowIf(self == 0, typeof(ShellWindow));
+            ObjectDisposedException.ThrowIf(self == 0, typeof(ShellWebBrowser));
             var iid = ExplorerComInterop.IidWebBrowserApp;
             ShellCom.Check(Marshal.QueryInterface(self, in iid, out var app));
             try
@@ -118,7 +118,7 @@ internal sealed class ShellWindow : IExplorerWindow
     public nint AcquireUnknown()
     {
         var self = _dispatch;
-        ObjectDisposedException.ThrowIf(self == 0, typeof(ShellWindow));
+        ObjectDisposedException.ThrowIf(self == 0, typeof(ShellWebBrowser));
         Marshal.AddRef(self);
         return self;
     }
