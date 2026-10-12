@@ -95,6 +95,16 @@ public sealed class PerfCompareTests : IDisposable
     }
 
     [Fact]
+    public void DifferenceExactlyAtTheThreshold_IsNotARegression_ButIsFlaggedAsDrift()
+    {
+        double[] flat = [100, 100, 100, 100, 100, 100];
+        var m = Single(Result([Metric("a", flat)]), Result([Metric("a", flat.Select(v => v + 5))]));
+        Assert.Equal(5.0, m.Allowed, 9);
+        Assert.Equal(PerfVerdict.Warn, m.Verdict);
+        Assert.Contains("drifting", m.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BusyMachine_DowngradesARegressionToInconclusive_WithReason()
     {
         var r = PerfComparer.Compare(Result([Metric("a", Quiet)]), Result([Metric("a", Scale(Quiet, 1.5))], cpu: 75));
