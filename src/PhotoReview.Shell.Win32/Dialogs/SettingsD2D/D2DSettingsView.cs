@@ -11,12 +11,12 @@ internal enum D2DCursorKind
 }
 
 /// <summary>
-/// SPIKE (WP-35 D2D Settings): TOÃ€N Bá»˜ trang Settings lÃ  Má»˜T bá» máº·t Direct2D. Lá»›p nÃ y khÃ´ng cÃ³ HWND: bá»‘ cá»¥c (px nguyÃªn), váº½ vÃ o
-/// <see cref="D2DDrawContext"/>, cuá»™n (offset px + váº½ láº¡i cáº£ khung + thanh cuá»™n tá»± váº½), chuá»™t, bÃ n phÃ­m (Tab/mÅ©i tÃªn/Space/focus ring),
-/// Ã´ nháº­p tá»± váº½, combobox tá»± váº½, nÃºt, cÃ¢y trá»£ nÄƒng. Cá»­a sá»• (<see cref="D2DSettingsWindow"/>) chá»‰ chuyá»ƒn thÃ´ng Ä‘iá»‡p vÃ o Ä‘Ã¢y.
+/// SPIKE (WP-35 D2D Settings): TOÀN BỘ trang Settings là MỘT bề mặt Direct2D. Lớp này không có HWND: bố cục (px nguyên), vẽ vào
+/// <see cref="D2DDrawContext"/>, cuộn (offset px + vẽ lại cả khung + thanh cuộn tự vẽ), chuột, bàn phím (Tab/mũi tên/Space/focus ring),
+/// ô nhập tự vẽ, combobox tự vẽ, nút, cây trợ năng. Cửa sổ (<see cref="D2DSettingsWindow"/>) chỉ chuyển thông điệp vào đây.
 /// <para>
-/// Toáº¡ Ä‘á»™: má»i sá»‘ lÃ  px thiáº¿t bá»‹. Khung váº½ Ä‘áº·t <c>PushTransform(scale(1/dpiScale))</c> nÃªn toáº¡ Ä‘á»™ px khá»›p pixel (cá»¡ chá»¯ cÅ©ng tÃ­nh px).
-/// Váº½ láº¡i: Má»–I khung xoÃ¡ vÃ  váº½ cáº£ cá»­a sá»• (khÃ´ng cÃ³ vÃ¹ng báº©n, khÃ´ng ScrollWindow) - nÃªn khÃ´ng thá»ƒ cÃ²n hÃ¬nh cÅ© khi cuá»™n.
+/// Toạ độ: mọi số là px thiết bị; bề mặt D2D tạo ở DPI 96 (1 DIP = 1 px) và bố cục tự nhân DPI, nên toạ độ khớp pixel (cỡ chữ cũng tính px).
+/// Vẽ lại: MỖI khung xoá và vẽ cả cửa sổ (không có vùng bẩn, không ScrollWindow) - nên không thể còn hình cũ khi cuộn.
 /// </para>
 /// </summary>
 internal sealed class D2DSettingsView
@@ -107,26 +107,26 @@ internal sealed class D2DSettingsView
 
     public bool CaretVisible => _caretVisible;
 
-    /// <summary>Sá»‘ láº§n váº½ (cháº©n Ä‘oÃ¡n/Ä‘o).</summary>
+    /// <summary>Số lần vẽ (chẩn đoán/đo).</summary>
     public long FrameCount { get; private set; }
 
-    /// <summary>CÃ³ thay Ä‘á»•i cáº§n váº½ láº¡i (cá»­a sá»• xoÃ¡ cá» sau khi váº½).</summary>
+    /// <summary>Có thay đổi cần vẽ lại (cửa sổ xoá cờ sau khi vẽ).</summary>
     public bool NeedsRedraw { get; set; } = true;
 
-    /// <summary>Pháº§n tá»­ ná»™i dung Ä‘á»•i giÃ¡ trá»‹ (tick, sá»‘, combobox, thanh trÆ°á»£t).</summary>
+    /// <summary>Phần tử nội dung đổi giá trị (tick, số, combobox, thanh trượt).</summary>
     public event Action<D2DWidget>? Changed;
 
-    /// <summary>NÃºt á»Ÿ chÃ¢n Ä‘Æ°á»£c báº¥m.</summary>
+    /// <summary>Nút ở chân được bấm.</summary>
     public event Action<D2DButtonWidget>? ButtonInvoked;
 
-    /// <summary>Focus nháº£y sang pháº§n tá»­ khÃ¡c (cá»­a sá»• dÃ¹ng Ä‘á»ƒ chuyá»ƒn focus HWND tháº­t á»Ÿ cháº¿ Ä‘á»™ lai).</summary>
+    /// <summary>Focus nhảy sang phần tử khác (cửa sổ dùng để chuyển focus HWND thật ở chế độ lai).</summary>
     public event Action<D2DWidget?>? FocusMoved;
 
     public void AddTop(D2DWidget widget) => _content.Add(widget);
 
     public void AddFooter(D2DButtonWidget button) => _footer.Add(button);
 
-    /// <summary>Má»i pháº§n tá»­ (lÃ¡ + nhÃ³m), theo thá»© tá»± khai bÃ¡o.</summary>
+    /// <summary>Mọi phần tử (lá + nhóm), theo thứ tự khai báo.</summary>
     public IEnumerable<D2DWidget> AllWidgets()
     {
         foreach (var widget in _content)
@@ -170,7 +170,7 @@ internal sealed class D2DSettingsView
         }
     }
 
-    // ---- bá»‘ cá»¥c ---------------------------------------------------------------------------------------------------------
+    // ---- bố cục ---------------------------------------------------------------------------------------------------------
 
     private int S(double dip) => (int)Math.Round(dip * _scale);
 
@@ -198,7 +198,7 @@ internal sealed class D2DSettingsView
         return layout.Size.Width;
     }
 
-    /// <summary>TÃ­nh láº¡i bá»‘ cá»¥c cho cá»¡ client vÃ  DPI. Giá»¯ offset (káº¹p láº¡i), giá»¯ focus.</summary>
+    /// <summary>Tính lại bố cục cho cỡ client và DPI. Giữ offset (kẹp lại), giữ focus.</summary>
     public void Layout(int clientWidth, int clientHeight, double scale)
     {
         _clientWidth = clientWidth;
@@ -229,7 +229,7 @@ internal sealed class D2DSettingsView
         ContentHeightPx = y + S(6);
         OffsetPx = Math.Clamp(OffsetPx, 0, MaxOffsetPx);
 
-        // NÃºt chÃ¢n: cÄƒn pháº£i, cÃ¹ng chiá»u cao.
+        // Nút chân: căn phải, cùng chiều cao.
         var gap = S(8);
         var x = clientWidth - S(14);
         var buttonH = _fieldHeight;
@@ -365,7 +365,7 @@ internal sealed class D2DSettingsView
         }
     }
 
-    // ---- váº½ -------------------------------------------------------------------------------------------------------------
+    // ---- vẽ -------------------------------------------------------------------------------------------------------------
 
     private static RectD R(PxRect r) => new(r.X, r.Y, r.Width, r.Height);
 
@@ -377,7 +377,7 @@ internal sealed class D2DSettingsView
         }
     }
 
-    /// <summary>Viá»n 1 px (cáº¡nh trong hÃ¬nh chá»¯ nháº­t), báº±ng bá»‘n hÃ¬nh chá»¯ nháº­t Ä‘áº·c Ä‘á»ƒ cháº¯c Ä‘Ãºng pixel.</summary>
+    /// <summary>Viền 1 px (cạnh trong hình chữ nhật), bằng bốn hình chữ nhật đặc để chắc đúng pixel.</summary>
     private static void Border(IDrawContext ctx, PxRect r, ColorF color, int thickness = 1)
     {
         var t = Math.Max(1, thickness);
@@ -399,13 +399,14 @@ internal sealed class D2DSettingsView
         ctx.DrawText(layout, new PointD(x, y), color);
     }
 
-    /// <summary>Váº½ má»™t khung hÃ¬nh: xoÃ¡ toÃ n bá»™ vÃ  váº½ láº¡i táº¥t cáº£ (khÃ´ng dÃ¹ng vÃ¹ng báº©n).</summary>
+    /// <summary>Vẽ một khung hình: xoá toàn bộ và vẽ lại tất cả (không dùng vùng bẩn).</summary>
     public void Render(D2DDrawContext ctx)
     {
         FrameCount++;
         var p = _palette;
         ctx.Clear(p.Window);
-        ctx.PushTransform(Matrix3x2.CreateScale((float)(1 / _scale)));
+        // Bề mặt luôn tạo ở DPI 96 (1 DIP = 1 px): bố cục tự nhân DPI. Đã thử DPI thật + PushTransform(1/scale): D2D bắt chữ vào lưới
+        // DIP nguyên (bước 1,5 px ở 150 %), nên chữ nhảy khác hình chữ nhật khi cuộn từng px (xem tài liệu spike, mục lệch).
         try
         {
             RenderHeader(ctx);
@@ -431,10 +432,8 @@ internal sealed class D2DSettingsView
         }
         finally
         {
-            ctx.PopTransform();
+            NeedsRedraw = false;
         }
-
-        NeedsRedraw = false;
     }
 
     private void RenderHeader(IDrawContext ctx)
@@ -485,7 +484,7 @@ internal sealed class D2DSettingsView
                 }
                 else
                 {
-                    Fill(ctx, field.BoxBounds, p.Input); // phÃ­a sau control Win32 tháº­t (trÃ¡nh lÃ³e khi Ä‘ang Ä‘áº·t vá»‹ trÃ­)
+                    Fill(ctx, field.BoxBounds, p.Input); // phía sau control Win32 thật (tránh lóe khi đang đặt vị trí)
                 }
 
                 if (field.Unit is not null)
@@ -600,7 +599,7 @@ internal sealed class D2DSettingsView
         var arrowW = S(20);
         var color = combo.Enabled ? p.Text : p.TextDisabled;
         DrawString(ctx, combo.SelectedText, b.X + S(6), b.Y + ((b.Height - _lineHeight) / 2), color, Math.Max(1, b.Width - arrowW - S(8)));
-        // MÅ©i tÃªn: 4 hÃ ng háº¹p dáº§n.
+        // Mũi tên: 4 hàng hẹp dần.
         var cx = b.Right - (arrowW / 2);
         var cy = b.Y + (b.Height / 2) - S(2);
         for (var i = 0; i < 4; i++)
@@ -638,6 +637,22 @@ internal sealed class D2DSettingsView
         }
 
         DrawString(ctx, slider.ValueText(slider.Value), slider.ValueBounds.X, slider.ValueBounds.Y, text);
+    }
+
+    /// <summary>Hình chữ nhật thumb của thanh cuộn tự vẽ (client px) và có hiện không.</summary>
+    public (PxRect Thumb, bool Visible) ThumbBounds => ThumbRect();
+
+    /// <summary>Toạ độ Y đỉnh thumb khi offset = <paramref name="offset"/> (test kéo thumb bằng chuột thật).</summary>
+    public int ThumbTopFor(int offset)
+    {
+        var (thumb, visible) = ThumbRect();
+        if (!visible)
+        {
+            return _scrollTrack.Y;
+        }
+
+        var room = _scrollTrack.Height - thumb.Height;
+        return _scrollTrack.Y + (MaxOffsetPx == 0 ? 0 : (int)((long)room * Math.Clamp(offset, 0, MaxOffsetPx) / MaxOffsetPx));
     }
 
     private (PxRect Thumb, bool Visible) ThumbRect()
@@ -683,6 +698,9 @@ internal sealed class D2DSettingsView
         }
     }
 
+    /// <summary>Hình chữ nhật danh sách đang mở (client px), null khi đóng.</summary>
+    public PxRect? PopupBounds => _openCombo is null ? null : PopupRect(_openCombo);
+
     private PxRect PopupRect(D2DComboWidget combo)
     {
         var box = combo.BoxBounds.Offset(0, _viewport.Y - OffsetPx);
@@ -716,7 +734,7 @@ internal sealed class D2DSettingsView
         }
     }
 
-    // ---- cuá»™n -----------------------------------------------------------------------------------------------------------
+    // ---- cuộn -----------------------------------------------------------------------------------------------------------
 
     public void ScrollTo(int offsetPx)
     {
@@ -835,7 +853,7 @@ internal sealed class D2DSettingsView
         NeedsRedraw = true;
     }
 
-    // ---- chuá»™t ----------------------------------------------------------------------------------------------------------
+    // ---- chuột ----------------------------------------------------------------------------------------------------------
 
     public D2DCursorKind CursorAt(int x, int y)
     {
@@ -1050,7 +1068,7 @@ internal sealed class D2DSettingsView
         }
     }
 
-    /// <summary>CÃ³ chuá»™t Ä‘ang kÃ©o (cá»­a sá»• giá»¯ capture).</summary>
+    /// <summary>Có chuột đang kéo (cửa sổ giữ capture).</summary>
     public bool IsDragging => _draggingThumb || _draggingSlider || _draggingSelection;
 
     private void SetSliderFromX(D2DSliderWidget s, int x)
@@ -1112,9 +1130,9 @@ internal sealed class D2DSettingsView
         Changed?.Invoke(combo);
     }
 
-    // ---- bÃ n phÃ­m -------------------------------------------------------------------------------------------------------
+    // ---- bàn phím -------------------------------------------------------------------------------------------------------
 
-    /// <summary>WM_KEYDOWN. Tráº£ true khi Ä‘Ã£ xá»­ lÃ½.</summary>
+    /// <summary>WM_KEYDOWN. Trả true khi đã xử lý.</summary>
     public bool KeyDown(int vk, bool ctrl, bool shift, bool alt)
     {
         if (_openCombo is { } open)
@@ -1215,7 +1233,7 @@ internal sealed class D2DSettingsView
                 break;
         }
 
-        // PhÃ­m Ä‘iá»u hÆ°á»›ng chung: mÅ©i tÃªn di chuyá»ƒn focus (Ã´ tick/nÃºt), PageUp/PageDown/Home/End cuá»™n khung.
+        // Phím điều hướng chung: mũi tên di chuyển focus (ô tick/nút), PageUp/PageDown/Home/End cuộn khung.
         switch (vk)
         {
             case VkDown or VkRight when _focused is D2DCheckWidget or D2DButtonWidget or null:
@@ -1298,7 +1316,7 @@ internal sealed class D2DSettingsView
         return true;
     }
 
-    /// <summary>WM_CHAR (kÃ½ tá»± Ä‘Ã£ dá»‹ch, gá»“m káº¿t quáº£ cá»§a IME/Telex).</summary>
+    /// <summary>WM_CHAR (ký tự đã dịch, gồm kết quả của IME/Telex).</summary>
     public bool Char(char c)
     {
         if (_focused is D2DFieldWidget { Enabled: true } field && Mode == D2DEditMode.SelfDrawn)
@@ -1310,13 +1328,13 @@ internal sealed class D2DSettingsView
                 return true;
             }
 
-            return !char.IsControl(c); // kÃ½ tá»± bá»‹ tá»« chá»‘i: váº«n "Ä‘Ã£ xá»­ lÃ½" (khÃ´ng bÃ­p lan ra ngoÃ i)
+            return !char.IsControl(c); // ký tự bị từ chối: vẫn "đã xử lý" (không bíp lan ra ngoài)
         }
 
         return false;
     }
 
-    // ---- giÃ¡ trá»‹ tá»« ngoÃ i (cháº¿ Ä‘á»™ lai: control Win32 bÃ¡o) ---------------------------------------------------------------
+    // ---- giá trị từ ngoài (chế độ lai: control Win32 báo) ---------------------------------------------------------------
 
     public void NotifyChanged(D2DWidget widget)
     {
@@ -1324,7 +1342,7 @@ internal sealed class D2DSettingsView
         Changed?.Invoke(widget);
     }
 
-    /// <summary>Control tháº­t cho cÃ¡c Ã´: hÃ¬nh chá»¯ nháº­t client (chÆ°a cáº¯t) cá»§a Ã´ nháº­p/combobox, Ä‘á»ƒ cá»­a sá»• Ä‘áº·t vá»‹ trÃ­.</summary>
+    /// <summary>Control thật cho các ô: hình chữ nhật client (chưa cắt) của ô nhập/combobox, để cửa sổ đặt vị trí.</summary>
     public IEnumerable<(D2DWidget Widget, PxRect Client)> HostedAreas()
     {
         if (Mode != D2DEditMode.HostedWin32)
@@ -1347,9 +1365,9 @@ internal sealed class D2DSettingsView
         }
     }
 
-    // ---- trá»£ nÄƒng -------------------------------------------------------------------------------------------------------
+    // ---- trợ năng -------------------------------------------------------------------------------------------------------
 
-    /// <summary>CÃ¢y trá»£ nÄƒng tá»‘i thiá»ƒu (tÃªn, vai trÃ², tráº¡ng thÃ¡i, hÃ¬nh chá»¯ nháº­t client) - nguá»“n cá»§a UIA/MSAA.</summary>
+    /// <summary>Cây trợ năng tối thiểu (tên, vai trò, trạng thái, hình chữ nhật client) - nguồn của UIA/MSAA.</summary>
     public IReadOnlyList<D2DAccessibleNode> AccessibleNodes()
     {
         var list = new List<D2DAccessibleNode>();

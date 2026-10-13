@@ -90,7 +90,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
         _clientHeight = client.Bottom - client.Top;
         _surface = D2DRenderSurface.CreateWindowSurface(_hwnd, new RenderSurfaceOptions(PreferWarp: options.PreferWarp, MaxFrameLatency: 1));
         _surface.ImmediatePresent = true;
-        _surface.Resize(Math.Max(1, _clientWidth), Math.Max(1, _clientHeight), _dpi / 96.0);
+        _surface.Resize(Math.Max(1, _clientWidth), Math.Max(1, _clientHeight), 1.0);
         RecreateFont();
         View.Layout(_clientWidth, _clientHeight, _dpi / 96.0);
         if (options.EditMode == D2DEditMode.HostedWin32)
@@ -229,7 +229,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
         User32.GetClientRect(_hwnd, &client);
         _clientWidth = Math.Max(1, client.Right - client.Left);
         _clientHeight = Math.Max(1, client.Bottom - client.Top);
-        _surface?.Resize(_clientWidth, _clientHeight, Scale);
+        _surface?.Resize(_clientWidth, _clientHeight, 1.0);
     }
 
     // ---- chế độ lai: control Win32 thật ---------------------------------------------------------------------------------
@@ -260,7 +260,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
             nint hwnd;
             if (widget is D2DFieldWidget field)
             {
-                var style = child | DialogConstants.WsTabStop | DialogConstants.EsAutoHScroll | (field.Box.NumericOnly ? ControlConstants.EsNumber : 0);
+                var style = child | DialogConstants.WsTabStop | DialogConstants.EsAutoHScroll | (field.Box.NumericOnly && !field.Box.AllowDecimal ? ControlConstants.EsNumber : 0);
                 hwnd = User32.CreateWindowEx(DialogConstants.WsExClientEdge, "EDIT", string.Empty, style, 0, 0, 10, 10, _hwnd, 0, Kernel32.GetModuleHandle(0), 0);
                 User32.SendMessage(hwnd, DialogConstants.EmSetLimitText, field.Box.MaxLength, 0);
             }
@@ -424,7 +424,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
                     {
                         _clientWidth = w;
                         _clientHeight = h;
-                        _surface.Resize(w, h, Scale);
+                        _surface.Resize(w, h, 1.0);
                         View.Layout(w, h, Scale);
                         SyncHosted();
                         InvalidateView();
@@ -511,6 +511,10 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
                 return 0;
             case WindowMessages.WmMouseWheel:
                 View.Wheel(HighWord(wParam) / 120);
+                AfterInput();
+                return 0;
+            case 0x0115 /* WM_VSCROLL */:
+                HandleVScroll((int)(wParam & 0xFFFF), (int)((wParam >> 16) & 0xFFFF));
                 AfterInput();
                 return 0;
             case WindowMessages.WmKeyDown or WindowMessages.WmSysKeyDown:
@@ -607,6 +611,36 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
         if (_hosted.Count > 0)
         {
             SyncHosted();
+        }
+    }
+
+    /// <summary>WM_VSCROLL tới cửa sổ (trợ năng, bàn di chuột, test): cùng mã SB_* với thanh cuộn Win32.</summary>
+    private void HandleVScroll(int code, int position)
+    {
+        var line = View.LineStepPx;
+        switch (code)
+        {
+            case 0:
+                View.ScrollTo(View.OffsetPx - line);
+                break;
+            case 1:
+                View.ScrollTo(View.OffsetPx + line);
+                break;
+            case 2:
+                View.ScrollTo(View.OffsetPx - Math.Max(line, View.Viewport.Height - line));
+                break;
+            case 3:
+                View.ScrollTo(View.OffsetPx + Math.Max(line, View.Viewport.Height - line));
+                break;
+            case 4 or 5:
+                View.ScrollTo(position);
+                break;
+            case 6:
+                View.ScrollTo(0);
+                break;
+            case 7:
+                View.ScrollTo(View.MaxOffsetPx);
+                break;
         }
     }
 

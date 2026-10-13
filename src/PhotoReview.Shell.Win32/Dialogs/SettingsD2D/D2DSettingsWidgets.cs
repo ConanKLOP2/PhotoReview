@@ -98,9 +98,10 @@ internal sealed class D2DNoteWidget(string id, Func<string> text, bool aligned =
 }
 
 /// <summary>Nhãn + ô nhập một dòng (+ đơn vị, ví dụ "ms").</summary>
-internal sealed class D2DFieldWidget(string id, Func<string> label, int widthDip, string? unit, bool numericOnly = true) : D2DWidget(id, label)
+internal sealed class D2DFieldWidget(string id, Func<string> label, int widthDip, string? unit, bool numericOnly = true, bool allowDecimal = false)
+    : D2DWidget(id, label)
 {
-    public D2DTextBox Box { get; } = new(numericOnly);
+    public D2DTextBox Box { get; } = new(numericOnly, 9, allowDecimal);
 
     public int WidthDip { get; } = widthDip;
 

@@ -28,7 +28,7 @@ internal sealed class D2DDisplayPage
     private readonly D2DCheckWidget _showInfoOverlay = new("ShowInfoOverlay", () => Tr.SettingsShowInfoOverlayLabel);
     private readonly D2DCheckWidget _showFileInfo = new("ShowFileInfo", () => Tr.SettingsShowFileInfoLabel, 12 * 3 / 2);
     private readonly D2DCheckWidget _showFolderInfo = new("ShowFolderInfo", () => Tr.SettingsShowFolderInfoLabel, 12 * 3 / 2);
-    private readonly D2DFieldWidget _fontSize = new("InfoOverlayFontSize", () => Tr.SettingsInfoOverlayFontSizeLabel, 60, null);
+    private readonly D2DFieldWidget _fontSize = new("InfoOverlayFontSize", () => Tr.SettingsInfoOverlayFontSizeLabel, 60, null, allowDecimal: true);
     private readonly D2DCheckWidget _showZoomIndicator = new("ShowZoomIndicator", () => Tr.SettingsShowZoomIndicatorLabel);
     private readonly D2DCheckWidget _toolbarAutoHide = new("ToolbarAutoHide", () => Tr.SettingsToolbarAutoHideLabel);
     private readonly D2DFieldWidget _toolbarDelay = new("ToolbarAutoHideDelay", () => Tr.SettingsToolbarAutoHideDelayLabel, 68, null);

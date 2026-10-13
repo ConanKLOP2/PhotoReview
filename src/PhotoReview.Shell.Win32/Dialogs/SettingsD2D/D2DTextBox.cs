@@ -22,13 +22,17 @@ internal sealed class D2DTextBox
     private readonly List<(string Text, int Caret)> _redo = [];
     private string _text = string.Empty;
 
-    public D2DTextBox(bool numericOnly, int maxLength = 9)
+    public D2DTextBox(bool numericOnly, int maxLength = 9, bool allowDecimal = false)
     {
         NumericOnly = numericOnly;
         MaxLength = maxLength;
+        AllowDecimal = allowDecimal;
     }
 
     public bool NumericOnly { get; }
+
+    /// <summary>Cho phép một dấu thập phân (cỡ chữ 12,5): Win32 <c>ES_NUMBER</c> không có kiểu này nên c1 phải tự lọc.</summary>
+    public bool AllowDecimal { get; }
 
     public int MaxLength { get; }
 
@@ -75,7 +79,7 @@ internal sealed class D2DTextBox
             return false;
         }
 
-        if (NumericOnly && !char.IsAsciiDigit(c))
+        if (NumericOnly && !IsAllowed(c, _text.Remove(SelectionStart, SelectionEnd - SelectionStart)))
         {
             RejectedCount++;
             return false;
@@ -99,7 +103,7 @@ internal sealed class D2DTextBox
                 continue;
             }
 
-            if (NumericOnly && !char.IsAsciiDigit(c))
+            if (NumericOnly && !IsAllowed(c, _text.Remove(SelectionStart, SelectionEnd - SelectionStart) + cleaned))
             {
                 RejectedCount++;
                 return false; // như ES_NUMBER: cả đoạn dán bị từ chối
@@ -249,6 +253,9 @@ internal sealed class D2DTextBox
 
         return _text.Length;
     }
+
+    private bool IsAllowed(char c, string existing)
+        => char.IsAsciiDigit(c) || (AllowDecimal && c is '.' or ',' && existing.IndexOfAny(['.', ',']) < 0);
 
     private bool Replace(string with)
     {
