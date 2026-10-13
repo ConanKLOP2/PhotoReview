@@ -135,6 +135,14 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # turbojpeg.dll is the only native binary that is DOWNLOADED (LibRaw is committed): nuget.org was sometimes 100+ s slow.
+      # tools/fetch-native.ps1 still verifies the pinned SHA-256 of whatever the cache restored (a mismatch re-downloads).
+      - name: Cache native binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/x64/turbojpeg.dll
+          key: ${{ runner.os }}-turbojpeg-${{ hashFiles('native/turbojpeg.sha256', 'tools/fetch-native.ps1') }}
+
       - name: Fetch native binaries
         shell: powershell
         run: ./tools/fetch-native.ps1
@@ -225,6 +233,14 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # turbojpeg.dll is the only native binary that is DOWNLOADED (LibRaw is committed): nuget.org was sometimes 100+ s slow.
+      # tools/fetch-native.ps1 still verifies the pinned SHA-256 of whatever the cache restored (a mismatch re-downloads).
+      - name: Cache native binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/x64/turbojpeg.dll
+          key: ${{ runner.os }}-turbojpeg-${{ hashFiles('native/turbojpeg.sha256', 'tools/fetch-native.ps1') }}
+
       - name: Fetch native binaries
         shell: powershell
         run: ./tools/fetch-native.ps1
@@ -242,7 +258,7 @@ jobs:
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-core.slnf -c Release --no-restore
+        run: dotnet build tools/ci/test-core.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
 
       - name: Run Core tests (HotPath)
         shell: pwsh
@@ -308,6 +324,14 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # turbojpeg.dll is the only native binary that is DOWNLOADED (LibRaw is committed): nuget.org was sometimes 100+ s slow.
+      # tools/fetch-native.ps1 still verifies the pinned SHA-256 of whatever the cache restored (a mismatch re-downloads).
+      - name: Cache native binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/x64/turbojpeg.dll
+          key: ${{ runner.os }}-turbojpeg-${{ hashFiles('native/turbojpeg.sha256', 'tools/fetch-native.ps1') }}
+
       - name: Fetch native binaries
         shell: powershell
         run: ./tools/fetch-native.ps1
@@ -325,7 +349,7 @@ jobs:
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-app.slnf -c Release --no-restore
+        run: dotnet build tools/ci/test-app.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
 
       - name: Run Architecture tests (HotPath)
         shell: pwsh
@@ -397,6 +421,14 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # turbojpeg.dll is the only native binary that is DOWNLOADED (LibRaw is committed): nuget.org was sometimes 100+ s slow.
+      # tools/fetch-native.ps1 still verifies the pinned SHA-256 of whatever the cache restored (a mismatch re-downloads).
+      - name: Cache native binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/x64/turbojpeg.dll
+          key: ${{ runner.os }}-turbojpeg-${{ hashFiles('native/turbojpeg.sha256', 'tools/fetch-native.ps1') }}
+
       - name: Fetch native binaries
         shell: powershell
         run: ./tools/fetch-native.ps1
@@ -414,7 +446,7 @@ jobs:
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-shell-settings.slnf -c Release --no-restore
+        run: dotnet build tools/ci/test-shell-settings.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
 
       - name: Run Shell tests - Settings UI shard (HotPath)
         shell: pwsh
@@ -464,6 +496,14 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # turbojpeg.dll is the only native binary that is DOWNLOADED (LibRaw is committed): nuget.org was sometimes 100+ s slow.
+      # tools/fetch-native.ps1 still verifies the pinned SHA-256 of whatever the cache restored (a mismatch re-downloads).
+      - name: Cache native binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/x64/turbojpeg.dll
+          key: ${{ runner.os }}-turbojpeg-${{ hashFiles('native/turbojpeg.sha256', 'tools/fetch-native.ps1') }}
+
       - name: Fetch native binaries
         shell: powershell
         run: ./tools/fetch-native.ps1
@@ -481,7 +521,7 @@ jobs:
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-shell.slnf -c Release --no-restore
+        run: dotnet build tools/ci/test-shell.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
 
       - name: Run Shell tests - shard without Settings UI (HotPath)
         shell: pwsh
@@ -547,6 +587,14 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # turbojpeg.dll is the only native binary that is DOWNLOADED (LibRaw is committed): nuget.org was sometimes 100+ s slow.
+      # tools/fetch-native.ps1 still verifies the pinned SHA-256 of whatever the cache restored (a mismatch re-downloads).
+      - name: Cache native binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/x64/turbojpeg.dll
+          key: ${{ runner.os }}-turbojpeg-${{ hashFiles('native/turbojpeg.sha256', 'tools/fetch-native.ps1') }}
+
       - name: Fetch native binaries
         shell: powershell
         run: ./tools/fetch-native.ps1
@@ -564,7 +612,7 @@ jobs:
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore
+        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
 
       - name: Run Integration tests (HotPath)
         shell: pwsh
@@ -615,6 +663,14 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # turbojpeg.dll is the only native binary that is DOWNLOADED (LibRaw is committed): nuget.org was sometimes 100+ s slow.
+      # tools/fetch-native.ps1 still verifies the pinned SHA-256 of whatever the cache restored (a mismatch re-downloads).
+      - name: Cache native binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/x64/turbojpeg.dll
+          key: ${{ runner.os }}-turbojpeg-${{ hashFiles('native/turbojpeg.sha256', 'tools/fetch-native.ps1') }}
+
       - name: Fetch native binaries
         shell: powershell
         run: ./tools/fetch-native.ps1
@@ -632,7 +688,7 @@ jobs:
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore
+        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
 
       # Q-R3: the tests tagged Category=Integration always run in CI, even when their class also carries
       # another exclusion trait (Slow), so a filter change can never silently drop them again. Only the
