@@ -103,6 +103,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    env:
+      # The workspace is on D: (faster than the C: profile drive): packages are restored/extracted there too.
+      NUGET_PACKAGES: D:\nuget-packages
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -131,7 +134,7 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.nuget/packages
+          path: D:\nuget-packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
@@ -154,9 +157,8 @@ jobs:
       - name: Restore
         run: dotnet restore PhotoReview.slnx
 
-      # Only the two executables and their dependency closure (tools/ci/publish.slnf): that is exactly what is published. The rest of
-      # the solution (test projects, WpfBridge, Benchmark.Cli) is compiled with the same Release / warnings-as-errors settings by the
-      # test-* jobs, and the Architecture test CI-PARALLEL fails if a solution project is reachable from no CI build.
+      # Only the two executables and their dependency closure (tools/ci/publish.slnf): that is exactly what is published (analyzers
+      # on, warnings are errors). The rest of the solution is compiled by compile-gate.
       - name: Build Release
         shell: powershell
         run: dotnet build tools/ci/publish.slnf -c Release --no-restore
@@ -189,18 +191,16 @@ jobs:
           name: release-publish
           path: src/PhotoReview.App/bin/Release/net10.0-windows/publish
 
-  # CI runs the HotPath tests plus the Category=Integration tests (fast, mocked deps, no real Recycle Bin); Native/Slow/Manual
-  # run locally only (verify-all.ps1 -Native/-Slow). TEST_FILTER (workflow env) is verified to match tools/verify-all.ps1
-  # and AGENTS.md > Tests. Tests used to run one after another in one job (~500 s). windows-latest has only 2 vCPUs, so
-  # splitting into processes on one runner did not help (measured, reverted); splitting across RUNNERS does: six jobs
-  # (CI-OPTIMIZE-ROUND2), balanced by measured wall time, each building only its own test projects through one solution
-  # filter. Every test project is owned by exactly one job (Shell.Tests by two complementary namespace shards).
-
-  # Core + Imaging (about 80 s of tests). Light build: no WPF application, no shell (net10.0 / Imaging.Wpf only).
-  test-core:
+  # The compile gate: the WHOLE solution (src, tests, tools) in Release with every analyzer on and warnings as errors, exactly
+  # what build-publish compiled before CI-OPTIMIZE-ROUND2. The test-* jobs skip the analyzers (RunAnalyzers=false) to save about half
+  # of their build time; this job is why that costs no diagnostic. Runs beside them, so it is not on the critical path.
+  compile-gate:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    env:
+      # The workspace is on D: (faster than the C: profile drive): packages are restored/extracted there too.
+      NUGET_PACKAGES: D:\nuget-packages
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -229,7 +229,77 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.nuget/packages
+          path: D:\nuget-packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # turbojpeg.dll is the only native binary that is DOWNLOADED (LibRaw is committed): nuget.org was sometimes 100+ s slow.
+      # tools/fetch-native.ps1 still verifies the pinned SHA-256 of whatever the cache restored (a mismatch re-downloads).
+      - name: Cache native binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: native/x64/turbojpeg.dll
+          key: ${{ runner.os }}-turbojpeg-${{ hashFiles('native/turbojpeg.sha256', 'tools/fetch-native.ps1') }}
+
+      - name: Fetch native binaries
+        shell: powershell
+        run: ./tools/fetch-native.ps1
+
+      - name: Fetch LibRaw native binary
+        shell: powershell
+        run: ./tools/fetch-libraw.ps1
+
+      - name: Restore
+        run: dotnet restore PhotoReview.slnx
+
+      - name: Build solution (Release, analyzers on, warnings are errors)
+        shell: powershell
+        run: dotnet build PhotoReview.slnx -c Release --no-restore
+
+  # CI runs the HotPath tests plus the Category=Integration tests (fast, mocked deps, no real Recycle Bin); Native/Slow/Manual
+  # run locally only (verify-all.ps1 -Native/-Slow). TEST_FILTER (workflow env) is verified to match tools/verify-all.ps1
+  # and AGENTS.md > Tests. Tests used to run one after another in one job (~500 s). windows-latest has only 2 vCPUs, so
+  # splitting into processes on one runner did not help (measured, reverted); splitting across RUNNERS does: six test jobs
+  # (CI-OPTIMIZE-ROUND2), balanced by measured wall time, each building only its own test projects through one solution
+  # filter. Every test project is owned by exactly one job (Shell.Tests by two complementary namespace shards).
+
+  # Core + Imaging (about 80 s of tests). Light build: no WPF application, no shell (net10.0 / Imaging.Wpf only).
+  test-core:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    env:
+      # The workspace is on D: (faster than the C: profile drive): packages are restored/extracted there too.
+      NUGET_PACKAGES: D:\nuget-packages
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history + tags: Directory.Build.targets derives the version from
+          # `git rev-list --count --first-parent v2.0.0..HEAD`.
+          fetch-depth: 0
+
+      # setup-dotnet checks this directory before downloading; if the exact SDK
+      # version from global.json is already here, it skips the download entirely.
+      # Keyed on global.json's hash so a version bump auto-invalidates the cache
+      # instead of silently reusing a stale SDK.
+      - name: Cache .NET SDK
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\hostedtoolcache\windows\dotnet
+          key: ${{ runner.os }}-dotnet-sdk-${{ hashFiles('global.json') }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        # No dotnet-version input: reads the pinned SDK version from global.json
+        # directly, so the workflow can't drift from what the repo actually pins.
+
+      # Every job restores the WHOLE solution (not only its own projects) so all jobs produce the same package set and
+      # whichever job saves the cache entry first saves a complete one.
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: D:\nuget-packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
@@ -254,11 +324,14 @@ jobs:
 
       # Builds only the test projects of this job (and what they reference), not the whole solution, with ONE `dotnet build` of a
       # solution filter (tools/ci/<job>.slnf): shared dependencies compile once and independent projects build in parallel.
+      # -p:RunAnalyzers=false: the diagnostic analyzers (CA*, VSTHRD*, code style) were measured at about half of this build; they do not
+      # change the compiled code (source generators still run), and the `compile-gate` job compiles the WHOLE solution with every
+      # analyzer on and warnings as errors, so no diagnostic is lost. Do not add RunAnalyzers=false anywhere else.
       # shell: powershell (not pwsh) on purpose: LibRaw's build step runs `powershell fetch-libraw.ps1`, which fails to find
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-core.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
+        run: dotnet build tools/ci/test-core.slnf -c Release --no-restore -p:RunAnalyzers=false
 
       - name: Run Core tests (HotPath)
         shell: pwsh
@@ -292,6 +365,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    env:
+      # The workspace is on D: (faster than the C: profile drive): packages are restored/extracted there too.
+      NUGET_PACKAGES: D:\nuget-packages
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -320,7 +396,7 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.nuget/packages
+          path: D:\nuget-packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
@@ -345,11 +421,14 @@ jobs:
 
       # Builds only the test projects of this job (and what they reference), not the whole solution, with ONE `dotnet build` of a
       # solution filter (tools/ci/<job>.slnf): shared dependencies compile once and independent projects build in parallel.
+      # -p:RunAnalyzers=false: the diagnostic analyzers (CA*, VSTHRD*, code style) were measured at about half of this build; they do not
+      # change the compiled code (source generators still run), and the `compile-gate` job compiles the WHOLE solution with every
+      # analyzer on and warnings as errors, so no diagnostic is lost. Do not add RunAnalyzers=false anywhere else.
       # shell: powershell (not pwsh) on purpose: LibRaw's build step runs `powershell fetch-libraw.ps1`, which fails to find
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-app.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
+        run: dotnet build tools/ci/test-app.slnf -c Release --no-restore -p:RunAnalyzers=false
 
       - name: Run Architecture tests (HotPath)
         shell: pwsh
@@ -389,6 +468,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    env:
+      # The workspace is on D: (faster than the C: profile drive): packages are restored/extracted there too.
+      NUGET_PACKAGES: D:\nuget-packages
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -417,7 +499,7 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.nuget/packages
+          path: D:\nuget-packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
@@ -442,11 +524,14 @@ jobs:
 
       # Builds only the test projects of this job (and what they reference), not the whole solution, with ONE `dotnet build` of a
       # solution filter (tools/ci/<job>.slnf): shared dependencies compile once and independent projects build in parallel.
+      # -p:RunAnalyzers=false: the diagnostic analyzers (CA*, VSTHRD*, code style) were measured at about half of this build; they do not
+      # change the compiled code (source generators still run), and the `compile-gate` job compiles the WHOLE solution with every
+      # analyzer on and warnings as errors, so no diagnostic is lost. Do not add RunAnalyzers=false anywhere else.
       # shell: powershell (not pwsh) on purpose: LibRaw's build step runs `powershell fetch-libraw.ps1`, which fails to find
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-shell-settings.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
+        run: dotnet build tools/ci/test-shell-settings.slnf -c Release --no-restore -p:RunAnalyzers=false
 
       - name: Run Shell tests - Settings UI shard (HotPath)
         shell: pwsh
@@ -464,6 +549,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    env:
+      # The workspace is on D: (faster than the C: profile drive): packages are restored/extracted there too.
+      NUGET_PACKAGES: D:\nuget-packages
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -492,7 +580,7 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.nuget/packages
+          path: D:\nuget-packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
@@ -517,11 +605,14 @@ jobs:
 
       # Builds only the test projects of this job (and what they reference), not the whole solution, with ONE `dotnet build` of a
       # solution filter (tools/ci/<job>.slnf): shared dependencies compile once and independent projects build in parallel.
+      # -p:RunAnalyzers=false: the diagnostic analyzers (CA*, VSTHRD*, code style) were measured at about half of this build; they do not
+      # change the compiled code (source generators still run), and the `compile-gate` job compiles the WHOLE solution with every
+      # analyzer on and warnings as errors, so no diagnostic is lost. Do not add RunAnalyzers=false anywhere else.
       # shell: powershell (not pwsh) on purpose: LibRaw's build step runs `powershell fetch-libraw.ps1`, which fails to find
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-shell.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
+        run: dotnet build tools/ci/test-shell.slnf -c Release --no-restore -p:RunAnalyzers=false
 
       - name: Run Shell tests - shard without Settings UI (HotPath)
         shell: pwsh
@@ -555,6 +646,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    env:
+      # The workspace is on D: (faster than the C: profile drive): packages are restored/extracted there too.
+      NUGET_PACKAGES: D:\nuget-packages
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -583,7 +677,7 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.nuget/packages
+          path: D:\nuget-packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
@@ -608,11 +702,14 @@ jobs:
 
       # Builds only the test projects of this job (and what they reference), not the whole solution, with ONE `dotnet build` of a
       # solution filter (tools/ci/<job>.slnf): shared dependencies compile once and independent projects build in parallel.
+      # -p:RunAnalyzers=false: the diagnostic analyzers (CA*, VSTHRD*, code style) were measured at about half of this build; they do not
+      # change the compiled code (source generators still run), and the `compile-gate` job compiles the WHOLE solution with every
+      # analyzer on and warnings as errors, so no diagnostic is lost. Do not add RunAnalyzers=false anywhere else.
       # shell: powershell (not pwsh) on purpose: LibRaw's build step runs `powershell fetch-libraw.ps1`, which fails to find
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
+        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore -p:RunAnalyzers=false
 
       - name: Run Integration tests (HotPath)
         shell: pwsh
@@ -631,6 +728,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    env:
+      # The workspace is on D: (faster than the C: profile drive): packages are restored/extracted there too.
+      NUGET_PACKAGES: D:\nuget-packages
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -659,7 +759,7 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.nuget/packages
+          path: D:\nuget-packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
           restore-keys: ${{ runner.os }}-nuget-
 
@@ -684,11 +784,14 @@ jobs:
 
       # Builds only the test projects of this job (and what they reference), not the whole solution, with ONE `dotnet build` of a
       # solution filter (tools/ci/<job>.slnf): shared dependencies compile once and independent projects build in parallel.
+      # -p:RunAnalyzers=false: the diagnostic analyzers (CA*, VSTHRD*, code style) were measured at about half of this build; they do not
+      # change the compiled code (source generators still run), and the `compile-gate` job compiles the WHOLE solution with every
+      # analyzer on and warnings as errors, so no diagnostic is lost. Do not add RunAnalyzers=false anywhere else.
       # shell: powershell (not pwsh) on purpose: LibRaw's build step runs `powershell fetch-libraw.ps1`, which fails to find
       # Get-FileHash when the parent is PowerShell 7 (inherited PSModulePath).
       - name: Build test projects (Release)
         shell: powershell
-        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore -p:EnforceCodeStyleInBuild=false
+        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore -p:RunAnalyzers=false
 
       # Q-R3: the tests tagged Category=Integration always run in CI, even when their class also carries
       # another exclusion trait (Slow), so a filter change can never silently drop them again. Only the
@@ -714,7 +817,7 @@ jobs:
   # `if: always()` so it also reports (red) when a needed job failed or was cancelled, instead of being skipped.
   # A docs-only pull request (see `changes`) legitimately skips the jobs; that counts as success.
   build-test-publish:
-    needs: [changes, build-publish, test-core, test-app, test-shell, test-shell-settings, test-integration, test-integration-slow]
+    needs: [changes, build-publish, compile-gate, test-core, test-app, test-shell, test-shell-settings, test-integration, test-integration-slow]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -724,6 +827,7 @@ jobs:
           CODE: ${{ needs.changes.outputs.code }}
           R_CHANGES: ${{ needs.changes.result }}
           R_BUILD_PUBLISH: ${{ needs.build-publish.result }}
+          R_COMPILE_GATE: ${{ needs.compile-gate.result }}
           R_TEST_CORE: ${{ needs.test-core.result }}
           R_TEST_SHELL: ${{ needs.test-shell.result }}
           R_TEST_SHELL_SETTINGS: ${{ needs.test-shell-settings.result }}
@@ -740,6 +844,7 @@ jobs:
           check changes "${R_CHANGES}" success
           if [ "${CODE}" = "true" ]; then expected=success; else expected=skipped; fi
           check build-publish "${R_BUILD_PUBLISH}" "${expected}"
+          check compile-gate "${R_COMPILE_GATE}" "${expected}"
           check test-core "${R_TEST_CORE}" "${expected}"
           check test-shell "${R_TEST_SHELL}" "${expected}"
           check test-shell-settings "${R_TEST_SHELL_SETTINGS}" "${expected}"

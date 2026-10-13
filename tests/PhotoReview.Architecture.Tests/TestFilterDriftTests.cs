@@ -246,42 +246,39 @@ public sealed class TestFilterDriftTests
 
         // The aggregate job keeps the id the required status check and release.yml look up, and waits for every job that builds or tests.
         var aggregate = jobs["build-test-publish"];
-        foreach (var job in jobs.Keys.Where(k => k.StartsWith("test-", StringComparison.Ordinal) || k == "build-publish" || k == "changes"))
+        foreach (var job in jobs.Keys.Where(k => k.StartsWith("test-", StringComparison.Ordinal) || k == "build-publish" || k == "compile-gate" || k == "changes"))
             Assert.Contains(job, aggregate, StringComparison.Ordinal);
         Assert.Contains("if: always()", aggregate, StringComparison.Ordinal);
         Assert.DoesNotContain("publish-aot", aggregate, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "Rule CI-PARALLEL: every project of PhotoReview.slnx is compiled by some CI build (a tools/ci/*.slnf or its ProjectReference closure)")]
-    public void EveryProjectOfTheSolution_IsBuiltBySomeCiBuild()
+    [Fact(DisplayName = "Rule CI-OPTIMIZE-ROUND2: only the test-* jobs skip the analyzers, and compile-gate compiles the whole solution with them on")]
+    public void AnalyzersAreSkippedOnlyWhereCompileGateStillRunsThem()
     {
-        // build-publish compiles only the published executables' closure and each test job only its own test projects, so a new
-        // project referenced by none of them would silently stop being compiled (and analysed) in CI.
-        var slnx = ReadRepoFile("PhotoReview.slnx");
-        var solutionProjects = Regex.Matches(slnx, @"<Project Path=""(?<p>[^""]+)""")
-            .Select(m => m.Groups["p"].Value.Replace('\\', '/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Assert.NotEmpty(solutionProjects);
+        var ci = ReadRepoFile(".github/workflows/ci.yml");
+        var jobs = CiJobs(ci);
 
-        var roots = Directory.GetFiles(Path.Combine(RepoScan.Root, "tools", "ci"), "*.slnf")
-            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"""(?<p>[^""]+\.csproj)""").Select(m => m.Groups["p"].Value.Replace('\\', '/')))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Assert.NotEmpty(roots);
+        // The gate: the whole solution, no analyzer switch, so every CA*/VSTHRD*/IDE diagnostic is still an error in Release.
+        var gate = jobs["compile-gate"];
+        Assert.Contains("dotnet build PhotoReview.slnx -c Release --no-restore", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("-p:RunAnalyzers=false", gate, StringComparison.Ordinal);
 
-        var reached = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var queue = new Queue<string>(roots);
-        while (queue.Count > 0)
+        // The published binaries are built with the analyzers on.
+        var publishCode = string.Join('\n', jobs["build-publish"].Split('\n').Where(l => !l.TrimStart().StartsWith('#')));
+        Assert.DoesNotContain("RunAnalyzers", publishCode, StringComparison.Ordinal);
+
+        // Every other use of the switch is on a test job's own slnf build line, never on a dotnet test, publish or other job.
+        foreach (var (id, text) in jobs)
         {
-            var project = queue.Dequeue();
-            if (!reached.Add(project)) continue;
-            var dir = Path.GetDirectoryName(project)!.Replace('\\', '/');
-            foreach (Match reference in Regex.Matches(ReadRepoFile(project), @"<ProjectReference\s+Include=""(?<p>[^""]+)"""))
+            foreach (var line in text.Split('\n').Where(l => l.Contains("-p:RunAnalyzers=false", StringComparison.Ordinal) && !l.TrimStart().StartsWith('#')))
             {
-                var target = Path.GetFullPath(Path.Combine(RepoScan.Root, dir, reference.Groups["p"].Value.Replace('\\', '/')));
-                queue.Enqueue(Path.GetRelativePath(RepoScan.Root, target).Replace('\\', '/'));
+                Assert.StartsWith("test-", id, StringComparison.Ordinal);
+                Assert.Matches(@"^\s*run: dotnet build tools/ci/test-[a-z-]+\.slnf -c Release --no-restore -p:RunAnalyzers=false\s*$", line);
             }
         }
 
-        var unbuilt = solutionProjects.Where(p => !reached.Contains(p)).ToArray();
-        Assert.True(unbuilt.Length == 0, "Solution projects built by no CI job: " + string.Join(", ", unbuilt));
+        // Nothing in the repo's build props may switch the analyzers off for everyone (that would make the gate meaningless).
+        foreach (var file in new[] { "Directory.Build.props", "Directory.Build.targets" })
+            Assert.DoesNotContain("<RunAnalyzers>false", ReadRepoFile(file), StringComparison.Ordinal);
     }
 }
