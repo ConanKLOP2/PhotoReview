@@ -101,7 +101,11 @@ public sealed partial class MainViewModelNavigationTests
                     }
                 default:
                     log.Add("Reopen");
-                    _lastSessionWriter!.Flush();
+                    // Not Flush(): it only writes what is still pending. A debounced write the writer's timer thread already
+                    // drained (slow runner: the 500 ms debounce fires mid-sequence) is in flight and invisible to it, and the
+                    // reopen below would then read the session file while that write replaces it ("no session": index 0).
+                    await _lastSessionWriter!.FlushAsync();
+                    await _lastSessionWriter.WhenIdleAsync();
                     model.Reopen();
                     await vm.OpenFolderAsync(folder);
                     await vm.ReadabilityProbeTask;

@@ -173,8 +173,14 @@ public sealed class StartupFirstShowIntegrationTests
                 Assert.Empty(presented); // the folder load has not presented anything yet (it resumes on this dispatcher)
                 var previews = window.ViewModel.PreviewService!;
                 var key = previews.GetCurrentCacheKey(Path.GetFullPath(target));
-                Assert.True(previews.HasInflightPreview(key) || previews.TryGetCachedPreview(key, out _),
+                // The prewarm runs on a pool thread (its cache key needs a file stat, never on the UI thread), so it registers
+                // its decode a moment after Show() returns -- on a starved pool, well after. Wait for it with a condition, and
+                // WITHOUT yielding to the dispatcher: the presenter resumes on it, so nothing but the prewarm can make this true
+                // before the folder is presented, and the assertion keeps its meaning ("started by the show, not by the presenter").
+                Assert.True(
+                    SpinWait.SpinUntil(() => previews.HasInflightPreview(key) || previews.TryGetCachedPreview(key, out _), Deadline),
                     "The launch file's decode was not started when the window was shown");
+                Assert.Empty(presented);
 
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, Deadline), "Nothing was presented");
                 Assert.Equal(Path.GetFullPath(target), presented[0], ignoreCase: true);

@@ -302,27 +302,40 @@ public sealed class StaTestHostSmokeTests
         Assert.True(sw.Elapsed >= duration, $"DrainAsync returned after {sw.Elapsed.TotalMilliseconds:F0} ms, before {duration.TotalMilliseconds:F0} ms.");
     }
 
+    /// <summary>
+    /// Bound on a body whose real MessageBox is supposed to be force-closed. It is a hang bound, not a speed budget: the first
+    /// window of a cold process (WPF theme/font load, JIT) on a busy 2-vCPU runner legitimately takes over 10 s, and a
+    /// wall-clock ceiling made this test fail there although the guard worked. A body that really hangs sits in the dialog's
+    /// nested Win32 loop, which neither the host's pump timeout nor xUnit can unwind, so the wait is bounded here instead.
+    /// </summary>
+    private static readonly TimeSpan GuardHangBound = TimeSpan.FromSeconds(90);
+
+    private static async Task<InvalidOperationException> RunExpectingGuardedDialogAsync(Func<Task> body)
+    {
+        using var stop = new CancellationTokenSource();
+        var run = StaTestHost.RunAsync(body, GuardHangBound);
+        var first = await Task.WhenAny(run, Task.Delay(GuardHangBound + TimeSpan.FromSeconds(30), stop.Token));
+        stop.Cancel();
+        Assert.True(ReferenceEquals(first, run), "The real dialog was not force-closed by Win32DialogGuard: the STA body is hanging in it.");
+        return await Assert.ThrowsAsync<InvalidOperationException>(() => run);
+    }
+
     [Fact]
     public async Task RealMessageBox_FailsFastWithItsText_InsteadOfHanging()
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StaTestHost.RunAsync(() =>
+        var ex = await RunExpectingGuardedDialogAsync(() =>
         {
             MessageBox.Show("sta-host-probe-body", "probe", MessageBoxButton.YesNo);
             return Task.CompletedTask;
-        }));
+        });
 
         Assert.Contains("sta-host-probe-body", ex.Message, StringComparison.Ordinal);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"Took {sw.Elapsed.TotalSeconds:F1}s.");
     }
 
     [Fact]
     public async Task RealMessageBox_InsideAModalWindow_FailsFastInsteadOfHanging()
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StaTestHost.RunAsync(() =>
+        var ex = await RunExpectingGuardedDialogAsync(() =>
         {
             var window = new Window { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
             window.Loaded += (_, _) => MessageBox.Show(window, "sta-host-probe-modal", "probe");
@@ -330,10 +343,9 @@ public sealed class StaTestHostSmokeTests
             // dialog's text must still be what gets reported.
             Assert.True(window.ShowDialog());
             return Task.CompletedTask;
-        }));
+        });
 
         Assert.Contains("sta-host-probe-modal", ex.Message, StringComparison.Ordinal);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"Took {sw.Elapsed.TotalSeconds:F1}s.");
     }
 
     [Fact]
