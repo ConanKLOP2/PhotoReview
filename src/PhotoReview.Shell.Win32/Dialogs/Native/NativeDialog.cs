@@ -1,4 +1,4 @@
-using System.Runtime.ExceptionServices;
+﻿using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Hosting;
@@ -922,6 +922,7 @@ internal abstract unsafe class NativeDialog
     {
         _hwnd = hwnd;
         _dpi = DpiFor(_owner != 0 ? _owner : hwnd);
+        ShellIcons.Apply(hwnd, _dpi); // icon app trên tiêu đề/Alt-Tab của hộp thoại phụ
         _windowBrush = Gdi32.CreateSolidBrush(DialogColors.Window);
         _inputBrush = Gdi32.CreateSolidBrush(DialogColors.Input);
         var controls = new List<DialogChromeControl>(Items.Count);
@@ -1360,6 +1361,7 @@ internal abstract unsafe class NativeDialog
         }
 
         _dpi = newDpi;
+        ShellIcons.Apply(_hwnd, newDpi);
         ApplyFonts();
         if (Resizable)
         {

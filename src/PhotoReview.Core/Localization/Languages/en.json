@@ -980,5 +980,6 @@
   "status.secondaryUnavailable.benchmark": "Benchmark window is not available in this build.",
   "diagnostics.copy": "Copy",
   "settings.resetPage": "Reset this page",
-  "settings.pagePending": "This page is not available in the new settings window yet. Its settings keep their current values and are saved unchanged. To edit them, use the standard settings window (leave PHOTOREVIEW_SETTINGS_WIN32 unset)."
+  "settings.pagePending": "This page is not available in the new settings window yet. Its settings keep their current values and are saved unchanged. To edit them, use the standard settings window (leave PHOTOREVIEW_SETTINGS_WIN32 unset).",
+  "status.menuFailed": "Menu error: {message}"
 }

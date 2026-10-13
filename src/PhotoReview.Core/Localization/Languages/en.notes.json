@@ -765,5 +765,6 @@
   "status.secondaryUnavailable.benchmark": "Status line for the Benchmark command in the Native AOT build.",
   "diagnostics.copy": "Button under the diagnostics table: copies every label and value to the clipboard (tab-separated lines).",
   "settings.resetPage": "Settings window button: sets only the page that is showing back to the built-in defaults (not saved until Save/Apply).",
-  "settings.pagePending": "Placeholder text on a Settings page that the new native settings window does not implement yet (temporary, removed when every page exists)."
+  "settings.pagePending": "Placeholder text on a Settings page that the new native settings window does not implement yet (temporary, removed when every page exists).",
+  "status.menuFailed": "Status line shown when building or showing a popup menu (context menu, Tools menu) throws; the same error is appended to shell-errors.log."
 }

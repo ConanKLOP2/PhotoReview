@@ -111,6 +111,21 @@ public sealed class ContextMenuControllerTests(Xunit.Abstractions.ITestOutputHel
         return settings;
     }
 
+    [Fact]
+    public async Task Show_WhenTheHostThrows_ReportsAMenuFailureInsteadOfThrowing_AndCanReopen()
+    {
+        var (controller, actions, host) = Create();
+        host.OnShow = () => throw new InvalidOperationException("boom");
+
+        await controller.ShowAsync(new PointD(1, 1));
+
+        Assert.Equal(["failed:Menu:InvalidOperationException"], actions.Log);
+        Assert.False(controller.IsOpen);
+        host.OnShow = () => null;
+        await controller.ShowAsync(new PointD(1, 1));
+        Assert.Equal(2, host.ShowCount);
+    }
+
     [Theory]
     [InlineData("Undo", "Execute:Undo")]
     [InlineData("MoveToRecycleBin", "Execute:Recycle")]
@@ -390,12 +405,13 @@ public sealed class ContextMenuControllerTests(Xunit.Abstractions.ITestOutputHel
     [Fact]
     public async Task IsOpen_IsClearedWhenTheHostThrows()
     {
-        var (controller, _, host) = Create();
+        var (controller, actions, host) = Create();
         host.OnShow = () => throw new InvalidOperationException("no menu");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Task.Run(() => controller.ShowAsync(default)));
+        await controller.ShowAsync(default); // không còn ném ra WndProc: báo "Menu error"
 
         Assert.False(controller.IsOpen);
+        Assert.Equal(["failed:Menu:InvalidOperationException"], actions.Log);
     }
 
     [Fact]

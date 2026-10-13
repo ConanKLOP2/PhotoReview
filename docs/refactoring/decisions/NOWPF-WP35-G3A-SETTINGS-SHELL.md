@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-G3A
-order: 1130
+order: 1140
 summary: |-
   WP-35 GĐ3a (phương án B của spike S3, CHƯA XÁC NHẬN): KHUNG cửa sổ Settings Win32 gốc + hợp đồng trang `ISettingsPageView` + builder bố cục theo dialog-unit + 3 trang đầu (General, Display, Diagnostics = 20 thuộc tính). Trang tạo điều khiển LƯỜI (chỉ trang đang mở), cuộn dọc, kéo giãn, Save/Apply/Cancel/Defaults/Reset trang/Import/Export, nhớ trang cuối, Ctrl+Tab, đổi ngôn ngữ làm mọi chữ đổi theo; 4 trang còn lại hiện ghi chú và GIỮ nguyên giá trị (Save không làm mất). Cổng Win32 chỉ nhận Settings khi đủ mọi trang hoặc cờ ẩn PHOTOREVIEW_SETTINGS_WIN32=1; mặc định vẫn cầu WPF (hybrid) / cổng tạm (AOT). 0 cảnh báo ILC; không nạp WPF; 29 đột biến, 0 sống thật; mở Settings đo được 68-80 ms (lượt yên nhất) nhưng máy bị chiếm 100 % CPU nên cổng <= 150 ms CHƯA xác nhận lúc yên (xem mục 4b).
 ---

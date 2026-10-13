@@ -11,8 +11,9 @@
     InformationalVersion = Version + "+" + 8-char sha (+ ".dirty" for PhotoReview.App when the tree has
     uncommitted changes). PhotoReview.App also gets AssemblyMetadata "BuildTime" in LOCAL time with the
     UTC offset (e.g. "2026-09-24 07:15:30 +07:00"), so it can be compared with file/log times directly.
-    Build time and the dirty flag are App-only: they change on every build/edit and would otherwise force
-    every project to recompile on every build.
+    Build time and the dirty flag are stamped only on the executable/UI leaf assemblies that show the version
+    (PhotoReview.App, PhotoReview.App.WpfWindows = Settings window, PhotoReview.Shell.Win32 = shell exe): they
+    change on every build/edit and would otherwise force every project to recompile on every build.
 
     CI must check out full history + tags (actions/checkout fetch-depth: 0). Without git the version
     falls back to $(PhotoReviewVersionMajorMinor).0-nogit.
@@ -73,7 +74,7 @@
     </PropertyGroup>
   </Target>
 
-  <Target Name="PhotoReviewAppBuildStamp" AfterTargets="PhotoReviewComputeVersion" BeforeTargets="GetAssemblyAttributes" Condition="'$(MSBuildProjectName)' == 'PhotoReview.App'">
+  <Target Name="PhotoReviewAppBuildStamp" AfterTargets="PhotoReviewComputeVersion" BeforeTargets="GetAssemblyAttributes" Condition="'$(MSBuildProjectName)' == 'PhotoReview.App' Or '$(MSBuildProjectName)' == 'PhotoReview.App.WpfWindows' Or '$(MSBuildProjectName)' == 'PhotoReview.Shell.Win32'">
     <Exec Condition="'$(_PrGitExit)' == '0'" Command="git status --porcelain --untracked-files=no" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true" WorkingDirectory="$(MSBuildThisFileDirectory)">
       <Output TaskParameter="ConsoleOutput" ItemName="_PrDirtyLines" />
     </Exec>

@@ -14,10 +14,43 @@ param(
     [long]$AotMaxExeBytes = 40MB,
     [long]$AotMaxFolderBytes = 40MB,
     # Test hook only: skip the "version carries a git commit" check (a runnable stand-in exe such as whoami.exe has none).
-    [switch]$AotSkipVersionCheck
+    [switch]$AotSkipVersionCheck,
+    # Test hook only: skip the "PhotoReview.exe carries an icon resource" check (fake folders use stand-in exes without one).
+    [switch]$SkipIconCheck
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Shell menus/icon fix: PhotoReview.exe must carry the app icon (RT_GROUP_ICON resource; ApplicationIcon in the Shell.Win32 csproj).
+# Pure Win32 through Add-Type (kernel32 LoadLibraryEx data-file + EnumResourceNames), no external tool. Returns the number of
+# group-icon resources found (0 = the exe has no icon, e.g. the shell window and the taskbar would show the generic one).
+function Get-ExeGroupIconCount {
+    param([string]$Path)
+    if (-not ('PhotoReviewIconProbe' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PhotoReviewIconProbe {
+    delegate bool EnumProc(IntPtr module, IntPtr type, IntPtr name, IntPtr param);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr LoadLibraryEx(string file, IntPtr handle, uint flags);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool EnumResourceNames(IntPtr module, IntPtr type, EnumProc proc, IntPtr param);
+    [DllImport("kernel32.dll")]
+    static extern bool FreeLibrary(IntPtr module);
+    public static int GroupIconCount(string file) {
+        IntPtr module = LoadLibraryEx(file, IntPtr.Zero, 0x2); // LOAD_LIBRARY_AS_DATAFILE
+        if (module == IntPtr.Zero) return -1;
+        int count = 0;
+        EnumResourceNames(module, (IntPtr)14, (m, t, n, p) => { count++; return true; }, IntPtr.Zero); // RT_GROUP_ICON
+        FreeLibrary(module);
+        return count;
+    }
+}
+'@
+    }
+    return [PhotoReviewIconProbe]::GroupIconCount([IO.Path]::GetFullPath($Path))
+}
 
 # WP-36: the AOT folder holds one native PhotoReview.exe and the native/data files, and NO .NET runtime and NO WPF.
 function Test-AotRelease {
@@ -47,6 +80,11 @@ function Test-AotRelease {
         $expectedHash = (Get-Content -LiteralPath (Join-Path $RepoRoot ('native\' + $native[1])) -TotalCount 1).Trim().ToUpperInvariant()
         $actualHash = (Get-FileHash -LiteralPath (Join-Path $aot $native[0]) -Algorithm SHA256).Hash
         if ($actualHash -ne $expectedHash) { Write-Error "AOT $($native[0]) SHA-256 mismatch: expected $expectedHash, found $actualHash"; exit 1 }
+    }
+    # Test stand-ins have no icon (-SkipIconCheck); real publishes must carry one.
+    if (-not $SkipIconCheck -and (Get-ExeGroupIconCount -Path $aotExe.FullName) -lt 1) {
+        Write-Error 'AOT PhotoReview.exe has no icon resource (RT_GROUP_ICON): ApplicationIcon was not applied.'
+        exit 1
     }
     $aotVersion = [string]$aotExe.VersionInfo.ProductVersion
     $aotCommit = ($aotVersion -split '\+', 2)[1]
@@ -203,6 +241,10 @@ $exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')
 if ($exe.Length -le 0) { Write-Error 'Release executable is empty.'; exit 1 }
 $shellExe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.exe')
 if ($shellExe.Length -le 0) { Write-Error 'Shell executable PhotoReview.exe is empty.'; exit 1 }
+if (-not $SkipIconCheck -and (Get-ExeGroupIconCount -Path $shellExe.FullName) -lt 1) {
+    Write-Error 'Shell executable PhotoReview.exe has no icon resource (RT_GROUP_ICON): ApplicationIcon was not applied.'
+    exit 1
+}
 $projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App\PhotoReview.App.csproj'
 # The version is computed from git by Directory.Build.targets (no <Version> in the csproj). Ask MSBuild
 # for the value the current commit produces, so a stale publish folder from another commit still fails.

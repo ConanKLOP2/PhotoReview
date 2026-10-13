@@ -328,7 +328,7 @@ public sealed class ToolScriptEncodingTests : IDisposable
         foreach (var name in ReleaseFiles) _root.File(Path.Combine("release [x]", name), 1, 2, 3);
         var script = Path.Combine(PowerShellRunner.RepoRoot(), "tools", "verify-release.ps1");
 
-        var (code, output) = PowerShellRunner.Run("-File", script, "-ReleaseDirectory", release);
+        var (code, output) = PowerShellRunner.Run("-File", script, "-ReleaseDirectory", release, "-SkipIconCheck");
 
         Assert.NotEqual(0, code);
         Assert.True(output.Contains("turbojpeg.dll SHA-256 mismatch", StringComparison.Ordinal), "verify-release output: " + output);
@@ -566,8 +566,8 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         }
 
         return smoke
-            ? PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release, "-Smoke")
-            : PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release);
+            ? PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release, "-Smoke", "-SkipIconCheck")
+            : PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release, "-SkipIconCheck");
     }
 
     private const string GoodThirdParty = "# Third-Party Software Notices\n## libjpeg-turbo\nBSD-3-Clause / IJG License / zlib License";
@@ -926,7 +926,7 @@ public sealed class AotReleaseScriptTests : IDisposable
     /// it is not runnable, which is what the smoke test relies on).
     /// </summary>
     private (int ExitCode, string Output) Verify(string? skipFile = null, string? extraFile = null, string? exeContent = null,
-        string? turboContent = null, bool smoke = false, string? standInExe = null, params string[] extraArgs)
+        string? turboContent = null, bool smoke = false, string? standInExe = null, bool checkIcon = false, params string[] extraArgs)
     {
         var name = "repo-" + Guid.NewGuid().ToString("N");
         var repo = _root.Dir(name);
@@ -952,12 +952,32 @@ public sealed class AotReleaseScriptTests : IDisposable
 
         var args = new List<string> { "-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-AotOnly", "-AotDirectory", aot };
         if (smoke) args.Add("-Smoke");
+        if (!checkIcon) args.Add("-SkipIconCheck"); // stand-in exes have no icon resource
         args.AddRange(extraArgs);
         return PowerShellRunner.Run([.. args]);
     }
 
     private static string Flat(string output) => System.Text.RegularExpressions.Regex.Replace(output, @"\s+", " ");
 
+    [Fact(DisplayName = "verify-release -AotOnly: an exe without an icon resource (RT_GROUP_ICON) fails")]
+    public void Aot_ExeWithoutIconResource_Fails()
+    {
+        var (code, output) = Verify(checkIcon: true, extraArgs: ["-AotMinExeBytes", "1"]);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("no icon resource", Flat(output), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release -AotOnly: an exe that carries an icon resource passes the icon check (control)")]
+    public void Aot_ExeWithIconResource_Passes()
+    {
+        var explorer = Path.Combine(Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows", "explorer.exe");
+
+        var (code, output) = Verify(checkIcon: true, standInExe: explorer, extraArgs: ["-AotMinExeBytes", "1", "-AotSkipVersionCheck"]);
+
+        Assert.True(code == 0, output);
+        Assert.Contains("PASS: AOT folder ok", output, StringComparison.Ordinal);
+    }
     [Fact(DisplayName = "verify-release -AotOnly (WP-36): a complete AOT folder passes (control for the failing cases)")]
     public void Aot_CompleteFolder_Passes()
     {
