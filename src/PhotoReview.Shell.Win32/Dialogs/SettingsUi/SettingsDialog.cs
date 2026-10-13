@@ -343,8 +343,12 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         {
             // The text provider again (not the text captured at Declare time): the language may have changed since the dialog was built.
             var text = _builders[index].Texts.TryGetValue(item.Id, out var provider) ? provider() : item.Text;
-            var control = User32.CreateWindowEx(item.ExStyle, DialogTemplate.WindowClassName(item.Class), text, item.Style, 0, 0, 0, 0,
-                viewport, item.Id, instance, 0);
+            // WS_CLIPSIBLINGS on every page control (a dialog template adds it itself, CreateWindowEx does not): the controls of a page are
+            // siblings that overlap (a group box frame is a full-rect fill under the controls of its group) and are moved one by one on
+            // scroll. Without it a window's paint DC and the copy-bits blit of SetWindowPos include the siblings above it, so a scroll
+            // step copied and left stale pixels of other controls (ghost text/frames, duplicated lines).
+            var control = User32.CreateWindowEx(item.ExStyle, DialogTemplate.WindowClassName(item.Class), text,
+                item.Style | ScrollConstants.WsClipSiblings, 0, 0, 0, 0, viewport, item.Id, instance, 0);
             if (control == 0)
             {
                 continue;
