@@ -51,3 +51,30 @@ report keeps the agent "running" in the UI, sometimes for hours. The work is don
 - Every test that starts a window/instance disposes it in `finally`; a failure in one must not poison the next.
 - No `Thread.Sleep`/`Task.Delay` (TEST-FLAKY rule), no dependence on screen size (CI desktop is 1024x768; a window is clamped
   to the monitor plus ~20 px invisible frame).
+
+## 5. Auto-fix and auto-merge rules (every PR, agents and lead)
+
+1. **Auto-merge only on green.** Enable `gh pr merge --auto --squash` only after the package's own tests pass locally; the CI of the
+   PR is the final judge. Never merge a PR whose CI is red, never disable or skip a check, never lower a gate to get green
+   (raising a numeric doc/CI ceiling is allowed only when the user has said so, with the reason recorded as a CHƯA XÁC NHẬN row).
+2. **`master` red is priority one.** Before any new work: read `gh run view --log-failed`, decide real bug vs known flaky.
+   Known flaky: re-run the failed job once (`gh run rerun --failed`); a test that fails twice in a week gets a root-cause fix
+   (deterministic seam, condition wait, compare `Thread` objects) instead of more re-runs.
+3. **Merge, never rebase or force-push.** Conflicts with `master` are resolved by merging `origin/master` into the branch with
+   `tools/sync-pr-branch.sh <worktree>`: it auto-resolves `OPEN-DECISIONS.md` (regenerated), the append-only `PERF-STATUS.md`,
+   `NOWPF-UNCONFIRMED-DECISIONS-*.md` and i18n JSON (keep both sides), and renumbers a duplicate decision-fragment `order:` of the
+   fragments the PR added (max + 10). Anything else exits 2 (NEEDS-HUMAN): resolve keeping both intents, rebuild, push.
+   `SYNC_NO_PUSH=1` merges and repairs locally without pushing (for tests).
+4. **After every sync, rebuild and re-run the touched suites** (a clean textual merge can still break compilation or a golden); a
+   conflict-free merge is not a proof.
+5. **Do not touch a branch whose agent is still working** (two syncs race): wait for its hand-back, or `TaskStop` it first.
+   A hand-back that never comes (agent stuck on its own background work) is closed by the lead: open the PR from the pushed
+   branch, enable auto-merge, `TaskStop` the agent.
+6. **Fragments and orders.** A decision fragment needs a unique `order:`; take max + 10 and re-check right before the push
+   (parallel PRs collide). Summaries stay short: `OPEN-DECISIONS.md` is generated and has a size ceiling.
+7. **Flaky-test policy.** A test that depends on thread identity, wall-clock time, CPU time or priority is a defect: use injectable
+   clocks, `TaskCompletionSource`/condition waits, `ReferenceEquals` on `Thread`, a dedicated caller thread. Never raise a
+   timeout to hide it. Never `Thread.Sleep`/`Task.Delay` in tests.
+8. **Data-safety packages** (Recycle, journal, undo, config, file actions): mutation survivors are re-run against the wide set;
+   no real Recycle Bin; behaviour changes need a user decision or a CHƯA XÁC NHẬN row with a rollback.
+9. **Disk.** Remove the worktree and temp folders as soon as the PR merges; `--blame-hang-dump-type none` on every `dotnet test`.
