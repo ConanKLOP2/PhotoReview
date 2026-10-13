@@ -27,5 +27,5 @@ bằng ảnh chụp: nền đúng `Dark.Panel` (#1E1E1E), chữ sáng, hover đ�
 ## 3. Việc còn lại / ghi chú
 
 - Mũi tên submenu: hệ thống vẫn vẽ thêm mũi tên đen của nó sau `WM_DRAWITEM` (không tắt được); đen trên nền tối nên gần như vô hình, mũi tên sáng của app nằm cạnh.
-- `NativeDialogChrome` (hộp thoại phụ) vẫn dùng `DarkModeMenus` (ordinal 135) cho ComboBox/ListView/ô nhập: chưa thấy lỗi tương tự (menu không còn phụ thuộc), nhưng cần người dùng kiểm hộp thoại Settings/Diagnostics trên build 26300; nếu lỗi thì chuyển sang tự vẽ như menu.
+- Hộp thoại phụ (`NativeDialogChrome`) CŨNG đã bỏ ordinal và chủ đề `DarkMode_*`, chuyển sang vẽ tay như menu: xem [NOWPF-DIALOG-CHROME-NO-ORDINAL](NOWPF-DIALOG-CHROME-NO-ORDINAL.md); `DarkModeMenus` đã bị xoá. Vẫn cần người dùng xác nhận trên màn hình thật build 26300.
 - Người dùng gặp lỗi menu mới: gửi `%LOCALAPPDATA%\PhotoReview\shell-errors.log` (không có dữ liệu ảnh; chứa kiểu ngoại lệ, HRESULT, thông điệp cắt 300 ký tự, 12 khung stack).
