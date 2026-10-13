@@ -119,18 +119,19 @@ public sealed unsafe class NativeControlsTests
     }
 
     [Theory]
-    [InlineData("Button", "DarkMode_Explorer")]
-    [InlineData("Edit", "DarkMode_CFD")]
-    [InlineData("ListBox", "DarkMode_Explorer")]
-    [InlineData("ComboBox", "DarkMode_CFD")]
-    [InlineData("ListView", "DarkMode_Explorer")]
-    [InlineData("Trackbar", "DarkMode_Explorer")]
-    [InlineData("Progress", "DarkMode_Explorer")]
-    public void DarkTheme_PerControlClass(string controlClass, string theme)
-        => Assert.Equal(theme, DarkDialogChrome.ThemeFor(Enum.Parse<DialogControlClass>(controlClass)));
+    [InlineData("Button")]
+    [InlineData("Edit")]
+    [InlineData("ListBox")]
+    [InlineData("ScrollBar")]
+    [InlineData("ComboBox")]
+    [InlineData("ListView")]
+    [InlineData("Trackbar")]
+    [InlineData("Progress")]
+    public void EveryThemedControlClass_DropsTheSystemTheme_NotADarkModeTheme(string controlClass)
+        => Assert.Equal(DarkDialogChrome.ClassicTheme, DarkDialogChrome.ThemeFor(Enum.Parse<DialogControlClass>(controlClass)));
 
     [Fact]
-    public void Static_HasNoTheme_AndRadioAndGroupBoxUseTheClassicLook()
+    public void Static_KeepsItsTheme_AndEveryOtherControlIsClassic()
     {
         Assert.Null(DarkDialogChrome.ThemeFor(DialogControlClass.Static));
         var (radio, group, check) = Run((d, _) => (
@@ -140,11 +141,11 @@ public sealed unsafe class NativeControlsTests
 
         Assert.Equal(DarkDialogChrome.ClassicTheme, radio);
         Assert.Equal(DarkDialogChrome.ClassicTheme, group);
-        Assert.Equal(DarkDialogChrome.ButtonTheme, check);
+        Assert.Equal(DarkDialogChrome.ClassicTheme, check);
     }
 
     [Fact]
-    public void RealChrome_ThemesEachControl_IncludingTheComboDropDownAndTheListViewHeader()
+    public void RealChrome_ClearsTheThemeOfEachControlIncludingTheComboDropDownAndTheListViewHeader_AndNeverUsesDarkModeThemes()
     {
         var calls = new List<(nint Hwnd, string Theme, string? Ids)>();
         var chrome = new DarkDialogChrome((hwnd, theme, ids) => calls.Add((hwnd, theme, ids)));
@@ -156,18 +157,15 @@ public sealed unsafe class NativeControlsTests
             Item(d, ControlGalleryDialog.Progress), Item(d, ControlGalleryDialog.Slider), Item(d, ControlGalleryDialog.Count)),
             chrome);
 
-        string? ThemeOf(nint hwnd) => calls.Where(c => c.Hwnd == hwnd).Select(c => c.Theme).LastOrDefault();
-        Assert.Equal("DarkMode_CFD", ThemeOf(combo));
-        Assert.Equal("DarkMode_Explorer", ThemeOf(comboList));
-        Assert.Equal("DarkMode_Explorer", ThemeOf(report));
-        Assert.Equal("DarkMode_ItemsView", ThemeOf(header));
-        Assert.Equal(string.Empty, ThemeOf(radio));
-        Assert.Equal(string.Empty, ThemeOf(group));
-        Assert.Equal("DarkMode_Explorer", ThemeOf(check));
-        Assert.Equal("DarkMode_Explorer", ThemeOf(progress));
-        Assert.Equal("DarkMode_Explorer", ThemeOf(slider));
-        Assert.Equal("DarkMode_CFD", ThemeOf(edit));
-        Assert.Equal(string.Empty, calls.Last(c => c.Hwnd == radio).Ids); // classic = sub-app "" AND ids "" (not the light default)
+        foreach (var hwnd in new[] { combo, comboList, report, header, radio, group, check, progress, slider, edit })
+        {
+            Assert.NotEqual(0, hwnd);
+            var last = calls.Last(c => c.Hwnd == hwnd);
+            Assert.Equal(string.Empty, last.Theme); // classic = sub-app "" AND ids "" (not the light default)
+            Assert.Equal(string.Empty, last.Ids);
+        }
+
+        Assert.DoesNotContain(calls, c => c.Theme.StartsWith("DarkMode_", StringComparison.Ordinal));
     }
 
     // ---- combobox -----------------------------------------------------------------------------------------------------
