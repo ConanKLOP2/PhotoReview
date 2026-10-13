@@ -57,17 +57,21 @@ public sealed class ShellSecondaryWindowFallbackTests
         Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + run.Diagnostics);
         Assert.True(SpinWait.SpinUntil(() => run.Main!.FirstImagePresented, Bound), "ảnh đầu không được vẽ");
 
-        run.OnUi(() => ((IContextMenuActions)run.Main!).ShowSettings());
-
-        var opens = launcher.Opens;
-        Assert.Single(opens);
-        Assert.Equal(run.Paths.ConfigFile, opens[0].Path);
-        Assert.Equal("open", opens[0].Verb);
-        Assert.Equal(Tr.StatusSecondaryUnavailableSettings, run.OnUi(() => run.Main!.ViewModel.StatusText));
+        // WP-35 GĐ3 (đủ 7 trang): Settings là hộp thoại Win32 gốc nên không còn rơi về cổng tạm khi cầu vắng: MỞ THẬT (modal, owner =
+        // HWND shell), không chạm launcher/config.json, rồi đóng bằng WM_CLOSE.
+        var uiThread = run.OnUi(() => GetCurrentThreadId());
+        var settings = run.Main!.Dispatcher.InvokeAsync(() => ((IContextMenuActions)run.Main!).ShowSettings());
+        nint settingsDialog = 0;
+        Assert.True(SpinWait.SpinUntil(() => (settingsDialog = OwnedBy(uiThread, run.Main!.Hwnd)) != 0, Bound),
+            "Settings không mở khi cầu vắng: " + run.Diagnostics);
+        Assert.Equal(Tr.SettingsWindowTitle, run.OnUi(() => WindowText(settingsDialog)));
+        Assert.True(PostMessage(settingsDialog, 0x0010 /* WM_CLOSE */, 0, 0));
+        Assert.True(SpinWait.SpinUntil(() => settings.IsCompleted, Bound), "Settings không đóng");
+        Assert.Empty(launcher.Opens);
+        Assert.NotEqual(Tr.StatusSecondaryUnavailableSettings, run.OnUi(() => run.Main!.ViewModel.StatusText));
 
         // WP-35 GĐ1/GĐ4: Diagnostics và Recovery đã có hộp thoại Win32 gốc nên không còn rơi về cổng tạm (kể cả khi cầu vắng):
         // Recovery MỞ THẬT (modal, owner = HWND shell), không chạm launcher, rồi đóng bằng WM_CLOSE.
-        var uiThread = run.OnUi(() => GetCurrentThreadId());
         var recovery = run.Main!.Dispatcher.InvokeAsync(() => run.Main!.ViewModel.ShowRecovery());
         nint dialog = 0;
         Assert.True(SpinWait.SpinUntil(() => (dialog = OwnedBy(uiThread, run.Main!.Hwnd)) != 0, Bound),
@@ -76,7 +80,7 @@ public sealed class ShellSecondaryWindowFallbackTests
         Assert.NotEqual(Tr.StatusSecondaryUnavailableRecovery, run.OnUi(() => run.Main!.ViewModel.StatusText));
         Assert.True(PostMessage(dialog, 0x0010 /* WM_CLOSE */, 0, 0));
         Assert.True(SpinWait.SpinUntil(() => recovery.IsCompleted, Bound), "Recovery không đóng");
-        Assert.Single(launcher.Opens); // Recovery không chạm launcher
+        Assert.Empty(launcher.Opens); // Recovery không chạm launcher
 
         run.RequestClose();
         Assert.True(run.WaitForExit(Bound), "shell không thoát sau WM_CLOSE: " + run.Diagnostics);
