@@ -41,7 +41,8 @@ internal sealed unsafe class ControlGalleryDialog : NativeDialog
     private int _sortColumn = -1;
     private int _sortDirection;
 
-    public ControlGalleryDialog()
+    public ControlGalleryDialog(INativeDialogChrome? chrome = null)
+        : base(chrome)
     {
         Items = BuildItems();
     }
@@ -89,10 +90,6 @@ internal sealed unsafe class ControlGalleryDialog : NativeDialog
             new(DialogControlClass.Button, Check, "Confirm before running", child | tab | ControlConstants.BsAutoCheckBox),
             new(DialogControlClass.Button, RadioA, "Move", child | tab | DialogConstants.WsGroup | ControlConstants.BsAutoRadioButton),
             new(DialogControlClass.Button, RadioB, "Copy", child | ControlConstants.BsAutoRadioButton),
-            new(DialogControlClass.Button, 120, "classic", child | tab | ControlConstants.BsAutoRadioButton),
-            new(DialogControlClass.Button, 121, "cfd", child | tab | ControlConstants.BsAutoRadioButton),
-            new(DialogControlClass.Button, 122, "explorer", child | tab | ControlConstants.BsAutoRadioButton),
-            new(DialogControlClass.Button, 123, "checkbox classic", child | tab | ControlConstants.BsAutoCheckBox),
             new(DialogControlClass.Button, TipButton, "Hover me", child | tab | DialogConstants.BsPushButton),
             new(DialogControlClass.Button, IdCancel, "Cancel", child | tab | DialogConstants.BsPushButton),
             new(DialogControlClass.Button, IdOk, "OK", child | tab | DialogConstants.BsDefPushButton),
@@ -132,10 +129,6 @@ internal sealed unsafe class ControlGalleryDialog : NativeDialog
         TrackbarControl.Configure(Item(Slider), 0, 100, 10, 1, 10);
         TrackbarControl.SetPosition(Item(Slider), 30);
         SetItemText(SliderValue, "30");
-        PhotoReview.Shell.Interop.Uxtheme.SetWindowTheme(Item(120), string.Empty, string.Empty);
-        PhotoReview.Shell.Interop.Uxtheme.SetWindowTheme(Item(121), "DarkMode_CFD", null);
-        PhotoReview.Shell.Interop.Uxtheme.SetWindowTheme(Item(122), "Explorer", null);
-        PhotoReview.Shell.Interop.Uxtheme.SetWindowTheme(Item(123), string.Empty, string.Empty);
         ButtonStateControl.SetChecked(Item(Check), true);
         ButtonStateControl.SetChecked(Item(RadioA), true);
         SetTooltip(TipButton, "A dark tooltip for a plain button");
@@ -260,10 +253,6 @@ internal sealed unsafe class ControlGalleryDialog : NativeDialog
         Place(Check, rightX + Dx(8), groupTop + Dy(14), rightWidth - Dx(16), line);
         Place(RadioA, rightX + Dx(8), groupTop + Dy(14) + line, Dx(60), line);
         Place(RadioB, rightX + Dx(8) + Dx(64), groupTop + Dy(14) + line, Dx(60), line);
-        Place(120, rightX + Dx(8), groupTop + Dy(14) + (2 * line), Dx(60), line);
-        Place(121, rightX + Dx(8) + Dx(64), groupTop + Dy(14) + (2 * line), Dx(60), line);
-        Place(122, rightX + Dx(8) + Dx(128), groupTop + Dy(14) + (2 * line), Dx(60), line);
-        Place(123, rightX + Dx(8) + Dx(128), groupTop + Dy(14) + line, Dx(80), line);
         Place(TipButton, rightX, groupTop + Dy(66), Dx(70), buttonHeight);
         PlaceButtonRow(clientWidth, m, buttonTop, buttonHeight, IdCancel, IdOk);
     }

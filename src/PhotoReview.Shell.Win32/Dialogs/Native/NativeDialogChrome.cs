@@ -88,6 +88,14 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
         _ => null,
     };
 
+    /// <summary>
+    /// Chủ đề của một điều khiển cụ thể: như <see cref="ThemeFor"/>, trừ radio/group box dùng dáng cổ điển (<see cref="ClassicTheme"/>):
+    /// chủ đề tối vẽ chữ của chúng xám đậm gần như vô hình trên nền tối (thấy ở ảnh chụp GĐ2), còn dáng cổ điển để chữ do
+    /// WM_CTLCOLORSTATIC tô sáng.
+    /// </summary>
+    internal static string? ThemeForControl(nint hwnd, DialogControlClass controlClass)
+        => controlClass == DialogControlClass.Button && IsRadioOrGroupBox(hwnd) ? ClassicTheme : ThemeFor(controlClass);
+
     /// <summary>Phần con có cửa sổ riêng: danh sách thả của combobox, header của listview.</summary>
     private static unsafe void ApplyParts(DarkModeMenus menus, DialogChromeControl control)
     {
@@ -128,14 +136,7 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
 
             foreach (var control in controls)
             {
-                var theme = ThemeFor(control.Class);
-                if (control.Class == DialogControlClass.Button && IsRadioOrGroupBox(control.Hwnd))
-                {
-                    // Chủ đề tối vẽ chữ radio/group box màu xám đậm gần như vô hình trên nền tối (thấy ở ảnh chụp GĐ2): dùng
-                    // dáng cổ điển, chữ do WM_CTLCOLORSTATIC tô sáng.
-                    theme = ClassicTheme;
-                }
-
+                var theme = ThemeForControl(control.Hwnd, control.Class);
                 if (theme is not null)
                 {
                     // "" + "" = không chủ đề (dáng cổ điển); chỉ "" cho sub-app name sẽ rơi về chủ đề sáng mặc định.

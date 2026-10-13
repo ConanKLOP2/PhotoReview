@@ -162,6 +162,9 @@ internal sealed class ActionProfilesDialog : NativeDialog
         }
     }
 
+    /// <summary>Chữ + huy hiệu (phím tắt) của dòng <paramref name="index"/> (test).</summary>
+    internal (string Text, string? Badge) RowText(int index) => ListItemText(ListId, index);
+
     protected override (string Text, string? Badge) ListItemText(int id, int index)
     {
         if (id == ListId && index >= 0 && index < _presenter.Actions.Count)

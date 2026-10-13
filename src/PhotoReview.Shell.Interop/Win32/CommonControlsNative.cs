@@ -218,7 +218,8 @@ internal static class ControlConstants
     public const uint TtmAddTool = 0x0432; // TTM_ADDTOOLW
     public const uint TtmUpdateTipText = 0x0439; // TTM_UPDATETIPTEXTW
     public const uint TtmGetToolCount = 0x040D;
-    public const int ToolInfoSize = 72;
+    /// <summary>TTTOOLINFOW_V2_SIZE (đến <c>lParam</c>): chạy cả với comctl32 v5 (testhost không có manifest) lẫn v6.</summary>
+    public const int ToolInfoSize = 64;
     public const nint LpstrTextCallback = -1;
 
     // ListView

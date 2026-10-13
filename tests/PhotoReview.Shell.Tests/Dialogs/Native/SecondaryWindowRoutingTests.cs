@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Services;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
@@ -46,6 +46,13 @@ public sealed class SecondaryWindowRoutingTests
 
         public void ShowBenchmark(nint ownerHwnd, string? folder) => Calls.Add("benchmark");
 
+        public IReadOnlyList<PhotoReview.Core.Settings.ReviewAction>? ShowActionProfiles(nint ownerHwnd,
+            IReadOnlyList<PhotoReview.Core.Settings.ReviewAction> actions)
+        {
+            Calls.Add("actionProfiles");
+            return actions;
+        }
+
         public void ShowSkippedFiles(nint ownerHwnd, IReadOnlyList<SkippedEntry> entries) => Calls.Add("skipped");
 
         public bool ShowBatchReview(nint ownerHwnd, IReadOnlyList<BatchReviewItem> items)
@@ -79,6 +86,7 @@ public sealed class SecondaryWindowRoutingTests
     private static readonly SecondaryWindowKind[] Win32Kinds =
     [
         SecondaryWindowKind.Diagnostics, SecondaryWindowKind.SkippedFiles, SecondaryWindowKind.BatchReview, SecondaryWindowKind.ZoomPrompt,
+        SecondaryWindowKind.Benchmark, SecondaryWindowKind.ActionProfiles,
     ];
 
     private static (SecondaryWindowRouter Router, Spy Native, Spy? Bridge, Func<bool> BridgeLoaded, List<string> Notices, NoLauncher Launcher) Build(
@@ -107,8 +115,10 @@ public sealed class SecondaryWindowRoutingTests
         router.ShowSkippedFiles(0, []);
         Assert.True(router.ShowBatchReview(0, []));
         Assert.Equal(150, router.PromptCustomZoom(0, 100));
+        router.ShowBenchmark(0, null);
+        Assert.NotNull(router.ShowActionProfiles(0, []));
 
-        Assert.Equal(["diagnostics", "skipped", "batch", "zoom"], native.Calls);
+        Assert.Equal(["diagnostics", "skipped", "batch", "zoom", "benchmark", "actionProfiles"], native.Calls);
         Assert.Empty(bridge!.Calls);
         Assert.False(loaded(), "the WPF bridge must not even be loaded for windows the Win32 port supports");
     }
@@ -120,9 +130,8 @@ public sealed class SecondaryWindowRoutingTests
 
         Assert.True(router.ShowSettings(0, SettingsTarget.Default));
         router.ShowRecovery(0);
-        router.ShowBenchmark(0, null);
 
-        Assert.Equal(["settings", "recovery", "benchmark"], bridge!.Calls);
+        Assert.Equal(["settings", "recovery"], bridge!.Calls);
         Assert.Empty(native.Calls);
         Assert.True(loaded());
         Assert.Empty(notices);
@@ -135,16 +144,14 @@ public sealed class SecondaryWindowRoutingTests
 
         Assert.False(router.ShowSettings(0, SettingsTarget.Default)); // opens config.json, nothing saved
         router.ShowRecovery(0);
-        router.ShowBenchmark(0, null);
+        router.ShowBenchmark(0, null); // WP-35 GĐ2: a real window now, not a notice (also in the AOT build)
         router.ShowDiagnostics(0);
         Assert.True(router.ShowBatchReview(0, []));
 
         Assert.True(loaded());
         Assert.Single(launcher.Opened);
-        Assert.Equal(["diagnostics", "batch"], native.Calls);
-        Assert.Equal(
-            [Tr.StatusSecondaryUnavailableSettings, Tr.StatusSecondaryUnavailableRecovery, Tr.StatusSecondaryUnavailableBenchmark],
-            notices);
+        Assert.Equal(["benchmark", "diagnostics", "batch"], native.Calls);
+        Assert.Equal([Tr.StatusSecondaryUnavailableSettings, Tr.StatusSecondaryUnavailableRecovery], notices);
     }
 
     [Fact]
@@ -176,7 +183,7 @@ public sealed class SecondaryWindowRoutingTests
     }
 
     [Fact]
-    public void Win32Port_Supports_ExactlyTheFourFirstWindows()
+    public void Win32Port_Supports_ExactlyTheNativeWindows()
     {
         var port = new Win32SecondaryWindowPort(new ServiceCollection().BuildServiceProvider());
 

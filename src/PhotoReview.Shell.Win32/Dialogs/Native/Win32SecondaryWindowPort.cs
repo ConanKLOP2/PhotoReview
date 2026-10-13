@@ -11,6 +11,14 @@ using PhotoReview.Shell.Win32.Hosting;
 
 namespace PhotoReview.Shell.Win32.Dialogs.Native;
 
+/// <summary>Phần phụ thuộc có thể thay của cửa sổ Benchmark (test); null = thật.</summary>
+internal sealed record BenchmarkDialogSeams(
+    BenchmarkSessionFactory? Sessions = null,
+    BenchmarkFileScan? Scan = null,
+    BenchmarkSummarySave? Save = null,
+    Func<nint, string, string?, string?>? PickFolder = null,
+    Action<string>? OpenInExplorer = null);
+
 /// <summary>
 /// WP-35 GĐ1: cổng cửa sổ phụ KHÔNG WPF (hộp thoại Win32 gốc, AOT-an toàn). Làm được: Diagnostics, SkippedFiles, BatchReview,
 /// ZoomPrompt (<see cref="Supports"/>); Settings/Recovery/Benchmark chưa có (trả false/no-op) nên <see cref="SecondaryWindowRouter"/>
@@ -25,6 +33,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     private readonly MessageLoop? _loop;
     private readonly List<NativeDialog> _open = [];
     private readonly IDialogWarningSink? _warnings;
+    private readonly BenchmarkDialogSeams? _benchmarkSeams;
     private BenchmarkDialog? _benchmark;
     private readonly int _uiThreadId = Environment.CurrentManagedThreadId;
     private bool _disposed;
@@ -34,9 +43,10 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     /// <param name="ready">Test: gọi sau khi hộp thoại đã hiện, trước vòng lặp modal (mô phỏng người dùng).</param>
     /// <param name="loop">Vòng lặp của shell: vòng modal chạy lồng trong nó (khung hình, việc nền, phím WPF modeless); null = đơn giản.</param>
     public Win32SecondaryWindowPort(IServiceProvider services, INativeDialogChrome? chrome = null, Action<NativeDialog>? ready = null,
-        MessageLoop? loop = null, IDialogWarningSink? warnings = null)
+        MessageLoop? loop = null, IDialogWarningSink? warnings = null, BenchmarkDialogSeams? benchmark = null)
     {
         _warnings = warnings;
+        _benchmarkSeams = benchmark;
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _chrome = chrome;
         _ready = ready;
@@ -75,13 +85,18 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
         }
 
         var folders = _services.GetService<IShellFolderDialog>();
+        var seams = _benchmarkSeams;
         var dialog = new BenchmarkDialog(
             folder,
             _services.GetRequiredService<IUiScheduler>(),
-            BenchmarkProfileSession.Factory(PixelBufferImageCodec.Instance, () => new WicDirectDecoder(PixelBufferImageCodec.Instance)),
-            pickFolder: folders is null
+            seams?.Sessions
+                ?? BenchmarkProfileSession.Factory(PixelBufferImageCodec.Instance, () => new WicDirectDecoder(PixelBufferImageCodec.Instance)),
+            pickFolder: seams?.PickFolder ?? (folders is null
                 ? null
-                : (owner, title, initial) => folders.Show(owner, title, FolderPicker.UsableInitialFolder(initial)),
+                : (owner, title, initial) => folders.Show(owner, title, FolderPicker.UsableInitialFolder(initial))),
+            openInExplorer: seams?.OpenInExplorer,
+            scan: seams?.Scan,
+            save: seams?.Save,
             chrome: _chrome);
         _benchmark = dialog;
         _open.Add(dialog);

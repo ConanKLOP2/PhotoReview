@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
@@ -155,7 +155,25 @@ internal static class ProbeProgram
         CloseSoon();
         var picked = zoom.PromptCustomZoom(100);
         Report("after-four-native-windows");
-        Console.WriteLine("RESULT batch=" + batch + " zoom=" + (picked?.ToString(CultureInfo.InvariantCulture) ?? "null"));
+
+        // WP-35 GĐ2: Benchmark (modeless: trả về ngay, đóng bằng WM_CLOSE) và Action profiles (modal, qua cổng).
+        var before = VisibleWindows().Count;
+        dialogs.ShowBenchmark(null);
+        var benchmarkOpened = VisibleWindows().Count == before + 1;
+        dialogs.ShowBenchmark(null); // lần hai: không tạo cửa sổ thứ hai
+        var benchmarkSingle = VisibleWindows().Count == before + 1;
+        foreach (var hwnd in VisibleWindows())
+        {
+            SendMessage(hwnd, WindowMessages.WmClose, 0, 0);
+        }
+
+        Report("after-benchmark");
+        CloseSoon();
+        var port = shell.GetRequiredService<PhotoReview.Shell.Win32.Dialogs.SecondaryWindowPortHost>().Port.Value!;
+        var edited = port.ShowActionProfiles(0, [new PhotoReview.Core.Settings.ReviewAction { Name = "Keep", Shortcut = "F6" }]);
+        Report("after-action-profiles");
+        Console.WriteLine("RESULT batch=" + batch + " zoom=" + (picked?.ToString(CultureInfo.InvariantCulture) ?? "null")
+            + " benchmark=" + benchmarkOpened + "/" + benchmarkSingle + " actionProfiles=" + (edited is null ? "null" : "list"));
         (shell as IDisposable)?.Dispose();
         return batch || picked is not null ? 1 : 0;
     }
@@ -194,6 +212,24 @@ internal static class ProbeProgram
         port.Dispose();
         return 0;
     }
+
+    private static List<nint> VisibleWindows()
+    {
+        var windows = new List<nint>();
+        EnumThreadWindows(GetCurrentThreadId(), (hwnd, _) =>
+        {
+            if (IsWindowVisible(hwnd))
+            {
+                windows.Add(hwnd);
+            }
+
+            return true;
+        }, 0);
+        return windows;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern nint SendMessage(nint hwnd, uint message, nint wParam, nint lParam);
 
     private static void ScheduleClose(Win32UiDispatcher dispatcher)
     {

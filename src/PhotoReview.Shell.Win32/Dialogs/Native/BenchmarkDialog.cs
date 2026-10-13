@@ -74,6 +74,9 @@ internal sealed unsafe class BenchmarkDialog : NativeDialog, IBenchmarkView, IDi
         Items = BuildItems();
     }
 
+    /// <summary>Task của lượt chạy gần nhất do nút Run/Quick check khởi động (test: chờ lượt chạy kết thúc).</summary>
+    internal Task? LastRunTask { get; private set; }
+
     /// <summary>Huỷ lượt chạy đang có và giải phóng presenter (cũng được gọi khi cửa sổ đóng).</summary>
     public void Dispose() => _presenter.Dispose();
 
@@ -371,6 +374,9 @@ internal sealed unsafe class BenchmarkDialog : NativeDialog, IBenchmarkView, IDi
         return (DialogColors.FromKey(displayedRow % 2 == 0 ? "Dark.Panel" : "Dark.RowAlt"), DialogColors.Text);
     }
 
+    /// <summary>Huy hiệu (chế độ nạp) của profile <paramref name="index"/> (test).</summary>
+    internal string? ProfileBadge(int index) => ListItemText(ProfilesId, index).Badge;
+
     protected override (string Text, string? Badge) ListItemText(int id, int index)
     {
         if (id == ProfilesId && index >= 0 && index < _presenter.ProfileItems.Count)
@@ -463,8 +469,9 @@ internal sealed unsafe class BenchmarkDialog : NativeDialog, IBenchmarkView, IDi
     /// Task của presenter chạy tiếp trên UI thread (bối cảnh đồng bộ của shell); presenter đã bắt lỗi của lượt chạy, nên chỉ ghi
     /// log nếu vẫn có ngoại lệ lọt ra (thay cho <c>async void</c> của bản WPF).
     /// </summary>
-    private static void Observe(Task task)
+    private void Observe(Task task)
     {
+        LastRunTask = task;
         if (task.IsCompleted)
         {
             if (task.IsFaulted)
