@@ -65,6 +65,7 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
                     ChangeDpi(dlg, dpi);
                 }
 
+                ParkCursor(dlg);
                 Drain(dlg);
                 var surface = dlg.Hwnd;
                 var bar = H(dlg, SettingsDialog.ScrollId);
@@ -79,6 +80,7 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
                     var expected = Capture(surface, out int _, out int _);
                     var bad = 0;
                     var firstBad = -1;
+                    int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
                     for (var i = 0; i < actual.Length; i += 4)
                     {
                         if (actual[i] != expected[i] || actual[i + 1] != expected[i + 1] || actual[i + 2] != expected[i + 2])
@@ -88,6 +90,13 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
                             {
                                 firstBad = i / 4;
                             }
+
+                            var px = (i / 4) % width;
+                            var py = (i / 4) / width;
+                            minX = Math.Min(minX, px);
+                            maxX = Math.Max(maxX, px);
+                            minY = Math.Min(minY, py);
+                            maxY = Math.Max(maxY, py);
                         }
                     }
 
@@ -111,7 +120,8 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
 
                     if (bad > 0)
                     {
-                        failures.Add($"step {step} (code {codes[step]}): {bad} stale pixels, first at ({firstBad % width},{firstBad / width})");
+                        failures.Add($"step {step} (code {codes[step]}): {bad} stale pixels, first at ({firstBad % width},{firstBad / width}), "
+                            + $"box ({minX},{minY})-({maxX},{maxY}) over {ControlsAt(dlg, minX, minY, maxX, maxY)}");
                     }
                 }
 
@@ -251,6 +261,46 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
 
         return counts.OrderByDescending(kv => kv.Value).First().Key;
     }
+
+    /// <summary>
+    /// The pointer must not sit over a page control: a control that scrolls under a still pointer makes the system synthesize a WM_MOUSEMOVE
+    /// (hover highlight of the chrome painter) at an arbitrary later time, so "after scroll" and "after forced redraw" differ by a hover
+    /// border that has nothing to do with stale pixels (seen on CI where a real pointer exists). It is parked over the dialog heading, a
+    /// static that neither scrolls nor tracks hover. <c>PHOTOREVIEW_SCROLL_CURSOR_OVER_PAGE=1</c> parks it over the page instead (reproduces
+    /// that CI condition on an interactive desktop).
+    /// </summary>
+    private static void ParkCursor(SettingsDialog dialog)
+    {
+        var overPage = Environment.GetEnvironmentVariable("PHOTOREVIEW_SCROLL_CURSOR_OVER_PAGE") == "1";
+        var target = WindowRect(H(dialog, overPage ? SettingsDialog.ViewportId(dialog.ActivePageIndex) : SettingsDialog.HeaderId));
+        _ = SetCursorPos(target.Left + ((target.Right - target.Left) / 2), target.Top + ((target.Bottom - target.Top) / 2));
+    }
+
+    private static string ControlsAt(SettingsDialog dialog, int left, int top, int right, int bottom)
+    {
+        var origin = WindowRect(dialog.Hwnd);
+        var found = new List<string>();
+        foreach (var item in dialog.PageItems(dialog.ActivePageIndex))
+        {
+            var control = H(dialog, item.Id);
+            if (control == 0 || !User32.IsWindowVisible(control) || IsGroupBox(control))
+            {
+                continue;
+            }
+
+            var r = WindowRect(control);
+            if (r.Left - origin.Left <= right && r.Right - origin.Left >= left && r.Top - origin.Top <= bottom && r.Bottom - origin.Top >= top)
+            {
+                found.Add($"{item.Id}({item.Class})");
+            }
+        }
+
+        return found.Count == 0 ? "no page control" : string.Join(",", found);
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetCursorPos(int x, int y);
 
     private static byte[] Capture(nint hwnd, out int width, out int height)
     {

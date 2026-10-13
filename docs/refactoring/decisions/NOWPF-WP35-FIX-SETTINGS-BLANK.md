@@ -35,3 +35,12 @@ bằng trang TRỐNG sau vẽ lại nên xanh: test so "trống với trống", 
 
 - CHƯA XÁC NHẬN: người dùng nhìn lại các trang Settings trên máy thật (nhiều màn hình, DPI khác).
 - Hoàn tác: bỏ khối `HWND_BOTTOM` ở `EnsurePageCreated` và điều kiện `!isGroupBox` ở `SettingsPageBuilder.Add` (khi đó lại trống nếu giữ WS_CLIPSIBLINGS).
+
+## 5. CI đỏ 3/14 (nhiễu hover, không phải hình ma) và cách làm test tất định
+
+- CI (windows-latest) có con trỏ thật: khi điều khiển cuộn dưới con trỏ đứng yên hệ thống tự sinh WM_MOUSEMOVE ở một lúc bất kỳ
+  => viền hover của bộ vẽ tay (checkbox 48 px, combobox ~800-1200 px) khác nhau giữa "sau cuộn" và "sau RedrawWindow". Tái hiện cục bộ trên
+  desktop tương tác với `PHOTOREVIEW_SCROLL_CURSOR_OVER_PAGE=1` (3/14 đỏ, hộp bao trùng đúng combobox/checkbox).
+- Test: con trỏ được đỗ lên tiêu đề hộp thoại (static không cuộn, không hover) trước khi chụp; thông báo lỗi nay kèm hộp bao điểm sai và điều khiển
+  nằm dưới. Khẳng định không-ghost và không-toàn-nền giữ nguyên; đột biến bỏ WS_CLIPSIBLINGS vẫn đỏ 14/14.
+- Chạy 5 lần x 14 ca trên desktop tương tác với 3 burner CPU nền: 70/70 xanh.
