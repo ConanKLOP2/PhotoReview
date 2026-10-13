@@ -1,6 +1,7 @@
 # ADR 0004: Tách project `Presentation` khỏi App (ST12 — điều tra)
 
 - Ngày: 2026-09-20. Trạng thái: **Chấp nhận (Accepted) — không tách project** (người dùng duyệt khuyến nghị; ST12 chỉ điều tra, không sửa source).
+- **Cập nhật 2026-10:** phần dùng chung không WPF đã được tách thành `PhotoReview.App.Shared` trong đợt NO-WPF (WP-09, [ADR 0010](0010-win32-direct2d-shell.md)); phân tích dưới đây phản ánh thời điểm 2026-09-20.
 - Khuyến nghị: **chưa làm**. Không có consumer nào bỏ được tham chiếu tới `PhotoReview.App`.
 - Thay thế bản nháp đầu của ADR này: bản đó lập luận "vòng phụ thuộc" (sai — App → Presentation là một chiều) và có ước lượng thời gian build chưa đo (đã bỏ).
 
