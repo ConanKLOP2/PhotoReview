@@ -38,6 +38,12 @@ public sealed class SettingsShortcutsPageTests : IDisposable
         _data.Dispose();
     }
 
+    [System.Runtime.InteropServices.DllImport("imm32.dll")]
+    private static extern nint ImmGetContext(nint hwnd);
+
+    /// <summary>HIMC của cửa sổ (0 = đã gỡ IME: ô bắt phím không nhận chữ từ IME).</summary>
+    private static nint ImmContextOf(nint hwnd) => ImmGetContext(hwnd);
+
     private static ShortcutsSettingsPage PageOf(SettingsDialog d) => (ShortcutsSettingsPage)d.Pages.Single(page => page.Key == "Shortcuts");
 
     private static int IndexOf(SettingsDialog d) => d.Pages.ToList().FindIndex(page => page.Key == "Shortcuts");
@@ -139,6 +145,15 @@ public sealed class SettingsShortcutsPageTests : IDisposable
                 Assert.True(Visible(d, cell.Box));
                 var style = (uint)User32.GetWindowLongPtr(H(d, cell.Box), WindowMessages.GwlStyle);
                 Assert.NotEqual(0u, style & 0x0800); // ES_READONLY: nothing but CaptureKey ever writes text
+                Assert.NotEqual(0u, style & DialogConstants.WsTabStop);
+                if (cell.Clear != 0)
+                {
+                    var clearStyle = (uint)User32.GetWindowLongPtr(H(d, cell.Clear), WindowMessages.GwlStyle);
+                    Assert.NotEqual(0u, clearStyle & DialogConstants.WsTabStop);
+                    Assert.Equal(PhotoReview.Shell.Win32.Dialogs.SettingsUi.SettingsPageBuilder.ClearGlyph, Txt(d, cell.Clear));
+                }
+
+                Assert.Equal(0, ImmContextOf(H(d, cell.Box)));
             }
 
             d.Close();
@@ -177,6 +192,10 @@ public sealed class SettingsShortcutsPageTests : IDisposable
                 Assert.NotEqual(boxBrush, labelBrush);
                 Assert.Equal(boxBrush, User32.SendMessage(viewport, 0x0138, hdc, H(d, page.Cell(nameof(ShortcutMappings.Skip)).Box)));
                 Assert.Equal(Gdi32.GetBkColor(hdc), DialogColors.Input);
+                Assert.Equal(Gdi32.GetTextColor(hdc), DialogColors.TextStrong);
+                // The conflict line is painted in the warning colour (a static, not an input).
+                User32.SendMessage(viewport, 0x0138, hdc, H(d, page.Ids.Warning));
+                Assert.Equal(Gdi32.GetTextColor(hdc), DialogColors.Warning);
             }
             finally
             {
@@ -405,6 +424,18 @@ public sealed class SettingsShortcutsPageTests : IDisposable
             var box = Box(d, nameof(ShortcutMappings.Next));
             Press(box, VkReturn, extended: true);
             Assert.Equal("Enter", BoxText(d, nameof(ShortcutMappings.Next)));
+            d.Close();
+        });
+    }
+
+    [Fact]
+    public void AltPlusKey_ThroughTheBoxSubclass_IsCapturedToo()
+    {
+        Show(new AppSettings(), (d, _) =>
+        {
+            var box = Box(d, nameof(ShortcutMappings.Fullscreen));
+            Press(box, 0x79, system: true); // F10
+            Assert.Equal("F10", BoxText(d, nameof(ShortcutMappings.Fullscreen)));
             d.Close();
         });
     }
@@ -765,6 +796,26 @@ public sealed class SettingsShortcutsPageTests : IDisposable
     }
 
     [Fact]
+    public void ImportingASettingsFile_ReplacesTheKeysAndTheSharedActionsJson()
+    {
+        using var temp = new TempRoot("settings-keys-import");
+        var imported = new AppSettings { Actions = [new ReviewAction { Name = "FromFile", Shortcut = "F9", Destination = "FromFile" }] };
+        imported.Shortcuts.Next = "N";
+        var path = Path.Combine(temp.Path, "imported.json");
+        Assert.Null(new SettingsPresenter(imported).ExportSettingsTo(path));
+
+        Show(new AppSettings(), (d, _) =>
+        {
+            Assert.DoesNotContain("FromFile", d.ActionsJson, StringComparison.Ordinal);
+            d.ImportSettingsFrom(path);
+            Assert.Equal("N", BoxText(d, nameof(ShortcutMappings.Next)));
+            Assert.Contains("FromFile", d.ActionsJson, StringComparison.Ordinal);
+            Assert.Contains("FromFile", d.CollectAll().ActionsJson, StringComparison.Ordinal);
+            d.Close();
+        });
+    }
+
+    [Fact]
     public void CancellingTheEditor_ChangesNothing()
     {
         var calls = 0;
@@ -903,6 +954,29 @@ public sealed class SettingsShortcutsPageTests : IDisposable
         }
 
         var all = ShortcutsSettingsPage.AllRows.Select(r => page.Cell(r.Property)).ToList();
+        var labels = all.Select(cell => RectInViewport(d, cell.Label)).ToList();
+        for (var i = 0; i < all.Count; i++)
+        {
+            for (var j = 0; j < all.Count; j++)
+            {
+                var a = labels[i];
+                var b = RectInViewport(d, all[j].Box);
+                if (a.Left < b.Right && b.Left < a.Right && a.Top < b.Bottom && b.Top < a.Bottom)
+                {
+                    yield return $"{label}: label {i} overlaps box {j}";
+                }
+
+                if (j > i)
+                {
+                    var c = labels[j];
+                    if (a.Left < c.Right && c.Left < a.Right && a.Top < c.Bottom && c.Top < a.Bottom)
+                    {
+                        yield return $"{label}: labels {i} and {j} overlap";
+                    }
+                }
+            }
+        }
+
         for (var i = 0; i < all.Count; i++)
         {
             for (var j = i + 1; j < all.Count; j++)
