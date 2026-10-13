@@ -17,6 +17,7 @@ internal static class SettingsPageCatalog
         ["Display"] = static () => new DisplaySettingsPage(),
         ["Files"] = static () => new FilesSettingsPage(),
         ["General"] = static () => new GeneralSettingsPage(),
+        ["Performance"] = static () => new PerformanceSettingsPage(),
     };
 
     /// <summary>Khoá các trang đã có bản Win32.</summary>

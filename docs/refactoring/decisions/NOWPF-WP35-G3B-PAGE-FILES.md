@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-G3B-FILES
-order: 1150
+order: 1170
 summary: |-
   WP-35 GĐ3b trang Files (phương án B của spike S3, CHƯA XÁC NHẬN): trang "Files & safety" của Settings Win32 gốc, 11 thuộc tính (so sánh bản trùng, RAW, WebP/HEIC + trạng thái codec, xoá vĩnh viễn opt-in, xác nhận xoá, trình soạn thảo ngoài + Browse, nhật ký thao tác bằng 2 radio, dùng lại thư mục lần trước). Thêm `Radio` vào `SettingsPageBuilder` (nhóm WS_GROUP/WS_TABSTOP, cắt nhóm sau radio, dáng cổ điển như GĐ2) và hook `FocusExternalEditor` (lệnh "Open in external editor" mở Settings ở trang Files, focus ô đường dẫn như bản WPF). Không chuỗi mới; không nạp WPF; 23 đột biến, 0 sống thật.
 ---

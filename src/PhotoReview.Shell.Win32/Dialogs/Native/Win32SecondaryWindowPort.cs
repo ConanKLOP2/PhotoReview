@@ -1,10 +1,14 @@
 using Microsoft.Extensions.DependencyInjection;
+using PhotoReview.App;
 using PhotoReview.App.Localization;
 using PhotoReview.App.Presenters;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.FileActions;
+using PhotoReview.Core.IO;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Settings;
 using PhotoReview.Core.Updates;
 using PhotoReview.Imaging.Decoding;
@@ -37,6 +41,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     private readonly List<NativeDialog> _open = [];
     private readonly IDialogWarningSink? _warnings;
     private readonly BenchmarkDialogSeams? _benchmarkSeams;
+    private readonly RecoveryDialogSeams? _recoverySeams;
     private readonly SettingsDialogOptions? _settingsOptions;
     private readonly Func<bool>? _settingsEnabled;
     private BenchmarkDialog? _benchmark;
@@ -49,12 +54,13 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     /// <param name="loop">Vòng lặp của shell: vòng modal chạy lồng trong nó (khung hình, việc nền, phím WPF modeless); null = đơn giản.</param>
     public Win32SecondaryWindowPort(IServiceProvider services, INativeDialogChrome? chrome = null, Action<NativeDialog>? ready = null,
         MessageLoop? loop = null, IDialogWarningSink? warnings = null, BenchmarkDialogSeams? benchmark = null,
-        SettingsDialogOptions? settings = null, Func<bool>? settingsEnabled = null)
+        SettingsDialogOptions? settings = null, Func<bool>? settingsEnabled = null, RecoveryDialogSeams? recovery = null)
     {
         _settingsOptions = settings;
         _settingsEnabled = settingsEnabled;
         _warnings = warnings;
         _benchmarkSeams = benchmark;
+        _recoverySeams = recovery;
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _chrome = chrome;
         _ready = ready;
@@ -79,6 +85,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     public bool Supports(SecondaryWindowKind kind)
         => kind is SecondaryWindowKind.Diagnostics or SecondaryWindowKind.SkippedFiles or SecondaryWindowKind.BatchReview
             or SecondaryWindowKind.ZoomPrompt or SecondaryWindowKind.Benchmark or SecondaryWindowKind.ActionProfiles
+            or SecondaryWindowKind.Recovery
             || (kind == SecondaryWindowKind.Settings && SettingsEnabled);
 
     /// <summary>
@@ -110,8 +117,64 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
         return dialog.Saved;
     }
 
+    /// <summary>
+    /// WP-35 GĐ4 (CHƯA XÁC NHẬN): Recovery MODAL bằng <see cref="RecoveryDialog"/>. Cùng nguồn dữ liệu với bản WPF
+    /// (<c>SecondaryWindowFactory.CreateRecovery</c>): journal, <c>RecoveryRetryService</c> (xác nhận hủy-bởi-người-dùng do cửa sổ
+    /// hỏi), <c>OperationJournal.Dismiss</c>, <c>IFileSystem</c> và cài đặt xoá vĩnh viễn đọc LÚC HỎI. Journal không đọc được:
+    /// báo lỗi và không mở (RV-A14).
+    /// </summary>
     public void ShowRecovery(nint ownerHwnd)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        VerifyUiThread();
+        var journal = _services.GetService<OperationJournal>();
+        if (journal is null)
+        {
+            return;
+        }
+
+        var warnings = _warnings ?? TaskDialogWarningSink.Instance;
+        var entries = TryReadRecoveryEntries(journal.ReadPendingAndFailedOperations,
+            (title, message) => warnings.ShowWarning(ownerHwnd, title, message));
+        if (entries is null)
+        {
+            return;
+        }
+
+        var retryService = _services.GetService<RecoveryRetryService>();
+        Func<JournalEntry, Task<RecoveryRetryResult>>? retry = retryService is null
+            ? null
+            : entry => retryService.RetryMoveOrCopyAsync(entry, confirmedFinishCancelled: true); // the window confirms a cancelled entry explicitly first
+        var settings = _services.GetService<SettingsStore>();
+        var clipboard = _services.GetService<IClipboardService>();
+        var seams = _recoverySeams ?? new RecoveryDialogSeams();
+        if (seams.Copy is null && clipboard is not null)
+        {
+            seams = seams with { Copy = clipboard.TrySetText };
+        }
+
+        var dialog = new RecoveryDialog(entries, retry, dismissed => journal.Dismiss(dismissed), _services.GetService<IFileSystem>(),
+            () => settings?.Current.AllowPermanentDeleteWithoutRecycleBin == true, seams, _chrome);
+        Run(dialog, ownerHwnd);
+    }
+
+    /// <summary>RV-A14: the journal entries for the Recovery window, or null after telling the user why the journal could not be read.</summary>
+    internal static List<JournalEntry>? TryReadRecoveryEntries(Func<IReadOnlyList<JournalEntry>> read, Action<string, string> showError)
+    {
+        try
+        {
+            return read().ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Error("Could not read the operation journal for the Recovery window", ex);
+            showError(Tr.RecoveryTitle, Tr.RecoveryReadFailed(ex.Message));
+            return null;
+        }
     }
 
     /// <summary>
