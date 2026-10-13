@@ -4,9 +4,20 @@ using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Settings;
+using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Shell.Win32.Hosting;
 
 namespace PhotoReview.Shell.Win32.Dialogs.Native;
+
+/// <summary>Phần phụ thuộc có thể thay của cửa sổ Benchmark (test); null = thật.</summary>
+internal sealed record BenchmarkDialogSeams(
+    BenchmarkSessionFactory? Sessions = null,
+    BenchmarkFileScan? Scan = null,
+    BenchmarkSummarySave? Save = null,
+    Func<nint, string, string?, string?>? PickFolder = null,
+    Action<string>? OpenInExplorer = null);
 
 /// <summary>
 /// WP-35 GĐ1: cổng cửa sổ phụ KHÔNG WPF (hộp thoại Win32 gốc, AOT-an toàn). Làm được: Diagnostics, SkippedFiles, BatchReview,
@@ -21,6 +32,9 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     private readonly Action<NativeDialog>? _ready;
     private readonly MessageLoop? _loop;
     private readonly List<NativeDialog> _open = [];
+    private readonly IDialogWarningSink? _warnings;
+    private readonly BenchmarkDialogSeams? _benchmarkSeams;
+    private BenchmarkDialog? _benchmark;
     private readonly int _uiThreadId = Environment.CurrentManagedThreadId;
     private bool _disposed;
 
@@ -29,8 +43,10 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     /// <param name="ready">Test: gọi sau khi hộp thoại đã hiện, trước vòng lặp modal (mô phỏng người dùng).</param>
     /// <param name="loop">Vòng lặp của shell: vòng modal chạy lồng trong nó (khung hình, việc nền, phím WPF modeless); null = đơn giản.</param>
     public Win32SecondaryWindowPort(IServiceProvider services, INativeDialogChrome? chrome = null, Action<NativeDialog>? ready = null,
-        MessageLoop? loop = null)
+        MessageLoop? loop = null, IDialogWarningSink? warnings = null, BenchmarkDialogSeams? benchmark = null)
     {
+        _warnings = warnings;
+        _benchmarkSeams = benchmark;
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _chrome = chrome;
         _ready = ready;
@@ -42,7 +58,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
 
     public bool Supports(SecondaryWindowKind kind)
         => kind is SecondaryWindowKind.Diagnostics or SecondaryWindowKind.SkippedFiles or SecondaryWindowKind.BatchReview
-            or SecondaryWindowKind.ZoomPrompt;
+            or SecondaryWindowKind.ZoomPrompt or SecondaryWindowKind.Benchmark or SecondaryWindowKind.ActionProfiles;
 
     public bool ShowSettings(nint ownerHwnd, SettingsTarget target) => false;
 
@@ -50,8 +66,68 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     {
     }
 
+    /// <summary>
+    /// WP-35 GĐ2: Benchmark MODELESS (không chặn shell), một cửa sổ duy nhất - mở lần hai chỉ đưa cửa sổ đang có lên trước.
+    /// Chạy lượt đo bằng codec/decoder không WPF của shell (<see cref="PixelBufferImageCodec"/> + WIC trực tiếp: mặc định của executor).
+    /// </summary>
     public void ShowBenchmark(nint ownerHwnd, string? folder)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        VerifyUiThread();
+        if (_benchmark is { IsClosed: false } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        var folders = _services.GetService<IShellFolderDialog>();
+        var seams = _benchmarkSeams;
+        var dialog = new BenchmarkDialog(
+            folder,
+            _services.GetRequiredService<IUiScheduler>(),
+            seams?.Sessions
+                ?? BenchmarkProfileSession.Factory(PixelBufferImageCodec.Instance, () => new WicDirectDecoder(PixelBufferImageCodec.Instance)),
+            pickFolder: seams?.PickFolder ?? (folders is null
+                ? null
+                : (owner, title, initial) => folders.Show(owner, title, FolderPicker.UsableInitialFolder(initial))),
+            openInExplorer: seams?.OpenInExplorer,
+            scan: seams?.Scan,
+            save: seams?.Save,
+            chrome: _chrome);
+        _benchmark = dialog;
+        _open.Add(dialog);
+        try
+        {
+            dialog.ShowModeless(ownerHwnd, _loop, _ready, () =>
+            {
+                _open.Remove(dialog);
+                if (ReferenceEquals(_benchmark, dialog))
+                {
+                    _benchmark = null;
+                }
+            });
+        }
+        catch
+        {
+            _open.Remove(dialog);
+            _benchmark = null;
+            throw;
+        }
+    }
+
+    /// <summary>Benchmark đang mở (null khi chưa mở/đã đóng): test và chẩn đoán.</summary>
+    internal bool IsBenchmarkOpen => _benchmark is { IsClosed: false };
+
+    /// <summary>WP-35 GĐ2: Action profiles MODAL (owner bị khoá); danh sách đã sửa khi Apply, null khi huỷ.</summary>
+    public IReadOnlyList<ReviewAction>? ShowActionProfiles(nint ownerHwnd, IReadOnlyList<ReviewAction> actions)
+    {
+        ArgumentNullException.ThrowIfNull(actions);
+        var dialog = new ActionProfilesDialog(actions, _services.GetService<IShellFileDialog>(), _warnings, _chrome);
+        return Run(dialog, ownerHwnd) == NativeDialog.IdOk ? dialog.Actions : null;
     }
 
     public void ShowDiagnostics(nint ownerHwnd)
@@ -92,10 +168,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
             return NativeDialog.IdCancel;
         }
 
-        if (Environment.CurrentManagedThreadId != _uiThreadId)
-        {
-            throw new InvalidOperationException("Native dialogs must be shown on the shell UI thread.");
-        }
+        VerifyUiThread();
 
         _open.Add(dialog);
         try
@@ -108,7 +181,15 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
         }
     }
 
-    /// <summary>Đóng mọi hộp thoại còn mở (lồng nhau: cái trong cùng trước). Idempotent.</summary>
+    private void VerifyUiThread()
+    {
+        if (Environment.CurrentManagedThreadId != _uiThreadId)
+        {
+            throw new InvalidOperationException("Native dialogs must be shown on the shell UI thread.");
+        }
+    }
+
+    /// <summary>Đóng mọi hộp thoại còn mở (lồng nhau: cái trong cùng trước; modeless cuối cùng). Idempotent.</summary>
     public void Dispose()
     {
         if (_disposed)
@@ -117,9 +198,10 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
         }
 
         _disposed = true;
-        for (var i = _open.Count - 1; i >= 0; i--)
+        var snapshot = _open.ToArray(); // modeless tự rút khỏi _open khi đóng
+        for (var i = snapshot.Length - 1; i >= 0; i--)
         {
-            _open[i].Close();
+            snapshot[i].Close();
         }
     }
 }
@@ -176,6 +258,9 @@ internal sealed class SecondaryWindowRouter : ISecondaryWindowPort, IDisposable
 
     public int? PromptCustomZoom(nint ownerHwnd, int currentPercent)
         => Pick(SecondaryWindowKind.ZoomPrompt) is { } port ? port.PromptCustomZoom(ownerHwnd, currentPercent) : null;
+
+    public IReadOnlyList<ReviewAction>? ShowActionProfiles(nint ownerHwnd, IReadOnlyList<ReviewAction> actions)
+        => Pick(SecondaryWindowKind.ActionProfiles) is { } port ? port.ShowActionProfiles(ownerHwnd, actions) : null;
 
     /// <summary>Cổng Win32 nếu nó làm được; ngược lại cầu WPF (nạp lười), hoặc null khi cầu vắng/lỗi nạp.</summary>
     private ISecondaryWindowPort? Pick(SecondaryWindowKind kind)

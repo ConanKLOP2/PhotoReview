@@ -32,8 +32,8 @@ public sealed class LazyLoadTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// WP-35 GĐ1 (cổng chấp nhận): DI thật của shell, bốn cửa sổ Win32 gốc (Diagnostics, SkippedFiles, BatchReview, ZoomPrompt) mở và
-    /// đóng được mà KHÔNG nạp WPF (PresentationFramework/Core, WindowsBase, System.Xaml, App.WpfWindows) và cả assembly cầu.
+    /// WP-35 GĐ1+GĐ2 (cổng chấp nhận): DI thật của shell, sáu cửa sổ Win32 gốc (Diagnostics, SkippedFiles, BatchReview, ZoomPrompt,
+    /// Benchmark modeless, ActionProfiles) mở và đóng được mà KHÔNG nạp WPF (PresentationFramework/Core, WindowsBase, System.Xaml, App.WpfWindows) và cả assembly cầu.
     /// </summary>
     [Fact]
     public async Task NativeSecondaryWindows_OpenWithoutLoadingWpfOrTheBridge()
@@ -41,12 +41,17 @@ public sealed class LazyLoadTests(ITestOutputHelper output)
         var lines = await RunProbeAsync("--probe-native");
         var stages = Parse(lines);
 
-        foreach (var stage in new[] { "shell-built", "services-resolved", "after-diagnostics", "after-four-native-windows" })
+        foreach (var stage in new[]
+                 {
+                     "shell-built", "services-resolved", "after-diagnostics", "after-four-native-windows", "after-benchmark",
+                     "after-action-profiles",
+                 })
         {
             Assert.DoesNotContain(stages[stage], n => WpfCore.Contains(n) || n == "PhotoReview.Shell.WpfBridge");
         }
 
-        Assert.Contains("RESULT batch=False zoom=null", lines);
+        // Benchmark opened as ONE modeless window (a second open added none); Action profiles closed as Cancel -> null.
+        Assert.Contains("RESULT batch=False zoom=null benchmark=True/True actionProfiles=null", lines);
     }
 
     [Fact]

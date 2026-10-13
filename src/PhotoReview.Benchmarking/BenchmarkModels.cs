@@ -107,10 +107,14 @@ public sealed record BenchmarkReport(string RunId, DateTimeOffset StartedUtc,
     string Folder, IReadOnlyList<BenchmarkPhaseResult> Phases,
     ReviewMetricsSnapshot? Metrics = null, string? Machine = null)
 {
-    private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
-
-    public string ToJson() => JsonSerializer.Serialize(this, DefaultOptions);
+    // WP-35 GĐ2: source-generated (cửa sổ Benchmark Win32 đưa BenchmarkReport vào đồ thị Native AOT; reflection = cảnh báo ILC).
+    // Cùng kết quả như JsonSerializerOptions { WriteIndented = true } trước đây.
+    public string ToJson() => JsonSerializer.Serialize(this, BenchmarkReportJsonContext.Default.BenchmarkReport);
 }
+
+[System.Text.Json.Serialization.JsonSourceGenerationOptions(WriteIndented = true)]
+[System.Text.Json.Serialization.JsonSerializable(typeof(BenchmarkReport))]
+internal sealed partial class BenchmarkReportJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 
 /// <summary>Stable description of the input set used by a benchmark batch.</summary>
 public sealed record BenchmarkDatasetManifest(

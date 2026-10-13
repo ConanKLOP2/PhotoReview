@@ -193,6 +193,9 @@ internal static class DialogConstants
     public const uint DsNoFailCreate = 0x0010;
 
     // DrawText
+    public const uint DtCenter = 0x0001;
+    public const uint DtVCenter = 0x0004;
+    public const uint DtEndEllipsis = 0x8000;
     public const uint DtWordBreak = 0x0010;
     public const uint DtSingleLine = 0x0020;
     public const uint DtCalcRect = 0x0400;

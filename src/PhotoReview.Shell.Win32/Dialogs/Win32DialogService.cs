@@ -30,6 +30,13 @@ internal interface ISecondaryWindowPort
     /// cầu WPF theo từng cửa sổ. Mặc định true (cầu WPF và các cổng giả của test làm được mọi cửa sổ).
     /// </summary>
     bool Supports(SecondaryWindowKind kind) => true;
+
+    /// <summary>
+    /// WP-35 GĐ2: editor Action profiles (modal, lồng được trong Settings). Trả danh sách đã sửa khi người dùng Apply; null khi huỷ
+    /// hoặc cổng không có (mặc định: cầu WPF chỉ mở nó từ bên trong cửa sổ Settings của nó).
+    /// </summary>
+    IReadOnlyList<PhotoReview.Core.Settings.ReviewAction>? ShowActionProfiles(nint ownerHwnd,
+        IReadOnlyList<PhotoReview.Core.Settings.ReviewAction> actions) => null;
 }
 
 /// <summary>Các cửa sổ phụ mà <see cref="ISecondaryWindowPort"/> có thể thực thi.</summary>
@@ -42,6 +49,9 @@ internal enum SecondaryWindowKind
     SkippedFiles,
     BatchReview,
     ZoomPrompt,
+
+    /// <summary>WP-35 GĐ2: editor Action profiles (modal).</summary>
+    ActionProfiles,
 }
 
 /// <summary>

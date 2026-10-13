@@ -11,6 +11,12 @@ internal enum DialogControlClass : ushort
     ListBox = 0x0083,
     ScrollBar = 0x0084,
     ComboBox = 0x0085,
+
+    // WP-35 GĐ2: lớp common-control, KHÔNG phải atom (template ghi tên lớp, xem DialogTemplate.ClassName). Giá trị chỉ là
+    // định danh nội bộ nằm ngoài vùng atom 0x0080..0x0085.
+    ListView = 0x1001,
+    Progress = 0x1002,
+    Trackbar = 0x1003,
 }
 
 /// <summary>Một điều khiển con của template. Hình học KHÔNG nằm trong template: bố cục tính ở mã (dialog-unit + đo chuỗi).</summary>
@@ -58,8 +64,16 @@ internal static class DialogTemplate
             writer.Write((short)0);
             writer.Write((short)0);
             writer.Write((ushort)item.Id);
-            writer.Write(AtomMarker);
-            writer.Write((ushort)item.Class);
+            if (ClassName(item.Class) is { } className)
+            {
+                WriteString(writer, className);
+            }
+            else
+            {
+                writer.Write(AtomMarker);
+                writer.Write((ushort)item.Class);
+            }
+
             WriteString(writer, item.Text);
             writer.Write((ushort)0); // no creation data
         }
@@ -67,6 +81,15 @@ internal static class DialogTemplate
         writer.Flush();
         return stream.ToArray();
     }
+
+    /// <summary>Tên lớp của điều khiển common (comctl32); null cho lớp chuẩn dùng atom.</summary>
+    internal static string? ClassName(DialogControlClass controlClass) => controlClass switch
+    {
+        DialogControlClass.ListView => PhotoReview.Shell.Interop.ControlConstants.ListViewClass,
+        DialogControlClass.Progress => PhotoReview.Shell.Interop.ControlConstants.ProgressClass,
+        DialogControlClass.Trackbar => PhotoReview.Shell.Interop.ControlConstants.TrackbarClass,
+        _ => null,
+    };
 
     private static void WriteString(BinaryWriter writer, string? text)
     {

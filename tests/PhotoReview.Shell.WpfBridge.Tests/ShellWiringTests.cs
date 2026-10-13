@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Interop;
@@ -207,8 +207,12 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         Assert.False(wired.Ports.Port.Value is null);
     }
 
+    /// <summary>
+    /// WP-35 GĐ2: Benchmark nay là cửa sổ Win32 gốc MODELESS (không nạp WPF/cầu): Tab tới hộp thoại qua bộ lọc của vòng lặp shell
+    /// (<c>IsDialogMessage</c>) và chuyển focus từ Run sang nút kế; cầu WPF vẫn có test riêng (<c>SecondaryWindowBridgeTests</c>).
+    /// </summary>
     [Fact]
-    public async Task Benchmark_ThroughTheDialogService_IsModeless_AndTabReachesWpfThroughTheShellLoopFilter()
+    public async Task Benchmark_ThroughTheDialogService_IsModeless_AndTabIsHandledByTheDialogManagerThroughTheShellLoopFilter()
     {
         await using var harness = await BridgeHarness.StartAsync();
         await using var wired = await Wired.StartAsync(harness);
@@ -216,19 +220,20 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         await harness.Ui.InvokeAsync(() => wired.Dialogs.ShowBenchmark(null)); // trả về ngay
         var hwnd = await harness.WaitForOwnedWindowAsync("benchmark shown");
         Assert.True(harness.IsOwnerEnabled());
-        Assert.Equal(1, harness.Ui.Loop.MessageFilterCount);
-        var seen = new List<int>();
-        ThreadMessageEventHandler observe = (ref MSG m, ref bool _) => seen.Add(m.message);
-        await harness.Ui.InvokeAsync(() => ComponentDispatcher.ThreadPreprocessMessage += observe);
+        Assert.Equal(1, harness.Ui.Loop.MessageFilterCount); // the dialog's own IsDialogMessage filter
+        var run = await harness.Ui.InvokeAsync(() => PhotoReview.Shell.Interop.User32.GetDlgItem(hwnd, 110));
+        var quick = await harness.Ui.InvokeAsync(() => PhotoReview.Shell.Interop.User32.GetDlgItem(hwnd, 111));
+        Assert.Equal(run, await harness.Ui.InvokeAsync(() => PhotoReview.Shell.Interop.User32.GetFocus()));
 
-        BridgeHarness.PostKey(hwnd, 0x09 /* VK_TAB */);
-        await Wait.UntilAsync(() => harness.Ui.InvokeAsync(() => seen.Contains(0x0100)).GetAwaiter().GetResult(),
-            "WM_KEYDOWN (Tab) reached ComponentDispatcher through the shell loop");
-        await harness.Ui.InvokeAsync(() => ComponentDispatcher.ThreadPreprocessMessage -= observe);
+        BridgeHarness.PostKey(run, 0x09 /* VK_TAB */);
+        await Wait.UntilAsync(
+            () => harness.Ui.InvokeAsync(() => PhotoReview.Shell.Interop.User32.GetFocus() == quick).GetAwaiter().GetResult(),
+            "Tab moved the focus from Run to Quick check through the shell loop filter");
 
         BridgeHarness.Close(hwnd);
         await harness.WaitForNoOwnedWindowAsync("benchmark closed");
-        output.WriteLine("messages seen: " + seen.Count);
+        Assert.Equal(0, harness.Ui.Loop.MessageFilterCount);
+        output.WriteLine("benchmark dialog filter added and removed");
     }
 
     [Fact]
