@@ -11,7 +11,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// WP-35 GĐ3a (thủ công): thời gian dựng khung (khai báo trang, tạo cửa sổ + điều khiển, bố cục) trong tiến trình test (JIT, nên là cận
 /// trên; số của exe R2R/AOT thật đo bằng probe riêng, xem tài liệu GĐ3a). Chạy: <c>--filter FullyQualifiedName~SettingsTimingTests</c>.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "Manual")]
 public sealed class SettingsTimingTests(ITestOutputHelper output)
 {

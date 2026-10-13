@@ -20,7 +20,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.Native;
 /// <c>PHOTOREVIEW_DIALOG_SNAPSHOTS=&lt;thư mục&gt; dotnet test --filter FullyQualifiedName~NativeDialogSnapshotTests</c>. Không có biến môi
 /// trường thì test bỏ qua (không ghi gì).
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "Manual")]
 public sealed unsafe class NativeDialogSnapshotTests
 {
@@ -256,7 +256,7 @@ public sealed unsafe class NativeDialogSnapshotTests
 }
 
 /// <summary>WP-35 GĐ2 (thủ công): ảnh chụp Action profiles (modal) và Benchmark (modeless, có kết quả); tách lớp vì cần <c>await</c>.</summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "Manual")]
 public sealed class NativeDialogSnapshotWindowsTests
 {

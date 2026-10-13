@@ -13,7 +13,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// WP-35 GĐ3a (thủ công): ảnh chụp cửa sổ Settings Win32 từng trang, en + vi, 100 % và 150 %, cuộn xuống cuối trang Display.
 /// <c>PHOTOREVIEW_DIALOG_SNAPSHOTS=&lt;thư mục&gt; dotnet test --filter FullyQualifiedName~SettingsSnapshotTests</c>; không có biến thì bỏ qua.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "Manual")]
 public sealed class SettingsSnapshotTests
 {

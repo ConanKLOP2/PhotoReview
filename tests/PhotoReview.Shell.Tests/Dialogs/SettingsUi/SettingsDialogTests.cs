@@ -18,7 +18,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// WP-35 GĐ3a: KHUNG cửa sổ Settings Win32 trên HWND thật (điều hướng, nhớ trang, Save/Apply/Cancel, Defaults/Reset trang, Import/Export,
 /// cuộn, Tab, bố cục en/vi ở 100 %/150 %, ngôn ngữ, rò handle). Nội dung từng trang: <see cref="SettingsPagesTests"/>.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "UI")]
 public sealed class SettingsDialogTests : IDisposable
 {
@@ -611,6 +611,15 @@ public sealed class SettingsDialogTests : IDisposable
             Assert.Equal(TestLocalization.Vietnamese.Get("settings.nav.display"), NavText(d, 1));
             Assert.Equal(TestLocalization.Vietnamese.Get("settings.nav.general"), Txt(d, SettingsDialog.PageTitleId));
             Assert.NotEqual(english.Save, Txt(d, SettingsDialog.SaveId));
+            // Every button of the frame follows the language (each is set separately by RefreshLocalizedTexts).
+            Assert.Equal(Tr.CommonSave, Txt(d, SettingsDialog.SaveId));
+            Assert.Equal(Tr.CommonApply, Txt(d, SettingsDialog.ApplyId));
+            Assert.Equal(Tr.CommonCancel, Txt(d, SettingsDialog.CancelId));
+            Assert.Equal(Tr.SettingsRestoreDefaults, Txt(d, SettingsDialog.DefaultsId));
+            Assert.Equal(Tr.SettingsResetPage, Txt(d, SettingsDialog.ResetPageId));
+            Assert.Equal(Tr.SettingsExportSettings, Txt(d, SettingsDialog.ExportId));
+            Assert.Equal(Tr.SettingsImportSettings, Txt(d, SettingsDialog.ImportId));
+            Assert.NotEqual("Apply", Txt(d, SettingsDialog.ApplyId));
             Assert.Empty(Problems(d, "vi after switch"));
             Localizer.SetCurrent(TestLocalization.English);
             Drain(d);

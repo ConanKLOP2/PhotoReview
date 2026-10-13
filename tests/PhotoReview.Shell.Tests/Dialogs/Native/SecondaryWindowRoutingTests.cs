@@ -15,7 +15,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.Native;
 /// WP-35 GĐ1: định tuyến theo từng cửa sổ (<see cref="SecondaryWindowRouter"/>: cổng Win32 -> cầu WPF -> cổng tạm) và cổng Win32
 /// (<see cref="Win32SecondaryWindowPort"/>) mở hộp thoại thật qua DI tối thiểu.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "UI")]
 public sealed class SecondaryWindowRoutingTests
 {

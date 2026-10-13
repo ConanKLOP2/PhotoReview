@@ -17,7 +17,7 @@ namespace PhotoReview.Shell.Tests.Golden;
 ///     box, is right.
 /// DirectWrite with the vi-VN strings of the recorder: <c>Category=Native</c> like the G-OVL shell test (fonts of the machine).
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "Native")]
 public sealed class PixelGoldenHudTests(ITestOutputHelper output)
 {

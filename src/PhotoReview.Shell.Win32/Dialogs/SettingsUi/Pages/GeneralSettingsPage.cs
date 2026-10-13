@@ -219,7 +219,7 @@ internal sealed class GeneralSettingsPage : SettingsPageBase
         }
 
         LoadLanguages(SelectedLanguage()?.Code); // a translator may have added a language file
-        Context.Warn(Tr.DialogReloadTranslationsTitle, reloaded.Message);
+        Context.ShowWarning(Tr.DialogReloadTranslationsTitle, reloaded.Message);
     }
 
     private void ExportTranslation()
@@ -232,7 +232,7 @@ internal sealed class GeneralSettingsPage : SettingsPageBase
         var (request, error) = Context.Presenter.ExportTranslation(SelectedLanguage());
         if (error is not null)
         {
-            Context.Warn(Tr.DialogExportTranslationFailedTitle, error);
+            Context.ShowWarning(Tr.DialogExportTranslationFailedTitle, error);
             return;
         }
 
@@ -254,7 +254,7 @@ internal sealed class GeneralSettingsPage : SettingsPageBase
         Context.SetEnabled(_checkUpdate, false);
         Context.SetVisible(_openUpdatePage, false);
         SetUpdateStatus(Tr.UpdateCheckChecking);
-        var display = await Context.Presenter.CheckForUpdateAsync(Context.Version).ConfigureAwait(false);
+        var display = await Context.Presenter.CheckForUpdateAsync(Context.Version);
         Context.PostToUi(() =>
         {
             if (display is null)

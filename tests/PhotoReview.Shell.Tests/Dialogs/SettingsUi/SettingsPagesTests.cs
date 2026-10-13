@@ -23,7 +23,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// -&gt; Save (qua <c>SettingsFieldMap</c>/<c>SettingsPresenter</c> thật), thứ tự mục combobox, kiểm hợp lệ theo trường, phụ thuộc bật/tắt,
 /// và các hành động của trang (cập nhật, Explorer, ngôn ngữ).
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "UI")]
 public sealed class SettingsPagesTests : IDisposable
 {
@@ -150,6 +150,33 @@ public sealed class SettingsPagesTests : IDisposable
     }
 
     [Fact]
+    public void General_SortMode_EveryComboItem_SavesTheModeItsTextNames()
+    {
+        // Pairs the item TEXT (what the user reads) with the mode that is saved: the tag array and the combo list must agree.
+        using var scope = TestLocalization.Use(TestLocalization.English);
+        var expected = new (string Text, ImageSortMode Mode)[]
+        {
+            (Tr.EnumImageSortModeName, ImageSortMode.Name),
+            (Tr.EnumImageSortModeNameAscending, ImageSortMode.NameAscending),
+            (Tr.EnumImageSortModeNameDescending, ImageSortMode.NameDescending),
+            (Tr.EnumImageSortModeSizeDescending, ImageSortMode.SizeDescending),
+            (Tr.EnumImageSortModeSizeAscending, ImageSortMode.SizeAscending),
+            (Tr.EnumImageSortModeDefault, ImageSortMode.Default),
+        };
+        for (var i = 0; i < expected.Length; i++)
+        {
+            var index = i;
+            var saved = Saved(new AppSettings { ImageSortMode = ImageSortMode.Name }, d =>
+            {
+                var ids = General(d).Ids;
+                Assert.Equal(expected[index].Text, ComboText(d, ids.SortMode, index));
+                Choose(d, ids.SortMode, index);
+            });
+            Assert.Equal(expected[i].Mode, saved.ImageSortMode);
+        }
+    }
+
+    [Fact]
     public void General_EditingCombos_WritesThroughToTheSettings()
     {
         var saved = Saved(new AppSettings(), d =>
@@ -199,6 +226,8 @@ public sealed class SettingsPagesTests : IDisposable
                 Assert.Contains("en", codes);
                 Assert.Contains("vi", codes);
                 Assert.Equal(codes.Count, ComboCount((SettingsDialog)d, ids.Language));
+                // The first entry (automatic) is a real choice: index 0 must be collected like any other.
+                Assert.Equal("auto", ((SettingsDialog)d).CollectAll().SelectedLanguage!.Code);
                 Choose((SettingsDialog)d, ids.Language, codes.IndexOf("vi"));
                 Assert.Equal("vi", ((SettingsDialog)d).CollectAll().SelectedLanguage!.Code);
                 Assert.True(((SettingsDialog)d).TrySaveAll());

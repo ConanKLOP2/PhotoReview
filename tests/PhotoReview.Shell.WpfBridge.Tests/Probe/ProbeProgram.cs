@@ -10,6 +10,7 @@ using PhotoReview.Core.Settings;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Dialogs;
 using PhotoReview.Shell.Win32.Hosting;
+using Xunit;
 
 namespace PhotoReview.Shell.WpfBridge.Tests.Probe;
 
@@ -18,6 +19,7 @@ namespace PhotoReview.Shell.WpfBridge.Tests.Probe;
 /// shell, mở một cửa sổ phụ modal rồi đóng, in ra danh sách assembly WPF đã nạp ở từng bước (test cha so sánh).
 /// Dòng kết quả: <c>STAGE tên | wpf=a,b,c</c>; thêm <c>TIMING tên=ms</c>.
 /// </summary>
+[Collection("GlobalState")] // TEST-09: the native scenario sets PHOTOREVIEW_SETTINGS_WIN32 (only ever in the probe process)
 internal static class ProbeProgram
 {
     private static readonly string[] WpfAssemblyPrefixes = ["PresentationFramework", "PresentationCore", "WindowsBase", "System.Xaml", "PhotoReview.App.WpfWindows"];

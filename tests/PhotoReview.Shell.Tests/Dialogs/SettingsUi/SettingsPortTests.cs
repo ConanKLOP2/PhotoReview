@@ -17,7 +17,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// WP-35 GĐ3a: cổng Win32 nhận Settings (cờ ẩn <c>PHOTOREVIEW_SETTINGS_WIN32=1</c> hoặc khi đủ mọi trang), mở <see cref="SettingsDialog"/> qua
 /// DI thật tối thiểu; Dispose cổng đóng hộp thoại đang mở.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "UI")]
 public sealed class SettingsPortTests : IDisposable
 {

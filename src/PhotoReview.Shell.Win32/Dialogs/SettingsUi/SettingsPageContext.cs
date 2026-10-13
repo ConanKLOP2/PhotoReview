@@ -61,7 +61,7 @@ internal sealed class SettingsPageContext
     public void Relayout() => _dialog.RelayoutActivePage();
 
     /// <summary>Hộp thoại cảnh báo modal trên cửa sổ Settings.</summary>
-    public void Warn(string title, string message) => _dialog.Warn(title, message);
+    public void ShowWarning(string title, string message) => _dialog.Warn(title, message);
 
     /// <summary>Chạy <paramref name="action"/> trên UI thread của cửa sổ (an toàn gọi từ luồng nền, ví dụ kết quả kiểm tra cập nhật).</summary>
     public void PostToUi(Action action) => _dialog.PostToUi(action);
@@ -72,7 +72,7 @@ internal sealed class SettingsPageContext
         ArgumentNullException.ThrowIfNull(request);
         if (request.ErrorMessage is not null)
         {
-            Warn(PhotoReview.Core.Localization.Tr.DialogSettingsOpenFailedTitle, request.ErrorMessage);
+            ShowWarning(PhotoReview.Core.Localization.Tr.DialogSettingsOpenFailedTitle, request.ErrorMessage);
             return;
         }
 
@@ -84,7 +84,7 @@ internal sealed class SettingsPageContext
         var error = Options.StartExplorer is { } start ? start(request.Arguments) : SettingsPresenter.TryStartExplorer(request.Arguments);
         if (error is not null)
         {
-            Warn(PhotoReview.Core.Localization.Tr.DialogSettingsOpenFailedTitle, error);
+            ShowWarning(PhotoReview.Core.Localization.Tr.DialogSettingsOpenFailedTitle, error);
         }
     }
 
