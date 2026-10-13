@@ -458,6 +458,67 @@ public sealed class ZoomPromptDialogTests
     }
 
     [Fact]
+    public void ClosedDialog_WindowIsDestroyed_EvenWhileTheOwnerLives()
+    {
+        OnSta(() =>
+        {
+            var owner = CreateOwner();
+            try
+            {
+                var before = UserObjects();
+                nint hwnd = 0;
+                var d = new ZoomPromptDialog(100);
+                d.ShowModal(owner, shown =>
+                {
+                    hwnd = shown.Hwnd;
+                    Command(shown, ZoomPromptDialog.CancelId);
+                });
+                Assert.NotEqual(0, hwnd);
+                Assert.False(User32.IsWindow(hwnd), "the dialog window must be destroyed when it closes");
+                Assert.True(UserObjects() <= before, "a destroyed dialog must free its USER objects");
+            }
+            finally
+            {
+                DestroyOwner(owner);
+            }
+
+            return 0;
+        });
+    }
+
+    [Fact]
+    public void ClientWidth_IsTwoHundredDialogUnits_OfTheBodyFont()
+    {
+        OnSta(() =>
+        {
+            ShowOnOwner(new ZoomPromptDialog(100), (d, _) =>
+            {
+                var averageWidth = AverageCharWidth(d);
+                var expected = (200 * averageWidth + 2) / 4; // 4 dlu = one average character
+                Assert.Equal(expected, Width(ClientRect(d.Hwnd)));
+                d.Close();
+            });
+            return 0;
+        });
+    }
+
+    private static unsafe int AverageCharWidth(NativeDialog d)
+    {
+        const string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        var hdc = User32.GetDC(d.Hwnd);
+        var old = Gdi32.SelectObject(hdc, d.BodyFont);
+        Point extent = default;
+        fixed (char* p = alphabet)
+        {
+            _ = Gdi32.GetTextExtentPoint32(hdc, p, alphabet.Length, &extent);
+        }
+
+        Gdi32.SelectObject(hdc, old);
+        _ = User32.ReleaseDC(d.Hwnd, hdc);
+        return Math.Max(1, (extent.X / 26 + 1) / 2);
+    }
+
+    [Fact]
     public void RepeatedOpenAndClose_LeaksNoGdiOrUserObjects()
     {
         OnSta(() =>

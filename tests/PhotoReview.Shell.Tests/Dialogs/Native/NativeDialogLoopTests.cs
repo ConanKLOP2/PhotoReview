@@ -85,6 +85,63 @@ public sealed class NativeDialogLoopTests
     }
 
     [Fact]
+    public async Task TheShellCompositionRoot_RunsItsNativeDialogsInsideTheShellLoop()
+    {
+        await using var ui = await UiThread.StartAsync();
+        var filter = new CountingFilter();
+        await ui.InvokeAsync(() => ui.Loop.AddMessageFilter(filter));
+        using var root = await ui.InvokeAsync(() => PhotoReview.Shell.Win32.Startup.ShellCompositionRoot.Build(
+            new PhotoReview.Shell.Win32.Startup.ShellHostServices(ui.Dispatcher, () => 0, ui.Loop),
+            new PhotoReview.Shell.Win32.Startup.ShellPresentationHub(),
+            services => services.AddSingleton<IAppPaths>(new PhotoReview.Core.AppPaths(Path.Combine(Path.GetTempPath(), "pr-wp35g1-root")))));
+        var other = await ui.InvokeAsync(() => NativeDialogTestKit.CreateOwner());
+        // The dialog runs under the shell loop only if the composition root hands the loop to the native port: only then does the
+        // loop consult its message filters, which is where this test closes the dialog from.
+        filter.OnSeen = () => ui.Dispatcher.Post(() => CloseVisibleWindowsExcept(other), UiPriority.Normal);
+        var dialogs = root.GetRequiredService<IDialogService>();
+        var shown = ui.InvokeAsync(() =>
+        {
+            User32.PostMessage(other, WindowMessages.WmApp + 0x20, 0, 0);
+            dialogs.ShowDiagnostics();
+        });
+
+        await shown.WaitAsync(UiThread.Bound);
+
+        Assert.True(filter.Seen >= 1);
+        await ui.InvokeAsync(() =>
+        {
+            ui.Loop.RemoveMessageFilter(filter);
+            NativeDialogTestKit.DestroyOwner(other);
+        });
+    }
+
+    private static void CloseVisibleWindowsExcept(nint keep)
+    {
+        var windows = new List<nint>();
+        EnumThreadWindows(GetCurrentThreadId(), (hwnd, _) =>
+        {
+            if (hwnd != keep && User32.IsWindowVisible(hwnd))
+            {
+                windows.Add(hwnd);
+            }
+
+            return true;
+        }, 0);
+        foreach (var hwnd in windows)
+        {
+            User32.PostMessage(hwnd, WindowMessages.WmClose, 0, 0);
+        }
+    }
+
+    private delegate bool EnumProc(nint hwnd, nint lParam);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool EnumThreadWindows(uint threadId, EnumProc callback, nint lParam);
+
+    [Fact]
     public async Task WmQuit_InsideTheModalLoop_ClosesTheDialogAndEndsTheOuterLoop_WithTheSameExitCode()
     {
         var ui = await UiThread.StartAsync();

@@ -165,4 +165,5 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 hiển thị (ImagePresenter dùng chung WPF/shell, PreviewImageService, composer/GpuImageCache/prefetcher/sink của shell Win32). Scheduler và
 decoder giả ép thứ tự hoàn tất đảo ngược; bất biến kiểm trên TOÀN BỘ nhật ký sink, không chỉ trạng thái cuối. Tìm thấy 1 lỗi thật
 (Win32PresentationSink mất FIFO khi UI thread tới sau cập nhật cross-thread còn trong hàng đợi, PR #476, đã sửa). [Detail](decisions/NOWPF-STALEPREVIEW-TESTS.md) |
+| NOWPF-WP35-G1 | WP-35 GĐ1 (phương án B của spike S3, CHƯA XÁC NHẬN): khung hộp thoại Win32 gốc AOT-sạch trong Shell.Win32 (template trong bộ nhớ + dialog manager, DPI từng màn hình, dark qua DWM/uxtheme/WM_CTLCOLOR*, modal không nuốt WM_QUIT, vòng lồng của shell) + 4 cửa sổ nhỏ (ZoomPrompt, Diagnostics + Sao chép, SkippedFiles, BatchReview) dùng presenter G0 + IFileOpenDialog/IFileSaveDialog + `Win32SecondaryWindowPort` và `SecondaryWindowRouter` (Win32 -> cầu WPF -> cổng tạm theo từng cửa sổ). @@SUMMARY@@ [Detail](decisions/NOWPF-WP35-G1-WIN32-DIALOGS.md) |
 <!-- END GENERATED DECIDED TABLE -->

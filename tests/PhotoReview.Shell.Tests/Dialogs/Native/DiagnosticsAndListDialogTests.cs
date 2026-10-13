@@ -20,6 +20,10 @@ public sealed class DiagnosticsAndListDialogTests
 {
     private static DiagnosticsDisplay SampleDisplay() => DiagnosticsPresenter.Build(new ReviewMetrics().Snapshot());
 
+    /// <summary>Every field distinct, in the declaration order of the record (= row order of the dialog).</summary>
+    private static DiagnosticsDisplay DistinctDisplay() => new(
+        "v00", "v01", "v02", "v03", "v04", "v05", "v06", "v07", "v08", "v09", "v10", "v11", "v12", "v13", "v14");
+
     private static DiagnosticsDisplay LongDisplay()
     {
         var longText = string.Join(", ", Enumerable.Range(1, 40).Select(i => $"IMG_{i:0000}.jpg x{i * 7}"));
@@ -58,6 +62,25 @@ public sealed class DiagnosticsAndListDialogTests
         });
     }
 
+    [Fact]
+    public void Diagnostics_RowIndexMapsToTheRightField_AndNoTwoRowsShareAValue()
+    {
+        var display = DistinctDisplay();
+        OnSta(() =>
+        {
+            ShowOnOwner(new DiagnosticsDialog(display), (d, _) =>
+            {
+                for (var row = 0; row < DiagnosticsDialog.RowCount; row++)
+                {
+                    Assert.Equal($"v{row:00}", TextOf(d, DiagnosticsDialog.FirstValueId + row));
+                }
+
+                d.Close();
+            });
+            return 0;
+        });
+    }
+
     [Theory]
     [InlineData("close_button")]
     [InlineData("escape")]
@@ -78,7 +101,8 @@ public sealed class DiagnosticsAndListDialogTests
                     Drain(d);
                     break;
                 case "enter":
-                    Assert.True(Key(d, Item(d, DiagnosticsDialog.CloseId), VkReturn));
+                    Assert.Equal(WindowMessages.IdCancel, (int)(User32.SendMessage(d.Hwnd, DialogConstants.DmGetDefId, 0, 0) & 0xFFFF));
+                    Assert.True(Key(d, Item(d, DiagnosticsDialog.NoteId), VkReturn)); // Enter on a non-button: the default button runs
                     Drain(d);
                     break;
                 case "wm_close":
@@ -332,6 +356,8 @@ public sealed class DiagnosticsAndListDialogTests
                 User32.SetWindowPos(d.Hwnd, 0, window.Left, window.Top, 100, 100, WindowMessages.SwpNoMove | WindowMessages.SwpNoZOrder | WindowMessages.SwpNoActivate);
                 var clientTiny = ClientRect(d.Hwnd);
                 Assert.True(Width(clientTiny) >= ChildRect(d, ListDialog.ConfirmId).Right);
+                Assert.True(Width(clientTiny) * 10 >= Width(clientBefore) * 6, "WM_GETMINMAXINFO must keep the minimum width (300 of 470 dlu)");
+                Assert.True(Height(clientTiny) * 2 >= Height(clientBefore), "WM_GETMINMAXINFO must keep the minimum height");
                 d.Close();
             });
             return 0;
