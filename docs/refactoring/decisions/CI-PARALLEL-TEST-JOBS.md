@@ -49,4 +49,16 @@ Required checks hiện là `build-test-publish` và `repo-checks`: KHÔNG cần 
 
 ## 5. Số đo
 
-(Điền sau khi CI của PR chạy; xem mô tả PR.)
+Run 38411060424 (master, tuần tự): 730 s. PR #502, run 38423595823 (cùng bộ test):
+
+| Job | Lần 1 | Lần 2 |
+|---|---|---|
+| `build-publish` | 243 s | 242 s |
+| `test-core` | 311 s | 338 s |
+| `test-integration` | 306 s | 313 s |
+| `test-shell` | 396 s | 327 s (đỏ do flaky Shell.Tests `NativeDialogChromeTests`, xanh khi rerun) |
+| Tổng thời gian tường tới `build-test-publish` | ~410 s | ~ 390 s (tới lúc job test-shell dừng) |
+
+Số test (so master 56c6b6a4, cùng commit nền): Architecture 159 (158 + 1 luật CI-PARALLEL mới), Core 3202, Imaging 4181, App 2583,
+Integration 1344 + 17 Slow, Shell 1609, Shell.Integration 151, WpfBridge 39: không project nào mất test.
+Job `test-shell` quyết định thời gian tường; Shell.Tests dao động 98-144 s. Hướng tối ưu thêm: tách Shell.Tests sang job riêng.
