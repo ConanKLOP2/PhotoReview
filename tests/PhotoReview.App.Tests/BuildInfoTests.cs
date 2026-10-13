@@ -26,6 +26,20 @@ public sealed class BuildInfoTests
         Assert.Equal(TimeZoneInfo.Local.GetUtcOffset(parsed), parsed.Offset);
     }
 
+    // 2026-10-13: since WP-19b the Settings window (which shows "version · build time · commit") lives in App.WpfWindows; an
+    // unstamped assembly silently dropped the build time from the version line.
+    [Fact]
+    public void SettingsWindowAssembly_IsStampedWithBuildTimeAndCommit_SoTheVersionLineShowsTheTime()
+    {
+        var assembly = typeof(PhotoReview.App.SettingsWindow).Assembly;
+        var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().ToDictionary(a => a.Key, a => a.Value);
+        Assert.True(metadata.ContainsKey("BuildTime"), "BuildTime missing on " + assembly.GetName().Name);
+        var parsed = DateTimeOffset.ParseExact(metadata["BuildTime"]!, "yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture);
+        Assert.Equal(TimeZoneInfo.Local.GetUtcOffset(parsed), parsed.Offset);
+        Assert.Contains("·", BuildInfo.Describe(assembly)); // version · build · commit
+        Assert.Contains("/", BuildInfo.Describe(assembly));  // dd/MM/yyyy HH:mm of the build
+    }
+
     [Fact]
     public void Describe_ReleaseBuild_ShowsVersionLocalBuildTimeAndSha()
     {
