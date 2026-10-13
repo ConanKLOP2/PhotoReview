@@ -1,6 +1,6 @@
 ---
 id: FLAKY-INTEGRATION-APP
-order: 1300
+order: 1310
 summary: |-
   CHƯA XÁC NHẬN: 5 test Integration/App.Tests đỏ ngẫu nhiên khi máy tải - StaTestHostSmoke (trần 10 s đồng hồ thật), Startup prewarm (kiểm "đã bắt đầu" ngay sau Show khi decode chạy trên pool), Navigation seed (Flush bỏ sót ghi đang bay của SessionWriter), DarkScrollBar (Join 15 s) sửa tận gốc; AppForwardedOpen A3 chưa tái hiện được, giữ nguyên.
 ---
