@@ -17,9 +17,9 @@ using Xunit.Abstractions;
 namespace PhotoReview.Shell.WpfBridge.Tests;
 
 /// <summary>
-/// NOWPF-SHELL-WIRE-WPF-BRIDGE: Ä‘á»“ thá»‹ DI THáº¬T cá»§a shell (<see cref="ShellCompositionRoot"/>, dispatcher + vÃ²ng láº·p tháº­t, cá»­a sá»• chá»§
-/// tháº­t) Ä‘Äƒng kÃ½ cáº§u cá»­a sá»• phá»¥: <see cref="IDialogService"/> vÃ  <see cref="IZoomPromptService"/> má»Ÿ cá»­a sá»• WPF tháº­t, owner = HWND
-/// shell; cáº§u chá»‰ náº¡p khi dÃ¹ng; dá»n Ä‘Ãºng thá»© tá»±. KhÃ¡c <see cref="SecondaryWindowBridgeTests"/> (cá»•ng tráº§n): á»Ÿ Ä‘Ã¢y Ä‘i qua Ä‘Äƒng kÃ½ DI.
+/// NOWPF-SHELL-WIRE-WPF-BRIDGE: đồ thị DI THẬT của shell (<see cref="ShellCompositionRoot"/>, dispatcher + vòng lặp thật, cửa sổ chủ
+/// thật) đăng ký cầu cửa sổ phụ: <see cref="IDialogService"/> và <see cref="IZoomPromptService"/> mở cửa sổ WPF thật, owner = HWND
+/// shell; cầu chỉ nạp khi dùng; dọn đúng thứ tự. Khác <see cref="SecondaryWindowBridgeTests"/> (cổng trần): ở đây đi qua đăng ký DI.
 /// </summary>
 [Trait("Category", "UI")]
 [Collection("WpfBridge")]
@@ -27,7 +27,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
 {
     private static readonly IReadOnlyList<SkippedEntry> Skipped = [new SkippedEntry(@"C:\x\a.jpg", "locked")];
 
-    /// <summary>DI tháº­t cá»§a shell trÃªn UI thread cá»§a harness; cá»•ng cá»­a sá»• phá»¥ náº¡p qua Ä‘Äƒng kÃ½ máº·c Ä‘á»‹nh (khÃ´ng override).</summary>
+    /// <summary>DI thật của shell trên UI thread của harness; cổng cửa sổ phụ nạp qua đăng ký mặc định (không override).</summary>
     private sealed class Wired : IAsyncDisposable
     {
         private readonly BridgeHarness _harness;
@@ -60,7 +60,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
                 services =>
                 {
                     services.AddSingleton<IAppPaths>(new AppPaths(root.Path, Path.Combine(root.Path, "data"), isolateConfig: true));
-                    // Cá»•ng váº¯ng (mÃ´ phá»ng AOT/Ä‘á»™t biáº¿n) khÃ´ng Ä‘Æ°á»£c má»Ÿ trÃ¬nh soáº¡n tháº£o tháº­t cá»§a mÃ¡y: launcher giáº£.
+                    // Cổng vắng (mô phỏng AOT/đột biến) không được mở trình soạn thảo thật của máy: launcher giả.
                     services.AddSingleton<IShellLauncher>(new NoLauncher());
                     configure?.Invoke(services);
                 }));
@@ -95,8 +95,8 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
 
         Assert.IsType<Win32DialogService>(dialogs);
         Assert.IsType<Win32ZoomPromptService>(zoom);
-        Assert.False(ports.Port.IsValueCreated); // chÆ°a má»Ÿ cá»­a sá»• phá»¥: WpfBridgeLoader (vÃ  WPF) chÆ°a náº¡p
-        Assert.Equal(0, harness.Ui.Loop.MessageFilterCount); // bá»™ lá»c phÃ­m chá»‰ gáº¯n khi cáº§u náº¡p
+        Assert.False(ports.Port.IsValueCreated); // chưa mở cửa sổ phụ: WpfBridgeLoader (và WPF) chưa nạp
+        Assert.Equal(0, harness.Ui.Loop.MessageFilterCount); // bộ lọc phím chỉ gắn khi cầu nạp
         Assert.Same(ports.Port, wired.Ports.Port);
     }
 
@@ -111,7 +111,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         var shown = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowSettings());
         var hwnd = await harness.WaitForOwnedWindowAsync("settings shown via IDialogService");
         Assert.False(harness.IsOwnerEnabled());
-        Assert.Equal(1, harness.Ui.Loop.MessageFilterCount); // cáº§u Ä‘Ã£ náº¡p vÃ  gáº¯n bá»™ lá»c vÃ o vÃ²ng láº·p tháº­t cá»§a shell
+        Assert.Equal(1, harness.Ui.Loop.MessageFilterCount); // cầu đã nạp và gắn bộ lọc vào vòng lặp thật của shell
         await harness.Ui.InvokeAsync(() => Invoke(VisibleWindow(), "Save_Click"));
         var accepted = await shown;
 
@@ -198,7 +198,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         var dialog = await harness.WaitForOwnedWindowAsync("zoom prompt shown again");
         await harness.Ui.InvokeAsync(() =>
         {
-            // WP-35 GÄ1: the prompt is a native Win32 dialog (edit id 101, Apply = IDOK), not a WPF window.
+            // WP-35 GĐ1: the prompt is a native Win32 dialog (edit id 101, Apply = IDOK), not a WPF window.
             Assert.True(PhotoReview.Shell.Interop.User32.SetWindowText(PhotoReview.Shell.Interop.User32.GetDlgItem(dialog, 101), "175"));
             PhotoReview.Shell.Interop.User32.PostMessage(dialog, 0x0111 /* WM_COMMAND */, 1 /* IDOK */, 0);
         });
@@ -213,7 +213,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         await using var harness = await BridgeHarness.StartAsync();
         await using var wired = await Wired.StartAsync(harness);
 
-        await harness.Ui.InvokeAsync(() => wired.Dialogs.ShowBenchmark(null)); // tráº£ vá» ngay
+        await harness.Ui.InvokeAsync(() => wired.Dialogs.ShowBenchmark(null)); // trả về ngay
         var hwnd = await harness.WaitForOwnedWindowAsync("benchmark shown");
         Assert.True(harness.IsOwnerEnabled());
         Assert.Equal(1, harness.Ui.Loop.MessageFilterCount);
@@ -238,13 +238,13 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         await using var wired = await Wired.StartAsync(harness);
         await harness.Ui.InvokeAsync(() => wired.Dialogs.ShowBenchmark(null));
         await harness.WaitForOwnedWindowAsync("benchmark shown");
-        var modal = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowSettings()); // vÃ²ng lá»“ng ShowDialog cháº¡y trÃªn UI thread
+        var modal = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowSettings()); // vòng lồng ShowDialog chạy trên UI thread
         await Wait.UntilAsync(() => harness.OwnedVisibleWindows().Count == 2, "benchmark + settings shown");
 
-        // NhÆ° ShellStartup khi shell thoÃ¡t giá»¯a chá»«ng: Dispose cá»•ng trÃªn UI thread (vÃ²ng lá»“ng cá»§a há»™p modal Ä‘ang cháº¡y).
+        // Như ShellStartup khi shell thoát giữa chừng: Dispose cổng trên UI thread (vòng lồng của hộp modal đang chạy).
         await harness.Ui.InvokeAsync(() => wired.Ports.Dispose());
 
-        Assert.False(await modal); // há»™p modal tráº£ vá», khÃ´ng treo
+        Assert.False(await modal); // hộp modal trả về, không treo
         await harness.WaitForNoOwnedWindowAsync("all secondary windows closed");
         Assert.Equal(0, harness.Ui.Loop.MessageFilterCount);
         Assert.True(harness.IsOwnerEnabled());
@@ -255,7 +255,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
     {
         await using var harness = await BridgeHarness.StartAsync();
         await using var wired = await Wired.StartAsync(harness);
-        // Recovery (chÆ°a cÃ³ há»™p thoáº¡i Win32) náº¡p cáº§u WPF trÃªn UI thread (host gáº¯n thread nÃ y); Diagnostics khÃ´ng cÃ²n náº¡p cáº§u.
+        // Recovery (chưa có hộp thoại Win32) nạp cầu WPF trên UI thread (host gắn thread này); Diagnostics không còn nạp cầu.
         var shown = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowRecovery());
         BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("recovery shown"));
         await shown;
@@ -278,10 +278,10 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         }
 
         await using var absent = await Wired.StartAsync(harness, s => s.AddSingleton<SecondaryWindowPortLoader>((_, _) => null));
-        await harness.Ui.InvokeAsync(() => absent.Dialogs.ShowRecovery()); // cá»•ng táº¡m: khÃ´ng cá»­a sá»•, khÃ´ng nÃ©m
+        await harness.Ui.InvokeAsync(() => absent.Dialogs.ShowRecovery()); // cổng tạm: không cửa sổ, không ném
         Assert.Empty(harness.OwnedVisibleWindows());
 
-        // WP-35 GÄ1: cáº§u váº¯ng (mÃ´ phá»ng AOT) nhÆ°ng há»™p thoáº¡i zoom lÃ  Win32 gá»‘c nÃªn váº«n má»Ÿ Ä‘Æ°á»£c; Ä‘Ã³ng = huá»· = null.
+        // WP-35 GĐ1: cầu vắng (mô phỏng AOT) nhưng hộp thoại zoom là Win32 gốc nên vẫn mở được; đóng = huỷ = null.
         var zoom = harness.Ui.InvokeAsync(() => absent.Zoom.PromptCustomZoom(100));
         BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("native zoom prompt without the bridge"));
         Assert.Null(await zoom);

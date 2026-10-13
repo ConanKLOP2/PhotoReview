@@ -53,6 +53,44 @@ internal static unsafe class NativeDialogTestKit
         return result;
     }
 
+    /// <summary>
+    /// Kích hoạt manifest nhúng của PhotoReview.dll (comctl32 v6 = visual styles) cho thread hiện tại: testhost không có manifest nên
+    /// nút/ô nhập chỉ có dáng cổ điển; exe thật có manifest. Dùng khi cần NHÌN giao diện (chụp ảnh thủ công).
+    /// </summary>
+    public static IDisposable ActivateVisualStyles()
+    {
+        var dll = typeof(NativeDialog).Assembly.Location;
+        nint context;
+        fixed (char* source = dll)
+        {
+            var actCtx = new ActivationContext.ActCtx
+            {
+                Size = (uint)sizeof(ActivationContext.ActCtx),
+                Flags = ActivationContext.FlagResourceNameValid,
+                Source = source,
+                ResourceName = 1,
+            };
+            context = ActivationContext.CreateActCtx(&actCtx);
+        }
+
+        nuint cookie = 0;
+        if (context == -1 || !ActivationContext.ActivateActCtx(context, &cookie))
+        {
+            throw new InvalidOperationException("comctl32 v6 activation context failed");
+        }
+
+        return new ActivationScope(context, cookie);
+    }
+
+    private sealed class ActivationScope(nint context, nuint cookie) : IDisposable
+    {
+        public void Dispose()
+        {
+            ActivationContext.DeactivateActCtx(0, cookie);
+            ActivationContext.ReleaseActCtx(context);
+        }
+    }
+
     /// <summary>Cửa sổ chủ popup hiện, 640x480 tại (100, 100); đã bật.</summary>
     public static nint CreateOwner()
     {

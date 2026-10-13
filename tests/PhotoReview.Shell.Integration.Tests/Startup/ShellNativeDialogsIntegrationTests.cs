@@ -7,9 +7,9 @@ using PhotoReview.Shell.Win32.Dialogs;
 namespace PhotoReview.Shell.Integration.Tests.Startup;
 
 /// <summary>
-/// WP-35 GÄ1: shell THáº¬T (DI tháº­t, desktop áº©n) má»Ÿ Diagnostics, SkippedFiles, BatchReview vÃ  há»™p zoom báº±ng há»™p thoáº¡i Win32 Gá»C
-/// (lá»›p <c>#32770</c>, owner = HWND shell, modal) mÃ  KHÃ”NG cáº§n cáº§u WPF (cá»•ng cáº§u mÃ´ phá»ng váº¯ng nhÆ° báº£n AOT), vÃ  Ä‘Ã³ng shell khi má»™t
-/// há»™p thoáº¡i cÃ²n má»Ÿ: thoÃ¡t mÃ£ 0, há»™p modal tráº£ vá», khÃ´ng treo.
+/// WP-35 GĐ1: shell THẬT (DI thật, desktop ẩn) mở Diagnostics, SkippedFiles, BatchReview và hộp zoom bằng hộp thoại Win32 GỐC
+/// (lớp <c>#32770</c>, owner = HWND shell, modal) mà KHÔNG cần cầu WPF (cổng cầu mô phỏng vắng như bản AOT), và đóng shell khi một
+/// hộp thoại còn mở: thoát mã 0, hộp modal trả về, không treo.
 /// </summary>
 [Collection("ShellStartup")]
 [Trait("Category", "UI")]
@@ -36,30 +36,30 @@ public sealed class ShellNativeDialogsIntegrationTests
             {
                 options.ServiceOverrides?.Invoke(services);
                 services.AddSingleton<IShellLauncher>(new NoLauncher());
-                services.AddSingleton<SecondaryWindowPortLoader>((_, _) => null); // cáº§u WPF váº¯ng (báº£n AOT)
+                services.AddSingleton<SecondaryWindowPortLoader>((_, _) => null); // cầu WPF vắng (bản AOT)
             },
         });
-        Assert.True(run.WaitForMain(), "cá»­a sá»• chÃ­nh khÃ´ng dá»±ng xong: " + run.Diagnostics);
-        Assert.True(SpinWait.SpinUntil(() => run.Main!.FirstImagePresented, Bound), "áº£nh Ä‘áº§u khÃ´ng Ä‘Æ°á»£c váº½: " + run.Diagnostics);
+        Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + run.Diagnostics);
+        Assert.True(SpinWait.SpinUntil(() => run.Main!.FirstImagePresented, Bound), "ảnh đầu không được vẽ: " + run.Diagnostics);
         var main = run.Main!;
         var uiThread = run.OnUi(() => GetCurrentThreadId());
         var viewModel = main.ViewModel;
 
-        // 1. Diagnostics: há»™p thoáº¡i Win32 gá»‘c, modal; Ä‘Ã³ng báº±ng nÃºt ÄÃ³ng (IDCANCEL).
+        // 1. Diagnostics: hộp thoại Win32 gốc, modal; đóng bằng nút Đóng (IDCANCEL).
         var diagnostics = Open(run, () => viewModel.ShowDiagnostics());
         var dialog = WaitOwned(run, uiThread, "diagnostics");
         Assert.Equal("#32770", ClassName(dialog));
-        Assert.False(IsWindowEnabled(main.Hwnd), "modal pháº£i vÃ´ hiá»‡u hoÃ¡ cá»­a sá»• chá»§");
+        Assert.False(IsWindowEnabled(main.Hwnd), "modal phải vô hiệu hoá cửa sổ chủ");
         Assert.Contains(Children(dialog), IsPushButton);
         run.OnUi(() => User32.SendMessage(dialog, WindowMessages.WmCommand, WindowMessages.IdCancel, 0));
-        Finished(diagnostics, "Diagnostics khÃ´ng Ä‘Ã³ng");
+        Finished(diagnostics, "Diagnostics không đóng");
         WaitNoOwned(run, uiThread, "diagnostics closed");
         Assert.True(IsWindowEnabled(main.Hwnd));
 
-        // 2. Há»™p zoom: Huá»· -> null, rá»“i OK 150.
+        // 2. Hộp zoom: Huỷ -> null, rồi OK 150.
         var zoomCancelled = Open(run, () => _ = main.OpenClickZoomCustomDialogAsync());
         PostClose(WaitOwned(run, uiThread, "zoom prompt"));
-        Finished(zoomCancelled, "há»™p zoom khÃ´ng Ä‘Ã³ng");
+        Finished(zoomCancelled, "hộp zoom không đóng");
         WaitNoOwned(run, uiThread, "zoom prompt closed");
 
         var zoomOk = Open(run, () => _ = main.OpenClickZoomCustomDialogAsync());
@@ -69,19 +69,19 @@ public sealed class ShellNativeDialogsIntegrationTests
             Assert.True(User32.SetWindowText(User32.GetDlgItem(zoom, 101), "150"));
             Assert.True(User32.PostMessage(zoom, WindowMessages.WmCommand, WindowMessages.IdOk, 0));
         });
-        Finished(zoomOk, "há»™p zoom khÃ´ng Ä‘Ã³ng sau OK");
+        Finished(zoomOk, "hộp zoom không đóng sau OK");
         WaitNoOwned(run, uiThread, "zoom prompt closed after OK");
 
-        // 3. ÄÃ³ng SHELL khi má»™t há»™p thoáº¡i Win32 cÃ²n má»Ÿ: thoÃ¡t mÃ£ 0, há»™p modal tráº£ vá» (khÃ´ng treo vÃ²ng lá»“ng).
+        // 3. Đóng SHELL khi một hộp thoại Win32 còn mở: thoát mã 0, hộp modal trả về (không treo vòng lồng).
         var modal = Open(run, () => viewModel.ShowDiagnostics());
         WaitOwned(run, uiThread, "diagnostics before shutdown");
 
         run.RequestClose();
 
-        Assert.True(run.WaitForExit(Bound), "shell khÃ´ng thoÃ¡t khi há»™p thoáº¡i Win32 cÃ²n má»Ÿ: " + run.Diagnostics);
+        Assert.True(run.WaitForExit(Bound), "shell không thoát khi hộp thoại Win32 còn mở: " + run.Diagnostics);
         Assert.Null(run.Error);
         Assert.Equal(0, run.ExitCode);
-        Finished(modal, "há»™p modal pháº£i tráº£ vá» khi shell thoÃ¡t");
+        Finished(modal, "hộp modal phải trả về khi shell thoát");
     }
 
     private static void Finished(Task task, string what) => Assert.True(task.Wait(Bound), what);
@@ -92,12 +92,12 @@ public sealed class ShellNativeDialogsIntegrationTests
     {
         nint found = 0;
         Assert.True(SpinWait.SpinUntil(() => (found = OwnedWindows(uiThread, run.Main!.Hwnd).FirstOrDefault()) != 0, Bound),
-            $"há»™p thoáº¡i '{what}' khÃ´ng hiá»‡n: " + run.Diagnostics);
+            $"hộp thoại '{what}' không hiện: " + run.Diagnostics);
         return found;
     }
 
     private static void WaitNoOwned(ShellRun run, uint uiThread, string what)
-        => Assert.True(SpinWait.SpinUntil(() => OwnedWindows(uiThread, run.Main!.Hwnd).Count == 0, Bound), $"há»™p thoáº¡i cÃ²n má»Ÿ: {what}");
+        => Assert.True(SpinWait.SpinUntil(() => OwnedWindows(uiThread, run.Main!.Hwnd).Count == 0, Bound), $"hộp thoại còn mở: {what}");
 
     private static void PostClose(nint hwnd) => Assert.True(User32.PostMessage(hwnd, WindowMessages.WmClose, 0, 0));
 

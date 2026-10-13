@@ -10,9 +10,9 @@ using static PhotoReview.Shell.Tests.Dialogs.Native.NativeDialogTestKit;
 namespace PhotoReview.Shell.Tests.Dialogs.Native;
 
 /// <summary>
-/// WP-35 GÄ1: Diagnostics (15 cáº·p nhÃ£n/giÃ¡ trá»‹ + Sao chÃ©p), SkippedFiles vÃ  BatchReview Win32 gá»‘c. Parity vá»›i
-/// <c>DiagnosticsPresenter</c>/<c>SkippedFilesPresenter</c>/<c>BatchReviewPresenter</c> (cÃ¹ng vÄƒn báº£n) vÃ  vá»›i cÃ¡c cá»­a sá»• WPF
-/// (nÃºt nÃ o Ä‘Ã³ng/xÃ¡c nháº­n, Enter/Esc, kÃ©o giÃ£n).
+/// WP-35 GĐ1: Diagnostics (15 cặp nhãn/giá trị + Sao chép), SkippedFiles và BatchReview Win32 gốc. Parity với
+/// <c>DiagnosticsPresenter</c>/<c>SkippedFilesPresenter</c>/<c>BatchReviewPresenter</c> (cùng văn bản) và với các cửa sổ WPF
+/// (nút nào đóng/xác nhận, Enter/Esc, kéo giãn).
 /// </summary>
 [Collection("OverlayLocalization")]
 [Trait("Category", "UI")]

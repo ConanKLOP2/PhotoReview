@@ -8,8 +8,8 @@ using static PhotoReview.Shell.Tests.Dialogs.Native.NativeDialogTestKit;
 namespace PhotoReview.Shell.Tests.Dialogs.Native;
 
 /// <summary>
-/// WP-35 GÄ1: <c>IFileOpenDialog</c> / <c>IFileSaveDialog</c> qua <c>[GeneratedComInterface]</c>. Cáº¥u hÃ¬nh Ä‘á»c láº¡i Ä‘Æ°á»£c tá»« chÃ­nh há»™p
-/// thoáº¡i (COM tháº­t, khÃ´ng hiá»‡n cá»­a sá»•); hiá»‡n tháº­t Ä‘Æ°á»£c Ä‘Ã³ng báº±ng luá»“ng Ä‘Ã³ng cá»­a sá»• (nhÆ° test thÆ° má»¥c) nÃªn tráº£ null = ngÆ°á»i dÃ¹ng huá»·.
+/// WP-35 GĐ1: <c>IFileOpenDialog</c> / <c>IFileSaveDialog</c> qua <c>[GeneratedComInterface]</c>. Cấu hình đọc lại được từ chính hộp
+/// thoại (COM thật, không hiện cửa sổ); hiện thật được đóng bằng luồng đóng cửa sổ (như test thư mục) nên trả null = người dùng huỷ.
 /// </summary>
 [Trait("Category", "Native")]
 public sealed unsafe class NativeShellFileDialogTests
@@ -17,7 +17,7 @@ public sealed unsafe class NativeShellFileDialogTests
     private static readonly FileDialogFilter[] Filters =
     [
         new("JSON (*.json)", "*.json"),
-        new("Táº¥t cáº£ tá»‡p", "*.*"),
+        new("Tất cả tệp", "*.*"),
     ];
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed unsafe class NativeShellFileDialogTests
             ComdlgFilterSpec[] specs = [];
             try
             {
-                specs = NativeShellFileDialog.Configure(dialog, "Chá»n tá»‡p", Filters, folder, NativeShellFileDialog.OpenOptions, null, null);
+                specs = NativeShellFileDialog.Configure(dialog, "Chọn tệp", Filters, folder, NativeShellFileDialog.OpenOptions, null, null);
                 ComInterop.Check(dialog.GetOptions(out FileDialogOptions flags));
                 ComInterop.Check(dialog.GetFileTypeIndex(out uint index));
                 ComInterop.Check(dialog.GetFolder(out nint raw));
@@ -74,7 +74,7 @@ public sealed unsafe class NativeShellFileDialogTests
             ComdlgFilterSpec[] specs = [];
             try
             {
-                specs = NativeShellFileDialog.Configure(dialog, "LÆ°u", Filters, null, NativeShellFileDialog.SaveOptions, ".json", "settings.json");
+                specs = NativeShellFileDialog.Configure(dialog, "Lưu", Filters, null, NativeShellFileDialog.SaveOptions, ".json", "settings.json");
                 ComInterop.Check(dialog.GetOptions(out FileDialogOptions flags));
                 ComInterop.Check(dialog.GetFileName(out nint raw));
                 return (flags, ShellNative.TakeCoTaskString(raw));
@@ -119,8 +119,8 @@ public sealed unsafe class NativeShellFileDialogTests
                 });
             });
             picked = save
-                ? dialog.PickSaveFile(0, "LÆ°u", Filters, ".json", "a.json", null)
-                : dialog.PickOpenFile(0, "Má»Ÿ", Filters, null);
+                ? dialog.PickSaveFile(0, "Lưu", Filters, ".json", "a.json", null)
+                : dialog.PickOpenFile(0, "Mở", Filters, null);
             finished.Set();
             return 0;
         });

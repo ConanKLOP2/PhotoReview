@@ -9,8 +9,8 @@ using PhotoReview.Shell.Win32.Hosting;
 namespace PhotoReview.Shell.Tests.Dialogs.Native;
 
 /// <summary>
-/// WP-35 GÄ1: há»™p thoáº¡i Win32 modal cháº¡y trong vÃ²ng láº·p lá»“ng cá»§a shell (<see cref="MessageLoop.RunNested"/>): viá»‡c dispatcher má»©c
-/// cao, bá»™ lá»c phÃ­m (cá»­a sá»• WPF modeless) vÃ  WM_QUIT (bÃ i há»c #486) hoáº¡t Ä‘á»™ng Ä‘Ãºng khi há»™p thoáº¡i Ä‘ang má»Ÿ, trÃªn UI thread tháº­t.
+/// WP-35 GĐ1: hộp thoại Win32 modal chạy trong vòng lặp lồng của shell (<see cref="MessageLoop.RunNested"/>): việc dispatcher mức
+/// cao, bộ lọc phím (cửa sổ WPF modeless) và WM_QUIT (bài học #486) hoạt động đúng khi hộp thoại đang mở, trên UI thread thật.
 /// </summary>
 [Trait("Category", "UI")]
 public sealed class NativeDialogLoopTests

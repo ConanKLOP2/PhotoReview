@@ -8,8 +8,8 @@ using static PhotoReview.Shell.Tests.Dialogs.Native.NativeDialogTestKit;
 namespace PhotoReview.Shell.Tests.Dialogs.Native;
 
 /// <summary>
-/// WP-35 GÄ1: há»™p thoáº¡i zoom tuá»³ chá»n Win32 gá»‘c (parity vá»›i <c>ClickZoomCustomDialogTests</c> cá»§a báº£n WPF). Cá»­a sá»• THáº¬T trÃªn thread STA
-/// riÃªng; ngÆ°á»i dÃ¹ng Ä‘Æ°á»£c mÃ´ phá»ng báº±ng SendMessage/IsDialogMessage Ä‘á»“ng bá»™ trong callback <c>ready</c>.
+/// WP-35 GĐ1: hộp thoại zoom tuỳ chọn Win32 gốc (parity với <c>ClickZoomCustomDialogTests</c> của bản WPF). Cửa sổ THẬT trên thread STA
+/// riêng; người dùng được mô phỏng bằng SendMessage/IsDialogMessage đồng bộ trong callback <c>ready</c>.
 /// </summary>
 [Collection("OverlayLocalization")]
 [Trait("Category", "UI")]

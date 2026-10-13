@@ -14,9 +14,9 @@ using PhotoReview.Shell.Win32.Hosting;
 namespace PhotoReview.Shell.WpfBridge.Tests.Probe;
 
 /// <summary>
-/// Entry point tá»± viáº¿t cá»§a project test (xUnit khÃ´ng gá»i nÃ³). <c>--probe-lazy</c>: tiáº¿n trÃ¬nh sáº¡ch dá»±ng cá»•ng cá»­a sá»• phá»¥ nhÆ°
-/// shell, má»Ÿ má»™t cá»­a sá»• phá»¥ modal rá»“i Ä‘Ã³ng, in ra danh sÃ¡ch assembly WPF Ä‘Ã£ náº¡p á»Ÿ tá»«ng bÆ°á»›c (test cha so sÃ¡nh).
-/// DÃ²ng káº¿t quáº£: <c>STAGE tÃªn | wpf=a,b,c</c>; thÃªm <c>TIMING tÃªn=ms</c>.
+/// Entry point tự viết của project test (xUnit không gọi nó). <c>--probe-lazy</c>: tiến trình sạch dựng cổng cửa sổ phụ như
+/// shell, mở một cửa sổ phụ modal rồi đóng, in ra danh sách assembly WPF đã nạp ở từng bước (test cha so sánh).
+/// Dòng kết quả: <c>STAGE tên | wpf=a,b,c</c>; thêm <c>TIMING tên=ms</c>.
 /// </summary>
 internal static class ProbeProgram
 {
@@ -72,7 +72,7 @@ internal static class ProbeProgram
         return exit;
     }
 
-    /// <summary>Thá»i gian má»Ÿ+Ä‘Ã³ng (Ä‘Ã£ gá»“m vÃ²ng láº·p lá»“ng WPF) láº§n Ä‘áº§u vÃ  láº§n sau cá»§a Diagnostics vÃ  Settings, cÃ¹ng tiáº¿n trÃ¬nh.</summary>
+    /// <summary>Thời gian mở+đóng (đã gồm vòng lặp lồng WPF) lần đầu và lần sau của Diagnostics và Settings, cùng tiến trình.</summary>
     private static System.Diagnostics.Stopwatch? Clock;
     private static TimeSpan? VisibleAt;
 
@@ -102,18 +102,18 @@ internal static class ProbeProgram
     private static int RunScenario(IServiceProvider provider, MessageLoop loop)
     {
         var lazy = SecondaryWindowPorts.CreateLazy(provider, loop);
-        Report("lazy-created"); // chÆ°a Ä‘á»c .Value: chÆ°a náº¡p cáº£ cáº§u
+        Report("lazy-created"); // chưa đọc .Value: chưa nạp cả cầu
         var dialogs = new Win32DialogService(() => 0, new FolderPicker(new UnwiredShellFolderDialog(), () => 0), lazy);
         Report("dialog-service-created");
         var port = lazy.Value;
-        Report("port-loaded"); // host táº¡o xong, chÆ°a má»Ÿ cá»­a sá»•: WPF váº«n chÆ°a náº¡p
+        Report("port-loaded"); // host tạo xong, chưa mở cửa sổ: WPF vẫn chưa nạp
         if (port is null)
         {
             Console.WriteLine("ERROR port null");
             return 1;
         }
 
-        // ÄÃ³ng cá»­a sá»• ngay khi nÃ³ hiá»‡n: viá»‡c Ä‘Äƒng kÃ½ trÆ°á»›c cháº¡y trong vÃ²ng láº·p lá»“ng cá»§a ShowDialog.
+        // Đóng cửa sổ ngay khi nó hiện: việc đăng ký trước chạy trong vòng lặp lồng của ShowDialog.
         loop.Dispatcher.Post(() => ScheduleClose(loop.Dispatcher), UiPriority.Normal);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         dialogs.ShowDiagnostics();
@@ -126,8 +126,8 @@ internal static class ProbeProgram
     }
 
     /// <summary>
-    /// WP-35 GÄ1: DI THáº¬T cá»§a shell (cáº§u WPF Ä‘Äƒng kÃ½ máº·c Ä‘á»‹nh); má»Ÿ bá»‘n cá»­a sá»• Win32 gá»‘c vÃ  Ä‘Ã³ng tá»«ng cÃ¡i báº±ng WM_CLOSE. WPF vÃ  cáº£
-    /// assembly cáº§u KHÃ”NG Ä‘Æ°á»£c náº¡p á»Ÿ báº¥t ká»³ bÆ°á»›c nÃ o.
+    /// WP-35 GĐ1: DI THẬT của shell (cầu WPF đăng ký mặc định); mở bốn cửa sổ Win32 gốc và đóng từng cái bằng WM_CLOSE. WPF và cả
+    /// assembly cầu KHÔNG được nạp ở bất kỳ bước nào.
     /// </summary>
     private static int RunNativeScenario(IServiceProvider unused, MessageLoop loop)
     {
@@ -160,7 +160,7 @@ internal static class ProbeProgram
         return batch || picked is not null ? 1 : 0;
     }
 
-    /// <summary>Thá»i gian tá»›i khi cá»­a sá»• Ä‘Ã£ táº¡o + bá»‘ cá»¥c + hiá»‡n (callback ready), xen káº½ bá»‘n cá»­a sá»•, nhiá»u vÃ²ng.</summary>
+    /// <summary>Thời gian tới khi cửa sổ đã tạo + bố cục + hiện (callback ready), xen kẽ bốn cửa sổ, nhiều vòng.</summary>
     private static int RunNativeTiming(IServiceProvider provider, MessageLoop loop)
     {
         _ = loop;
@@ -197,7 +197,7 @@ internal static class ProbeProgram
 
     private static void ScheduleClose(Win32UiDispatcher dispatcher)
     {
-        // TÃ¬m cá»­a sá»• WPF cá»§a thread nÃ y vÃ  gá»­i WM_CLOSE; náº¿u chÆ°a cÃ³ thÃ¬ thá»­ láº¡i á»Ÿ lÆ°á»£t sau (khÃ´ng chá» cá»‘ Ä‘á»‹nh).
+        // Tìm cửa sổ WPF của thread này và gửi WM_CLOSE; nếu chưa có thì thử lại ở lượt sau (không chờ cố định).
         var windows = new List<nint>();
         EnumThreadWindows(GetCurrentThreadId(), (hwnd, _) =>
         {
