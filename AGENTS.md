@@ -59,6 +59,7 @@ The application must prioritize the following principles when processing and rev
 - **No hung agents:** briefing or being a subagent, read `docs/AGENT-HYGIENE.md`: bound every command (timeouts), stop only
   processes you started, use a private scratchpad prefix, and end with `tools/agent-finish-check.ps1 -Worktree <path>` (must
   print `[PASS]`) before the final report - a leftover background process makes a finished agent look running for hours.
+  PR flow (auto-fix / auto-merge): `docs/AGENT-HYGIENE.md` section 5 (green-only auto-merge, merge not rebase, `tools/sync-pr-branch.sh`).
 - **Verify claims:** never report an agent's "done / N tests pass" without rebuilding (`dotnet build PhotoReview.slnx -c Release`, 0 warnings) and rerunning the gate on the merged result.
 - **No stacked PRs:** after the user merges, check each PR head with `git merge-base --is-ancestor <head> origin/master`, not the MERGED label.
 - **Recycle Bin:** never run code that deletes from, sweeps or empties the user's real Recycle Bin — including mutation checks of such code (2026-09-24 incident, Q-R9 declined). Use fakes; Native bin tests only remove their own items.
