@@ -4,6 +4,7 @@ using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Dialogs.SettingsD2D;
 using PhotoReview.TestSupport;
 using Xunit.Abstractions;
+using PhotoReview.Shell.Rendering;
 using static PhotoReview.Shell.Tests.Dialogs.Native.NativeDialogTestKit;
 using static PhotoReview.Shell.Tests.Dialogs.SettingsD2D.D2DTestKit;
 
@@ -86,7 +87,6 @@ public sealed class SettingsD2DPerfTests(ITestOutputHelper output)
                 window.View.Layout(window.View.ClientWidth, window.View.ClientHeight, window.Scale);
                 window.PushValuesToHosted();
                 window.SyncHosted();
-                window.MeasureGpuCompletion = true;
                 var t2 = Stopwatch.GetTimestamp();
                 window.RenderNow();
                 var t3 = Stopwatch.GetTimestamp();
@@ -133,7 +133,6 @@ public sealed class SettingsD2DPerfTests(ITestOutputHelper output)
             window.View.Layout(window.View.ClientWidth, window.View.ClientHeight, window.Scale);
             window.PushValuesToHosted();
             window.SyncHosted();
-            window.MeasureGpuCompletion = true;
             window.RenderNow();
             Pump();
             var view = window.View;
@@ -181,8 +180,35 @@ public sealed class SettingsD2DPerfTests(ITestOutputHelper output)
             Line($"GPU memory (typeperf, window alive): {GpuMemoryMb()}");
             return 0;
         });
-        Line($"scroll frame CPU submit (BeginDraw..Present) ms: {Stat(cpu)}");
-        Line($"scroll frame to GPU done ms: {Stat(gpu)}");
+        Line($"scroll frame, real window: CPU submit (BeginDraw..Present) ms: {Stat(cpu)}");
+        // GPU xong: cùng mã vẽ trên bề mặt offscreen (WaitForGpu đọc lại 1 pixel; swap chain cửa sổ không hỗ trợ).
+        var done = new List<double>();
+        var submit = new List<double>();
+        var scale = dpi / 96.0;
+        using (var offscreen = new D2DOffscreenHost((int)(640 * scale), (int)(560 * scale), scale, true, hardware: !warp))
+        {
+            offscreen.Render(read: false);
+            offscreen.Surface.WaitForGpu();
+            var max = offscreen.View.MaxOffsetPx;
+            for (var i = 0; i < 400; i++)
+            {
+                offscreen.View.ScrollTo((int)((long)max * (i % 40) / 39));
+                var t0 = Stopwatch.GetTimestamp();
+                offscreen.Render(read: false);
+                var t1 = Stopwatch.GetTimestamp();
+                offscreen.Surface.WaitForGpu();
+                var t2 = Stopwatch.GetTimestamp();
+                if (i >= 20)
+                {
+                    submit.Add(Stopwatch.GetElapsedTime(t0, t1).TotalMilliseconds);
+                    done.Add(Stopwatch.GetElapsedTime(t0, t2).TotalMilliseconds);
+                }
+            }
+
+            Line($"offscreen {(offscreen.IsWarp ? "WARP" : "GPU")}: frame CPU submit ms: {Stat(submit)}");
+            Line($"offscreen {(offscreen.IsWarp ? "WARP" : "GPU")}: frame to GPU done ms: {Stat(done)}");
+        }
+
         Line($"scroll step end-to-end (message + paint + GPU done + hosted sync) ms: {Stat(step)}");
         Line($"objects: GDI {gdiBefore}->{gdiAfter} (+{gdiAfter - gdiBefore}), USER {userBefore}->{userAfter} (+{userAfter - userBefore}); private bytes {privateBefore / 1048576.0:F1}->{privateAfter / 1048576.0:F1} MB (+{(privateAfter - privateBefore) / 1048576.0:F1})");
     }
