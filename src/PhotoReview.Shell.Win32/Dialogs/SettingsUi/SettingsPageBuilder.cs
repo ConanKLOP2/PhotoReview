@@ -239,6 +239,42 @@ internal sealed class SettingsButtonsElement(IReadOnlyList<int> ids, bool aligne
     }
 }
 
+/// <summary>Một radio (có thể thụt vào, tự xuống dòng) kèm ghi chú mờ ngay dưới (thụt thêm), nhưng ghi chú ẩn nếu không có.</summary>
+internal sealed class SettingsRadioElement(int id, int? hintId, int indentDlu) : SettingsLayoutElement
+{
+    public override IEnumerable<int> ControlIds => hintId is { } hint ? [id, hint] : [id];
+
+    protected override int PlaceVisible(ISettingsLayoutSurface s, int x, int y, int width)
+    {
+        if (s.IsHidden(id))
+        {
+            s.Hide(id);
+            if (hintId is { } hiddenHint)
+            {
+                s.Hide(hiddenHint);
+            }
+
+            return 0;
+        }
+
+        var indent = s.Dx(indentDlu);
+        var textWidth = Math.Max(s.Dx(20), width - indent - s.Dx(14));
+        var height = Math.Max(s.LineHeight + s.Dy(2), s.TextHeight(id, textWidth) + s.Dy(1));
+        s.Place(id, x + indent, y, width - indent, height);
+        var used = height + s.Dy(2);
+        if (hintId is { } hint)
+        {
+            var hintIndent = indent + s.Dx(12);
+            var hintWidth = Math.Max(s.Dx(30), width - hintIndent);
+            var hintHeight = s.TextHeight(hint, hintWidth);
+            s.Place(hint, x + hintIndent, y + used, hintWidth, hintHeight);
+            used += hintHeight + s.Dy(2);
+        }
+
+        return used + s.Dy(4);
+    }
+}
+
 /// <summary>Dãy ô tick xuống dòng theo bề rộng (WrapPanel của bản WPF).</summary>
 internal sealed class SettingsCheckFlowElement(IReadOnlyList<int> ids, int indentDlu) : SettingsLayoutElement
 {
@@ -352,6 +388,7 @@ internal sealed class SettingsPageBuilder
     private readonly Dictionary<int, IReadOnlyList<Func<string>>> _comboItems = [];
     private readonly Dictionary<int, (int Min, int Max)> _sliders = [];
     private int _counter;
+    private bool _breakGroup;
 
     internal SettingsPageBuilder(int idBase)
     {
@@ -386,6 +423,13 @@ internal sealed class SettingsPageBuilder
         if (_counter > 999)
         {
             throw new InvalidOperationException("A settings page can declare at most 999 controls.");
+        }
+
+        if (_breakGroup)
+        {
+            // The control right after a radio group starts a new dialog-manager group, so the arrow keys cannot walk out of the radios.
+            style |= DialogConstants.WsGroup;
+            _breakGroup = false;
         }
 
         if (text is not null && controlClass == DialogControlClass.Button)
@@ -491,6 +535,58 @@ internal sealed class SettingsPageBuilder
     {
         var ids = texts.Select(text => Add(DialogControlClass.Button, text, Child | TabStop | DialogConstants.BsPushButton)).ToArray();
         AddElement(new SettingsButtonsElement(ids, aligned));
+        return ids;
+    }
+
+    /// <summary>
+    /// Nhóm radio (BS_AUTORADIOBUTTON): radio đầu có WS_GROUP + WS_TABSTOP (dialog manager: Tab vào radio đang chọn, mũi tên đi trong nhóm),
+    /// điều khiển khai báo ngay sau nhóm mở nhóm mới. <paramref name="hints"/> (tuỳ chọn, null = không có) là ghi chú mờ dưới từng radio;
+    /// ghi chú được tạo SAU mọi radio để mũi tên không rơi vào chữ. Trả id radio theo thứ tự (chỉ số = thứ tự mục).
+    /// </summary>
+    public IReadOnlyList<int> Radio(IReadOnlyList<Func<string>> texts, IReadOnlyList<Func<string>?>? hints = null, int indentDlu = 0)
+    {
+        ArgumentNullException.ThrowIfNull(texts);
+        if (texts.Count < 2)
+        {
+            throw new ArgumentException("A radio group needs at least two options.", nameof(texts));
+        }
+
+        if (hints is not null && hints.Count != texts.Count)
+        {
+            throw new ArgumentException("There must be one hint (or null) per radio option.", nameof(hints));
+        }
+
+        var ids = new int[texts.Count];
+        for (var i = 0; i < texts.Count; i++)
+        {
+            var style = Child | ControlConstants.BsAutoRadioButton | BsMultiline;
+            if (i == 0)
+            {
+                style |= DialogConstants.WsGroup | TabStop;
+            }
+
+            ids[i] = Add(DialogControlClass.Button, texts[i], style);
+        }
+
+        _breakGroup = true;
+        var hintIds = new int?[texts.Count];
+        if (hints is not null)
+        {
+            for (var i = 0; i < hints.Count; i++)
+            {
+                if (hints[i] is { } hint)
+                {
+                    hintIds[i] = Add(DialogControlClass.Static, hint, StaticStyle);
+                    _notes.Add(hintIds[i]!.Value);
+                }
+            }
+        }
+
+        for (var i = 0; i < ids.Length; i++)
+        {
+            AddElement(new SettingsRadioElement(ids[i], hintIds[i], indentDlu));
+        }
+
         return ids;
     }
 

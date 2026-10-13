@@ -290,6 +290,36 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         _subscribed = true;
         _attached = true;
         ActivatePage(index, remember: Options.Target != SettingsTarget.ExternalEditor, layout: false); // the framework lays out once, right after OnInitialized
+        if (Options.Target == SettingsTarget.ExternalEditor)
+        {
+            // The framework puts the focus on the navigation list right after OnInitialized; the editor field takes it once the loop runs.
+            PostToUi(() => FocusExternalEditor());
+        }
+    }
+
+    /// <summary>
+    /// "Open in external editor" without an editor configured: focuses the editor path field of the Files page (creating the page controls
+    /// if needed) like the WPF window (<c>FocusExternalEditorOnLoad</c>). False when no page handles it.
+    /// </summary>
+    internal bool FocusExternalEditor()
+    {
+        for (var i = 0; i < _pages.Count; i++)
+        {
+            if (_pages[i].Key != "Files")
+            {
+                continue;
+            }
+
+            EnsurePageCreated(i);
+            if (_active != i)
+            {
+                ActivatePage(i, remember: false);
+            }
+
+            return _pages[i].FocusExternalEditor();
+        }
+
+        return false;
     }
 
     /// <summary>

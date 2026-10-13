@@ -42,6 +42,12 @@ internal interface ISettingsPageView
     /// <summary>Điều khiển cần focus khi Save bị từ chối ở trường này (null = trang không có trường đó).</summary>
     int? FocusTarget(SettingsFocusField field);
 
+    /// <summary>
+    /// Lệnh "Open in external editor" từ ngoài (<c>SettingsTarget.ExternalEditor</c>): trang Files đưa focus vào ô đường dẫn trình
+    /// soạn thảo và trả true; các trang khác giữ mặc định (false). Khung gọi một lần, sau khi cửa sổ đã bố cục xong.
+    /// </summary>
+    bool FocusExternalEditor() => false;
+
     /// <summary>Cửa sổ đóng.</summary>
     void OnClosed();
 }
@@ -75,6 +81,8 @@ internal abstract class SettingsPageBase : ISettingsPageView
     }
 
     public virtual int? FocusTarget(SettingsFocusField field) => null;
+
+    public virtual bool FocusExternalEditor() => false;
 
     public virtual void OnClosed()
     {
