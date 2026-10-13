@@ -47,8 +47,15 @@ public sealed class DarkScrollBarRenderingTests
             }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "ScrollViewer render timed out.");
+        // A hang bound, not a speed budget: the first WPF render of a cold process (theme/font load, JIT) on a busy 2-vCPU
+        // runner took over the former fixed 15 s once in CI although nothing was wrong. The body only renders one small tree,
+        // so a genuine hang is still caught, just later.
+        var bound = TimeSpan.FromSeconds(120);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.True(thread.Join(bound),
+            $"ScrollViewer render did not finish within {bound.TotalSeconds:0} s (waited {stopwatch.Elapsed.TotalSeconds:0.0} s, thread state {thread.ThreadState}).");
         // A real dialog forced this thread's body to fail; that force-close is only a symptom, so
         // report the dialog ahead of whatever exception the body itself raised.
         if (dialogException is not null) throw dialogException;

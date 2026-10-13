@@ -84,7 +84,11 @@ public sealed class ExplorerOrderServiceSeamTests
             return Available(folder, "a.jpg");
         });
 
-        var timedOut = await service.TryGetSnapshotAsync(Folder("t"), TimeSpan.Zero, CancellationToken.None).WaitAsync(HangGuard);
+        // Not TimeSpan.Zero: the timeout would then race the pump thread reaching the query, and the pump returns Canceled
+        // WITHOUT invoking a query whose token is already cancelled (ExplorerOrderService, "already cancelled" check), so on a busy
+        // runner the query never ran and "sawCancel" never came (30 s hang guard, CI run 38447347034). A timeout the pump
+        // thread beats by far makes the test about what it says: a RUNNING query sees its token cancelled.
+        var timedOut = await service.TryGetSnapshotAsync(Folder("t"), TimeSpan.FromSeconds(3), CancellationToken.None).WaitAsync(HangGuard);
         Assert.Equal(ExplorerOrderStatus.TimedOut, timedOut.Status);
         Assert.Equal(ExplorerReason.Timeout, timedOut.Reason);
         Assert.Empty(timedOut.OrderedPaths);

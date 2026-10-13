@@ -189,4 +189,5 @@ decoder giả ép thứ tự hoàn tất đảo ngược; bất biến kiểm tr
 qua được ngân sách retry (đếm theo SỐ LẦN, 5 lần, ~100 ms ngủ) của OperationJournal: số đó là lịch CPU, không phải bất biến. Mã sản xuất
 đúng (journal từ chối khi tranh chấp, không xoắn/mất), chỉ sửa test: writer retry như caller thật, rồi khẳng định MỌI bản ghi đã ack
 hiện diện đúng một lần và không xoắn. Test thứ hai cùng lớp (Committed >= 15/30) sửa cùng cách. [Detail](decisions/FLAKY-JOURNAL-MANY-WRITERS.md) |
+| FLAKY-INTEGRATION-APP | CHƯA XÁC NHẬN: 5 test Integration/App.Tests đỏ ngẫu nhiên khi máy tải - StaTestHostSmoke (trần 10 s đồng hồ thật), Startup prewarm (kiểm "đã bắt đầu" ngay sau Show khi decode chạy trên pool), Navigation seed (Flush bỏ sót ghi đang bay của SessionWriter), DarkScrollBar (Join 15 s) sửa tận gốc; AppForwardedOpen A3 chưa tái hiện được, giữ nguyên. [Detail](decisions/FLAKY-INTEGRATION-APP.md) |
 <!-- END GENERATED DECIDED TABLE -->
