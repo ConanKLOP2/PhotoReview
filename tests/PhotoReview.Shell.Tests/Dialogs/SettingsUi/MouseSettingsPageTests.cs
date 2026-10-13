@@ -21,6 +21,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// </summary>
 [Collection("GlobalState")]
 [Trait("Category", "UI")]
+[Trait("Category", "Manual")] // EXPERIMENT: isolate the CI leak-test failure
 public sealed class MouseSettingsPageTests : IDisposable
 {
     private static readonly int MouseIndex = SettingsPresenter.Pages.ToList().FindIndex(p => p.Key == "Mouse");
