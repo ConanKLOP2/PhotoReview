@@ -658,15 +658,85 @@ public sealed class SettingsDialogTests : IDisposable
     }
 
     [Fact]
-    public void ChromeIsApplied_ExactlyOnce_WithTheScrollBarComboAndNavigation()
+    public void Chrome_IsAppliedToTheFrame_AndThenToEachPageWhenItsControlsAreCreated()
     {
         var chrome = new RecordingChrome();
-        Show(new AppSettings(), (d, _) => d.Close(), chrome: chrome);
+        Show(new AppSettings(), (d, _) =>
+        {
+            Assert.Equal(2, chrome.Calls.Count);
+            GoTo(d, 1);
+            Assert.Equal(3, chrome.Calls.Count);
+            GoTo(d, 1);
+            GoTo(d, 0);
+            Assert.Equal(3, chrome.Calls.Count);
+            d.Close();
+        }, chrome: chrome, realizeAll: false);
 
-        var call = Assert.Single(chrome.Calls);
-        Assert.Contains(call.Controls, c => c.Class == DialogControlClass.ComboBox);
-        Assert.Contains(call.Controls, c => c.Class == DialogControlClass.ScrollBar);
-        Assert.Contains(call.Controls, c => c.Class == DialogControlClass.Trackbar);
+        Assert.Contains(chrome.Calls[0].Controls, c => c.Class == DialogControlClass.ScrollBar);
+        Assert.Contains(chrome.Calls[0].Controls, c => c.Class == DialogControlClass.ListBox);
+        Assert.Contains(chrome.Calls[1].Controls, c => c.Class == DialogControlClass.ComboBox);
+        Assert.Contains(chrome.Calls[2].Controls, c => c.Class == DialogControlClass.Trackbar);
+    }
+
+    [Fact]
+    public void OnlyTheShowingPagesControlsExist_UntilAnotherPageIsOpened()
+    {
+        Show(new AppSettings(), (d, _) =>
+        {
+            Assert.True(d.IsPageCreated(0));
+            Assert.False(d.IsPageCreated(1));
+            var firstOfDisplay = d.PageItems(1)[0].Id;
+            Assert.Equal(0, H(d, firstOfDisplay));
+            GoTo(d, 1);
+            Assert.True(d.IsPageCreated(1));
+            Assert.NotEqual(0, H(d, firstOfDisplay));
+            d.Close();
+        }, realizeAll: false);
+    }
+
+    [Fact]
+    public void APageOpenedAfterDefaults_ShowsTheDefaultsAndNotTheOldValues()
+    {
+        Show(new AppSettings { LoggingEnabled = true, ShowFolderInfo = true }, (d, _) =>
+        {
+            Command(d, SettingsDialog.DefaultsId);
+            GoTo(d, 6);
+            Assert.False(Checked(d, ((Win32.Dialogs.SettingsUi.Pages.DiagnosticsSettingsPage)d.Pages[6]).Ids.Logging));
+            GoTo(d, 1);
+            Assert.False(Checked(d, ((Win32.Dialogs.SettingsUi.Pages.DisplaySettingsPage)d.Pages[1]).Ids.ShowFolderInfo));
+            d.Close();
+        }, realizeAll: false);
+    }
+
+    [Fact]
+    public void SavingWithoutVisitingAPage_KeepsThatPagesValues()
+    {
+        var (_, dialog) = Show(new AppSettings { LoggingEnabled = true, ShowFolderInfo = true, ToolbarOpacityPercent = 45 }, (d, _) =>
+        {
+            Assert.True(d.TrySaveAll());
+            d.Close();
+        }, realizeAll: false);
+
+        Assert.True(dialog.Settings.LoggingEnabled);
+        Assert.True(dialog.Settings.ShowFolderInfo);
+        Assert.Equal(45, dialog.Settings.ToolbarOpacityPercent);
+    }
+
+    [Fact]
+    public void ALanguageChange_BeforeAPageIsOpened_LocalizesItWhenItIsCreated()
+    {
+        using var scope = TestLocalization.Use(TestLocalization.English);
+        Show(new AppSettings(), (d, _) =>
+        {
+            Localizer.SetCurrent(TestLocalization.Vietnamese);
+            Drain(d);
+            GoTo(d, 1);
+            var ids = ((Win32.Dialogs.SettingsUi.Pages.DisplaySettingsPage)d.Pages[1]).Ids;
+            Assert.Equal(Tr.SettingsShowInfoOverlayLabel, Txt(d, ids.ShowInfoOverlay));
+            Assert.Equal(Tr.SettingsLoadingModeLabel, Txt(d, d.PageItems(1).First(i => i.Id == ids.LoadingMode - 1).Id));
+            Assert.Equal(Tr.EnumLoadingModeFast, ComboText(d, ids.LoadingMode, 0));
+            d.Close();
+        }, realizeAll: false);
     }
 
     [Fact]

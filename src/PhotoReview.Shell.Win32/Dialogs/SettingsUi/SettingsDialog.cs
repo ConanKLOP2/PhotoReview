@@ -79,11 +79,13 @@ internal sealed unsafe class SettingsDialog : NativeDialog
     private readonly List<DialogItem> _items = [];
     private readonly Dictionary<int, SettingsLayoutElement> _groupsById = [];
     private readonly HashSet<int> _hidden = [];
+    private readonly Dictionary<nint, (int X, int Y, int W, int H)> _placed = [];
     private readonly Dictionary<int, IReadOnlyList<Func<string>>> _comboItems = [];
     private readonly HashSet<int> _notes = [];
     private readonly int[] _scroll;
     private readonly int[] _contentHeight;
     private readonly bool[] _dirty;
+    private readonly bool[] _created;
     private readonly ConcurrentQueue<Action> _queue = new();
     private readonly IDialogWarningSink _warnings;
     private readonly SettingsPageContext _context;
@@ -118,6 +120,7 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         _scroll = new int[_pages.Count];
         _contentHeight = new int[_pages.Count];
         _dirty = new bool[_pages.Count];
+        _created = new bool[_pages.Count];
         BuildItems();
     }
 
@@ -199,7 +202,6 @@ internal sealed unsafe class SettingsDialog : NativeDialog
             var builder = new SettingsPageBuilder(PageIdBase(i));
             _pages[i].Declare(builder);
             _builders[i] = builder;
-            _items.AddRange(builder.Items);
             foreach (var pair in builder.ComboItems)
             {
                 _comboItems[pair.Key] = pair.Value;
@@ -247,86 +249,111 @@ internal sealed unsafe class SettingsDialog : NativeDialog
 
     protected override void OnInitialized()
     {
-        // 1. Cửa sổ chứa trang: tra id xuyên cửa sổ, chuyển tiếp thông điệp điều khiển con lên hộp thoại, thanh cuộn tối.
+        // Cửa sổ chứa trang: tra id xuyên cửa sổ, chuyển tiếp thông điệp điều khiển con lên hộp thoại. Điều khiển của một trang chỉ được
+        // TẠO khi trang được mở lần đầu (EnsurePageCreated): mở cửa sổ không phải trả giá mọi trang (cột mốc "mở <= 150 ms").
         for (var i = 0; i < _pages.Count; i++)
         {
             var viewport = User32.GetDlgItem(Hwnd, ViewportId(i));
             AddChildHost(viewport);
             Forward(viewport, everything: true);
-        }
-
-        Forward(Item(NavId));
-
-        // 2. Điều khiển của trang (tạo bởi template dưới hộp thoại) -> con của cửa sổ chứa. SetParent đưa lên ĐẦU thứ tự Z nên đi
-        // ngược để thứ tự Tab = thứ tự khai báo.
-        for (var i = 0; i < _pages.Count; i++)
-        {
-            var viewport = User32.GetDlgItem(Hwnd, ViewportId(i));
-            var items = _builders[i].Items;
-            for (var k = items.Count - 1; k >= 0; k--)
-            {
-                var control = User32.GetDlgItem(Hwnd, items[k].Id);
-                if (control == 0)
-                {
-                    continue;
-                }
-
-                User32.SetParent(control, viewport);
-                if (items[k].Class == DialogControlClass.ComboBox)
-                {
-                    Forward(control);
-                }
-            }
-
             User32.ShowWindow(viewport, WindowMessages.SwHide);
         }
 
-        // 3. Combobox/thanh trượt khai báo + danh sách điều hướng + trang.
-        FillStaticCombos();
-        foreach (var builder in _builders)
-        {
-            foreach (var (id, range) in builder.Sliders)
-            {
-                TrackbarControl.Configure(Item(id), range.Min, range.Max, 1, 1, Math.Max(1, (range.Max - range.Min) / 10));
-            }
-        }
-
+        Forward(Item(NavId));
         for (var i = 0; i < _pages.Count; i++)
         {
             ListBoxControl.Add(Item(NavId), _pages[i].Title);
         }
-
-        ApplyTextsToControls(); // before Attach/Load: pages overwrite the dynamic texts (status lines, "Update path", values)
-        _attached = true;
-        foreach (var page in _pages)
-        {
-            page.Attach(_context);
-        }
-
-        LoadAll(_presenter.LoadFields());
 
         var key = Options.Target == SettingsTarget.ExternalEditor ? "Files" : SettingsPresenter.InitialPageKey;
         var index = Math.Max(0, _pages.ToList().FindIndex(page => page.Key == key));
         ListBoxControl.SelectSingle(Item(NavId), index);
         Localizer.CurrentChanged += OnLocalizerChanged;
         _subscribed = true;
-        ActivatePage(index, remember: Options.Target != SettingsTarget.ExternalEditor);
+        _attached = true;
+        ActivatePage(index, remember: Options.Target != SettingsTarget.ExternalEditor, layout: false); // the framework lays out once, right after OnInitialized
     }
 
-    private void FillStaticCombos()
+    /// <summary>
+    /// Tạo điều khiển của trang <paramref name="index"/> (một lần): <c>CreateWindowEx</c> theo danh sách khai báo, con của cửa sổ chứa
+    /// trang, font + giao diện tối, danh sách combobox/thanh trượt, rồi <see cref="ISettingsPageView.Attach"/> + nạp giá trị hiện tại
+    /// của bản làm việc (nên trang tạo sau Defaults/Import vẫn hiện đúng).
+    /// </summary>
+    internal void EnsurePageCreated(int index)
     {
-        foreach (var (id, items) in _comboItems)
+        if (_created[index] || Hwnd == 0)
+        {
+            return;
+        }
+
+        _created[index] = true;
+        var viewport = Item(ViewportId(index));
+        var items = _builders[index].Items;
+        var controls = new List<DialogChromeControl>(items.Count);
+        var instance = Kernel32.GetModuleHandle(0);
+        foreach (var item in items)
+        {
+            // The text provider again (not the text captured at Declare time): the language may have changed since the dialog was built.
+            var text = _builders[index].Texts.TryGetValue(item.Id, out var provider) ? provider() : item.Text;
+            var control = User32.CreateWindowEx(item.ExStyle, DialogTemplate.WindowClassName(item.Class), text, item.Style, 0, 0, 0, 0,
+                viewport, item.Id, instance, 0);
+            if (control == 0)
+            {
+                continue;
+            }
+
+            RegisterChild(control);
+            controls.Add(new DialogChromeControl(control, item.Class));
+            if (item.Class == DialogControlClass.ComboBox)
+            {
+                Forward(control);
+            }
+        }
+
+        ApplyChrome(controls);
+        var builder = _builders[index];
+        foreach (var (id, texts) in builder.ComboItems)
         {
             var combo = Item(id);
             ComboBoxControl.Clear(combo);
-            foreach (var text in items)
+            foreach (var text in texts)
             {
                 ComboBoxControl.Add(combo, text());
             }
 
             ComboBoxControl.Select(combo, 0);
         }
+
+        foreach (var (id, range) in builder.Sliders)
+        {
+            TrackbarControl.Configure(Item(id), range.Min, range.Max, 1, 1, Math.Max(1, (range.Max - range.Min) / 10));
+        }
+
+        _pages[index].Attach(_context);
+        _loading = true;
+        try
+        {
+            _pages[index].Load(_presenter.LoadFields());
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        _dirty[index] = true;
     }
+
+    /// <summary>Tạo mọi trang (test và tính năng cần duyệt hết điều khiển).</summary>
+    internal void EnsureAllPagesCreated()
+    {
+        for (var i = 0; i < _pages.Count; i++)
+        {
+            EnsurePageCreated(i);
+        }
+    }
+
+    /// <summary>Trang đã được tạo điều khiển chưa (test).</summary>
+    internal bool IsPageCreated(int index) => _created[index];
 
     protected override void OnClosed()
     {
@@ -350,9 +377,12 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         _loading = true;
         try
         {
-            foreach (var page in _pages)
+            for (var i = 0; i < _pages.Count; i++)
             {
-                page.Load(state);
+                if (_created[i])
+                {
+                    _pages[i].Load(state);
+                }
             }
         }
         finally
@@ -371,9 +401,12 @@ internal sealed unsafe class SettingsDialog : NativeDialog
     internal SettingsFormState CollectAll()
     {
         var state = _presenter.LoadFields();
-        foreach (var page in _pages)
+        for (var i = 0; i < _pages.Count; i++)
         {
-            page.Collect(state);
+            if (_created[i])
+            {
+                _pages[i].Collect(state);
+            }
         }
 
         return state;
@@ -381,7 +414,7 @@ internal sealed unsafe class SettingsDialog : NativeDialog
 
     // ---- điều hướng -------------------------------------------------------------------------------------------------------
 
-    internal void ActivatePage(int index, bool remember = true)
+    internal void ActivatePage(int index, bool remember = true, bool layout = true)
     {
         if (index < 0 || index >= _pages.Count)
         {
@@ -393,6 +426,7 @@ internal sealed unsafe class SettingsDialog : NativeDialog
             User32.ShowWindow(Item(ViewportId(_active)), WindowMessages.SwHide);
         }
 
+        EnsurePageCreated(index);
         _active = index;
         if (remember)
         {
@@ -408,7 +442,10 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         _scroll[index] = 0;
         _dirty[index] = true;
         User32.ShowWindow(Item(ViewportId(index)), WindowMessages.SwShow);
-        RunLayout();
+        if (layout)
+        {
+            RunLayout();
+        }
     }
 
     /// <summary>Ctrl+Tab / Ctrl+Shift+Tab: trang kế (vòng tròn).</summary>
@@ -742,6 +779,11 @@ internal sealed unsafe class SettingsDialog : NativeDialog
             foreach (var (id, items) in _comboItems)
             {
                 var combo = Item(id);
+                if (combo == 0)
+                {
+                    continue; // the page has not been opened yet: its combos are filled (localized) when it is created
+                }
+
                 var selected = ComboBoxControl.SelectedIndex(combo);
                 ComboBoxControl.Clear(combo);
                 foreach (var text in items)
@@ -752,9 +794,12 @@ internal sealed unsafe class SettingsDialog : NativeDialog
                 ComboBoxControl.Select(combo, Math.Max(0, selected));
             }
 
-            foreach (var page in _pages)
+            for (var i = 0; i < _pages.Count; i++)
             {
-                page.OnLanguageChanged();
+                if (_created[i])
+                {
+                    _pages[i].OnLanguageChanged();
+                }
             }
 
             _dirty.AsSpan().Fill(true);
@@ -1143,18 +1188,35 @@ internal sealed unsafe class SettingsDialog : NativeDialog
 
             if (dialog._hidden.Contains(id))
             {
-                User32.ShowWindow(control, WindowMessages.SwHide);
+                Hide(id);
                 return;
             }
 
-            User32.MoveWindow(control, x, y, Math.Max(0, width), Math.Max(0, height), true);
-            User32.ShowWindow(control, WindowMessages.SwShowNa);
+            // One SetWindowPos per control (position + size + show) and none when nothing changed: a page of ~80 controls is laid out
+            // on every resize/scroll/language change and creating-then-moving was the bulk of the open time.
+            var rect = (X: x, Y: y, W: Math.Max(0, width), H: Math.Max(0, height));
+            if (dialog._placed.TryGetValue(control, out var last) && last == rect)
+            {
+                return;
+            }
+
+            User32.SetWindowPos(control, 0, rect.X, rect.Y, rect.W, rect.H,
+                WindowMessages.SwpNoZOrder | WindowMessages.SwpNoActivate | WindowMessages.SwpShowWindow);
+            dialog._placed[control] = rect;
         }
 
         public void Hide(int id)
         {
             var control = dialog.Item(id);
-            if (control != 0)
+            if (control == 0)
+            {
+                return;
+            }
+
+            // Controls are created WS_VISIBLE at 0,0: one that was never placed (a hidden group at Attach) still has to be hidden.
+            var wasPlaced = dialog._placed.Remove(control);
+            var styleVisible = ((uint)User32.GetWindowLongPtr(control, WindowMessages.GwlStyle) & WindowMessages.WsVisible) != 0;
+            if (wasPlaced || styleVisible)
             {
                 User32.ShowWindow(control, WindowMessages.SwHide);
             }

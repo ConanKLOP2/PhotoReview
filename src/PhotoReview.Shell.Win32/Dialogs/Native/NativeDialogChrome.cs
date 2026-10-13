@@ -15,6 +15,12 @@ internal readonly record struct DialogChromeControl(nint Hwnd, DialogControlClas
 internal interface INativeDialogChrome
 {
     void Apply(nint dialog, IReadOnlyList<DialogChromeControl> controls);
+
+    /// <summary>
+    /// WP-35 GĐ3a: điều khiển tạo thêm SAU <see cref="Apply"/> (trang Settings tạo lười): chỉ chủ đề điều khiển, không đụng title bar.
+    /// Mặc định gọi <see cref="Apply"/> (bản ghi lại của test).
+    /// </summary>
+    void ApplyControls(nint dialog, IReadOnlyList<DialogChromeControl> controls) => Apply(dialog, controls);
 }
 
 /// <summary>Màu COLORREF (0x00BBGGRR) lấy từ <see cref="DarkPalette"/> (cùng bảng màu với overlay và cửa sổ WPF).</summary>
@@ -142,27 +148,49 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
             if (menus.TryEnable())
             {
                 menus.TryAllowForWindow(dialog);
-                foreach (var control in controls)
-                {
-                    menus.TryAllowForWindow(control.Hwnd);
-                }
             }
 
-            foreach (var control in controls)
-            {
-                var theme = ThemeForControl(control.Hwnd, control.Class);
-                if (theme is not null)
-                {
-                    // "" + "" = không chủ đề (dáng cổ điển); chỉ "" cho sub-app name sẽ rơi về chủ đề sáng mặc định.
-                    _setTheme(control.Hwnd, theme, theme.Length == 0 ? string.Empty : null);
-                }
-
-                ApplyParts(menus, control);
-            }
+            ApplyControlThemes(menus, controls);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
             // Windows không có hàm: hộp thoại hiện nền sáng, không phải lỗi.
+        }
+    }
+
+    /// <summary>Chủ đề cho điều khiển tạo thêm sau khi hộp thoại đã dựng (trang Settings tạo lười).</summary>
+    public void ApplyControls(nint dialog, IReadOnlyList<DialogChromeControl> controls)
+    {
+        try
+        {
+            ApplyControlThemes(Menus.Value, controls);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // Windows không có hàm: nền sáng, không phải lỗi.
+        }
+    }
+
+    private void ApplyControlThemes(DarkModeMenus menus, IReadOnlyList<DialogChromeControl> controls)
+    {
+        if (menus.TryEnable())
+        {
+            foreach (var control in controls)
+            {
+                menus.TryAllowForWindow(control.Hwnd);
+            }
+        }
+
+        foreach (var control in controls)
+        {
+            var theme = ThemeForControl(control.Hwnd, control.Class);
+            if (theme is not null)
+            {
+                // "" + "" = không chủ đề (dáng cổ điển); chỉ "" cho sub-app name sẽ rơi về chủ đề sáng mặc định.
+                _setTheme(control.Hwnd, theme, theme.Length == 0 ? string.Empty : null);
+            }
+
+            ApplyParts(menus, control);
         }
     }
 }

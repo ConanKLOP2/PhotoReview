@@ -91,6 +91,21 @@ internal static class DialogTemplate
         _ => null,
     };
 
+    /// <summary>
+    /// Tên lớp cửa sổ cho <c>CreateWindowEx</c> (WP-35 GĐ3a: điều khiển của trang Settings được tạo lười sau khi hộp thoại đã có,
+    /// không qua template): lớp chuẩn theo tên, lớp common-control như <see cref="ClassName"/>.
+    /// </summary>
+    internal static string WindowClassName(DialogControlClass controlClass) => ClassName(controlClass) ?? controlClass switch
+    {
+        DialogControlClass.Button => "Button",
+        DialogControlClass.Edit => "Edit",
+        DialogControlClass.Static => "Static",
+        DialogControlClass.ListBox => "ListBox",
+        DialogControlClass.ScrollBar => "ScrollBar",
+        DialogControlClass.ComboBox => "ComboBox",
+        _ => throw new ArgumentOutOfRangeException(nameof(controlClass), controlClass, null),
+    };
+
     private static void WriteString(BinaryWriter writer, string? text)
     {
         foreach (var ch in text ?? string.Empty)

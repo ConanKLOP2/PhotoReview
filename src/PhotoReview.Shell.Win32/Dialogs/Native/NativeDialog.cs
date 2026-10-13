@@ -1077,6 +1077,24 @@ internal abstract unsafe class NativeDialog
     /// </summary>
     protected void AddChildHost(nint host) => _childHosts.Add(host);
 
+    /// <summary>
+    /// WP-35 GĐ3a: điều khiển do lớp dẫn xuất tạo SAU khi hộp thoại đã có (trang Settings tạo lười): đặt font thân hiện hành và cho vào
+    /// danh sách con để đổi DPI/font cập nhật theo và <c>Cleanup</c> dọn.
+    /// </summary>
+    protected void RegisterChild(nint control)
+    {
+        if (control == 0)
+        {
+            return;
+        }
+
+        _children.Add(control);
+        User32.SendMessage(control, DialogConstants.WmSetFont, _font, 0);
+    }
+
+    /// <summary>Áp giao diện tối cho điều khiển tạo thêm sau (cùng chủ đề như điều khiển của template; không đụng title bar).</summary>
+    protected void ApplyChrome(IReadOnlyList<DialogChromeControl> controls) => _chrome.ApplyControls(_hwnd, controls);
+
     protected nint Item(int id)
     {
         var child = User32.GetDlgItem(_hwnd, id);

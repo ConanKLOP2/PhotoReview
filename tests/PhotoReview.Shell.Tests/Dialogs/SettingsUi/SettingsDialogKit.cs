@@ -120,7 +120,7 @@ internal static unsafe class SettingsDialogKit
     /// <summary>Mở trên cửa sổ chủ mới; <paramref name="ready"/> chạy ngay trước vòng lặp modal. Trả (kết quả, hộp thoại).</summary>
     public static (int Result, SettingsDialog Dialog) Show(AppSettings settings, Action<SettingsDialog, nint> ready,
         SettingsDialogOptions? options = null, SettingsStore? store = null, Action<SettingsDialog>? prepare = null,
-        INativeDialogChrome? chrome = null, PhotoReview.Core.Updates.IUpdateChecker? updates = null)
+        INativeDialogChrome? chrome = null, PhotoReview.Core.Updates.IUpdateChecker? updates = null, bool realizeAll = true)
     {
         return OnSta(() =>
         {
@@ -129,7 +129,16 @@ internal static unsafe class SettingsDialogKit
             dialog.Presenter.ShellIntegration = new FakeShell();
             dialog.Presenter.ExecutablePath = @"C:\Apps\PhotoReview\PhotoReview.exe";
             prepare?.Invoke(dialog);
-            var result = ShowOnOwner(dialog, (d, owner) => ready((SettingsDialog)d, owner));
+            var result = ShowOnOwner(dialog, (d, owner) =>
+            {
+                // Pages create their controls when first opened; most tests want every page's controls to exist.
+                if (realizeAll)
+                {
+                    ((SettingsDialog)d).EnsureAllPagesCreated();
+                }
+
+                ready((SettingsDialog)d, owner);
+            });
             return (result, dialog);
         });
     }
