@@ -1,6 +1,6 @@
 ﻿---
 id: NOWPF-DIALOG-CHROME-NO-ORDINAL
-order: 1170
+order: 1180
 summary: |-
   Hộp thoại Win32 gốc (ZoomPrompt, Diagnostics, SkippedFiles, BatchReview, ActionProfiles, Benchmark, Settings, Recovery) bỏ phụ thuộc uxtheme ordinal (SetPreferredAppMode/FlushMenuThemes/AllowDarkModeForWindow) và chủ đề DarkMode_*: điều khiển xoá chủ đề (SetWindowTheme "" "") rồi vẽ tay bằng bảng màu Dark.* (nút/check/radio/group/combo/progress/trackbar/đường kẻ: WM_PAINT; ô nhập/listbox/listview/progress: viền phẳng WM_NCPAINT; hàng chọn listview: sửa NM_CUSTOMDRAW ở subclass hộp thoại; header: tô phần thừa). DarkModeMenus bị xoá. Nền tối + tương phản >= 4,5:1 đo bằng điểm ảnh; giao diện KHÔNG đổi khi chế độ ứng dụng uxtheme bị đổi qua ordinal. CHƯA XÁC NHẬN trên màn hình thật build 26300.
 ---
