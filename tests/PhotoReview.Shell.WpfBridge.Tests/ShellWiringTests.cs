@@ -260,7 +260,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
     {
         await using var harness = await BridgeHarness.StartAsync();
         await using var wired = await Wired.StartAsync(harness);
-        // Recovery (chưa có hộp thoại Win32) nạp cầu WPF trên UI thread (host gắn thread này); Diagnostics không còn nạp cầu.
+        // Recovery là hộp thoại Win32 gốc (GĐ4): cổng Win32 gắn UI thread của shell và từ chối thread khác.
         var shown = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowRecovery());
         BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("recovery shown"));
         await shown;
@@ -283,8 +283,11 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         }
 
         await using var absent = await Wired.StartAsync(harness, s => s.AddSingleton<SecondaryWindowPortLoader>((_, _) => null));
-        await harness.Ui.InvokeAsync(() => absent.Dialogs.ShowRecovery()); // cổng tạm: không cửa sổ, không ném
-        Assert.Empty(harness.OwnedVisibleWindows());
+        // WP-35 GĐ4: Recovery là hộp thoại Win32 gốc nên mở được cả khi cầu vắng (mô phỏng AOT); đóng = trả về, dữ liệu không đổi.
+        var recovery = harness.Ui.InvokeAsync(() => absent.Dialogs.ShowRecovery());
+        BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("native recovery without the bridge"));
+        await recovery;
+        await harness.WaitForNoOwnedWindowAsync("native recovery closed");
 
         // WP-35 GĐ1: cầu vắng (mô phỏng AOT) nhưng hộp thoại zoom là Win32 gốc nên vẫn mở được; đóng = huỷ = null.
         var zoom = harness.Ui.InvokeAsync(() => absent.Zoom.PromptCustomZoom(100));
