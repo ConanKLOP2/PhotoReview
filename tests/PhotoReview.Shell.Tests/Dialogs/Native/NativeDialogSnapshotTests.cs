@@ -166,7 +166,7 @@ public sealed unsafe class NativeDialogSnapshotTests
         });
     }
 
-    private static byte[] EncodePng(byte[] bgra, int width, int height)
+    internal static byte[] EncodePng(byte[] bgra, int width, int height)
     {
         using var raw = new MemoryStream();
         for (var y = 0; y < height; y++)

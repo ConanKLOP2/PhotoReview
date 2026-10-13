@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using PhotoReview.Core.Settings;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Tests.Dialogs.Native;
+using PhotoReview.Shell.Win32.Dialogs.Native;
 using PhotoReview.Shell.Win32.Dialogs.SettingsUi;
 using PhotoReview.TestSupport;
 using Xunit.Abstractions;
@@ -16,6 +17,8 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// bề mặt THẬT của hộp thoại (BitBlt từ DC cửa sổ, không phải PrintWindow vì PrintWindow tự vẽ lại toàn bộ; DC màn hình của desktop
 /// ẩn trả về đen nên không dùng được) rồi so với ảnh sau khi ép vẽ lại toàn bộ (<c>RedrawWindow</c> ALLCHILDREN|ERASE|UPDATENOW).
 /// Hai ảnh phải trùng từng điểm ảnh. Nguyên nhân lỗi gốc: điều khiển của trang tạo bằng <c>CreateWindowEx</c> thiếu WS_CLIPSIBLINGS.
+/// Trùng nhau CHƯA đủ (một trang TRỐNG sau cuộn bằng một trang TRỐNG sau vẽ lại: đó là cách WS_CLIPSIBLINGS mà khung nhóm nằm TRÊN điều khiển
+/// con làm trống mọi trang mà test vẫn xanh), nên mỗi bước còn khẳng định: mọi điều khiển hiện đủ trong vùng nhìn phải có điểm ảnh khác màu nền.
 /// </summary>
 [Collection("GlobalState")]
 [Trait("Category", "UI")]
@@ -62,6 +65,7 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
                     ChangeDpi(dlg, dpi);
                 }
 
+                ParkCursor(dlg);
                 Drain(dlg);
                 var surface = dlg.Hwnd;
                 var bar = H(dlg, SettingsDialog.ScrollId);
@@ -76,6 +80,7 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
                     var expected = Capture(surface, out int _, out int _);
                     var bad = 0;
                     var firstBad = -1;
+                    int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
                     for (var i = 0; i < actual.Length; i += 4)
                     {
                         if (actual[i] != expected[i] || actual[i + 1] != expected[i + 1] || actual[i + 2] != expected[i + 2])
@@ -85,7 +90,21 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
                             {
                                 firstBad = i / 4;
                             }
+
+                            var px = (i / 4) % width;
+                            var py = (i / 4) / width;
+                            minX = Math.Min(minX, px);
+                            maxX = Math.Max(maxX, px);
+                            minY = Math.Min(minY, py);
+                            maxY = Math.Max(maxY, py);
                         }
+                    }
+
+                    // The page must not just be "equal to itself": every visible control has to show something other than the page background
+                    // (a blank page after a redraw is also equal to its own scrolled copy - that is how WS_CLIPSIBLINGS under the group boxes slipped by).
+                    foreach (var blank in BlankControls(dlg, expected, width, height))
+                    {
+                        failures.Add($"step {step} (code {codes[step]}): control {blank} is blank (only page background)");
                     }
 
                     if (dump is { Length: > 0 })
@@ -101,7 +120,8 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
 
                     if (bad > 0)
                     {
-                        failures.Add($"step {step} (code {codes[step]}): {bad} stale pixels, first at ({firstBad % width},{firstBad / width})");
+                        failures.Add($"step {step} (code {codes[step]}): {bad} stale pixels, first at ({firstBad % width},{firstBad / width}), "
+                            + $"box ({minX},{minY})-({maxX},{maxY}) over {ControlsAt(dlg, minX, minY, maxX, maxY)}");
                     }
                 }
 
@@ -151,6 +171,136 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
             return 0;
         });
     }
+
+    /// <summary>
+    /// Ids (with class) of the visible controls of the active page whose on-screen rectangle (clipped to the page viewport) contains one
+    /// single colour equal to the page background: the signature of a control painted over by a sibling above it. Group boxes are skipped
+    /// (their rectangle legitimately is mostly background) and so are controls without text that have no border of their own.
+    /// </summary>
+    private static List<string> BlankControls(SettingsDialog dialog, byte[] pixels, int width, int height)
+    {
+        var result = new List<string>();
+        var origin = WindowRect(dialog.Hwnd);
+        var viewportRect = WindowRect(H(dialog, SettingsDialog.ViewportId(dialog.ActivePageIndex)));
+        var background = DominantColor(pixels, width, height, viewportRect.Left - origin.Left, viewportRect.Top - origin.Top,
+            viewportRect.Right - origin.Left, viewportRect.Bottom - origin.Top);
+        foreach (var item in dialog.PageItems(dialog.ActivePageIndex))
+        {
+            var control = H(dialog, item.Id);
+            if (control == 0 || !User32.IsWindowVisible(control) || IsGroupBox(control))
+            {
+                continue;
+            }
+
+            var rect = WindowRect(control);
+            if (rect.Top < viewportRect.Top || rect.Bottom > viewportRect.Bottom)
+            {
+                continue; // partly scrolled out: a thin slice of a text line may legitimately be only background
+            }
+
+            var left = Math.Max(rect.Left, viewportRect.Left) - origin.Left;
+            var top = Math.Max(rect.Top, viewportRect.Top) - origin.Top;
+            var right = Math.Min(rect.Right, viewportRect.Right) - origin.Left;
+            var bottom = Math.Min(rect.Bottom, viewportRect.Bottom) - origin.Top;
+            if (right - left < 6 || bottom - top < 6)
+            {
+                continue;
+            }
+
+            var emptyText = item.Class is DialogControlClass.Static or DialogControlClass.Button && TextOf(control).Length == 0;
+            if (emptyText)
+            {
+                continue;
+            }
+
+            if (UniformColor(pixels, width, left, top, right, bottom) == background)
+            {
+                result.Add($"{item.Id} ({item.Class})");
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Colour (0xRRGGBB) of the rectangle when every pixel has it, otherwise -1.</summary>
+    private static int UniformColor(byte[] bgra, int width, int left, int top, int right, int bottom)
+    {
+        var first = -2;
+        for (var y = top; y < bottom; y++)
+        {
+            for (var x = left; x < right; x++)
+            {
+                var i = ((y * width) + x) * 4;
+                var color = (bgra[i + 2] << 16) | (bgra[i + 1] << 8) | bgra[i];
+                if (first == -2)
+                {
+                    first = color;
+                }
+                else if (color != first)
+                {
+                    return -1;
+                }
+            }
+        }
+
+        return first;
+    }
+
+    private static int DominantColor(byte[] bgra, int width, int height, int left, int top, int right, int bottom)
+    {
+        var counts = new Dictionary<int, int>();
+        for (var y = Math.Max(0, top); y < Math.Min(height, bottom); y++)
+        {
+            for (var x = Math.Max(0, left); x < Math.Min(width, right); x++)
+            {
+                var i = ((y * width) + x) * 4;
+                var color = (bgra[i + 2] << 16) | (bgra[i + 1] << 8) | bgra[i];
+                counts[color] = counts.GetValueOrDefault(color) + 1;
+            }
+        }
+
+        return counts.OrderByDescending(kv => kv.Value).First().Key;
+    }
+
+    /// <summary>
+    /// The pointer must not sit over a page control: a control that scrolls under a still pointer makes the system synthesize a WM_MOUSEMOVE
+    /// (hover highlight of the chrome painter) at an arbitrary later time, so "after scroll" and "after forced redraw" differ by a hover
+    /// border that has nothing to do with stale pixels (seen on CI where a real pointer exists). It is parked over the dialog heading, a
+    /// static that neither scrolls nor tracks hover. <c>PHOTOREVIEW_SCROLL_CURSOR_OVER_PAGE=1</c> parks it over the page instead (reproduces
+    /// that CI condition on an interactive desktop).
+    /// </summary>
+    private static void ParkCursor(SettingsDialog dialog)
+    {
+        var overPage = Environment.GetEnvironmentVariable("PHOTOREVIEW_SCROLL_CURSOR_OVER_PAGE") == "1";
+        var target = WindowRect(H(dialog, overPage ? SettingsDialog.ViewportId(dialog.ActivePageIndex) : SettingsDialog.HeaderId));
+        _ = SetCursorPos(target.Left + ((target.Right - target.Left) / 2), target.Top + ((target.Bottom - target.Top) / 2));
+    }
+
+    private static string ControlsAt(SettingsDialog dialog, int left, int top, int right, int bottom)
+    {
+        var origin = WindowRect(dialog.Hwnd);
+        var found = new List<string>();
+        foreach (var item in dialog.PageItems(dialog.ActivePageIndex))
+        {
+            var control = H(dialog, item.Id);
+            if (control == 0 || !User32.IsWindowVisible(control) || IsGroupBox(control))
+            {
+                continue;
+            }
+
+            var r = WindowRect(control);
+            if (r.Left - origin.Left <= right && r.Right - origin.Left >= left && r.Top - origin.Top <= bottom && r.Bottom - origin.Top >= top)
+            {
+                found.Add($"{item.Id}({item.Class})");
+            }
+        }
+
+        return found.Count == 0 ? "no page control" : string.Join(",", found);
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetCursorPos(int x, int y);
 
     private static byte[] Capture(nint hwnd, out int width, out int height)
     {
