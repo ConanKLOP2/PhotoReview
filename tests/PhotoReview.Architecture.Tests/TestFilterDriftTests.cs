@@ -146,10 +146,11 @@ public sealed class TestFilterDriftTests
         Assert.DoesNotContain("ShellAot", release, StringComparison.Ordinal);
         Assert.DoesNotContain("-Aot", release, StringComparison.Ordinal);
 
-        // The AOT build drops the WPF bridge and keeps EventSourceSupport (without it PHOTOREVIEW_PERF_TRACE and startup-probe are blind).
+        // The AOT build keeps EventSourceSupport (without it PHOTOREVIEW_PERF_TRACE and startup-probe are blind); since WP-35 G5 the
+        // shell has no WPF bridge reference in ANY variant, so no ShellAot-conditional bridge group may come back.
         var csproj = ReadRepoFile("src/PhotoReview.Shell.Win32/PhotoReview.Shell.Win32.csproj");
         Assert.Contains("<EventSourceSupport Condition=\"'$(ShellAot)' == 'true'\">true</EventSourceSupport>", csproj, StringComparison.Ordinal);
-        Assert.Contains("<ItemGroup Condition=\"'$(ShellAot)' != 'true'\">", csproj, StringComparison.Ordinal);
+        Assert.DoesNotContain("PhotoReview.Shell.WpfBridge.csproj", csproj, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "Rule R2-A-12: the CI safety-net step covers every test project")]

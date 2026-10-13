@@ -142,7 +142,7 @@ $required = @(
     'PhotoReview.PerfAnalysis.dll',
     'PhotoReview.Imaging.TurboJpeg.dll',
     'PhotoReview.Imaging.LibRaw.dll',
-    # NO-WPF WP-30: the Win32 + Direct2D shell (PhotoReview.exe) ships in the same folder. WP-35 GĐ5: it no longer loads a WPF
+    # NO-WPF WP-30: the Win32 + Direct2D shell (PhotoReview.exe) ships in the same folder. WP-35 G5: it no longer loads a WPF
     # bridge (every secondary window is a native Win32 dialog), so PhotoReview.Shell.WpfBridge.dll is NOT part of the package.
     'PhotoReview.exe',
     'PhotoReview.dll',
