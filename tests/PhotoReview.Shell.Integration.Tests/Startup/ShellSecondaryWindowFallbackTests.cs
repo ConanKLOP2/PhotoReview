@@ -51,6 +51,7 @@ public sealed class ShellSecondaryWindowFallbackTests
             {
                 options.ServiceOverrides?.Invoke(services);
                 services.AddSingleton<IShellLauncher>(launcher);
+                services.AddSingleton<SecondaryWindowPortLoader>((_, _) => null); // mô phỏng bản AOT: cầu vắng
             },
         });
         Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + run.Diagnostics);

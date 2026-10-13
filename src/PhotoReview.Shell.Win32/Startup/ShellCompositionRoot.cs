@@ -13,7 +13,8 @@ namespace PhotoReview.Shell.Win32.Startup;
 /// <summary>Những gì host Win32 cấp cho đồ thị dịch vụ dùng chung (C-16): không có mặc định ẩn, thiếu thì ném to.</summary>
 /// <param name="Dispatcher">Dispatcher của UI thread (đăng ký làm <see cref="IUiScheduler"/>).</param>
 /// <param name="OwnerWindow">HWND chủ của hộp thoại; 0 khi chưa có cửa sổ chính.</param>
-internal sealed record ShellHostServices(Win32UiDispatcher Dispatcher, Func<nint> OwnerWindow);
+/// <param name="Loop">Vòng thông điệp của UI thread (cầu cửa sổ phụ gắn bộ lọc phím cho cửa sổ modeless); null = không (test).</param>
+internal sealed record ShellHostServices(Win32UiDispatcher Dispatcher, Func<nint> OwnerWindow, MessageLoop? Loop = null);
 
 /// <summary>
 /// C-16 phần shell (NO-WPF-EXEC-PLAN mục 5, WP-20): đồ thị DI của bản Win32 = <c>AddPhotoReviewShared</c> (WP-09, codec =
@@ -42,11 +43,19 @@ internal static class ShellCompositionRoot
         services.AddSingleton<IClipboardService>(_ => new Win32ClipboardService(host.OwnerWindow));
         services.AddSingleton(sp => new FolderPicker(sp.GetService<IShellFolderDialog>() ?? UnwiredShellFolderDialog.Instance, host.OwnerWindow));
         services.AddSingleton<IFolderPicker, ShellFolderPickerAdapter>();
+        // NOWPF-SHELL-WIRE-WPF-BRIDGE: cổng cửa sổ phụ nạp lười (WpfBridgeLoader qua SecondaryWindowPorts) dùng chung cho
+        // IDialogService và IZoomPromptService; ISecondaryWindowPort đăng ký sẵn (test) thắng cầu thật. Bản Native AOT: cầu vắng
+        // (TryLoad = null) nên cổng tạm trả lời. Chủ sở hữu duy nhất của cổng = SecondaryWindowPortHost (Dispose đóng cửa sổ phụ).
+        services.AddSingleton<SecondaryWindowPortLoader>(SecondaryWindowPorts.TryLoad);
+        services.AddSingleton(sp => new SecondaryWindowPortHost(new Lazy<ISecondaryWindowPort?>(
+            () => sp.GetService<ISecondaryWindowPort>() ?? sp.GetRequiredService<SecondaryWindowPortLoader>()(sp, host.Loop),
+            LazyThreadSafetyMode.ExecutionAndPublication)));
+        services.AddSingleton<IZoomPromptService>(sp =>
+            new Win32ZoomPromptService(host.OwnerWindow, sp.GetRequiredService<SecondaryWindowPortHost>().Port));
         services.AddSingleton<IDialogService>(sp => new Win32DialogService(
             host.OwnerWindow,
             sp.GetRequiredService<FolderPicker>(),
-            // WP-19b đăng ký ISecondaryWindowPort (cửa sổ phụ WPF nạp muộn); chưa có thì các lệnh mở cửa sổ phụ là no-op.
-            new Lazy<ISecondaryWindowPort?>(() => sp.GetService<ISecondaryWindowPort>()),
+            sp.GetRequiredService<SecondaryWindowPortHost>().Port,
             // Cổng vắng (bản Native AOT / nạp cầu lỗi): Settings mở config.json, cửa sổ khác báo "không có trong bản này"
             // qua dòng trạng thái của view model thật (ShellNoticeSink: MainViewModel là transient, không resolve lại được).
             new SecondaryWindowFallback(sp.GetRequiredService<IAppPaths>(), sp.GetService<IShellLauncher>() ?? ProcessShellLauncher.Instance,

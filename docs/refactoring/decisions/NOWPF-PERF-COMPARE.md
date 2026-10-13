@@ -1,6 +1,6 @@
 ﻿---
 id: NOWPF-PERF-COMPARE
-order: 1070
+order: 1080
 summary: |-
   Kết quả đo JSON có schema versioned + verb `compare` (PASS/WARN/REGRESSION/INCONCLUSIVE, không báo hồi quy giả khi máy bận) + cổng tùy chọn `verify-all.ps1 -PerfGate`; baseline `tools/perf-baselines/<máy>.json` chỉ commit khi chủ dự án chốt (CHƯA XÁC NHẬN).
 ---
