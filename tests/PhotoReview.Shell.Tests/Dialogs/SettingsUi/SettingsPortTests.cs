@@ -52,7 +52,8 @@ public sealed class SettingsPortTests : IDisposable
             using var on = new Win32SecondaryWindowPort(provider, settingsEnabled: () => true);
             Assert.False(off.Supports(SecondaryWindowKind.Settings));
             Assert.True(on.Supports(SecondaryWindowKind.Settings));
-            Assert.False(on.Supports(SecondaryWindowKind.Recovery), "Recovery is another package");
+            Assert.True(on.Supports(SecondaryWindowKind.Recovery), "WP-35 GĐ4: Recovery is a Win32 window of its own, independent of the Settings flag");
+            Assert.True(off.Supports(SecondaryWindowKind.Recovery));
             return 0;
         });
     }
