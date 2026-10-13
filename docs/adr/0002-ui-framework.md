@@ -1,6 +1,6 @@
 # ADR 0002: Giữ WPF làm framework UI
 
-- **Trạng thái:** Accepted — No-go cho spike WinUI 3 ở giai đoạn này
+- **Trạng thái:** Accepted — No-go cho spike WinUI 3 ở giai đoạn này. **Bổ sung 2026-10:** WPF không còn là framework UI duy nhất; bản song song Win32 + Direct2D (`PhotoReview.exe`) xem [ADR 0010](0010-win32-direct2d-shell.md). Quyết định "không WinUI 3" vẫn đúng.
 - **Ngày:** 2026-09-19
 - **Phạm vi:** PhotoReview desktop UI sau đợt refactor W7
 
