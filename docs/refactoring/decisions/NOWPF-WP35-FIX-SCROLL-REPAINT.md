@@ -1,6 +1,6 @@
 ﻿---
 id: NOWPF-WP35-FIX-SCROLL-REPAINT
-order: 1220
+order: 1230
 summary: |-
   WP-35 sửa lỗi (CHƯA XÁC NHẬN): cuộn trang Settings Win32 (tối) để lại hình cũ / vẽ chồng. Nguyên nhân gốc: điều khiển của trang tạo bằng CreateWindowEx thiếu WS_CLIPSIBLINGS (hộp thoại dựng từ template tự có), nên vùng vẽ + phép chép bit của SetWindowPos lấy cả điểm ảnh của điều khiển anh em nằm trên. Sửa: thêm WS_CLIPSIBLINGS cho mọi điều khiển trang (một dòng, áp cho mọi trang). Test điểm ảnh 14 ca (7 trang x 100%/150%) xanh sau sửa, 10/14 đỏ trước sửa.
 ---

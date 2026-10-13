@@ -153,13 +153,50 @@ public sealed class TestFilterDriftTests
         Assert.DoesNotContain("PhotoReview.Shell.WpfBridge.csproj", csproj, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "Rule R2-A-12: the CI safety-net step covers every test project")]
+    [Fact(DisplayName = "Rule R2-A-12: the CI safety-net steps (one per test job) together cover every test project")]
     public void IntegrationSlowStep_CoversEveryTestProject()
     {
         var ci = ReadRepoFile(".github/workflows/ci.yml");
-        var step = ci[ci.IndexOf("Integration-category tests that the main filter skips", StringComparison.Ordinal)..];
+        const string marker = "- name: Run Integration-category tests that the main filter skips";
+        var steps = new List<string>();
+        for (var at = ci.IndexOf(marker, StringComparison.Ordinal); at >= 0; at = ci.IndexOf(marker, at + marker.Length, StringComparison.Ordinal))
+        {
+            var end = ci.IndexOf("\n      - name:", at + marker.Length, StringComparison.Ordinal);
+            steps.Add(end < 0 ? ci[at..] : ci[at..end]);
+        }
+
+        Assert.NotEmpty(steps);
+        foreach (var project in TestProjects())
+            Assert.Contains(steps, step => step.Contains($"'{project}'", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "Rule CI-PARALLEL: each test project's main step and safety-net step run in the same job, and the aggregate build-test-publish job needs every build/test job")]
+    public void EachProjectIsTestedInOneJob_AndTheAggregateGateNeedsAllJobs()
+    {
+        var ci = ReadRepoFile(".github/workflows/ci.yml");
+        var jobStarts = Regex.Matches(ci, @"^  (?<id>[a-z][a-z0-9-]*):\s*$", RegexOptions.Multiline)
+            .Where(m => m.Index > ci.IndexOf("\njobs:",StringComparison.Ordinal)).ToArray();
+        var jobs = new Dictionary<string, string>();
+        for (var i = 0; i < jobStarts.Length; i++)
+        {
+            var end = i + 1 < jobStarts.Length ? jobStarts[i + 1].Index : ci.Length;
+            jobs[jobStarts[i].Groups["id"].Value] = ci[jobStarts[i].Index..end];
+        }
 
         foreach (var project in TestProjects())
-            Assert.Contains($"'{project}'", step[..step.IndexOf("- name: Publish Release", StringComparison.Ordinal)], StringComparison.Ordinal);
+        {
+            var owners = jobs.Where(j => j.Value.Contains($"dotnet test tests/{project}/{project}.csproj -c Release --no-build --filter \"$env:TEST_FILTER\"", StringComparison.Ordinal))
+                .Select(j => j.Key).ToArray();
+            var owner = Assert.Single(owners);
+            Assert.Contains($"'{project}'", jobs[owner], StringComparison.Ordinal);
+            Assert.Contains("Category=Integration&Category=Slow&", jobs[owner], StringComparison.Ordinal);
+        }
+
+        // The aggregate job keeps the id the required status check and release.yml look up, and waits for every job that builds or tests.
+        var aggregate = jobs["build-test-publish"];
+        foreach (var job in jobs.Keys.Where(k => k.StartsWith("test-", StringComparison.Ordinal) || k == "build-publish" || k == "changes"))
+            Assert.Contains(job, aggregate, StringComparison.Ordinal);
+        Assert.Contains("if: always()", aggregate, StringComparison.Ordinal);
+        Assert.DoesNotContain("publish-aot", aggregate, StringComparison.Ordinal);
     }
 }
