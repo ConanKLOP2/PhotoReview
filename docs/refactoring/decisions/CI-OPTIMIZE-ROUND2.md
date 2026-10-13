@@ -1,6 +1,6 @@
 ---
 id: CI-OPTIMIZE-ROUND2
-order: 1260
+order: 1270
 summary: |-
   CI vòng 2: 6 job test + compile-gate (build của job test bỏ analyzer, build bằng solution filter), tường ~400 s xuống ~220 s (CHƯA XÁC NHẬN, 2026-10-14).
 ---
