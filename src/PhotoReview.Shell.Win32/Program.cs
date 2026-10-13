@@ -12,5 +12,5 @@ internal static class Program
     internal const string SmokeArgument = ShellLaunch.SmokeArgument;
 
     [STAThread]
-    private static int Main(string[] args) => ShellStartup.Run(args);
+    private static int Main(string[] args) => Dialogs.SettingsD2D.D2DSettingsSpike.TryRun(args) ?? ShellStartup.Run(args);
 }

@@ -17,7 +17,8 @@ internal sealed record D2DSettingsWindowOptions(
     int ClientHeightDip = 560,
     uint? DpiOverride = null,
     bool PreferWarp = false,
-    bool Visible = true);
+    bool Visible = true,
+    bool QuitOnClose = false);
 
 /// <summary>
 /// SPIKE: cửa sổ top-level chứa MỘT bề mặt Direct2D (<see cref="D2DRenderSurface"/>) và <see cref="D2DSettingsView"/>. Chuyển thông điệp
@@ -101,7 +102,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
 
         View.FocusMoved += OnViewFocusMoved;
         View.Changed += _ => InvalidateView();
-        if (options.Visible)
+        if (options.Visible && !options.QuitOnClose)
         {
             User32.ShowWindow(_hwnd, WindowMessages.SwShowNoActivate);
         }
@@ -148,6 +149,9 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
     public IReadOnlyList<(string Id, nint Hwnd)> HostedHandles => _hosted.Select(h => (h.Widget.Id, h.Hwnd)).ToList();
 
     // ---- vẽ -------------------------------------------------------------------------------------------------------------
+
+    /// <summary>Hiện cửa sổ (kích hoạt) - lối vào thử.</summary>
+    public void Show() => User32.ShowWindow(_hwnd, WindowMessages.SwShow);
 
     public void InvalidateView()
     {
@@ -592,6 +596,11 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
             case WindowMessages.WmDestroy:
                 _destroyed = true;
                 D2DNative.KillTimer(hwnd, BlinkTimerId);
+                if (_options.QuitOnClose)
+                {
+                    User32.PostQuitMessage(0);
+                }
+
                 break;
         }
 
