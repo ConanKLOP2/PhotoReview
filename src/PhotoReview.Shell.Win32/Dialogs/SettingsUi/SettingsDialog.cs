@@ -30,6 +30,9 @@ internal sealed record SettingsDialogOptions
     /// <summary>Danh sách trang thay cho <see cref="SettingsPageCatalog"/> (test); phải theo thứ tự <see cref="SettingsPresenter.Pages"/>.</summary>
     public IReadOnlyList<ISettingsPageView>? Pages { get; init; }
 
+    /// <summary>RAM vật lý giả (test trang Performance: khoảng thanh trượt cache RAM tất định); null = đo máy thật.</summary>
+    public long? PhysicalMemoryBytes { get; init; }
+
     /// <summary>Mở trang tải về (mặc định: ShellExecute).</summary>
     public Action<string>? OpenUrl { get; init; }
 
@@ -118,7 +121,7 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         Options = (options ?? new SettingsDialogOptions()) with { };
         Files = Options.Files;
         DecoderFactory = decoderFactory;
-        _presenter = new SettingsPresenter(current, store, localization, updateChecker);
+        _presenter = new SettingsPresenter(current, store, localization, updateChecker, Options.PhysicalMemoryBytes);
         _warnings = Options.Warnings ?? TaskDialogWarningSink.Instance;
         Options = Options with { Version = Options.Version ?? BuildInfo.GetVersion(typeof(SettingsDialog).Assembly) };
         _pages = Options.Pages ?? SettingsPageCatalog.CreatePages();

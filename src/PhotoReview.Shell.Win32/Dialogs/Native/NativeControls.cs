@@ -160,7 +160,10 @@ internal static unsafe class ListBoxControl
 
     /// <summary>Vẽ một dòng owner-draw: nền chọn/thường, chữ bên trái, huy hiệu (viên thuốc) bên phải, khung focus.</summary>
     /// <param name="drawItem">Con trỏ DRAWITEMSTRUCT.</param>
-    public static void DrawItem(byte* drawItem, string text, string? badge, nint font, int padX)
+    /// <param name="subtitle">Dòng phụ vẽ dưới tiêu đề (màu phụ); null = một dòng.</param>
+    /// <param name="badgeColor">Màu chữ + viền huy hiệu (COLORREF) trên nền Dark.Panel; null = huy hiệu mặc định.</param>
+    public static void DrawItem(byte* drawItem, string text, string? badge, nint font, int padX, string? subtitle = null,
+        uint? badgeColor = null)
     {
         var itemId = *(int*)(drawItem + 8);
         var state = *(uint*)(drawItem + 16);
@@ -196,8 +199,8 @@ internal static unsafe class ListBoxControl
                 var badgeWidth = extent.X + padX;
                 var badgeLeft = right - badgeWidth;
                 var badgeTop = rect.Top + ((height - badgeHeight) / 2);
-                var pen = Gdi32.CreatePen(0, 1, DialogColors.FromKey("Dark.BorderStrong"));
-                var fill = Gdi32.CreateSolidBrush(DialogColors.FromKey("Dark.Surface"));
+                var pen = Gdi32.CreatePen(0, 1, badgeColor ?? DialogColors.FromKey("Dark.BorderStrong"));
+                var fill = Gdi32.CreateSolidBrush(DialogColors.FromKey(badgeColor is null ? "Dark.Surface" : "Dark.Panel"));
                 var oldPen = Gdi32.SelectObject(hdc, pen);
                 var oldBrush = Gdi32.SelectObject(hdc, fill);
                 _ = Gdi32.RoundRect(hdc, badgeLeft, badgeTop, right, badgeTop + badgeHeight, badgeHeight, badgeHeight);
@@ -205,7 +208,7 @@ internal static unsafe class ListBoxControl
                 Gdi32.SelectObject(hdc, oldBrush);
                 Gdi32.DeleteObject(pen);
                 Gdi32.DeleteObject(fill);
-                _ = Gdi32.SetTextColor(hdc, DialogColors.TextSecondary);
+                _ = Gdi32.SetTextColor(hdc, badgeColor ?? DialogColors.TextSecondary);
                 var badgeRect = new Rect { Left = badgeLeft, Top = badgeTop, Right = right, Bottom = badgeTop + badgeHeight };
                 _ = User32.DrawText(hdc, b, badge.Length, &badgeRect,
                     DialogConstants.DtSingleLine | DialogConstants.DtVCenter | DialogConstants.DtCenter | DialogConstants.DtNoPrefix);
@@ -214,6 +217,21 @@ internal static unsafe class ListBoxControl
         }
 
         var textRect = new Rect { Left = rect.Left + padX, Top = rect.Top, Right = Math.Max(rect.Left + padX, right), Bottom = rect.Bottom };
+        var hasSubtitle = !string.IsNullOrEmpty(subtitle);
+        if (hasSubtitle)
+        {
+            // Hai dòng: tiêu đề nửa trên, dòng phụ nửa dưới (màu phụ).
+            var middle = rect.Top + ((rect.Bottom - rect.Top) / 2);
+            var subRect = new Rect { Left = textRect.Left, Top = middle, Right = textRect.Right, Bottom = rect.Bottom };
+            textRect.Bottom = middle;
+            _ = Gdi32.SetTextColor(hdc, DialogColors.FromKey("Dark.TextMuted"));
+            fixed (char* s = subtitle)
+            {
+                _ = User32.DrawText(hdc, s, subtitle!.Length, &subRect,
+                    DialogConstants.DtSingleLine | DialogConstants.DtVCenter | DialogConstants.DtNoPrefix | DialogConstants.DtEndEllipsis);
+            }
+        }
+
         _ = Gdi32.SetTextColor(hdc, DialogColors.TextStrong);
         fixed (char* t = text)
         {

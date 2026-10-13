@@ -16,6 +16,7 @@ internal static class SettingsPageCatalog
         ["Diagnostics"] = static () => new DiagnosticsSettingsPage(),
         ["Display"] = static () => new DisplaySettingsPage(),
         ["General"] = static () => new GeneralSettingsPage(),
+        ["Performance"] = static () => new PerformanceSettingsPage(),
         ["Shortcuts"] = static () => new ShortcutsSettingsPage(),
     };
 
