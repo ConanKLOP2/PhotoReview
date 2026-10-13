@@ -57,8 +57,8 @@ public sealed class RecoveryWindowGapTests
             if (!string.Equals(path, lastSource, StringComparison.OrdinalIgnoreCase)) return;
             switch (Interlocked.Increment(ref hits))
             {
-                case 1: firstBlocked.TrySetResult(); Assert.True(releaseFirst.Wait(TimeSpan.FromSeconds(20))); break;
-                case 2: secondBlocked.TrySetResult(); Assert.True(releaseSecond.Wait(TimeSpan.FromSeconds(20))); break;
+                case 1: firstBlocked.TrySetResult(); Assert.True(releaseFirst.Wait(TimeSpan.FromSeconds(60))); break;
+                case 2: secondBlocked.TrySetResult(); Assert.True(releaseSecond.Wait(TimeSpan.FromSeconds(60))); break;
             }
         };
         await StaTestHost.RunAsync(async () =>
@@ -68,11 +68,11 @@ public sealed class RecoveryWindowGapTests
             window.RecheckButton.IsEnabledChanged += (_, e) => { if (e.NewValue is true) enabledTransitions++; };
 
             var first = window.RunChecksAsync();
-            await firstBlocked.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            await firstBlocked.Task.WaitAsync(TimeSpan.FromSeconds(60));
             Assert.False(window.RecheckButton.IsEnabled);
 
             var second = window.RunChecksAsync(); // "Re-check" while the first run is still checking
-            await secondBlocked.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            await secondBlocked.Task.WaitAsync(TimeSpan.FromSeconds(60));
 
             releaseFirst.Set(); // the superseded run now finishes its last row
             await first;

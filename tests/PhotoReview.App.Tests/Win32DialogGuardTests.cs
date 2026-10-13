@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using PhotoReview.TestSupport.Windows;
 
@@ -16,7 +15,6 @@ public sealed class Win32DialogGuardTests
     [Fact]
     public void InstallOnCurrentThread_RealMessageBoxShown_IsRecordedAndAutoDismissedPromptly()
     {
-        var sw = Stopwatch.StartNew();
         bool hasDialogsAfter = false;
         System.Collections.Generic.IReadOnlyList<string> dialogsAfter = Array.Empty<string>();
         InvalidOperationException? thrown = null;
@@ -30,10 +28,12 @@ public sealed class Win32DialogGuardTests
             thrown = Assert.Throws<InvalidOperationException>(guard.ThrowIfAny);
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
 
-        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "Guarded MessageBox thread did not finish promptly.");
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"Took {sw.Elapsed.TotalSeconds:F1}s.");
+        Wait.JoinOrFail(thread, "Guarded MessageBox thread");
+        // No wall-clock ceiling here: the first window of a cold process takes longer than any short fixed budget on a busy runner
+        // although the guard worked. What matters is that the guard closed the dialog (a hang fails the bounded join above).
 
         Assert.True(hasDialogsAfter, "HasDialogs should be true after a real dialog was shown.");
         Assert.Contains(dialogsAfter, d => d.Contains("app-guard-probe", StringComparison.Ordinal));
@@ -60,9 +60,10 @@ public sealed class Win32DialogGuardTests
             }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
 
-        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "Guard thread did not finish promptly.");
+        Wait.JoinOrFail(thread, "Guard thread");
         Assert.Null(threadException);
     }
 
@@ -90,9 +91,10 @@ public sealed class Win32DialogGuardTests
             }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
 
-        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "Guard thread did not finish promptly.");
+        Wait.JoinOrFail(thread, "Guard thread");
         Assert.Null(threadException);
     }
 }

@@ -22,7 +22,7 @@ namespace PhotoReview.Shell.Integration.Tests.Menus;
 [Trait("Category", "Integration")]
 public sealed partial class ShellMenuRenderingTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
     private const nint VkEscape = 0x1B;
     private const nint VkDown = 0x28;
 

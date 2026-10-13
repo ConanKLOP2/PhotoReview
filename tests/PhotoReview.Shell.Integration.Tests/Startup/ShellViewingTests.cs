@@ -24,7 +24,7 @@ namespace PhotoReview.Shell.Integration.Tests.Startup;
 [Trait("Category", "Integration")]
 public sealed class ShellViewingTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     private static string[] MakeFolder(string root, int count)
     {
@@ -263,7 +263,7 @@ public sealed class ShellViewingTests
         // Mở một ảnh thuộc cặp số (a.jpg + a (1).jpg) vào thẳng compare (như bản WPF).
         Assert.True(WaitUntil(() => run.OnUi(() =>
             main.ViewModel.Compare.IsVisible && main.ViewModel.Compare.LeftImage is PixelBuffer && main.ViewModel.Compare.RightImage is PixelBuffer),
-            TimeSpan.FromSeconds(20)),
+            TimeSpan.FromSeconds(60)),
             "compare không hiện hai ảnh: " + run.OnUi(() =>
                 $"visible={main.ViewModel.Compare.IsVisible} left={main.ViewModel.Compare.LeftImage?.GetType().Name} right={main.ViewModel.Compare.RightImage?.GetType().Name} status={main.ViewModel.StatusText} count={main.ViewModel.Catalog.Count}"));
         var framesBefore = run.OnUi(() => main.Stats.Total);

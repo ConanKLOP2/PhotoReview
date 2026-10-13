@@ -75,8 +75,10 @@ public sealed class PlatformPrimitivesTests
             }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "Window handle creation timed out.");
+        // A hang bound, not a speed budget: the first WPF window of a cold process on a busy 2-vCPU runner outlasted the former 10 s.
+        Wait.JoinOrFail(thread, "Window handle creation");
         Assert.Null(threadException);
 
         // PW-01: an older Windows build is expected to make DwmSetWindowAttribute fail, which TryEnableDarkMode/TrySetCaptionColor

@@ -20,7 +20,7 @@ public sealed unsafe class ShellFullscreenFrameGeometryTests
 {
     private const int ScreenWidth = 720;
     private const int ScreenHeight = 480;
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     private sealed class FakeScreenNative(ScreenRect screen) : IFullscreenNative
     {

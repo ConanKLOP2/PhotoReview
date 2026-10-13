@@ -117,15 +117,19 @@ internal sealed class BridgeHarness : IAsyncDisposable
         return found;
     }
 
+    // A hang bound, not a speed budget: the first lazily loaded WPF window of a cold process (theme/font load, JIT) on a busy 2-vCPU
+    // runner can take far longer than the former 20 s.
+    private static readonly TimeSpan WindowHangBound = TimeSpan.FromSeconds(120);
+
     public async Task<nint> WaitForOwnedWindowAsync(string what)
     {
         nint hwnd = 0;
-        await Wait.UntilAsync(() => (hwnd = OwnedVisibleWindows().FirstOrDefault()) != 0, what, TimeSpan.FromSeconds(20));
+        await Wait.UntilAsync(() => (hwnd = OwnedVisibleWindows().FirstOrDefault()) != 0, what, WindowHangBound);
         return hwnd;
     }
 
     public async Task WaitForNoOwnedWindowAsync(string what)
-        => await Wait.UntilAsync(() => OwnedVisibleWindows().Count == 0, what, TimeSpan.FromSeconds(20));
+        => await Wait.UntilAsync(() => OwnedVisibleWindows().Count == 0, what, WindowHangBound);
 
     public bool IsOwnerEnabled() => IsWindowEnabled(OwnerHwnd);
 

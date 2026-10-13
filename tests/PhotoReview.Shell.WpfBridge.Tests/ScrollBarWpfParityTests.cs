@@ -8,6 +8,7 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.App.Viewport;
 using PhotoReview.Shell.Rendering;
 using PhotoReview.Shell.Win32.Viewing;
+using PhotoReview.TestSupport;
 using Xunit.Abstractions;
 
 namespace PhotoReview.Shell.WpfBridge.Tests;
@@ -387,8 +388,9 @@ public sealed class ScrollBarWpfParityTests(ITestOutputHelper output)
                 }
             });
             thread.SetApartmentState(ApartmentState.STA);
+            thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
             thread.Start();
-            thread.Join();
+            Wait.JoinOrFail(thread, "WPF scrollbar parity STA body");
             if (failure is not null)
             {
                 System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();

@@ -26,7 +26,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.Native;
 [Trait("Category", "UI")]
 public sealed class BenchmarkDialogTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     private sealed class FakeSession(BenchmarkProfile profile, Func<FakeSession, CancellationToken, Task<BenchmarkReport>> run)
         : IBenchmarkProfileSession

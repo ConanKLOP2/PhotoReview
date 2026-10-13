@@ -18,7 +18,7 @@ namespace PhotoReview.Shell.Integration.Tests.Viewing;
 [Trait("Category", "Integration")]
 public sealed partial class ShellScrollBarEndToEndTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     private static bool WaitUntil(Func<bool> condition) => SpinWait.SpinUntil(condition, Bound);
 

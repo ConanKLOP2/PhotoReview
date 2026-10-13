@@ -218,13 +218,13 @@ public sealed class AppRound3GapTests
         { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        SpinWait.SpinUntil(() => appDispatcher is not null, TimeSpan.FromSeconds(10));
+        Assert.True(SpinWait.SpinUntil(() => appDispatcher is not null, TimeSpan.FromSeconds(60)), "the dispatcher thread never started");
         try
         {
             var scheduler = new DispatcherUiScheduler(applicationDispatcher: () => appDispatcher);
             var ranOn = -1;
 
-            await scheduler.InvokeAsync(() => { ranOn = Environment.CurrentManagedThreadId; done.Set(); }).WaitAsync(TimeSpan.FromSeconds(10));
+            await scheduler.InvokeAsync(() => { ranOn = Environment.CurrentManagedThreadId; done.Set(); }).WaitAsync(TimeSpan.FromSeconds(60));
 
             Assert.True(done.IsSet);
             Assert.Equal(thread.ManagedThreadId, ranOn);
@@ -264,7 +264,7 @@ public sealed class AppRound3GapTests
         { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        SpinWait.SpinUntil(() => appDispatcher is not null, TimeSpan.FromSeconds(10));
+        Assert.True(SpinWait.SpinUntil(() => appDispatcher is not null, TimeSpan.FromSeconds(60)), "the dispatcher thread never started");
         try
         {
             var ranOn = -1;

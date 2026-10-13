@@ -14,7 +14,8 @@ namespace PhotoReview.Integration.Tests;
 [Trait("Category", "Integration")]
 public sealed class InstanceForwardClientOutcomeTests : IDisposable
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
+    // A hang bound, not a speed budget (see InstanceForwardPipeTests.Timeout).
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
     private readonly string _pipe = "PhotoReview.ClientTest." + Guid.NewGuid().ToString("N");
     private readonly string _root = Path.Combine(Path.GetTempPath(), "PhotoReviewFwdOut_" + Guid.NewGuid().ToString("N"));
     private readonly List<IAsyncDisposable> _servers = [];

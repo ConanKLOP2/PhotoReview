@@ -18,7 +18,7 @@ namespace PhotoReview.Shell.Integration.Tests.Startup;
 /// </summary>
 internal sealed class ShellRun : IDisposable
 {
-    private static readonly TimeSpan DefaultWait = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DefaultWait = TimeSpan.FromSeconds(60);
 
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _mainReady = new();
@@ -283,7 +283,7 @@ internal sealed class ShellRun : IDisposable
         if (!_exited.IsSet)
         {
             RequestClose();
-            if (!_exited.Wait(TimeSpan.FromSeconds(15)))
+            if (!_exited.Wait(TimeSpan.FromSeconds(45)))
             {
                 // Không thoát được: không để thread (và cửa sổ) treo vào các test sau.
                 if (Main is { } main && main.Hwnd != 0)
@@ -293,7 +293,7 @@ internal sealed class ShellRun : IDisposable
             }
         }
 
-        if (!_thread.Join(TimeSpan.FromSeconds(5)) && !_exited.IsSet)
+        if (!_thread.Join(TimeSpan.FromSeconds(15)) && !_exited.IsSet)
         {
             s_abandoned = $"root={Root} marks=[{string.Join(", ", MarkNames)}]";
         }
