@@ -21,6 +21,7 @@ internal sealed class D2DUiaProvider : IDisposable
     private const int WmGetObject = 0x003D;
     private const int UiaRootObjectId = -25;
     private const int MarshalMagic = 0x44325541; // "D2UA": lParam riêng của lời gọi chuyển thread, không trùng OBJID_* hợp lệ
+    private const int FlushMagic = 0x44325546;   // "D2UF": xả hàng đợi sự kiện (PostMessage)
     private const int PropNameId = 30005;
     private const int PropControlType = 30003;
     private const int PropAutomationId = 30011;
@@ -95,6 +96,7 @@ internal sealed class D2DUiaProvider : IDisposable
         }
 
         _disposed = true;
+        FlushEvents(); // giải phóng BSTR còn trong hàng đợi (không phát)
         _window.GetObjectHandler = null;
         _window.View.Changed -= OnViewChanged;
         _window.View.FocusMoved -= OnViewFocusMoved;
@@ -117,6 +119,12 @@ internal sealed class D2DUiaProvider : IDisposable
         if (id == MarshalMagic)
         {
             ((UiaWork)GCHandle.FromIntPtr(wParam).Target!).Run();
+            return 1;
+        }
+
+        if (id == FlushMagic)
+        {
+            FlushEvents();
             return 1;
         }
 
@@ -594,6 +602,14 @@ internal sealed class D2DUiaProvider : IDisposable
     internal int ExpandState(string id) => OnUi(() => Data(BuildTree(), id).IsExpanded == true ? 1 : 0);
 
     // ---- sự kiện (thread UI) --------------------------------------------------------------------------------------------
+    // Sự kiện KHÔNG phát ngay trong lời gọi provider: UIA phát sự kiện đồng bộ tới client, mà client cùng tiến trình (và mọi client
+    // đang chờ chính lời gọi này) bị chặn tới khi lời gọi trả về - kết quả đo được là ~2 s chờ hết hạn cho MỖI lần Toggle/SetValue.
+    // Nên xếp hàng và PostMessage một thông điệp xả (cùng seam WM_GETOBJECT, lParam = FlushMagic): xả sau khi lời gọi đã trả.
+
+    private readonly List<PendingEvent> _pending = [];
+    private bool _flushPosted;
+
+    private readonly record struct PendingEvent(string Id, int PropertyId, UiaVariant Value, bool Focus);
 
     private void RememberEnabled()
     {
@@ -604,18 +620,21 @@ internal sealed class D2DUiaProvider : IDisposable
         }
     }
 
+    private void Enqueue(PendingEvent item)
+    {
+        _pending.Add(item);
+        if (!_flushPosted)
+        {
+            _flushPosted = true;
+            _ = User32.PostMessage(_window.Hwnd, WmGetObject, 0, FlushMagic);
+        }
+    }
+
     private void OnViewFocusMoved(D2DWidget? widget)
     {
-        if (widget is null || _disposed || !D2DUiaNative.UiaClientsAreListening())
+        if (widget is not null && !_disposed && D2DUiaNative.UiaClientsAreListening())
         {
-            return;
-        }
-
-        var ptr = ComPointer(NodeFor(widget.Id), SimpleIid);
-        if (ptr != 0)
-        {
-            _ = D2DUiaNative.UiaRaiseAutomationEvent(ptr, EventFocusChanged);
-            _ = Marshal.Release(ptr);
+            Enqueue(new PendingEvent(widget.Id, 0, default, true));
         }
     }
 
@@ -627,20 +646,20 @@ internal sealed class D2DUiaProvider : IDisposable
             return;
         }
 
-        // Giá trị mới của phần tử vừa đổi.
+        // Giá trị mới của phần tử vừa đổi (BSTR cấp ở đây, giải phóng sau khi phát).
         switch (widget)
         {
             case D2DCheckWidget check:
-                Raise(widget.Id, PropToggleState, UiaVariant.FromInt(check.Checked ? 1 : 0));
+                Enqueue(new PendingEvent(widget.Id, PropToggleState, UiaVariant.FromInt(check.Checked ? 1 : 0), false));
                 break;
             case D2DFieldWidget field:
-                Raise(widget.Id, PropValueValue, UiaVariant.FromString(field.Box.Text));
+                Enqueue(new PendingEvent(widget.Id, PropValueValue, UiaVariant.FromString(field.Box.Text), false));
                 break;
             case D2DComboWidget combo:
-                Raise(widget.Id, PropValueValue, UiaVariant.FromString(combo.SelectedText));
+                Enqueue(new PendingEvent(widget.Id, PropValueValue, UiaVariant.FromString(combo.SelectedText), false));
                 break;
             case D2DSliderWidget slider:
-                Raise(widget.Id, PropRangeValue, UiaVariant.FromDouble(slider.Value));
+                Enqueue(new PendingEvent(widget.Id, PropRangeValue, UiaVariant.FromDouble(slider.Value), false));
                 break;
         }
 
@@ -649,38 +668,46 @@ internal sealed class D2DUiaProvider : IDisposable
         {
             if (_lastEnabled.TryGetValue(node.AutomationId, out var before) && before != node.IsEnabled)
             {
-                Raise(node.AutomationId, PropIsEnabled, UiaVariant.FromBool(node.IsEnabled));
+                Enqueue(new PendingEvent(node.AutomationId, PropIsEnabled, UiaVariant.FromBool(node.IsEnabled), false));
             }
         }
 
         RememberEnabled();
     }
 
-    private unsafe void Raise(string id, int propertyId, UiaVariant newValue)
+    private unsafe void FlushEvents()
     {
-        var ptr = ComPointer(NodeFor(id), SimpleIid);
-        try
+        _flushPosted = false;
+        var batch = _pending.ToArray();
+        _pending.Clear();
+        foreach (var item in batch)
         {
-            if (ptr != 0)
+            var value = item.Value;
+            var ptr = _disposed ? 0 : ComPointer(NodeFor(item.Id), SimpleIid);
+            try
             {
-                _ = D2DUiaNative.UiaRaiseAutomationPropertyChangedEvent(ptr, propertyId, default, newValue);
+                if (ptr != 0)
+                {
+                    _ = item.Focus
+                        ? D2DUiaNative.UiaRaiseAutomationEvent(ptr, EventFocusChanged)
+                        : D2DUiaNative.UiaRaiseAutomationPropertyChangedEvent(ptr, item.PropertyId, default, value);
+                }
             }
-        }
-        finally
-        {
-            if (ptr != 0)
+            finally
             {
-                _ = Marshal.Release(ptr);
-            }
+                if (ptr != 0)
+                {
+                    _ = Marshal.Release(ptr);
+                }
 
-            if (newValue.Vt == UiaVariant.VtBstr)
-            {
-                _ = D2DUiaNative.VariantClear(&newValue);
+                if (value.Vt == UiaVariant.VtBstr)
+                {
+                    _ = D2DUiaNative.VariantClear(&value);
+                }
             }
         }
     }
 }
-
 /// <summary>Phần tử UIA (fragment) - gốc chung của cửa sổ và các nút.</summary>
 [GeneratedComClass]
 internal abstract partial class D2DUiaElement(D2DUiaProvider owner, string id, int sequence) : IRawElementProviderSimple, IRawElementProviderFragment

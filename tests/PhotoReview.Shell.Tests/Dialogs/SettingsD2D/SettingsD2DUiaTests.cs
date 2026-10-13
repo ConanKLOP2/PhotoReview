@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Settings;
+using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Dialogs.SettingsD2D;
 using PhotoReview.TestSupport;
 using Xunit.Abstractions;
@@ -23,6 +24,27 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsD2D;
 public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
 {
     private const int HrElementNotEnabled = unchecked((int)0x80040200);
+
+    /// <summary>Client UIA ngoài tiến trình (System.Windows.Automation của Windows PowerShell 5.1): in TREE/NODE/TOGGLE để test đọc.</summary>
+    private const string UiaClientScript = """
+                param([long]$Hwnd)
+                Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+                $sw = [Diagnostics.Stopwatch]::StartNew()
+                $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Hwnd)
+                $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+                "TREE|$($sw.ElapsedMilliseconds)|$($all.Count)"
+                foreach ($e in $all) {
+                    $c = $e.Current
+                    if ($c.FrameworkId -eq 'PhotoReviewD2D') { "NODE|$($c.AutomationId)|$($c.ControlType.ProgrammaticName)|$($c.Name)|$($c.IsEnabled)" }
+                }
+                $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ShowInfoOverlay')
+                $box = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+                $pattern = $box.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+                $before = $pattern.Current.ToggleState
+                $sw.Restart()
+                $pattern.Toggle()
+                "TOGGLE|$($sw.ElapsedMilliseconds)|$before|$($pattern.Current.ToggleState)"
+                """;
 
     private static AppSettings Baseline() => new()
     {
@@ -166,22 +188,19 @@ public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
 
     // ---- (c) pattern điều khiển view ---------------------------------------------------------------------------------------
 
+    // Mỗi test chỉ làm 1-3 hành động UIA: trên desktop ẩn của runner, UIA chờ ~2 s trước MỖI hành động (cửa sổ không bao giờ là
+    // foreground; trên desktop thật Toggle 21 ms, SetFocus 44 ms), và OnSta chỉ cho 60 s cho cả test.
+
     [Fact]
-    public void Patterns_Toggle_SetValue_Range_Expand_Invoke_DriveTheView()
+    public void Toggle_FlipsTheCheckBox_AndRaisesChangedOnce()
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
         WithUia((window, host) =>
         {
-            var view = window.View;
             var changes = new List<string>();
-            var invoked = new List<string>();
-            view.Changed += w => changes.Add(w.Id);
-            view.ButtonInvoked += b => invoked.Add(b.Id);
-            var check = (D2DCheckWidget)view.Find("ShowInfoOverlay")!;
-            var delay = (D2DFieldWidget)view.Find("ToolbarAutoHideDelay")!;
-            var slider = (D2DSliderWidget)view.Find("ToolbarOpacity")!;
+            window.View.Changed += w => changes.Add(w.Id);
+            var check = (D2DCheckWidget)window.View.Find("ShowInfoOverlay")!;
             Assert.True(check.Checked);
-
             host.Call(api =>
             {
                 UiaApi.Pattern<IUiaClientToggle>(api.ById("ShowInfoOverlay"), UiaIds.TogglePattern)!.Toggle();
@@ -189,8 +208,21 @@ public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
             });
             Assert.False(check.Checked);
             Assert.Equal(["ShowInfoOverlay"], changes);
+            var state = host.Call(api => UiaApi.Pattern<IUiaClientToggle>(api.ById("ShowInfoOverlay"), UiaIds.TogglePattern)!.GetCurrentToggleState());
+            Assert.Equal(0, state);
+            return 0;
+        });
+    }
 
-            changes.Clear();
+    [Fact]
+    public void SetValue_EditsTheNumberBox_AndLettersAreRejectedWithInvalidArg()
+    {
+        using var scope = TestLocalization.Use(TestLocalization.English);
+        WithUia((window, host) =>
+        {
+            var changes = new List<string>();
+            window.View.Changed += w => changes.Add(w.Id);
+            var delay = (D2DFieldWidget)window.View.Find("ToolbarAutoHideDelay")!;
             host.Call(api =>
             {
                 UiaApi.Pattern<IUiaClientValue>(api.ById("ToolbarAutoHideDelay"), UiaIds.ValuePattern)!.SetValue("750");
@@ -216,7 +248,20 @@ public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
             Assert.Equal(unchecked((int)0x80070057), rejected);
             Assert.Equal("750", delay.Box.Text);
             Assert.Empty(changes);
+            return 0;
+        });
+    }
 
+    [Fact]
+    public void RangeValue_And_ExpandCollapse_DriveTheSliderAndTheComboPopup()
+    {
+        using var scope = TestLocalization.Use(TestLocalization.English);
+        WithUia((window, host) =>
+        {
+            var view = window.View;
+            var changes = new List<string>();
+            view.Changed += w => changes.Add(w.Id);
+            var slider = (D2DSliderWidget)view.Find("ToolbarOpacity")!;
             host.Call(api =>
             {
                 UiaApi.Pattern<IUiaClientRange>(api.ById("ToolbarOpacity"), UiaIds.RangeValuePattern)!.SetValue(55);
@@ -239,7 +284,18 @@ public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
                 return 0;
             });
             Assert.False(view.PopupOpen);
+            return 0;
+        });
+    }
 
+    [Fact]
+    public void Invoke_OnAFooterButton_RaisesButtonInvoked()
+    {
+        using var scope = TestLocalization.Use(TestLocalization.English);
+        WithUia((window, host) =>
+        {
+            var invoked = new List<string>();
+            window.View.ButtonInvoked += b => invoked.Add(b.Id);
             host.Call(api =>
             {
                 UiaApi.Pattern<IUiaClientInvoke>(api.ById("Cancel"), UiaIds.InvokePattern)!.Invoke();
@@ -249,7 +305,143 @@ public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
             return 0;
         });
     }
+    // ---- client NGOÀI tiến trình (giống Narrator) ------------------------------------------------------------------------
 
+    [Fact]
+    public void OutOfProcessClient_SeesTheSameTree_AndTogglesTheCheckBox()
+    {
+        using var scope = TestLocalization.Use(TestLocalization.English);
+        var dir = Path.Combine(Path.GetTempPath(), "d2d-uia-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var script = Path.Combine(dir, "client.ps1");
+            File.WriteAllText(script, UiaClientScript);
+            WithUia((window, host) =>
+            {
+                var check = (D2DCheckWidget)window.View.Find("ShowInfoOverlay")!;
+                var before = check.Checked;
+                var psi = new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -Hwnd {window.Hwnd}")
+                {
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
+                using var process = Process.Start(psi)!;
+                var stdout = process.StandardOutput.ReadToEndAsync();
+                var stderr = process.StandardError.ReadToEndAsync();
+                using var exited = new ManualResetEventSlim(false);
+                process.EnableRaisingEvents = true;
+                process.Exited += (_, _) => exited.Set();
+                if (process.HasExited)
+                {
+                    exited.Set();
+                }
+
+                try
+                {
+                    UiaClientNative.PumpUntil(exited.WaitHandle, TimeSpan.FromSeconds(45));
+                    if (!exited.IsSet)
+                    {
+                        throw new TimeoutException("out-of-process UIA client did not finish within 45 s (UI thread was pumping).");
+                    }
+                }
+                finally
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                }
+
+                var lines = stdout.GetAwaiter().GetResult().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+                output.WriteLine(string.Join(Environment.NewLine, lines.Where(l => !l.StartsWith("NODE", StringComparison.Ordinal))) + Environment.NewLine + stderr.GetAwaiter().GetResult());
+                output.WriteLine($"{lines.Count(l => l.StartsWith("NODE", StringComparison.Ordinal))} NODE lines");
+                var nodes = lines.Where(l => l.StartsWith("NODE|", StringComparison.Ordinal)).Select(l => l.Split('|')).ToList();
+                var expected = window.View.AccessibleNodes();
+                Assert.Equal(expected.Count, nodes.Count);
+                Assert.All(nodes, n => Assert.False(string.IsNullOrWhiteSpace(n[3]), $"{n[1]} has no name"));
+                Assert.Equal("ControlType.CheckBox", nodes.Single(n => n[1] == "ShowInfoOverlay")[2]);
+                Assert.Equal("ControlType.Edit", nodes.Single(n => n[1] == "ToolbarAutoHideDelay")[2]);
+                Assert.Equal("ControlType.ComboBox", nodes.Single(n => n[1] == "LoadingMode")[2]);
+                Assert.Equal("ControlType.Slider", nodes.Single(n => n[1] == "ToolbarOpacity")[2]);
+                Assert.Equal("ControlType.Button", nodes.Single(n => n[1] == "Save")[2]);
+                Assert.Equal("False", nodes.Single(n => n[1] == "InfoOverlayAutoHideDelay")[4]);
+                var toggle = lines.Single(l => l.StartsWith("TOGGLE|", StringComparison.Ordinal)).Split('|');
+                Assert.Equal(before ? "On" : "Off", toggle[2]);
+                Assert.Equal(before ? "Off" : "On", toggle[3]);
+                Assert.Equal(!before, check.Checked);
+                return 0;
+            });
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+    // ---- ứng dụng THẬT chạy ở tiến trình riêng (vòng GetMessage ở thread chính) ----------------------------------------------
+
+    [Fact]
+    public async Task SeparateProcessApp_ExposesTheTree_AndTogglesTheCheckBox()
+    {
+        var exe = Path.Combine(AppContext.BaseDirectory, "PhotoReview.exe");
+        Assert.True(File.Exists(exe), exe + " is missing");
+        var dir = Path.Combine(Path.GetTempPath(), "d2d-uia-app-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Process? app = null;
+        try
+        {
+            var script = Path.Combine(dir, "client.ps1");
+            File.WriteAllText(script, UiaClientScript);
+            var start = new ProcessStartInfo(exe, "--settings-d2d") { UseShellExecute = false, CreateNoWindow = true };
+            start.Environment["PHOTOREVIEW_SETTINGS_D2D"] = "dark";
+            app = Process.Start(start)!;
+            nint hwnd = 0;
+            var clock = Stopwatch.StartNew();
+            while (hwnd == 0 && clock.Elapsed < TimeSpan.FromSeconds(30) && !app.HasExited)
+            {
+                hwnd = UiaClientNative.FindTopLevelWindow("PhotoReview.SettingsD2D.Surface", (uint)app.Id);
+                if (hwnd == 0)
+                {
+                    using var gate = new ManualResetEventSlim(false);
+                    _ = gate.Wait(50);
+                }
+            }
+
+            Assert.NotEqual(0, hwnd);
+            var psi = new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -Hwnd {hwnd}")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            using var client = Process.Start(psi)!;
+            var stdout = client.StandardOutput.ReadToEndAsync();
+            var stderr = client.StandardError.ReadToEndAsync();
+            Assert.True(client.WaitForExit(45000), "PowerShell UIA client did not finish within 45 s");
+            var lines = (await stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+            output.WriteLine(string.Join(Environment.NewLine, lines.Where(l => !l.StartsWith("NODE", StringComparison.Ordinal))) + Environment.NewLine + (await stderr));
+            var nodes = lines.Where(l => l.StartsWith("NODE|", StringComparison.Ordinal)).Select(l => l.Split('|')).ToList();
+            Assert.True(nodes.Count >= 50, $"expected the whole page, got {nodes.Count} nodes");
+            Assert.All(nodes, n => Assert.False(string.IsNullOrWhiteSpace(n[3]), $"{n[1]} has no name"));
+            Assert.Equal("ControlType.CheckBox", nodes.Single(n => n[1] == "ShowInfoOverlay")[2]);
+            var toggle = lines.Single(l => l.StartsWith("TOGGLE|", StringComparison.Ordinal)).Split('|');
+            Assert.NotEqual(toggle[2], toggle[3]);
+            output.WriteLine($"separate process: tree {lines.Single(l => l.StartsWith("TREE|", StringComparison.Ordinal))}, toggle {toggle[1]} ms");
+        }
+        finally
+        {
+            if (app is not null && !app.HasExited)
+            {
+                app.Kill(entireProcessTree: true);
+            }
+
+            app?.Dispose();
+            Directory.Delete(dir, recursive: true);
+        }
+    }
     // ---- (d) trạng thái tắt ------------------------------------------------------------------------------------------------
 
     [Fact]
@@ -409,8 +601,7 @@ public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
                 && !(props.Has("ShowInfoOverlay", UiaIds.ToggleState, "0") && props.Has("ToolbarAutoHideDelay", UiaIds.ValueValue, "640")
                     && props.Has("ShowFileInfo", UiaIds.IsEnabled, "False") && focus.Ids.Contains("ToolbarOpacity")))
             {
-                Pump();
-                _ = gate.Wait(2);
+                UiaClientNative.PumpUntil(gate.WaitHandle, TimeSpan.FromMilliseconds(20));
             }
 
             output.WriteLine("property events: " + string.Join("; ", props.Seen));
@@ -500,6 +691,55 @@ internal static unsafe partial class UiaClientNative
 
     [LibraryImport("oleaut32.dll")]
     public static partial int VariantClear(ClientVariant* variant);
+
+    [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint FindWindowEx(nint parent, nint after, string className, string? title);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowThreadProcessId")]
+    private static partial uint GetWindowThreadProcessId(nint hwnd, out uint processId);
+
+    /// <summary>Cửa sổ cấp cao nhất của lớp này thuộc tiến trình <paramref name="processId"/> (0 nếu chưa có).</summary>
+    public static nint FindTopLevelWindow(string className, uint processId)
+    {
+        nint hwnd = 0;
+        while ((hwnd = FindWindowEx(0, hwnd, className, null)) != 0)
+        {
+            _ = GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == processId)
+            {
+                return hwnd;
+            }
+        }
+
+        return 0;
+    }
+
+    [LibraryImport("user32.dll", EntryPoint = "PostThreadMessageW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool PostThreadMessage(uint thread, uint message, nint wParam, nint lParam);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetCurrentThreadId")]
+    private static partial uint GetCurrentThreadId();
+
+    /// <summary>
+    /// Vòng thông điệp THẬT (GetMessage) trên thread gọi tới khi <paramref name="done"/> báo hiệu hoặc hết <paramref name="limit"/>: mỗi
+    /// SendMessage/PostMessage của provider hoặc của UIA đánh thức ngay (không có chu kỳ thăm dò), như vòng lặp của ứng dụng thật.
+    /// </summary>
+    public static void PumpUntil(WaitHandle done, TimeSpan limit)
+    {
+        var thread = GetCurrentThreadId();
+        _ = Task.Run(() =>
+        {
+            _ = done.WaitOne(limit);
+            _ = PostThreadMessage(thread, 0x0012 /* WM_QUIT */, 0, 0);
+        });
+        Msg message;
+        while (User32.GetMessage(&message, 0, 0, 0) > 0)
+        {
+            _ = User32.TranslateMessage(&message);
+            _ = User32.DispatchMessage(&message);
+        }
+    }
 }
 
 /// <summary>IUIAutomation (vtable theo UIAutomationClient.h): khai tới hàm cần dùng; khe không dùng là Sxx.</summary>
@@ -710,6 +950,7 @@ internal sealed class UiaHost(D2DSettingsWindow window) : IDisposable
     private static readonly Guid IUIAutomation = new("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee");
 
     private IUiaClient? _ui;
+    private UiaApi? _api;
 
     public T Call<T>(Func<UiaApi, T> body)
     {
@@ -717,16 +958,15 @@ internal sealed class UiaHost(D2DSettingsWindow window) : IDisposable
         {
             _ = UiaClientNative.CoInitializeEx(0, 0 /* COINIT_MULTITHREADED */);
             _ui ??= Create();
-            return body(new UiaApi(_ui, window.Hwnd));
+            _api ??= new UiaApi(_ui, window.Hwnd); // cây tĩnh: giữ chỉ mục AutomationId giữa các lần gọi
+            return body(_api);
         });
-        var clock = Stopwatch.StartNew();
-        while (Task.WaitAny([task], 2) < 0)
+        using var done = new ManualResetEventSlim(false);
+        _ = task.ContinueWith(_ => done.Set(), TaskScheduler.Default);
+        UiaClientNative.PumpUntil(done.WaitHandle, TimeSpan.FromSeconds(30));
+        if (!done.IsSet)
         {
-            D2DTestKit.Pump();
-            if (clock.Elapsed > TimeSpan.FromSeconds(30))
-            {
-                throw new TimeoutException("UIA client call did not finish within 30 s (UI thread was pumping).");
-            }
+            throw new TimeoutException("UIA client call did not finish within 30 s (UI thread was pumping).");
         }
 
         D2DTestKit.Pump();
@@ -761,6 +1001,7 @@ internal sealed class UiaHost(D2DSettingsWindow window) : IDisposable
         }
 
         _ui = null;
+        _api = null;
     }
 }
 

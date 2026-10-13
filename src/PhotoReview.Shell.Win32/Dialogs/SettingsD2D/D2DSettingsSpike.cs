@@ -1,4 +1,4 @@
-using PhotoReview.App.Presenters;
+﻿using PhotoReview.App.Presenters;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Settings;
 using PhotoReview.Shell.Interop;
@@ -32,6 +32,7 @@ internal static unsafe class D2DSettingsSpike
         var presenter = new SettingsPresenter(new AppSettings());
         var state = presenter.LoadFields();
         using var window = new D2DSettingsWindow(options, () => Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
+        using var uia = D2DUiaProvider.Install(window); // cây UIA (Narrator) của lối vào thử
         var page = (D2DDisplayPage)window.Page;
         page.Load(state);
         window.View.Layout(window.View.ClientWidth, window.View.ClientHeight, window.Scale);
