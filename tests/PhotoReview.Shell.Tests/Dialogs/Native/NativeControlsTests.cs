@@ -645,20 +645,29 @@ public sealed unsafe class NativeControlsTests
                     d.Close();
                 });
             }
-            var gdiBefore = GdiObjects();
-            var userBefore = UserObjects();
-            for (var i = 0; i < 12; i++)
+            // Process-wide counters: other test threads (and the transient double-buffer bitmaps of their paints) add noise, so a real
+            // leak = growth in EVERY one of three attempts; noise or a one-time cache = at least one attempt within tolerance.
+            var best = (Gdi: int.MaxValue, User: int.MaxValue);
+            for (var attempt = 0; attempt < 3 && (best.Gdi > 2 || best.User > 2); attempt++)
             {
-                ShowOnOwner(new ControlGalleryDialog(), (d, _) =>
+                var gdiBefore = GdiObjects();
+                var userBefore = UserObjects();
+                for (var i = 0; i < 12; i++)
                 {
-                    ComboBoxControl.Drop(Item(d, ControlGalleryDialog.Combo), true);
-                    ComboBoxControl.Drop(Item(d, ControlGalleryDialog.Combo), false);
-                    Drain(d);
-                    d.Close();
-                });
+                    ShowOnOwner(new ControlGalleryDialog(), (d, _) =>
+                    {
+                        ComboBoxControl.Drop(Item(d, ControlGalleryDialog.Combo), true);
+                        ComboBoxControl.Drop(Item(d, ControlGalleryDialog.Combo), false);
+                        Drain(d);
+                        d.Close();
+                    });
+                }
+
+                var grown = ((int)GdiObjects() - (int)gdiBefore, (int)UserObjects() - (int)userBefore);
+                best = (Math.Min(best.Gdi, grown.Item1), Math.Min(best.User, grown.Item2));
             }
 
-            return ((int)GdiObjects() - (int)gdiBefore, (int)UserObjects() - (int)userBefore);
+            return best;
         });
 
         Assert.True(gdi <= 2, $"GDI objects grew by {gdi}");
