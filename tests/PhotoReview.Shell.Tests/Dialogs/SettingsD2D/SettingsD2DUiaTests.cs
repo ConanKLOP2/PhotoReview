@@ -208,12 +208,12 @@ public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
                     UiaApi.Pattern<IUiaClientValue>(api.ById("ToolbarAutoHideDelay"), UiaIds.ValuePattern)!.SetValue("abc");
                     return 0;
                 }
-                catch (COMException ex)
+                catch (Exception ex) when (ex is COMException or ArgumentException)
                 {
-                    return ex.HResult;
+                    return ex.HResult; // E_INVALIDARG nên Marshal đổi thành ArgumentException
                 }
             });
-            Assert.NotEqual(0, rejected);
+            Assert.Equal(unchecked((int)0x80070057), rejected);
             Assert.Equal("750", delay.Box.Text);
             Assert.Empty(changes);
 
@@ -854,7 +854,11 @@ internal sealed class UiaApi(IUiaClient ui, nint hwnd)
 
     public List<IUiaClientElement> Children(IUiaClientElement e) => Find(e, 2).Where(c => Str(c, UiaIds.FrameworkId) == "PhotoReviewD2D").ToList();
 
-    public IUiaClientElement ById(string id) => Provider().First(e => Str(e, UiaIds.AutomationId) == id);
+    private Dictionary<string, IUiaClientElement>? _byId;
+
+    /// <summary>Tra theo AutomationId (cây tĩnh trong một lần gọi nên lập chỉ mục một lần để khỏi quét lại 50 phần tử mỗi lần).</summary>
+    public IUiaClientElement ById(string id)
+        => (_byId ??= Provider().ToDictionary(e => Str(e, UiaIds.AutomationId), e => e))[id];
 
     public IUiaClientElement? Parent(IUiaClientElement e) => ui.GetControlViewWalker().GetParentElement(e);
 }
