@@ -2,7 +2,7 @@
 id: NOWPF-WP35-G1
 order: 1100
 summary: |-
-  WP-35 GĐ1 (phương án B của spike S3, CHƯA XÁC NHẬN): khung hộp thoại Win32 gốc AOT-sạch trong Shell.Win32 (template trong bộ nhớ + dialog manager, DPI từng màn hình, dark qua DWM/uxtheme/WM_CTLCOLOR*, modal không nuốt WM_QUIT, vòng lồng của shell) + 4 cửa sổ nhỏ (ZoomPrompt, Diagnostics + Sao chép, SkippedFiles, BatchReview) dùng presenter G0 + IFileOpenDialog/IFileSaveDialog + `Win32SecondaryWindowPort` và `SecondaryWindowRouter` (Win32 -> cầu WPF -> cổng tạm theo từng cửa sổ). @@SUMMARY@@
+  WP-35 GĐ1 (phương án B của spike S3, CHƯA XÁC NHẬN): khung hộp thoại Win32 gốc AOT-sạch trong Shell.Win32 (template trong bộ nhớ + dialog manager, DPI từng màn hình, dark qua DWM/uxtheme/WM_CTLCOLOR*, modal không nuốt WM_QUIT, vòng lồng của shell) + 4 cửa sổ nhỏ (ZoomPrompt, Diagnostics + Sao chép, SkippedFiles, BatchReview) dùng presenter G0 + IFileOpenDialog/IFileSaveDialog + `Win32SecondaryWindowPort` và `SecondaryWindowRouter` (Win32 -> cầu WPF -> cổng tạm theo từng cửa sổ). Đã đo trên exe thật (R2R và AOT): mở <= 65 ms; 0 cảnh báo ILC; không nạp WPF; 24 đột biến, 0 sống; 50 lượt lặp 0 lỗi.
 ---
 
 # NOWPF-WP35-G1 - hộp thoại Win32 gốc, giai đoạn 1 (2026-10-13)
@@ -96,7 +96,38 @@ các điều khiển (do hệ thống vẽ ngay sau đó). Cổng "không nạp 
 
 ## 5. Đột biến (hai bước, `docs/MUTATION-TESTING.md`)
 
-@@MUTATION@@
+24 đột biến thủ công (script ở scratchpad, build Release + test trên desktop ẩn). Bước 1 = `Shell.Tests` lọc `Dialogs.Native` (75 ca); bước 2 (chỉ kẻ sống) = toàn
+`Shell.Tests` (CI filter); `Shell.Integration.Tests` + `WpfBridge.Tests` đã xanh trên mã gốc và phủ cổng/shell (không chạy lại từng đột biến).
+
+| # | Đột biến | Kết quả |
+|---|---|---|
+| M01 | owner không bị vô hiệu hoá (modal) | chết bước 1 |
+| M02 | owner không bật lại sau khi đóng | chết bước 1 |
+| M03 | nút Huỷ trả OK | chết bước 1 |
+| M04 | WM_CLOSE (X/Alt+F4) trả OK | chết bước 1 |
+| M05 | bỏ kiểm tra giá trị zoom | chết bước 1 |
+| M06 | `WM_DPICHANGED` không lưu DPI mới (bản đầu `if (true)` không biên dịch được, đổi lại) | chết bước 1 |
+| M07 | không áp giao diện tối (chrome) | chết bước 1 |
+| M08 | màu chữ STATIC không đặt | chết bước 1 |
+| M09 | không huỷ cửa sổ hộp thoại | SỐNG: test cũ huỷ owner (kéo theo cửa sổ con) nên không thấy; thêm `ClosedDialog_WindowIsDestroyed_EvenWhileTheOwnerLives` -> chết |
+| M10 | hoán đổi chữ nút Huỷ/Apply | chết bước 1 |
+| M11 | router không bao giờ ưu tiên cổng Win32 | chết bước 1 |
+| M12 | cầu vắng: Settings không rơi về cổng tạm | chết bước 1 |
+| M13 | vòng GetMessage đơn giản nuốt WM_QUIT | chết bước 1 |
+| M14 | vòng lồng của shell nuốt WM_QUIT | chết bước 1 |
+| M15 | `Dispose` cổng không đóng hộp thoại đang mở | chết bước 1 |
+| M16 | đổi tỉ lệ dialog-unit ngang (/4 -> /6) | SỐNG (bố cục không phụ thuộc kích thước tuyệt đối trong test); thêm `ClientWidth_IsTwoHundredDialogUnits_OfTheBodyFont` -> chết |
+| M17 | bỏ `DM_SETDEFID` | SỐNG cả bước 2: **tương đương** - dialog manager lấy nút mặc định từ kiểu `BS_DEFPUSHBUTTON` (giữ lệnh vì tường minh) |
+| M18 | hoán đổi giá trị hàng 0/1 của Diagnostics | SỐNG (mẫu toàn số 0 nên hai hàng trùng giá trị); thêm `Diagnostics_RowIndexMapsToTheRightField...` (mẫu khác nhau từng hàng) -> chết |
+| M19 | không nạp dòng vào listbox | chết bước 1 |
+| M20 | bỏ kích thước tối thiểu (`WM_GETMINMAXINFO`) | SỐNG (khẳng định quá yếu); siết khẳng định bề rộng/cao tối thiểu -> chết |
+| M21 | `Dispose` router bỏ qua cổng Win32 | chết bước 1 |
+| M22 | BatchReview: Huỷ cũng thành "đã xác nhận" | chết bước 1 |
+| M23 | không hiện thông báo lỗi zoom | chết bước 1 |
+| M24 | composition root không đưa vòng lặp shell cho cổng Win32 | SỐNG (không test nào đi qua DI thật với vòng lặp); thêm `TheShellCompositionRoot_RunsItsNativeDialogsInsideTheShellLoop` -> chết |
+
+Tổng: 24 chạy; 18 chết ở bước 1; 5 sống rồi bị test mới giết (M09, M16, M18, M20, M24); 1 tương đương (M17). Còn sống thật: 0. Một lỗi script giữa chừng làm mất
+kết quả M08: chạy lại, chết bước 1.
 
 ## 6. Nhìn bằng mắt và phần CHƯA kiểm được bằng máy
 
