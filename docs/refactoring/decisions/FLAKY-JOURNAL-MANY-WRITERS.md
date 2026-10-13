@@ -1,6 +1,6 @@
 ---
 id: FLAKY-JOURNAL-MANY-WRITERS
-order: 1240
+order: 1300
 summary: |-
   CHƯA XÁC NHẬN (2026-10-13): test `ManyWritersOneFile_NoTornOrLostAcknowledgedRecords` đỏ khi CPU bị đói vì đòi >= 120/240 append
   qua được ngân sách retry (đếm theo SỐ LẦN, 5 lần, ~100 ms ngủ) của OperationJournal: số đó là lịch CPU, không phải bất biến. Mã sản xuất
