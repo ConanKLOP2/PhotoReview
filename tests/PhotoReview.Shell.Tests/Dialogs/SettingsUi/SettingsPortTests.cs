@@ -14,7 +14,7 @@ using static PhotoReview.Shell.Tests.Dialogs.SettingsUi.SettingsDialogKit;
 namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 
 /// <summary>
-/// WP-35 GĐ3a: cổng Win32 nhận Settings (cờ ẩn <c>PHOTOREVIEW_SETTINGS_WIN32=1</c> hoặc khi đủ mọi trang), mở <see cref="SettingsDialog"/> qua
+/// WP-35 GĐ3a: cổng Win32 nhận Settings (khi đủ mọi trang; cờ ẩn PHOTOREVIEW_SETTINGS_WIN32 đã gỡ ở GĐ5), mở <see cref="SettingsDialog"/> qua
 /// DI thật tối thiểu; Dispose cổng đóng hộp thoại đang mở.
 /// </summary>
 [Collection("GlobalState")]
@@ -59,29 +59,31 @@ public sealed class SettingsPortTests : IDisposable
     }
 
     [Fact]
-    public void TheHiddenEnvironmentFlag_EnablesSettings_WithoutTheCatalogBeingComplete()
+    public void TheRemovedEnvironmentFlag_HasNoEffect_SettingsFollowsTheCatalogOnly()
     {
-        // While pages are missing the flag is the only way in; with every page present Settings is Win32 without it.
+        // WP-35 GĐ5: PHOTOREVIEW_SETTINGS_WIN32 was removed (meaningless once every page exists). Whatever its value, Settings is
+        // Win32 exactly when the catalog is complete.
         var complete = SettingsPageCatalog.IsComplete;
-        var previous = Environment.GetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable);
+        const string flag = "PHOTOREVIEW_SETTINGS_WIN32";
+        var previous = Environment.GetEnvironmentVariable(flag);
         try
         {
             OnSta(() =>
             {
                 using var provider = Services(null);
                 using var port = new Win32SecondaryWindowPort(provider);
-                Environment.SetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable, null);
-                Assert.Equal(complete, port.Supports(SecondaryWindowKind.Settings));
-                Environment.SetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable, "0");
-                Assert.Equal(complete, port.Supports(SecondaryWindowKind.Settings));
-                Environment.SetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable, "1");
-                Assert.True(port.Supports(SecondaryWindowKind.Settings));
+                foreach (var value in new string?[] { null, "0", "1" })
+                {
+                    Environment.SetEnvironmentVariable(flag, value);
+                    Assert.Equal(complete, port.Supports(SecondaryWindowKind.Settings));
+                }
+
                 return 0;
             });
         }
         finally
         {
-            Environment.SetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable, previous);
+            Environment.SetEnvironmentVariable(flag, previous);
         }
     }
 

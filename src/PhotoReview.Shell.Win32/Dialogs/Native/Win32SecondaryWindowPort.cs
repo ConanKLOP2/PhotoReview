@@ -27,9 +27,10 @@ internal sealed record BenchmarkDialogSeams(
     Action<string>? OpenInExplorer = null);
 
 /// <summary>
-/// WP-35 GĐ1: cổng cửa sổ phụ KHÔNG WPF (hộp thoại Win32 gốc, AOT-an toàn). Làm được: Diagnostics, SkippedFiles, BatchReview,
-/// ZoomPrompt (<see cref="Supports"/>); Settings/Recovery/Benchmark chưa có (trả false/no-op) nên <see cref="SecondaryWindowRouter"/>
-/// chuyển sang cầu WPF hoặc cổng tạm. Mọi hàm gọi trên UI thread của shell; <see cref="Dispose"/> đóng các hộp thoại còn mở
+/// WP-35 GĐ1..5: cổng cửa sổ phụ KHÔNG WPF (hộp thoại Win32 gốc, AOT-an toàn). Làm được MỌI cửa sổ phụ (<see cref="Supports"/>:
+/// Diagnostics, SkippedFiles, BatchReview, ZoomPrompt, Benchmark, ActionProfiles, Recovery, và Settings khi catalog đủ trang); cửa sổ
+/// nào cổng không làm được thì <see cref="SecondaryWindowRouter"/> chuyển sang cổng tạm. Mọi hàm gọi trên UI thread của shell;
+/// <see cref="Dispose"/> đóng các hộp thoại còn mở
 /// (shell thoát giữa chừng) - sau đó mọi lệnh hiện là no-op trả về như Huỷ.
 /// </summary>
 internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposable
@@ -70,17 +71,12 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     /// <summary>Số hộp thoại đang mở (kể cả lồng nhau).</summary>
     internal int OpenCount => _open.Count;
 
-    /// <summary>Biến môi trường (ẩn) bật cửa sổ Settings Win32 khi chưa đủ trang: <c>PHOTOREVIEW_SETTINGS_WIN32=1</c>.</summary>
-    internal const string SettingsEnvironmentVariable = "PHOTOREVIEW_SETTINGS_WIN32";
-
     /// <summary>
-    /// WP-35 GĐ3a: cổng Win32 nhận Settings khi ĐỦ MỌI trang (<see cref="SettingsPageCatalog.IsComplete"/>) hoặc khi bật cờ ẩn; chưa đủ
-    /// thì cầu WPF (bản hybrid) hoặc cổng tạm (Native AOT: mở config.json) làm mặc định.
+    /// WP-35 GĐ3a/GĐ5: cổng Win32 nhận Settings khi ĐỦ MỌI trang (<see cref="SettingsPageCatalog.IsComplete"/>, luôn true từ GĐ3b);
+    /// khi thiếu trang (catalog mới thêm mục chưa có bản Win32) thì <see cref="SecondaryWindowRouter"/> rơi về cổng tạm (mở config.json).
+    /// Cờ môi trường <c>PHOTOREVIEW_SETTINGS_WIN32</c> đã bị gỡ (vô nghĩa khi catalog đủ).
     /// </summary>
-    internal bool SettingsEnabled
-        => _settingsEnabled?.Invoke()
-            ?? (SettingsPageCatalog.IsComplete
-                || string.Equals(Environment.GetEnvironmentVariable(SettingsEnvironmentVariable), "1", StringComparison.Ordinal));
+    internal bool SettingsEnabled => _settingsEnabled?.Invoke() ?? SettingsPageCatalog.IsComplete;
 
     public bool Supports(SecondaryWindowKind kind)
         => kind is SecondaryWindowKind.Diagnostics or SecondaryWindowKind.SkippedFiles or SecondaryWindowKind.BatchReview
@@ -319,20 +315,17 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
 }
 
 /// <summary>
-/// WP-35 GĐ1: định tuyến theo TỪNG cửa sổ - cổng Win32 cho cửa sổ nó hỗ trợ; cửa sổ chưa có thì rơi về cầu WPF (nạp lười, chỉ khi
-/// cần); cầu vắng (bản AOT) thì rơi về <see cref="SecondaryWindowFallback"/>. Chủ sở hữu của hai cổng: <see cref="Dispose"/>
-/// đóng cả hai (cầu chỉ khi đã nạp: không nạp WPF để dọn).
+/// WP-35 GĐ1/GĐ5: định tuyến theo TỪNG cửa sổ - cổng Win32 cho cửa sổ nó hỗ trợ; cửa sổ nó không làm được (Settings khi catalog
+/// chưa đủ trang) thì rơi về <see cref="SecondaryWindowFallback"/>. Không còn cầu WPF (GĐ5). <see cref="Dispose"/> đóng cổng Win32.
 /// </summary>
 internal sealed class SecondaryWindowRouter : ISecondaryWindowPort, IDisposable
 {
     private readonly ISecondaryWindowPort _native;
-    private readonly Lazy<ISecondaryWindowPort?> _bridge;
     private readonly SecondaryWindowFallback? _fallback;
 
-    public SecondaryWindowRouter(ISecondaryWindowPort native, Lazy<ISecondaryWindowPort?> bridge, SecondaryWindowFallback? fallback)
+    public SecondaryWindowRouter(ISecondaryWindowPort native, SecondaryWindowFallback? fallback)
     {
         _native = native ?? throw new ArgumentNullException(nameof(native));
-        _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _fallback = fallback;
     }
 
@@ -374,31 +367,8 @@ internal sealed class SecondaryWindowRouter : ISecondaryWindowPort, IDisposable
     public IReadOnlyList<ReviewAction>? ShowActionProfiles(nint ownerHwnd, IReadOnlyList<ReviewAction> actions)
         => Pick(SecondaryWindowKind.ActionProfiles) is { } port ? port.ShowActionProfiles(ownerHwnd, actions) : null;
 
-    /// <summary>Cổng Win32 nếu nó làm được; ngược lại cầu WPF (nạp lười), hoặc null khi cầu vắng/lỗi nạp.</summary>
-    private ISecondaryWindowPort? Pick(SecondaryWindowKind kind)
-    {
-        if (_native.Supports(kind))
-        {
-            return _native;
-        }
+    /// <summary>Cổng Win32 nếu nó làm được; ngược lại null (người gọi dùng cổng tạm).</summary>
+    private ISecondaryWindowPort? Pick(SecondaryWindowKind kind) => _native.Supports(kind) ? _native : null;
 
-        try
-        {
-            var bridge = _bridge.Value;
-            return bridge is not null && bridge.Supports(kind) ? bridge : null;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return null;
-        }
-    }
-
-    public void Dispose()
-    {
-        (_native as IDisposable)?.Dispose();
-        if (_bridge.IsValueCreated && _bridge.Value is IDisposable bridge)
-        {
-            bridge.Dispose();
-        }
-    }
+    public void Dispose() => (_native as IDisposable)?.Dispose();
 }

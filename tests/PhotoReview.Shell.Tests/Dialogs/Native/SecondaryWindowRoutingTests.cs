@@ -13,7 +13,7 @@ using static PhotoReview.Shell.Tests.Dialogs.Native.NativeDialogTestKit;
 namespace PhotoReview.Shell.Tests.Dialogs.Native;
 
 /// <summary>
-/// WP-35 GĐ1: định tuyến theo từng cửa sổ (<see cref="SecondaryWindowRouter"/>: cổng Win32 -> cầu WPF -> cổng tạm) và cổng Win32
+/// WP-35 GĐ1: định tuyến theo từng cửa sổ (<see cref="SecondaryWindowRouter"/>: cổng Win32 -> cổng tạm; WP-35 GĐ5 gỡ cầu WPF) và cổng Win32
 /// (<see cref="Win32SecondaryWindowPort"/>) mở hộp thoại thật qua DI tối thiểu.
 /// </summary>
 [Collection("GlobalState")]
@@ -90,27 +90,19 @@ public sealed class SecondaryWindowRoutingTests
         SecondaryWindowKind.Benchmark, SecondaryWindowKind.ActionProfiles, SecondaryWindowKind.Recovery,
     ];
 
-    private static (SecondaryWindowRouter Router, Spy Native, Spy? Bridge, Func<bool> BridgeLoaded, List<string> Notices, NoLauncher Launcher) Build(
-        bool bridgePresent, bool bridgeThrows = false, bool nativeSettings = false)
+    private static (SecondaryWindowRouter Router, Spy Native, List<string> Notices, NoLauncher Launcher) Build(bool nativeSettings = false)
     {
         var native = new Spy(nativeSettings ? [.. Win32Kinds, SecondaryWindowKind.Settings] : Win32Kinds);
-        var bridge = bridgePresent ? new Spy(Enum.GetValues<SecondaryWindowKind>()) : null;
-        var loaded = false;
-        var lazy = new Lazy<ISecondaryWindowPort?>(() =>
-        {
-            loaded = true;
-            return bridgeThrows ? throw new FileNotFoundException("PresentationFramework") : bridge;
-        });
         var notices = new List<string>();
         var launcher = new NoLauncher();
         var fallback = new SecondaryWindowFallback(new AppPaths(Path.GetTempPath()), launcher, notices.Add);
-        return (new SecondaryWindowRouter(native, lazy, fallback), native, bridge, () => loaded, notices, launcher);
+        return (new SecondaryWindowRouter(native, fallback), native, notices, launcher);
     }
 
     [Fact]
-    public void WindowsTheWin32PortSupports_NeverTouchTheBridge()
+    public void WindowsTheWin32PortSupports_GoToIt_AndNeverTouchTheFallback()
     {
-        var (router, native, bridge, loaded, _, _) = Build(bridgePresent: true);
+        var (router, native, notices, launcher) = Build();
 
         router.ShowDiagnostics(0);
         router.ShowSkippedFiles(0, []);
@@ -121,80 +113,48 @@ public sealed class SecondaryWindowRoutingTests
         router.ShowRecovery(0); // WP-35 GĐ4: Recovery is a Win32 window now
 
         Assert.Equal(["diagnostics", "skipped", "batch", "zoom", "benchmark", "actionProfiles", "recovery"], native.Calls);
-        Assert.Empty(bridge!.Calls);
-        Assert.False(loaded(), "the WPF bridge must not even be loaded for windows the Win32 port supports");
-    }
-
-    [Fact]
-    public void WindowsTheWin32PortLacks_GoToTheWpfBridge()
-    {
-        var (router, native, bridge, loaded, notices, _) = Build(bridgePresent: true);
-
-        Assert.True(router.ShowSettings(0, SettingsTarget.Default));
-
-        Assert.Equal(["settings"], bridge!.Calls); // WP-35 GĐ4: only Settings is left on the bridge
-        Assert.Empty(native.Calls);
-        Assert.True(loaded());
         Assert.Empty(notices);
+        Assert.Empty(launcher.Opened);
     }
 
     [Fact]
-    public void Settings_GoesToTheWin32Port_WhenItSupportsIt_AndNeverLoadsTheBridge()
+    public void Settings_GoesToTheWin32Port_WhenItSupportsIt()
     {
-        // WP-35 GĐ3a: once the Win32 port takes Settings (flag or every page present) the WPF bridge is not even loaded for it.
-        var (router, native, bridge, loaded, notices, _) = Build(bridgePresent: true, nativeSettings: true);
+        // WP-35 GĐ3a: once the Win32 port takes Settings (every page of the catalog present) nothing else is consulted.
+        var (router, native, notices, launcher) = Build(nativeSettings: true);
 
         Assert.True(router.ShowSettings(0, SettingsTarget.ExternalEditor));
 
         Assert.Equal(["settings"], native.Calls);
-        Assert.Empty(bridge!.Calls);
-        Assert.False(loaded());
         Assert.Empty(notices);
+        Assert.Empty(launcher.Opened);
     }
 
     [Fact]
-    public void WithoutTheBridge_LackingWindowsFallBackToTheTemporaryPort_WhileWin32WindowsStillWork()
+    public void WhenTheWin32PortLacksSettings_ItFallsBackToTheTemporaryPort_WhileWin32WindowsStillWork()
     {
-        var (router, native, _, loaded, notices, launcher) = Build(bridgePresent: false);
+        // WP-35 GĐ5: there is no WPF bridge to try any more - the only thing left behind the Win32 port is the temporary port.
+        var (router, native, notices, launcher) = Build();
 
         Assert.False(router.ShowSettings(0, SettingsTarget.Default)); // opens config.json, nothing saved
-        router.ShowRecovery(0); // WP-35 GĐ4: a real window now, not a notice (also in the AOT build)
-        router.ShowBenchmark(0, null); // WP-35 GĐ2: likewise
+        router.ShowRecovery(0);
+        router.ShowBenchmark(0, null);
         router.ShowDiagnostics(0);
         Assert.True(router.ShowBatchReview(0, []));
 
-        Assert.True(loaded());
         Assert.Single(launcher.Opened);
         Assert.Equal(["recovery", "benchmark", "diagnostics", "batch"], native.Calls);
         Assert.Equal([Tr.StatusSecondaryUnavailableSettings], notices);
     }
 
     [Fact]
-    public void ABridgeThatFailsToLoad_IsTreatedAsAbsent_NotAsACrash()
+    public void Dispose_ClosesTheWin32Port()
     {
-        var (router, native, _, _, notices, _) = Build(bridgePresent: true, bridgeThrows: true);
+        var (router, native, _, _) = Build();
 
-        Assert.False(router.ShowSettings(0, SettingsTarget.Default)); // Settings is the one window still on the bridge
-        router.ShowDiagnostics(0);
+        router.Dispose();
 
-        Assert.Equal([Tr.StatusSecondaryUnavailableSettings], notices);
-        Assert.Equal(["diagnostics"], native.Calls);
-    }
-
-    [Fact]
-    public void Dispose_ClosesTheWin32Port_AndTheBridgeOnlyWhenItWasLoaded()
-    {
-        var untouched = Build(bridgePresent: true);
-        untouched.Router.Dispose();
-        Assert.True(untouched.Native.Disposed);
-        Assert.False(untouched.BridgeLoaded());
-        Assert.False(untouched.Bridge!.Disposed);
-
-        var used = Build(bridgePresent: true);
-        Assert.True(used.Router.ShowSettings(0, SettingsTarget.Default));
-        used.Router.Dispose();
-        Assert.True(used.Native.Disposed);
-        Assert.True(used.Bridge!.Disposed);
+        Assert.True(native.Disposed);
     }
 
     [Fact]

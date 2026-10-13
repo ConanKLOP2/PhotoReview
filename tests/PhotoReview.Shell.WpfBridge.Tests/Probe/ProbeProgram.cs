@@ -19,7 +19,6 @@ namespace PhotoReview.Shell.WpfBridge.Tests.Probe;
 /// shell, mở một cửa sổ phụ modal rồi đóng, in ra danh sách assembly WPF đã nạp ở từng bước (test cha so sánh).
 /// Dòng kết quả: <c>STAGE tên | wpf=a,b,c</c>; thêm <c>TIMING tên=ms</c>.
 /// </summary>
-[Collection("GlobalState")] // TEST-09: the native scenario sets PHOTOREVIEW_SETTINGS_WIN32 (only ever in the probe process)
 internal static class ProbeProgram
 {
     private static readonly string[] WpfAssemblyPrefixes = ["PresentationFramework", "PresentationCore", "WindowsBase", "System.Xaml", "PhotoReview.App.WpfWindows"];
@@ -80,7 +79,7 @@ internal static class ProbeProgram
 
     private static int RunTiming(IServiceProvider provider, MessageLoop loop)
     {
-        var port = SecondaryWindowPorts.CreateLazy(provider, loop).Value ?? throw new InvalidOperationException("no bridge");
+        var port = WpfBridgePort.CreateLazy(provider, loop).Value ?? throw new InvalidOperationException("no bridge");
         Measure(loop, "diagnostics-1st", () => port.ShowDiagnostics(0));
         Measure(loop, "diagnostics-2nd", () => port.ShowDiagnostics(0));
         Measure(loop, "settings-1st", () => port.ShowSettings(0, SettingsTarget.Default));
@@ -103,7 +102,7 @@ internal static class ProbeProgram
 
     private static int RunScenario(IServiceProvider provider, MessageLoop loop)
     {
-        var lazy = SecondaryWindowPorts.CreateLazy(provider, loop);
+        var lazy = WpfBridgePort.CreateLazy(provider, loop);
         Report("lazy-created"); // chưa đọc .Value: chưa nạp cả cầu
         var dialogs = new Win32DialogService(() => 0, new FolderPicker(new UnwiredShellFolderDialog(), () => 0), lazy);
         Report("dialog-service-created");
@@ -128,14 +127,12 @@ internal static class ProbeProgram
     }
 
     /// <summary>
-    /// WP-35 GĐ1: DI THẬT của shell (cầu WPF đăng ký mặc định); mở bốn cửa sổ Win32 gốc và đóng từng cái bằng WM_CLOSE. WPF và cả
+    /// WP-35 GĐ1/GĐ5: DI THẬT của shell (không còn cầu WPF); mở bốn cửa sổ Win32 gốc và đóng từng cái bằng WM_CLOSE. WPF và cả
     /// assembly cầu KHÔNG được nạp ở bất kỳ bước nào.
     /// </summary>
     private static int RunNativeScenario(IServiceProvider unused, MessageLoop loop)
     {
         _ = unused;
-        // WP-35 GĐ3a: the hidden flag that routes Settings to the Win32 dialog while some pages are still missing.
-        Environment.SetEnvironmentVariable("PHOTOREVIEW_SETTINGS_WIN32", "1");
         var shell = PhotoReview.Shell.Win32.Startup.ShellCompositionRoot.Build(
             new PhotoReview.Shell.Win32.Startup.ShellHostServices(loop.Dispatcher, () => 0, loop),
             new PhotoReview.Shell.Win32.Startup.ShellPresentationHub(),
@@ -190,7 +187,7 @@ internal static class ProbeProgram
         dialogs.ShowRecovery();
         var recoveryClosed = VisibleWindows().Count == recoveryBefore;
         Report("after-recovery");
-        // WP-35 GĐ3a: Settings (modal, flag on) closed with WM_CLOSE = Cancel -> false; still no WPF.
+        // WP-35 GĐ3a: Settings (modal, every page present) closed with WM_CLOSE = Cancel -> false; still no WPF.
         CloseSoon();
         var settingsSaved = dialogs.ShowSettings();
         Report("after-settings");

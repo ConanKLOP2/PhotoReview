@@ -6,8 +6,9 @@ using Xunit.Abstractions;
 namespace PhotoReview.Shell.WpfBridge.Tests;
 
 /// <summary>
-/// WP-19b (NE-5): WPF chỉ được nạp khi mở cửa sổ phụ đầu tiên. Chạy tiến trình sạch (<c>--probe-lazy</c> của chính exe test, vì
-/// tiến trình test này có thể đã nạp WPF từ test khác) dựng cổng như shell và đọc danh sách assembly WPF ở từng bước.
+/// WP-19b (NE-5): WPF chỉ được nạp khi mở cửa sổ phụ đầu tiên (hợp đồng của cầu, qua <see cref="WpfBridgePort"/> của test; shell thật
+/// không còn cầu từ WP-35 GĐ5). Chạy tiến trình sạch (<c>--probe-lazy</c> của chính exe test, vì tiến trình test này có thể đã nạp WPF
+/// từ test khác) dựng cổng và đọc danh sách assembly WPF ở từng bước.
 /// </summary>
 [Trait("Category", "UI")]
 [Trait("Category", "Integration")] // spawns a child process (TEST-OS)
@@ -33,7 +34,7 @@ public sealed class LazyLoadTests(ITestOutputHelper output)
 
     /// <summary>
     /// WP-35 GĐ1+GĐ2 (cổng chấp nhận): DI thật của shell, sáu cửa sổ Win32 gốc (Diagnostics, SkippedFiles, BatchReview, ZoomPrompt,
-    /// Benchmark modeless, ActionProfiles) mở và đóng được mà KHÔNG nạp WPF (PresentationFramework/Core, WindowsBase, System.Xaml, App.WpfWindows) và cả assembly cầu.
+    /// Benchmark modeless, ActionProfiles) cùng Recovery và Settings mở và đóng được mà KHÔNG nạp WPF (PresentationFramework/Core, WindowsBase, System.Xaml, App.WpfWindows) và cả assembly cầu (WP-35 GĐ5: không còn cờ môi trường).
     /// </summary>
     [Fact]
     public async Task NativeSecondaryWindows_OpenWithoutLoadingWpfOrTheBridge()
@@ -51,7 +52,7 @@ public sealed class LazyLoadTests(ITestOutputHelper output)
         }
 
         // Benchmark opened as ONE modeless window (a second open added none); Action profiles closed as Cancel -> null.
-        // WP-35 GĐ3a: Settings (flag on) opened as the Win32 dialog and was cancelled: nothing saved, WPF never loaded.
+        // WP-35 GĐ3a: Settings opened as the Win32 dialog and was cancelled: nothing saved, WPF never loaded.
         Assert.Contains("RESULT batch=False zoom=null benchmark=True/True actionProfiles=null recovery=True settings=False", lines);
     }
 

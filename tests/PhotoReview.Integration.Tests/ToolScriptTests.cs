@@ -305,7 +305,7 @@ public sealed class ToolScriptEncodingTests : IDisposable
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll", "turbojpeg.dll",
         // WP-30: the Win32 shell executable and the libraries only it needs.
         "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.deps.json", "PhotoReview.runtimeconfig.json",
-        "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll", "PhotoReview.Shell.WpfBridge.dll",
+        "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll",
         "libraw.dll", "LibRaw-LICENSE.LGPL", "LibRaw-LICENSE.CDDL", "LibRaw-SOURCE.zip", "LibRaw-NOTICE.txt", "THIRD-PARTY-NOTICES.md",
         "Languages\\en.json", "Languages\\vi.json",
     ];
@@ -511,7 +511,7 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.Shared.dll", "PhotoReview.App.WpfWindows.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll",
         "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.runtimeconfig.json", "PhotoReview.Shell.Interop.dll",
-        "PhotoReview.Shell.Rendering.dll", "PhotoReview.Shell.WpfBridge.dll",
+        "PhotoReview.Shell.Rendering.dll",
         "Languages\\en.json", "Languages\\vi.json",
     ];
 
@@ -648,7 +648,6 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
     [InlineData("PhotoReview.runtimeconfig.json")]
     [InlineData("PhotoReview.Shell.Interop.dll")]
     [InlineData("PhotoReview.Shell.Rendering.dll")]
-    [InlineData("PhotoReview.Shell.WpfBridge.dll")]
     public void VerifyRelease_MissingShellFile_Fails(string file)
     {
         var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, skipFile: file);

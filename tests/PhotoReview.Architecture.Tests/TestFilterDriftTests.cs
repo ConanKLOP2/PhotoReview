@@ -118,7 +118,7 @@ public sealed class TestFilterDriftTests
         foreach (var file in new[]
         {
             "PhotoReview.App.exe", "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.deps.json", "PhotoReview.runtimeconfig.json",
-            "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll", "PhotoReview.Shell.WpfBridge.dll", "PhotoReview.App.WpfWindows.dll",
+            "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll", "PhotoReview.App.WpfWindows.dll",
         })
             Assert.Contains($"'{file}'", script, StringComparison.Ordinal);
     }

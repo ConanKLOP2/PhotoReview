@@ -1,26 +1,25 @@
 using System.Runtime.CompilerServices;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Shell.Interop;
+using PhotoReview.Shell.Win32.Dialogs;
 using PhotoReview.Shell.Win32.Hosting;
-using PhotoReview.Shell.WpfBridge;
 
-namespace PhotoReview.Shell.Win32.Dialogs;
+namespace PhotoReview.Shell.WpfBridge.Tests;
 
 /// <summary>
-/// WP-19b (L-SHELL, NE-5): lớp DUY NHẤT của Shell.Win32 chạm tới <c>PhotoReview.Shell.WpfBridge</c>. Bọc
-/// <see cref="ISecondaryWindowHost"/> (C-13b) thành <see cref="ISecondaryWindowPort"/> cho <see cref="Win32DialogService"/> và
-/// <c>Win32ZoomPromptService</c>, và nối <see cref="ISecondaryWindowMessagePump"/> vào <see cref="MessageLoop"/> để cửa sổ phụ WPF
-/// modeless nhận phím. Mọi đường vào WPF đi qua <see cref="SecondaryWindowPorts.CreateLazy"/> -> <see cref="Create"/>
-/// (<see cref="MethodImplOptions.NoInlining"/>): chỉ chạy khi mở cửa sổ phụ đầu tiên, nên shell không nạp WPF khi chưa dùng.
+/// WP-35 GĐ5: bộ nối CHỈ DÙNG TRONG TEST (trước đây là <c>WpfBridgeLoader</c> của Shell.Win32, đã gỡ cùng tham chiếu
+/// Shell.Win32 -> Shell.WpfBridge). Bọc <see cref="ISecondaryWindowHost"/> (C-13b) thành <see cref="ISecondaryWindowPort"/> của
+/// Shell.Win32 và nối <see cref="ISecondaryWindowMessagePump"/> vào <see cref="MessageLoop"/> như shell từng làm, để các test của
+/// cầu (host, cửa sổ WPF thật, nạp lười) vẫn chạy trên HWND thật cho tới khi WP-37 xoá project WPF. Shell thật KHÔNG dùng lớp này.
 /// </summary>
-internal sealed class WpfBridgeLoader : ISecondaryWindowPort, IRawMessageFilter, IDisposable
+internal sealed class WpfBridgePort : ISecondaryWindowPort, IRawMessageFilter, IDisposable
 {
     private readonly ISecondaryWindowHost _host;
     private readonly ISecondaryWindowMessagePump? _pump;
     private readonly MessageLoop? _loop;
     private bool _disposed;
 
-    private WpfBridgeLoader(ISecondaryWindowHost host, MessageLoop? loop)
+    private WpfBridgePort(ISecondaryWindowHost host, MessageLoop? loop)
     {
         _host = host;
         _pump = host as ISecondaryWindowMessagePump;
@@ -28,10 +27,17 @@ internal sealed class WpfBridgeLoader : ISecondaryWindowPort, IRawMessageFilter,
         loop?.AddMessageFilter(this);
     }
 
-    /// <summary>Tạo host thật. Gọi qua <see cref="SecondaryWindowPorts"/>: lỗi nạp assembly bắt ở đó, ngoài lớp này.</summary>
+    /// <summary>Tạo host thật (chỉ khi mở cửa sổ phụ đầu tiên: <see cref="MethodImplOptions.NoInlining"/> giữ assembly WPF ngoài đường nóng).</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static WpfBridgeLoader Create(IServiceProvider services, MessageLoop? loop)
+    internal static WpfBridgePort Create(IServiceProvider services, MessageLoop? loop)
         => new(SecondaryWindowHostFactory.Create(services), loop);
+
+    /// <summary>Cổng nạp lười như <c>SecondaryWindowPorts.CreateLazy</c> trước GĐ5: chỉ tạo host khi <c>.Value</c> được đọc lần đầu.</summary>
+    internal static Lazy<ISecondaryWindowPort?> CreateLazy(IServiceProvider services, MessageLoop? loop)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return new Lazy<ISecondaryWindowPort?>(() => Create(services, loop), LazyThreadSafetyMode.ExecutionAndPublication);
+    }
 
     public bool ShowSettings(nint ownerHwnd, SettingsTarget target) => _host.ShowSettings(ownerHwnd, target);
 

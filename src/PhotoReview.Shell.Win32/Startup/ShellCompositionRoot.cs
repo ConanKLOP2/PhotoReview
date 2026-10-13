@@ -14,7 +14,7 @@ namespace PhotoReview.Shell.Win32.Startup;
 /// <summary>Những gì host Win32 cấp cho đồ thị dịch vụ dùng chung (C-16): không có mặc định ẩn, thiếu thì ném to.</summary>
 /// <param name="Dispatcher">Dispatcher của UI thread (đăng ký làm <see cref="IUiScheduler"/>).</param>
 /// <param name="OwnerWindow">HWND chủ của hộp thoại; 0 khi chưa có cửa sổ chính.</param>
-/// <param name="Loop">Vòng thông điệp của UI thread (cầu cửa sổ phụ gắn bộ lọc phím cho cửa sổ modeless); null = không (test).</param>
+/// <param name="Loop">Vòng thông điệp của UI thread (hộp thoại modeless như Benchmark gắn bộ lọc phím IsDialogMessage); null = không (test).</param>
 internal sealed record ShellHostServices(Win32UiDispatcher Dispatcher, Func<nint> OwnerWindow, MessageLoop? Loop = null);
 
 /// <summary>
@@ -44,13 +44,12 @@ internal static class ShellCompositionRoot
         services.AddSingleton<IClipboardService>(_ => new Win32ClipboardService(host.OwnerWindow));
         services.AddSingleton(sp => new FolderPicker(sp.GetService<IShellFolderDialog>() ?? UnwiredShellFolderDialog.Instance, host.OwnerWindow));
         services.AddSingleton<IFolderPicker, ShellFolderPickerAdapter>();
-        // WP-35 GĐ1: cổng cửa sổ phụ = SecondaryWindowRouter. Cửa sổ đã có hộp thoại Win32 gốc (Diagnostics, SkippedFiles, BatchReview,
-        // ZoomPrompt) mở bằng Win32SecondaryWindowPort (không WPF, chạy cả ở bản Native AOT); cửa sổ chưa có (Settings, Recovery,
-        // Benchmark) rơi về cầu WPF nạp lười (WpfBridgeLoader qua SecondaryWindowPorts) và, khi cầu vắng (bản AOT / nạp lỗi), về
-        // cổng tạm SecondaryWindowFallback. ISecondaryWindowPort đăng ký sẵn (test) thắng tất cả. Chủ sở hữu duy nhất của cổng =
-        // SecondaryWindowPortHost (Dispose đóng hộp thoại Win32 + cửa sổ WPF còn mở).
-        services.AddSingleton<SecondaryWindowPortLoader>(SecondaryWindowPorts.TryLoad);
-        // Cổng vắng (bản Native AOT / nạp cầu lỗi): Settings mở config.json, cửa sổ khác báo "không có trong bản này"
+        // WP-35 GĐ1/GĐ5: cổng cửa sổ phụ = SecondaryWindowRouter. Mọi cửa sổ phụ (Settings, Recovery, Diagnostics, Benchmark, SkippedFiles,
+        // BatchReview, ZoomPrompt, ActionProfiles) mở bằng Win32SecondaryWindowPort (hộp thoại Win32 gốc, không WPF, cùng bản cho hybrid và
+        // Native AOT); cửa sổ nào cổng không làm được (Settings khi catalog thiếu trang) rơi về cổng tạm SecondaryWindowFallback.
+        // ISecondaryWindowPort đăng ký sẵn (test) thắng tất cả. Chủ sở hữu duy nhất của cổng = SecondaryWindowPortHost (Dispose đóng
+        // hộp thoại còn mở). Shell.Win32 KHÔNG còn phụ thuộc Shell.WpfBridge.
+        // Cổng tạm: Settings mở config.json, cửa sổ khác báo "không có trong bản này"
         // qua dòng trạng thái của view model thật (ShellNoticeSink: MainViewModel là transient, không resolve lại được).
         services.AddSingleton(sp => new SecondaryWindowFallback(sp.GetRequiredService<IAppPaths>(),
             sp.GetService<IShellLauncher>() ?? ProcessShellLauncher.Instance, sp.GetRequiredService<ShellNoticeSink>().Show));
@@ -58,9 +57,6 @@ internal static class ShellCompositionRoot
         services.AddSingleton(sp => new SecondaryWindowPortHost(new Lazy<ISecondaryWindowPort?>(
             () => sp.GetService<ISecondaryWindowPort>() ?? new SecondaryWindowRouter(
                 new Win32SecondaryWindowPort(sp, loop: host.Loop),
-                new Lazy<ISecondaryWindowPort?>(
-                    () => sp.GetRequiredService<SecondaryWindowPortLoader>()(sp, host.Loop),
-                    LazyThreadSafetyMode.ExecutionAndPublication),
                 sp.GetRequiredService<SecondaryWindowFallback>()),
             LazyThreadSafetyMode.ExecutionAndPublication)));
         services.AddSingleton<IZoomPromptService>(sp =>
