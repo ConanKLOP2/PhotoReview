@@ -57,7 +57,7 @@ internal static class ShellCompositionRoot
         services.AddSingleton<IShellFileDialog, NativeShellFileDialog>();
         services.AddSingleton(sp => new SecondaryWindowPortHost(new Lazy<ISecondaryWindowPort?>(
             () => sp.GetService<ISecondaryWindowPort>() ?? new SecondaryWindowRouter(
-                new Win32SecondaryWindowPort(sp),
+                new Win32SecondaryWindowPort(sp, loop: host.Loop),
                 new Lazy<ISecondaryWindowPort?>(
                     () => sp.GetRequiredService<SecondaryWindowPortLoader>()(sp, host.Loop),
                     LazyThreadSafetyMode.ExecutionAndPublication),

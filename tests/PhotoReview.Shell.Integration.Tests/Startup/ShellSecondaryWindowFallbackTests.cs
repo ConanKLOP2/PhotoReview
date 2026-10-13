@@ -40,7 +40,7 @@ public sealed class ShellSecondaryWindowFallbackTests
     }
 
     [Fact]
-    public void SettingsAndDiagnostics_WithNoSecondaryPort_OpenConfigJsonAndShowTheStatusNotice()
+    public void SettingsAndRecovery_WithNoBridge_OpenConfigJsonAndShowTheStatusNotice()
     {
         var root = ShellRun.NewRoot("aotfallback");
         var jpeg = TestJpeg.WriteTo(Path.Combine(root, "photos", "a.jpg"));
@@ -65,9 +65,10 @@ public sealed class ShellSecondaryWindowFallbackTests
         Assert.Equal("open", opens[0].Verb);
         Assert.Equal(Tr.StatusSecondaryUnavailableSettings, run.OnUi(() => run.Main!.ViewModel.StatusText));
 
-        run.OnUi(() => run.Main!.ViewModel.ShowDiagnostics());
-        Assert.Equal(Tr.StatusSecondaryUnavailableDiagnostics, run.OnUi(() => run.Main!.ViewModel.StatusText));
-        Assert.Single(launcher.Opens); // Diagnostics không chạm launcher
+        // WP-35 GĐ1: Diagnostics đã có hộp thoại Win32 gốc nên không còn rơi về cổng tạm; Recovery thì vẫn (chưa có view Win32).
+        run.OnUi(() => run.Main!.ViewModel.ShowRecovery());
+        Assert.Equal(Tr.StatusSecondaryUnavailableRecovery, run.OnUi(() => run.Main!.ViewModel.StatusText));
+        Assert.Single(launcher.Opens); // Recovery không chạm launcher
 
         run.RequestClose();
         Assert.True(run.WaitForExit(Bound), "shell không thoát sau WM_CLOSE: " + run.Diagnostics);

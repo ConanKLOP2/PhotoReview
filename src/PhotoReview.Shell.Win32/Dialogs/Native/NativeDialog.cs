@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using PhotoReview.Shell.Interop;
+using PhotoReview.Shell.Win32.Hosting;
 using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 
 namespace PhotoReview.Shell.Win32.Dialogs.Native;
@@ -116,7 +117,9 @@ internal abstract unsafe class NativeDialog
     /// </summary>
     /// <param name="ready">Test/cầu nối: gọi sau khi cửa sổ đã hiện và owner đã bị vô hiệu hoá, trước vòng lặp.</param>
     /// <returns><see cref="IdOk"/> hoặc <see cref="IdCancel"/> (huỷ, X, Esc, Alt+F4, WM_QUIT, <see cref="Close"/>).</returns>
-    public int ShowModal(nint owner, Action<NativeDialog>? ready = null)
+    /// <param name="loop">Vòng lặp của shell: nếu có, vòng modal chạy trong nó (khung hình, việc nền và phím của cửa sổ WPF modeless
+    /// vẫn chạy); null = vòng GetMessage đơn giản (test).</param>
+    public int ShowModal(nint owner, Action<NativeDialog>? ready = null, MessageLoop? loop = null)
     {
         if (_used)
         {
@@ -153,7 +156,7 @@ internal abstract unsafe class NativeDialog
                 ready?.Invoke(this);
                 if (!_done)
                 {
-                    RunLoop();
+                    RunLoop(loop);
                 }
             }
         }
@@ -185,8 +188,19 @@ internal abstract unsafe class NativeDialog
         }
     }
 
-    private void RunLoop()
+    private void RunLoop(MessageLoop? loop)
     {
+        if (loop is not null)
+        {
+            if (!loop.RunNested(() => _done, ClaimDialogMessage))
+            {
+                _result = IdCancel; // WM_QUIT (already reposted by the shell loop)
+                _done = true;
+            }
+
+            return;
+        }
+
         Msg message;
         while (!_done)
         {
@@ -214,6 +228,15 @@ internal abstract unsafe class NativeDialog
 
             User32.TranslateMessage(&message);
             User32.DispatchMessage(&message);
+        }
+    }
+
+    /// <summary>Message cho hộp thoại (Tab, Enter, Esc, phím tắt) xử lý bằng IsDialogMessage trước khi tới bộ lọc/dispatch.</summary>
+    private bool ClaimDialogMessage(ref Msg message)
+    {
+        fixed (Msg* pointer = &message)
+        {
+            return _hwnd != 0 && User32.IsDialogMessage(_hwnd, pointer);
         }
     }
 

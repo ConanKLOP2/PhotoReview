@@ -76,13 +76,12 @@ public sealed class ShellSecondaryWindowBridgeTests
         Finished(zoomCancelled, "hộp zoom không đóng");
         WaitNoOwned(run, uiThread, "zoom prompt closed");
         var zoomOk = Open(run, () => _ = main.OpenClickZoomCustomDialogAsync());
-        WaitOwned(run, uiThread, "zoom prompt again");
+        var zoomHwnd = WaitOwned(run, uiThread, "zoom prompt again");
         run.OnUi(() =>
         {
-            var window = OnlyVisibleWindow();
-            var box = window.GetType().GetMethod("FindName")!.Invoke(window, ["PercentText"])!;
-            box.GetType().GetProperty("Text")!.SetValue(box, "150");
-            Click(window, "Ok_Click");
+            // WP-35 GĐ1: hộp zoom là hộp thoại Win32 gốc (ô nhập id 101, Apply = IDOK), không còn là cửa sổ WPF.
+            Assert.True(User32.SetWindowText(User32.GetDlgItem(zoomHwnd, 101), "150"));
+            Assert.True(User32.PostMessage(zoomHwnd, WindowMessages.WmCommand, WindowMessages.IdOk, 0));
         });
         Finished(zoomOk, "hộp zoom không đóng sau OK");
         WaitNoOwned(run, uiThread, "zoom prompt closed after OK");

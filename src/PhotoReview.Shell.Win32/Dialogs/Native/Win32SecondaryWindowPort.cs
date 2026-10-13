@@ -4,6 +4,7 @@ using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Shell.Win32.Hosting;
 
 namespace PhotoReview.Shell.Win32.Dialogs.Native;
 
@@ -18,6 +19,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     private readonly IServiceProvider _services;
     private readonly INativeDialogChrome? _chrome;
     private readonly Action<NativeDialog>? _ready;
+    private readonly MessageLoop? _loop;
     private readonly List<NativeDialog> _open = [];
     private readonly int _uiThreadId = Environment.CurrentManagedThreadId;
     private bool _disposed;
@@ -25,11 +27,14 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     /// <param name="services">DI của shell (ReviewMetrics, LatestExplorerSnapshot, IClipboardService).</param>
     /// <param name="chrome">Giao diện tối (null = <see cref="DarkDialogChrome"/>); test thay bản ghi lại.</param>
     /// <param name="ready">Test: gọi sau khi hộp thoại đã hiện, trước vòng lặp modal (mô phỏng người dùng).</param>
-    public Win32SecondaryWindowPort(IServiceProvider services, INativeDialogChrome? chrome = null, Action<NativeDialog>? ready = null)
+    /// <param name="loop">Vòng lặp của shell: vòng modal chạy lồng trong nó (khung hình, việc nền, phím WPF modeless); null = đơn giản.</param>
+    public Win32SecondaryWindowPort(IServiceProvider services, INativeDialogChrome? chrome = null, Action<NativeDialog>? ready = null,
+        MessageLoop? loop = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _chrome = chrome;
         _ready = ready;
+        _loop = loop;
     }
 
     /// <summary>Số hộp thoại đang mở (kể cả lồng nhau).</summary>
@@ -95,7 +100,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
         _open.Add(dialog);
         try
         {
-            return dialog.ShowModal(owner, _ready);
+            return dialog.ShowModal(owner, _ready, _loop);
         }
         finally
         {

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,9 +14,9 @@ using PhotoReview.Shell.Win32.Hosting;
 namespace PhotoReview.Shell.WpfBridge.Tests.Probe;
 
 /// <summary>
-/// Entry point tự viết của project test (xUnit không gọi nó). <c>--probe-lazy</c>: tiến trình sạch dựng cổng cửa sổ phụ như
-/// shell, mở một cửa sổ phụ modal rồi đóng, in ra danh sách assembly WPF đã nạp ở từng bước (test cha so sánh).
-/// Dòng kết quả: <c>STAGE tên | wpf=a,b,c</c>; thêm <c>TIMING tên=ms</c>.
+/// Entry point tá»± viáº¿t cá»§a project test (xUnit khÃ´ng gá»i nÃ³). <c>--probe-lazy</c>: tiáº¿n trÃ¬nh sáº¡ch dá»±ng cá»•ng cá»­a sá»• phá»¥ nhÆ°
+/// shell, má»Ÿ má»™t cá»­a sá»• phá»¥ modal rá»“i Ä‘Ã³ng, in ra danh sÃ¡ch assembly WPF Ä‘Ã£ náº¡p á»Ÿ tá»«ng bÆ°á»›c (test cha so sÃ¡nh).
+/// DÃ²ng káº¿t quáº£: <c>STAGE tÃªn | wpf=a,b,c</c>; thÃªm <c>TIMING tÃªn=ms</c>.
 /// </summary>
 internal static class ProbeProgram
 {
@@ -25,13 +25,14 @@ internal static class ProbeProgram
     [STAThread]
     private static int Main(string[] args)
     {
-        if (args.Length == 0 || args[0] is not ("--probe-lazy" or "--probe-timing"))
+        if (args.Length == 0 || args[0] is not ("--probe-lazy" or "--probe-timing" or "--probe-native" or "--probe-native-timing"))
         {
-            Console.Error.WriteLine("usage: --probe-lazy | --probe-timing");
+            Console.Error.WriteLine("usage: --probe-lazy | --probe-timing | --probe-native | --probe-native-timing");
             return 2;
         }
 
         var timing = args[0] == "--probe-timing";
+        var mode = args[0];
 
         Report("start");
         using var dispatcher = new Win32UiDispatcher(null);
@@ -49,7 +50,12 @@ internal static class ProbeProgram
         {
             try
             {
-                exit = timing ? RunTiming(provider, loop) : RunScenario(provider, loop);
+                exit = mode switch
+                {
+                    "--probe-native" => RunNativeScenario(provider, loop),
+                    "--probe-native-timing" => RunNativeTiming(provider, loop),
+                    _ => timing ? RunTiming(provider, loop) : RunScenario(provider, loop),
+                };
             }
             catch (Exception ex)
             {
@@ -66,7 +72,7 @@ internal static class ProbeProgram
         return exit;
     }
 
-    /// <summary>Thời gian mở+đóng (đã gồm vòng lặp lồng WPF) lần đầu và lần sau của Diagnostics và Settings, cùng tiến trình.</summary>
+    /// <summary>Thá»i gian má»Ÿ+Ä‘Ã³ng (Ä‘Ã£ gá»“m vÃ²ng láº·p lá»“ng WPF) láº§n Ä‘áº§u vÃ  láº§n sau cá»§a Diagnostics vÃ  Settings, cÃ¹ng tiáº¿n trÃ¬nh.</summary>
     private static System.Diagnostics.Stopwatch? Clock;
     private static TimeSpan? VisibleAt;
 
@@ -96,18 +102,18 @@ internal static class ProbeProgram
     private static int RunScenario(IServiceProvider provider, MessageLoop loop)
     {
         var lazy = SecondaryWindowPorts.CreateLazy(provider, loop);
-        Report("lazy-created"); // chưa đọc .Value: chưa nạp cả cầu
+        Report("lazy-created"); // chÆ°a Ä‘á»c .Value: chÆ°a náº¡p cáº£ cáº§u
         var dialogs = new Win32DialogService(() => 0, new FolderPicker(new UnwiredShellFolderDialog(), () => 0), lazy);
         Report("dialog-service-created");
         var port = lazy.Value;
-        Report("port-loaded"); // host tạo xong, chưa mở cửa sổ: WPF vẫn chưa nạp
+        Report("port-loaded"); // host táº¡o xong, chÆ°a má»Ÿ cá»­a sá»•: WPF váº«n chÆ°a náº¡p
         if (port is null)
         {
             Console.WriteLine("ERROR port null");
             return 1;
         }
 
-        // Đóng cửa sổ ngay khi nó hiện: việc đăng ký trước chạy trong vòng lặp lồng của ShowDialog.
+        // ÄÃ³ng cá»­a sá»• ngay khi nÃ³ hiá»‡n: viá»‡c Ä‘Äƒng kÃ½ trÆ°á»›c cháº¡y trong vÃ²ng láº·p lá»“ng cá»§a ShowDialog.
         loop.Dispatcher.Post(() => ScheduleClose(loop.Dispatcher), UiPriority.Normal);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         dialogs.ShowDiagnostics();
@@ -119,9 +125,79 @@ internal static class ProbeProgram
         return 0;
     }
 
+    /// <summary>
+    /// WP-35 GÄ1: DI THáº¬T cá»§a shell (cáº§u WPF Ä‘Äƒng kÃ½ máº·c Ä‘á»‹nh); má»Ÿ bá»‘n cá»­a sá»• Win32 gá»‘c vÃ  Ä‘Ã³ng tá»«ng cÃ¡i báº±ng WM_CLOSE. WPF vÃ  cáº£
+    /// assembly cáº§u KHÃ”NG Ä‘Æ°á»£c náº¡p á»Ÿ báº¥t ká»³ bÆ°á»›c nÃ o.
+    /// </summary>
+    private static int RunNativeScenario(IServiceProvider unused, MessageLoop loop)
+    {
+        _ = unused;
+        var shell = PhotoReview.Shell.Win32.Startup.ShellCompositionRoot.Build(
+            new PhotoReview.Shell.Win32.Startup.ShellHostServices(loop.Dispatcher, () => 0, loop),
+            new PhotoReview.Shell.Win32.Startup.ShellPresentationHub(),
+            services =>
+            {
+                services.AddSingleton<IAppPaths>(new AppPaths(Path.Combine(Path.GetTempPath(), "PhotoReview-probe-native")));
+            });
+        Report("shell-built");
+        var dialogs = shell.GetRequiredService<IDialogService>();
+        var zoom = shell.GetRequiredService<PhotoReview.App.Services.IZoomPromptService>();
+        Report("services-resolved");
+
+        void CloseSoon() => loop.Dispatcher.Post(() => ScheduleClose(loop.Dispatcher), UiPriority.Normal);
+        CloseSoon();
+        dialogs.ShowDiagnostics();
+        Report("after-diagnostics");
+        CloseSoon();
+        dialogs.ShowSkippedFiles([new SkippedEntry(@"C:\photos\a.jpg", "locked")]);
+        CloseSoon();
+        var batch = dialogs.ShowBatchReview([new BatchReviewItem(@"C:\photos\a.jpg", 10)]);
+        CloseSoon();
+        var picked = zoom.PromptCustomZoom(100);
+        Report("after-four-native-windows");
+        Console.WriteLine("RESULT batch=" + batch + " zoom=" + (picked?.ToString(CultureInfo.InvariantCulture) ?? "null"));
+        (shell as IDisposable)?.Dispose();
+        return batch || picked is not null ? 1 : 0;
+    }
+
+    /// <summary>Thá»i gian tá»›i khi cá»­a sá»• Ä‘Ã£ táº¡o + bá»‘ cá»¥c + hiá»‡n (callback ready), xen káº½ bá»‘n cá»­a sá»•, nhiá»u vÃ²ng.</summary>
+    private static int RunNativeTiming(IServiceProvider provider, MessageLoop loop)
+    {
+        _ = loop;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        double started = 0;
+        var seen = new List<double>();
+        var port = new PhotoReview.Shell.Win32.Dialogs.Native.Win32SecondaryWindowPort(provider, null, d =>
+        {
+            seen.Add(clock.Elapsed.TotalMilliseconds - started);
+            d.Close();
+        });
+        var skipped = new[] { new SkippedEntry(@"C:\photos\a.jpg", "locked"), new SkippedEntry(@"C:\photos\b.jpg", "denied") };
+        var batch = new[] { new BatchReviewItem(@"C:\photos\a.jpg", 10), new BatchReviewItem(@"C:\photos\b.jpg", 20) };
+        string Last() => seen[^1].ToString("F1", CultureInfo.InvariantCulture);
+        for (var round = 1; round <= 8; round++)
+        {
+            started = clock.Elapsed.TotalMilliseconds;
+            port.PromptCustomZoom(0, 100);
+            Console.WriteLine($"TIMING native-zoom-r{round}-ms={Last()}");
+            started = clock.Elapsed.TotalMilliseconds;
+            port.ShowDiagnostics(0);
+            Console.WriteLine($"TIMING native-diagnostics-r{round}-ms={Last()}");
+            started = clock.Elapsed.TotalMilliseconds;
+            port.ShowSkippedFiles(0, skipped);
+            Console.WriteLine($"TIMING native-skipped-r{round}-ms={Last()}");
+            started = clock.Elapsed.TotalMilliseconds;
+            port.ShowBatchReview(0, batch);
+            Console.WriteLine($"TIMING native-batch-r{round}-ms={Last()}");
+        }
+
+        port.Dispose();
+        return 0;
+    }
+
     private static void ScheduleClose(Win32UiDispatcher dispatcher)
     {
-        // Tìm cửa sổ WPF của thread này và gửi WM_CLOSE; nếu chưa có thì thử lại ở lượt sau (không chờ cố định).
+        // TÃ¬m cá»­a sá»• WPF cá»§a thread nÃ y vÃ  gá»­i WM_CLOSE; náº¿u chÆ°a cÃ³ thÃ¬ thá»­ láº¡i á»Ÿ lÆ°á»£t sau (khÃ´ng chá» cá»‘ Ä‘á»‹nh).
         var windows = new List<nint>();
         EnumThreadWindows(GetCurrentThreadId(), (hwnd, _) =>
         {
