@@ -294,7 +294,8 @@ public sealed class SettingsShortcutsPageTests : IDisposable
         using var scope = TestLocalization.Use(TestLocalization.English);
         Show(new AppSettings(), (d, _) =>
         {
-            Assert.Equal(14, d.TooltipToolCount);
+            // 14 clear buttons/summary tools of this page + 1 for the locked Settings tick box of the Mouse page (the tooltip window is the dialog's).
+            Assert.Equal(14 + 1, d.TooltipToolCount);
             d.Close();
         });
     }

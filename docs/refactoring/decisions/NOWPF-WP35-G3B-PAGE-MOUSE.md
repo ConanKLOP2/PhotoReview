@@ -36,3 +36,10 @@ Theo hÆ°á»›ng dáº«n "cÃ¡ch thÃªm má»™t trang" cá»§a [NOWPF-W
 DPI hai mÃ n hÃ¬nh tháº­t, title bar tá»‘i, Narrator/IME bÃ n phÃ­m tháº­t (nhÆ° GÄ3a); bá»‘ cá»¥c cá»§a ba trang Performance/Files/Shortcuts do PR riÃªng.
 
 HoÃ n tÃ¡c: revert PR (má»™t dÃ²ng catalog + file trang; pháº§n khung cá»™ng thÃªm vÃ´ háº¡i).
+
+## 5. Đủ 7 trang: Settings thành cửa sổ Win32 mặc định (bước 8 của hướng dẫn)
+
+Trang Mouse là trang cuối vào master (sau Performance, Files, Shortcuts) nên `SettingsPageCatalog.IsComplete` = true: cổng Win32 nhận Settings KHÔNG cần cờ `PHOTOREVIEW_SETTINGS_WIN32` (cờ vẫn còn, vô hại). Test chỉnh theo: `SecondaryWindowRoutingTests.Win32Port_Supports_...` (Settings được Win32 hỗ trợ khi catalog đủ), `SettingsPortTests.TheHiddenEnvironmentFlag...` (kỳ vọng theo `IsComplete`), `ShellWiringTests.Settings_ThroughTheDialogService...` (Save = IDOK trên hộp thoại Win32, cầu WPF KHÔNG nạp), `SettingsShortcutsPageTests.ClearButtons_HaveATooltip...` (14 + 1 tooltip của ô Settings khoá, cửa sổ tooltip là của hộp thoại). Hoàn tác riêng: bỏ `["Mouse"]` khỏi catalog để Settings về cầu WPF.
+
+CI đỏ nhiều lần vì các ca "rò GDI/USER" (`DiagnosticsAndListDialogTests.RepeatedOpenAndClose...`, `ZoomPromptDialogTests...`): bộ đếm là của CẢ tiến trình nên một cửa sổ của lớp test song song đang đóng làm tăng +1 tạm. Đã chờ có giới hạn (`NativeDialogTestKit.SettlesAtOrBelow`, tối đa 5 s, GC giữa các lần đọc): rò thật vẫn đỏ vì không bao giờ về mức nền. Chưa xác nhận nguyên nhân gốc (lớp UI không có `[Collection]` chạy song song); master cũng đỏ ngẫu nhiên ở các ca này (#494, #492).
+
