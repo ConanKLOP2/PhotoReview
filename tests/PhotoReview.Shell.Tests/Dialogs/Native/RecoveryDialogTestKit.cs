@@ -27,6 +27,9 @@ internal sealed class FakeMessages : ITaskDialogPort
     /// <summary>Gọi NGAY khi hộp hiện (trước khi trả lời): test kiểm trạng thái tại thời điểm hỏi.</summary>
     public Action<ShownMessage>? OnShow { get; set; }
 
+    /// <summary>Ép kết quả của hộp xác nhận (vd. IDCANCEL khi đóng bằng X); null = theo <see cref="Answer"/>.</summary>
+    public int? ConfirmationResult { get; set; }
+
     public IReadOnlyList<ShownMessage> Calls
     {
         get
@@ -50,6 +53,11 @@ internal sealed class FakeMessages : ITaskDialogPort
         if (kind != TaskDialogKind.Confirmation)
         {
             return WindowMessages.IdOk;
+        }
+
+        if (ConfirmationResult is { } forced)
+        {
+            return forced;
         }
 
         return Answer(title, message) ? WindowMessages.IdYes : WindowMessages.IdNo;
