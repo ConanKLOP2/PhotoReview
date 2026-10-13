@@ -226,6 +226,35 @@ public sealed class MouseSettingsPageTests : IDisposable
     }
 
     [Fact]
+    public void Mouse_EachTickBox_WritesOnlyItsOwnProperty()
+    {
+        // One box at a time (the all-at-once edit cannot tell two crossed boxes apart).
+        var getters = new Func<AppSettings, bool>[]
+        {
+            s => s.ClickToZoomEnabled, s => s.KeepZoomAcrossImages, s => s.ClickZoomKeyTogglesFit, s => s.KineticPanEnabled,
+            s => s.ArrowKeyNavigatesAtZoomEdge, s => s.TouchpadSwipeEnabled,
+        };
+        for (var which = 0; which < getters.Length; which++)
+        {
+            var saved = Saved(new AppSettings { TouchpadSwipeEnabled = false }, (d, page) =>
+            {
+                var ids = page.Ids;
+                var boxes = new[] { ids.ClickToZoom, ids.KeepZoom, ids.ClickZoomKeyTogglesFit, ids.KineticPan, ids.ArrowKeyAtEdge, ids.TouchpadSwipe };
+                foreach (var box in boxes)
+                {
+                    Tick(d, box, false);
+                }
+
+                Tick(d, boxes[which], true);
+            });
+            for (var other = 0; other < getters.Length; other++)
+            {
+                Assert.Equal(other == which, getters[other](saved));
+            }
+        }
+    }
+
+    [Fact]
     public void Mouse_DoesNotTouchThePropertiesOfTheOtherPages()
     {
         var original = new AppSettings
