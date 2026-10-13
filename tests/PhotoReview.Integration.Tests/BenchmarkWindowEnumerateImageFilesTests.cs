@@ -1,12 +1,13 @@
 using System.IO;
 using PhotoReview.App;
+using PhotoReview.App.Presenters;
 
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>
-/// R11 (full-code-review-2026-09-27): <see cref="BenchmarkWindow.EnumerateImageFiles"/> is the folder-exists check,
+/// R11 (full-code-review-2026-09-27): <see cref="BenchmarkPresenter.EnumerateImageFiles"/> is the folder-exists check,
 /// the top-level file listing (filtered to supported image types, then capped) that
-/// <see cref="BenchmarkWindow.RunAsync"/> now runs on a background thread (via <c>Task.Run</c>) instead of
+/// <see cref="BenchmarkPresenter.RunAsync"/> now runs on a background thread (via <c>Task.Run</c>) instead of
 /// synchronously on the dialog's dispatcher, so a large or slow/NAS folder no longer blocks the window while it
 /// scans. These tests exercise the extracted static logic directly (no WPF window/dispatcher needed) -- same
 /// production method the window calls.
@@ -22,7 +23,7 @@ public sealed class BenchmarkWindowEnumerateImageFilesTests : IDisposable
     {
         var missing = Path.Combine(_root.Path, "does-not-exist");
 
-        Assert.Throws<DirectoryNotFoundException>(() => BenchmarkWindow.EnumerateImageFiles(missing, imageLimit: 0));
+        Assert.Throws<DirectoryNotFoundException>(() => BenchmarkPresenter.EnumerateImageFiles(missing, imageLimit: 0));
     }
 
     [Fact(DisplayName = "Non-image files are filtered out and the remaining supported files keep their enumeration order")]
@@ -35,7 +36,7 @@ public sealed class BenchmarkWindowEnumerateImageFilesTests : IDisposable
         var expectedOrder = Directory.EnumerateFiles(dir).Where(PhotoReview.Core.Catalog.ImageFileTypes.IsSupported)
             .OrderBy(p => p, StringComparer.Ordinal).ToArray();
 
-        var files = BenchmarkWindow.EnumerateImageFiles(dir, imageLimit: 0);
+        var files = BenchmarkPresenter.EnumerateImageFiles(dir, imageLimit: 0);
 
         Assert.Equal(2, files.Length);
         Assert.All(files, f => Assert.True(PhotoReview.Core.Catalog.ImageFileTypes.IsSupported(f)));
@@ -50,7 +51,7 @@ public sealed class BenchmarkWindowEnumerateImageFilesTests : IDisposable
         File.WriteAllBytes(Path.Combine(dir, "b.cr2"), [1, 2, 3, 4]);
         File.WriteAllBytes(Path.Combine(dir, "c.nef"), [1, 2, 3, 4, 5]);
 
-        var files = BenchmarkWindow.EnumerateImageFiles(dir, imageLimit: 0);
+        var files = BenchmarkPresenter.EnumerateImageFiles(dir, imageLimit: 0);
 
         Assert.Equal([Path.Combine(dir, "a.jpg")], files);
     }
@@ -61,12 +62,12 @@ public sealed class BenchmarkWindowEnumerateImageFilesTests : IDisposable
         var dir = _root.Dir("many");
         for (var i = 0; i < 10; i++) File.WriteAllBytes(Path.Combine(dir, $"img{i:00}.jpg"), new byte[i + 1]);
 
-        var uncapped = BenchmarkWindow.EnumerateImageFiles(dir, imageLimit: 0);
-        var capped = BenchmarkWindow.EnumerateImageFiles(dir, imageLimit: 3);
+        var uncapped = BenchmarkPresenter.EnumerateImageFiles(dir, imageLimit: 0);
+        var capped = BenchmarkPresenter.EnumerateImageFiles(dir, imageLimit: 3);
 
         Assert.Equal(10, uncapped.Length);
         Assert.Equal(3, capped.Length);
-        Assert.Equal(BenchmarkWindow.ApplyImageLimit(uncapped, 3), capped);
+        Assert.Equal(BenchmarkPresenter.ApplyImageLimit(uncapped, 3), capped);
     }
 
     [Fact(DisplayName = "A folder with only unsupported files returns an empty list, not an error (the caller maps this to BenchmarkStatusNoImages)")]
@@ -75,7 +76,7 @@ public sealed class BenchmarkWindowEnumerateImageFilesTests : IDisposable
         var dir = _root.Dir("no-images");
         File.WriteAllBytes(Path.Combine(dir, "readme.txt"), [1]);
 
-        var files = BenchmarkWindow.EnumerateImageFiles(dir, imageLimit: 0);
+        var files = BenchmarkPresenter.EnumerateImageFiles(dir, imageLimit: 0);
 
         Assert.Empty(files);
     }

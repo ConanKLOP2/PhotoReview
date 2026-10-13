@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-G1
-order: 1100
+order: 1110
 summary: |-
   WP-35 GĐ1 (phương án B của spike S3, CHƯA XÁC NHẬN): khung hộp thoại Win32 gốc AOT-sạch trong Shell.Win32 (template trong bộ nhớ + dialog manager, DPI từng màn hình, dark qua DWM/uxtheme/WM_CTLCOLOR*, modal không nuốt WM_QUIT, vòng lồng của shell) + 4 cửa sổ nhỏ (ZoomPrompt, Diagnostics + Sao chép, SkippedFiles, BatchReview) dùng presenter G0 + IFileOpenDialog/IFileSaveDialog + `Win32SecondaryWindowPort` và `SecondaryWindowRouter` (Win32 -> cầu WPF -> cổng tạm theo từng cửa sổ). Đã đo trên exe thật (R2R và AOT): mở <= 65 ms; 0 cảnh báo ILC; không nạp WPF; 24 đột biến, 0 sống; 50 lượt lặp 0 lỗi.
 ---
