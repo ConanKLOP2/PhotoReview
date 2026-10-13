@@ -115,6 +115,11 @@ internal static unsafe partial class Gdi32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetTextExtentPoint32(nint hdc, char* text, int count, Point* size);
 
+    /// <summary>GetTextMetricsW; <paramref name="metrics"/> trỏ tới TEXTMETRICW (60 byte; 5 LONG đầu: Height, Ascent, Descent, InternalLeading, ExternalLeading).</summary>
+    [LibraryImport("gdi32.dll", EntryPoint = "GetTextMetricsW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetTextMetrics(nint hdc, void* metrics);
+
     /// <summary>CreateFontIndirectW với con trỏ tới LOGFONTW (92 byte).</summary>
     [LibraryImport("gdi32.dll", EntryPoint = "CreateFontIndirectW")]
     public static partial nint CreateFontIndirect(void* logFont);
@@ -156,6 +161,9 @@ internal static class DialogConstants
     public const uint EmSetSel = 0x00B1;
     public const uint EmGetSel = 0x00B0;
     public const uint EmSetLimitText = 0x00C5;
+    public const uint EmGetRect = 0x00B2;
+    public const uint EmSetRect = 0x00B3;
+    public const uint EsMultiline = 0x0004;
     public const uint LbAddString = 0x0180;
     public const uint LbResetContent = 0x0184;
     public const uint LbSetCurSel = 0x0186;
