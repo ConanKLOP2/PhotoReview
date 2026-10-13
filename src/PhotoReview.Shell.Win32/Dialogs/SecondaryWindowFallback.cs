@@ -40,8 +40,8 @@ internal sealed class ProcessShellLauncher : IShellLauncher
 }
 
 /// <summary>
-/// "Cổng chưa có" tối thiểu (NOWPF-AOT-SETTINGS-FALLBACK): khi cầu WPF không khả dụng (bản Native AOT, hoặc nạp cầu thất
-/// bại) lệnh Settings mở <c>config.json</c> bằng trình soạn thảo mặc định, các cửa sổ phụ khác chỉ báo "không có trong bản
+/// "Cổng chưa có" tối thiểu (NOWPF-AOT-SETTINGS-FALLBACK): khi cổng Win32 không làm được cửa sổ (WP-35 GĐ5: chỉ còn Settings khi
+/// catalog thiếu trang) lệnh Settings mở <c>config.json</c> bằng trình soạn thảo mặc định, các cửa sổ phụ khác chỉ báo "không có trong bản
 /// này" (không chặn, không ném, không đổi dữ liệu). KHÔNG bao giờ ghi/sửa config.json: chỉ mở tệp.
 /// </summary>
 internal sealed class SecondaryWindowFallback

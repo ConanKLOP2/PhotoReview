@@ -39,19 +39,8 @@
     <ProjectReference Include="..\PhotoReview.App.Shared\PhotoReview.App.Shared.csproj" />
     <ProjectReference Include="..\PhotoReview.Shell.Interop\PhotoReview.Shell.Interop.csproj" />
     <ProjectReference Include="..\PhotoReview.Shell.Rendering\PhotoReview.Shell.Rendering.csproj" />
-    <!-- WP-19b (NE-5, L-SHELL): cầu cửa sổ phụ WPF nạp muộn; chỉ Dialogs/WpfBridgeLoader.cs chạm tới nó. -->
-  </ItemGroup>
-
-  <!-- WP-36: the WPF bridge (Settings/Diagnostics/Recovery secondary windows) is NOT part of the Native AOT variant: WPF cannot be
-       AOT-compiled, and dropping the reference removes the WindowsDesktop framework from the publish folder (~20 MB, no .NET
-       runtime needed). WpfBridgeLoader.cs is compiled out and SecondaryWindowPorts returns null (secondary windows no-op) until
-       WP-35 replaces them. The default (hybrid R2R) build keeps the bridge. -->
-  <ItemGroup Condition="'$(ShellAot)' != 'true'">
-    <ProjectReference Include="..\PhotoReview.Shell.WpfBridge\PhotoReview.Shell.WpfBridge.csproj" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(ShellAot)' == 'true'">
-    <Compile Remove="Dialogs\WpfBridgeLoader.cs" />
+    <!-- WP-35 GĐ5: no reference to Shell.WpfBridge any more (it was the only WPF edge of this project). Every secondary window is a
+         native Win32 dialog, identical in the hybrid R2R and the Native AOT build; the WPF app keeps its own copies (App.WpfWindows). -->
   </ItemGroup>
 
   <ItemGroup>

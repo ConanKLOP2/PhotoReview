@@ -6,8 +6,8 @@ using PhotoReview.Shell.Win32.Menus;
 namespace PhotoReview.Shell.Integration.Tests.Startup;
 
 /// <summary>
-/// NOWPF-AOT-SETTINGS-FALLBACK: shell THẬT (HWND trên desktop ẩn, WARP) không có cổng cửa sổ phụ đăng ký (như bản Native
-/// AOT): lệnh Settings/Diagnostics đi hết đường lệnh thật tới launcher giả và dòng trạng thái; không ném, không treo. Không
+/// NOWPF-AOT-SETTINGS-FALLBACK: shell THẬT (HWND trên desktop ẩn, WARP), không đăng ký cổng cửa sổ phụ nào (WP-35 GĐ5: cổng Win32 là duy nhất; trước
+/// đó mô phỏng bản Native AOT): lệnh Settings/Diagnostics đi hết đường lệnh thật tới launcher giả và dòng trạng thái; không ném, không treo. Không
 /// giả định kích thước màn hình.
 /// </summary>
 [Collection("ShellStartup")]
@@ -40,7 +40,7 @@ public sealed class ShellSecondaryWindowFallbackTests
     }
 
     [Fact]
-    public void SettingsFallsBack_WithNoBridge_AndRecoveryStillOpensAsAWin32Window()
+    public void SettingsAndRecoveryOpenAsWin32Windows_WithoutTouchingTheLauncher()
     {
         var root = ShellRun.NewRoot("aotfallback");
         var jpeg = TestJpeg.WriteTo(Path.Combine(root, "photos", "a.jpg"));
@@ -51,31 +51,30 @@ public sealed class ShellSecondaryWindowFallbackTests
             {
                 options.ServiceOverrides?.Invoke(services);
                 services.AddSingleton<IShellLauncher>(launcher);
-                services.AddSingleton<SecondaryWindowPortLoader>((_, _) => null); // mô phỏng bản AOT: cầu vắng
             },
         });
         Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + run.Diagnostics);
         Assert.True(SpinWait.SpinUntil(() => run.Main!.FirstImagePresented, Bound), "ảnh đầu không được vẽ");
 
-        // WP-35 GĐ3 (đủ 7 trang): Settings là hộp thoại Win32 gốc nên không còn rơi về cổng tạm khi cầu vắng: MỞ THẬT (modal, owner =
+        // WP-35 GĐ3 (đủ 7 trang): Settings là hộp thoại Win32 gốc nên không còn rơi về cổng tạm: MỞ THẬT (modal, owner =
         // HWND shell), không chạm launcher/config.json, rồi đóng bằng WM_CLOSE.
         var uiThread = run.OnUi(() => GetCurrentThreadId());
         var settings = run.Main!.Dispatcher.InvokeAsync(() => ((IContextMenuActions)run.Main!).ShowSettings());
         nint settingsDialog = 0;
         Assert.True(SpinWait.SpinUntil(() => (settingsDialog = OwnedBy(uiThread, run.Main!.Hwnd)) != 0, Bound),
-            "Settings không mở khi cầu vắng: " + run.Diagnostics);
+            "Settings không mở: " + run.Diagnostics);
         Assert.Equal(Tr.SettingsWindowTitle, run.OnUi(() => WindowText(settingsDialog)));
         Assert.True(PostMessage(settingsDialog, 0x0010 /* WM_CLOSE */, 0, 0));
         Assert.True(SpinWait.SpinUntil(() => settings.IsCompleted, Bound), "Settings không đóng");
         Assert.Empty(launcher.Opens);
         Assert.NotEqual(Tr.StatusSecondaryUnavailableSettings, run.OnUi(() => run.Main!.ViewModel.StatusText));
 
-        // WP-35 GĐ1/GĐ4: Diagnostics và Recovery đã có hộp thoại Win32 gốc nên không còn rơi về cổng tạm (kể cả khi cầu vắng):
+        // WP-35 GĐ1/GĐ4: Diagnostics và Recovery đã có hộp thoại Win32 gốc nên không còn rơi về cổng tạm:
         // Recovery MỞ THẬT (modal, owner = HWND shell), không chạm launcher, rồi đóng bằng WM_CLOSE.
         var recovery = run.Main!.Dispatcher.InvokeAsync(() => run.Main!.ViewModel.ShowRecovery());
         nint dialog = 0;
         Assert.True(SpinWait.SpinUntil(() => (dialog = OwnedBy(uiThread, run.Main!.Hwnd)) != 0, Bound),
-            "Recovery không mở khi cầu vắng: " + run.Diagnostics);
+            "Recovery không mở: " + run.Diagnostics);
         Assert.Equal(Tr.RecoveryTitle, run.OnUi(() => WindowText(dialog)));
         Assert.NotEqual(Tr.StatusSecondaryUnavailableRecovery, run.OnUi(() => run.Main!.ViewModel.StatusText));
         Assert.True(PostMessage(dialog, 0x0010 /* WM_CLOSE */, 0, 0));

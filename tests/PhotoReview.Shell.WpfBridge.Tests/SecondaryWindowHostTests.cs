@@ -6,7 +6,7 @@ using PhotoReview.Shell.Win32.Dialogs;
 namespace PhotoReview.Shell.WpfBridge.Tests;
 
 /// <summary>
-/// WP-19b: hợp đồng của host (<see cref="SecondaryWindowHostFactory"/>) mà <c>WpfBridgeLoader</c> bọc: trạng thái modeless cho
+/// WP-19b: hợp đồng của host (<see cref="SecondaryWindowHostFactory"/>) mà <c>WpfBridgePort</c> (test) bọc: trạng thái modeless cho
 /// bộ lọc phím, Application WPF lười không tắt khi đóng cửa sổ cuối, dispose gỡ bộ lọc khỏi vòng lặp.
 /// </summary>
 [Trait("Category", "UI")]

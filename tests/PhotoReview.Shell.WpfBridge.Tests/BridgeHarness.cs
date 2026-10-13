@@ -16,7 +16,7 @@ namespace PhotoReview.Shell.WpfBridge.Tests;
 
 /// <summary>
 /// WP-19b: một UI thread thật của shell (dispatcher Win32 + <see cref="MessageLoop"/>), một cửa sổ chủ <see cref="ShellWindow"/> và
-/// cầu cửa sổ phụ WPF thật (<see cref="SecondaryWindowPorts"/>) trên DI tối thiểu (SettingsStore trong thư mục tạm).
+/// cầu cửa sổ phụ WPF thật (<see cref="WpfBridgePort"/>) trên DI tối thiểu (SettingsStore trong thư mục tạm).
 /// </summary>
 internal sealed class BridgeHarness : IAsyncDisposable
 {
@@ -80,7 +80,7 @@ internal sealed class BridgeHarness : IAsyncDisposable
     /// <summary>Tạo cổng cửa sổ phụ (như WP-20 sẽ làm) trên UI thread; bộ lọc phím gắn vào vòng lặp thật.</summary>
     public async Task<ISecondaryWindowPort> LoadPortAsync()
     {
-        Port = await Ui.InvokeAsync(() => SecondaryWindowPorts.CreateLazy(Services, Ui.Loop).Value
+        Port = await Ui.InvokeAsync(() => WpfBridgePort.CreateLazy(Services, Ui.Loop).Value
             ?? throw new InvalidOperationException("bridge not loaded"));
         return Port;
     }
