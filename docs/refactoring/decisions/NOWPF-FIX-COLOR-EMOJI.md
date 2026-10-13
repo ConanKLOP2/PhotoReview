@@ -1,6 +1,6 @@
 ---
 id: NOWPF-FIX-COLOR-EMOJI
-order: 1300
+order: 1320
 summary: |-
   Sửa lỗi L2 của WP-27 (CHƯA XÁC NHẬN): emoji hiện đơn sắc trong shell Win32 vì `D2DDrawContext.DrawText` gọi `DrawTextLayout` với `D2dDrawTextOptions.None`. Đổi sang `EnableColorFont` (D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT, đủ trên ID2D1DeviceContext). Test tự động (WARP, Native): emoji trên nền xám phải có điểm ảnh bão hoà (đỏ trên master: 0/4292), chữ thường vẫn đơn sắc. Hộp bao toolbar không đổi (số đo layout không phụ thuộc cờ vẽ).
 ---
