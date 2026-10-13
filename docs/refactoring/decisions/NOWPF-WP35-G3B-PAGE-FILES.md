@@ -95,7 +95,7 @@ Tổng: 23 chạy (build Release + test trên desktop ẩn `PRSetFiles`); bướ
 
 ## 5. Chưa kiểm được / việc còn lại
 
-- Trùng thuộc tính với trang Performance nếu agent đó cũng làm Compare/RAW/WebP: hai trang cùng ghi một thuộc tính (trang sau thắng ở `CollectAll`); khi merge cần chốt một chủ.
+- Đã kiểm sau khi gộp #495: trang Performance KHÔNG khai báo Compare/RAW/WebP nên không trùng chủ với trang Files.
 - Trang Shortcuts cũng có thể khai báo MoveCopyReuseLastFolder (XAML đặt nó ở đó): cần chốt một chủ.
 - Chưa kiểm: bàn phím thật (Alt+phím tắt của radio, IME), Narrator, `IFileOpenDialog` thật từ nút Browse (chỉ fake; hộp thoại thật đã kiểm ở GĐ1), màu chữ radio ở chế độ tương phản cao.
 - Chưa bật cổng mặc định: `IsComplete` vẫn false tới khi đủ Mouse/Performance/Shortcuts.
