@@ -532,6 +532,7 @@ public sealed class SettingsFilesPageTests : IDisposable
             Assert.True(d.FocusExternalEditor());
             Assert.Equal("Files", d.ActivePageKey);
             Assert.Equal(H(d, FilesPage(d).Ids.EditorPath), User32.GetFocus());
+            Assert.Equal("General", SettingsPresenter.RememberedPageKey); // a one-off jump is not "the page the user last used"
             d.Close();
         });
     }
