@@ -40,7 +40,6 @@ public sealed class ShellNativeDialogsIntegrationTests
             {
                 options.ServiceOverrides?.Invoke(services);
                 services.AddSingleton<IShellLauncher>(new NoLauncher());
-                services.AddSingleton<SecondaryWindowPortLoader>((_, _) => null); // cầu WPF vắng (bản AOT)
             },
         });
         Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + run.Diagnostics);
@@ -105,7 +104,6 @@ public sealed class ShellNativeDialogsIntegrationTests
             {
                 options.ServiceOverrides?.Invoke(services);
                 services.AddSingleton<IShellLauncher>(new NoLauncher());
-                services.AddSingleton<SecondaryWindowPortLoader>((_, _) => null);
             },
         });
         Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + run.Diagnostics);
@@ -152,7 +150,6 @@ public sealed class ShellNativeDialogsIntegrationTests
             {
                 options.ServiceOverrides?.Invoke(services);
                 services.AddSingleton<IShellLauncher>(new NoLauncher());
-                services.AddSingleton<SecondaryWindowPortLoader>((_, _) => null);
             },
         });
         Assert.True(run.WaitForMain(), "cửa sổ chính không dựng xong: " + run.Diagnostics);

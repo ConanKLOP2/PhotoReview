@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- NO-WPF-EXEC-PLAN mục 3 (WP-01, NE-5 = a, WP-19b): cầu nạp muộn cửa sổ phụ WPF (Settings, Recovery, ...) cho shell, cùng
-       tiến trình. Project DUY NHẤT trong Shell.* được dùng WPF; Shell.Win32 chỉ tham chiếu nó từ Dialogs/WpfBridgeLoader.cs
-       (L-SHELL). Không IsAotCompatible (WPF không AOT được). -->
+       tiến trình. Project DUY NHẤT trong Shell.* được dùng WPF. WP-35 GĐ5: Shell.Win32 KHÔNG còn tham chiếu project này (mọi cửa sổ phụ là
+       hộp thoại Win32 gốc); nó chỉ còn được dùng bởi test của nó cho tới khi WP-37 xoá. Không IsAotCompatible (WPF không AOT được). -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>

@@ -6,7 +6,7 @@ namespace PhotoReview.Architecture.Tests;
 
 /// <summary>
 /// NO-WPF-EXEC-PLAN mục 3.3 (WP-01): luật kiến trúc của các project mới, kiểm trên assembly đã build (reflection):
-/// L-SHELL (Shell.* không WPF/WinForms/App WPF; chỉ WpfBridgeLoader được dùng Shell.WpfBridge), L-SHARED (App.Shared không
+/// L-SHELL (Shell.* không WPF/WinForms/App WPF và, từ WP-35 GĐ5, không tham chiếu Shell.WpfBridge), L-SHARED (App.Shared không
 /// WPF, không App/Shell), L-AOT (IsAotCompatible, không [ComImport], P/Invoke chỉ qua LibraryImport, không dynamic).
 /// </summary>
 public sealed class ShellRulesTests
@@ -33,31 +33,33 @@ public sealed class ShellRulesTests
     private static string[] ReferencedNames(Assembly assembly) =>
         assembly.GetReferencedAssemblies().Select(r => r.Name ?? string.Empty).ToArray();
 
-    [Theory(DisplayName = "L-SHELL: Shell.Interop/Rendering/Win32 reference no WPF, WinForms, App WPF or Shell.WpfBridge assembly outside the bridge loader")]
+    [Theory(DisplayName = "L-SHELL: Shell.Interop/Rendering/Win32 reference no WPF, WinForms, App WPF or Shell.WpfBridge assembly (WP-35 GĐ5: the bridge is unplugged)")]
     [MemberData(nameof(ShellAssemblyNames))]
     [Trait("Category", "Architecture")]
     public void ShellAssembly_DoesNotReferenceWpfSide(string assemblyName)
     {
         var assembly = ByName(assemblyName);
-        var forbidden = assembly == ShellWin32 ? WpfSideAssemblies : [.. WpfSideAssemblies, "PhotoReview.Shell.WpfBridge"];
+        string[] forbidden = [.. WpfSideAssemblies, "PhotoReview.Shell.WpfBridge"];
 
         Assert.Empty(ReferencedNames(assembly).Intersect(forbidden, StringComparer.Ordinal));
     }
 
-    [Fact(DisplayName = "L-SHELL: in Shell.Win32 only Dialogs/WpfBridgeLoader depends on PhotoReview.Shell.WpfBridge (NE-5)")]
+    [Fact(DisplayName = "L-SHELL (WP-35 GĐ5): no Shell.Win32 type depends on PhotoReview.Shell.WpfBridge and its project file has no reference to it")]
     [Trait("Category", "Architecture")]
-    public void ShellWin32_OnlyBridgeLoaderDependsOnWpfBridge()
+    public void ShellWin32_DoesNotDependOnWpfBridge()
     {
         var result = Types.InAssembly(ShellWin32)
-            .That().DoNotHaveName("WpfBridgeLoader")
             .ShouldNot().HaveDependencyOn("PhotoReview.Shell.WpfBridge")
             .GetResult();
 
         Assert.True(result.IsSuccessful,
-            "Only PhotoReview.Shell.Win32.Dialogs.WpfBridgeLoader may touch the WPF bridge (lazy, NoInlining, C-13): " +
+            "Shell.Win32 must not touch the WPF bridge any more (every secondary window is a native Win32 dialog): " +
             string.Join(", ", result.FailingTypeNames ?? []));
-        Assert.All(ShellWin32.GetTypes().Where(t => t.Name == "WpfBridgeLoader"),
-            t => Assert.Equal("PhotoReview.Shell.Win32.Dialogs", t.Namespace));
+        Assert.DoesNotContain(ShellWin32.GetTypes(), t => t.Name == "WpfBridgeLoader");
+
+        var project = File.ReadAllText(Path.Combine(RepoScan.Root, "src/PhotoReview.Shell.Win32/PhotoReview.Shell.Win32.csproj"));
+        Assert.DoesNotContain("PhotoReview.Shell.WpfBridge.csproj", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("PhotoReview.App.WpfWindows.csproj", project, StringComparison.Ordinal);
     }
 
     private static readonly Assembly WpfBridge = typeof(PhotoReview.Shell.WpfBridge.ISecondaryWindowHost).Assembly;
@@ -83,7 +85,7 @@ public sealed class ShellRulesTests
         var bridge = ReferencedNames(WpfBridge);
         var windows = ReferencedNames(WpfWindows);
 
-        Assert.Contains("PhotoReview.App.WpfWindows", bridge);               // Shell.Win32 -> WpfBridge -> WpfWindows
+        Assert.Contains("PhotoReview.App.WpfWindows", bridge);               // WpfBridge -> WpfWindows (nothing in Shell.Win32 points at the bridge any more)
         Assert.DoesNotContain(bridge, r => r is "PhotoReview" or "PhotoReview.App" or "PhotoReview.Shell.Win32"
             or "PhotoReview.Shell.Rendering" or "PhotoReview.Shell.Interop");
         Assert.DoesNotContain(windows, r => r is "PhotoReview" or "PhotoReview.App" or "PhotoReview.Shell.WpfBridge"

@@ -156,7 +156,8 @@ jobs:
         shell: pwsh
         run: dotnet test tests/PhotoReview.Shell.Integration.Tests/PhotoReview.Shell.Integration.Tests.csproj -c Release --no-build --filter "$env:TEST_FILTER" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
-      # NO-WPF (WP-19b): WPF secondary windows opened from the Win32 shell through Shell.WpfBridge (real HWNDs, lazy WPF load probe).
+      # NO-WPF (WP-19b): the Shell.WpfBridge contract (real WPF HWNDs through a test-only adapter, lazy WPF load probe) plus the shell's
+      # "no WPF loaded" probe for the native secondary windows (WP-35 GĐ5 unplugged the bridge from the shell).
       - name: Run Shell WpfBridge tests (HotPath)
         shell: pwsh
         run: dotnet test tests/PhotoReview.Shell.WpfBridge.Tests/PhotoReview.Shell.WpfBridge.Tests.csproj -c Release --no-build --filter "$env:TEST_FILTER" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
