@@ -978,5 +978,6 @@
   "status.secondaryUnavailable.skippedFiles": "Skipped-files window is not available in this build.",
   "status.secondaryUnavailable.batchReview": "Batch review window is not available in this build; nothing was changed.",
   "status.secondaryUnavailable.benchmark": "Benchmark window is not available in this build.",
-  "diagnostics.copy": "Copy"
+  "diagnostics.copy": "Copy",
+  "status.menuFailed": "Menu error: {message}"
 }
