@@ -4,9 +4,9 @@ using PhotoReview.Core.Localization;
 namespace PhotoReview.Shell.Win32.Dialogs;
 
 /// <summary>
-/// Cổng tới cửa sổ phụ WPF nạp muộn (C-13b). Phản chiếu <c>ISecondaryWindowHost</c> của Shell.WpfBridge nhưng nằm trong
-/// Shell.Win32 (Shell.Win32 không tham chiếu WpfBridge trực tiếp, L-SHELL); <c>WpfBridgeLoader</c> (WP-19b) bọc host thật
-/// thành cổng này và đưa vào <see cref="Win32DialogService"/> qua <see cref="Lazy{T}"/>.
+/// Cổng tới cửa sổ phụ (C-13b). Thực thi: <c>Win32SecondaryWindowPort</c> (hộp thoại Win32 gốc, WP-35) qua
+/// <c>SecondaryWindowRouter</c>; đưa vào <see cref="Win32DialogService"/> qua <see cref="Lazy{T}"/>. WP-35 GĐ5: Shell.Win32
+/// không còn tham chiếu Shell.WpfBridge (cầu WPF chỉ còn là mã dùng trong test của dự án đó cho tới WP-37).
 /// </summary>
 internal interface ISecondaryWindowPort
 {
@@ -27,13 +27,13 @@ internal interface ISecondaryWindowPort
 
     /// <summary>
     /// WP-35: cổng này tự thực thi cửa sổ <paramref name="kind"/>? <see cref="SecondaryWindowRouter"/> hỏi để chọn cổng Win32 hay
-    /// cầu WPF theo từng cửa sổ. Mặc định true (cầu WPF và các cổng giả của test làm được mọi cửa sổ).
+    /// cổng tạm theo từng cửa sổ. Mặc định true (các cổng giả của test làm được mọi cửa sổ).
     /// </summary>
     bool Supports(SecondaryWindowKind kind) => true;
 
     /// <summary>
     /// WP-35 GĐ2: editor Action profiles (modal, lồng được trong Settings). Trả danh sách đã sửa khi người dùng Apply; null khi huỷ
-    /// hoặc cổng không có (mặc định: cầu WPF chỉ mở nó từ bên trong cửa sổ Settings của nó).
+    /// hoặc cổng không có (mặc định: chỉ cổng Win32 mở nó, từ bên trong cửa sổ Settings).
     /// </summary>
     IReadOnlyList<PhotoReview.Core.Settings.ReviewAction>? ShowActionProfiles(nint ownerHwnd,
         IReadOnlyList<PhotoReview.Core.Settings.ReviewAction> actions) => null;

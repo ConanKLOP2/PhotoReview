@@ -56,6 +56,9 @@ internal static unsafe class NativeDialogTestKit
     /// <summary>
     /// Kích hoạt manifest nhúng của PhotoReview.dll (comctl32 v6 = visual styles) cho thread hiện tại: testhost không có manifest nên
     /// nút/ô nhập chỉ có dáng cổ điển; exe thật có manifest. Dùng khi cần NHÌN giao diện (chụp ảnh thủ công).
+    /// BẮT BUỘC Dispose trong CÙNG lời gọi (cùng việc dispatcher / cùng callback OnSta) đã gọi hàm này: user32 khôi phục ngăn xếp
+    /// activation khi một WndProc trả về, nên bật ở một việc <c>UiThread.InvokeAsync</c> rồi tắt ở việc khác làm DeactivateActCtx
+    /// ném SEHException ngẫu nhiên (đo 15/60). Xem NativeDialogChromeTests.RunBenchmark.
     /// </summary>
     public static IDisposable ActivateVisualStyles()
     {

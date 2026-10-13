@@ -425,7 +425,10 @@ internal sealed class SettingsPageBuilder
             throw new InvalidOperationException("A settings page can declare at most 999 controls.");
         }
 
-        if (_breakGroup)
+        // A group box is sent to the bottom of the z-order when the page is created (SettingsDialog.EnsurePageCreated), so it is no
+        // longer "the control after the radios": the group flag moves on to the first real control declared after it.
+        var isGroupBox = controlClass == DialogControlClass.Button && (style & 0xFu) == ControlConstants.BsGroupBox;
+        if (_breakGroup && !isGroupBox)
         {
             // The control right after a radio group starts a new dialog-manager group, so the arrow keys cannot walk out of the radios.
             style |= DialogConstants.WsGroup;

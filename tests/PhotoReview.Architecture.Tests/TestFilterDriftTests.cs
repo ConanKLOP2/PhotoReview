@@ -50,7 +50,25 @@ public sealed class TestFilterDriftTests
             .Select(dir => Path.GetFileName(dir)!)
             .Where(name => Directory.GetFiles(Path.Combine(RepoScan.Root, "tests", name), "*.csproj").Length > 0);
 
-    private const string SharedFilterArgument = "--filter \"$env:TEST_FILTER\"";
+    // A project's main CI step: the shared TEST_FILTER, optionally narrowed to one namespace shard by
+    // `&FullyQualifiedName~<ns>` (this shard) or `&FullyQualifiedName!~<ns>` (the complement shard). Anything else is drift.
+    private static readonly Regex MainStepCommand = new(
+        @"dotnet test tests/(?<p>PhotoReview\.[A-Za-z.]+\.Tests)/\k<p>\.csproj -c Release --no-build --filter ""\$env:TEST_FILTER(?:&FullyQualifiedName(?<neg>!?)~(?<ns>[A-Za-z0-9_.]+))?""",
+        RegexOptions.CultureInvariant);
+
+    private static Dictionary<string, string> CiJobs(string ci)
+    {
+        var jobStarts = Regex.Matches(ci, @"^  (?<id>[a-z][a-z0-9-]*):\s*$", RegexOptions.Multiline)
+            .Where(m => m.Index > ci.IndexOf("\njobs:", StringComparison.Ordinal)).ToArray();
+        var jobs = new Dictionary<string, string>();
+        for (var i = 0; i < jobStarts.Length; i++)
+        {
+            var end = i + 1 < jobStarts.Length ? jobStarts[i + 1].Index : ci.Length;
+            jobs[jobStarts[i].Groups["id"].Value] = ci[jobStarts[i].Index..end];
+        }
+
+        return jobs;
+    }
 
     [Fact(DisplayName = "Rule R2-A-12: every CI dotnet test command passes the shared TEST_FILTER (or the Integration+Slow safety net)")]
     public void EveryCiTestCommand_PassesTheSharedFilter()
@@ -63,15 +81,14 @@ public sealed class TestFilterDriftTests
         // A step that defines TEST_FILTER but forgets to pass it would silently run Native/Slow/Manual tests (or none).
         foreach (var command in commands)
         {
-            var usesShared = command.Contains(SharedFilterArgument, StringComparison.Ordinal);
+            var usesShared = MainStepCommand.IsMatch(command);
             var usesSafetyNet = command.Contains("--filter \"Category=Integration&Category=Slow&", StringComparison.Ordinal);
             Assert.True(usesShared || usesSafetyNet, $"CI test command without the shared filter: {command.Trim()}");
         }
 
         // ...and every test project has a main step with the shared filter.
         foreach (var project in TestProjects())
-            Assert.Contains(commands, c => c.Contains($"tests/{project}/{project}.csproj", StringComparison.Ordinal)
-                && c.Contains(SharedFilterArgument, StringComparison.Ordinal));
+            Assert.Contains(commands, c => MainStepCommand.Match(c) is { Success: true } m && m.Groups["p"].Value == project);
 
         // verify-all.ps1's per-project run passes the filter it builds (checked against CI above).
         Assert.Contains("'--filter', $filter,", ReadRepoFile("tools/verify-all.ps1"), StringComparison.Ordinal);
@@ -118,7 +135,7 @@ public sealed class TestFilterDriftTests
         foreach (var file in new[]
         {
             "PhotoReview.App.exe", "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.deps.json", "PhotoReview.runtimeconfig.json",
-            "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll", "PhotoReview.Shell.WpfBridge.dll", "PhotoReview.App.WpfWindows.dll",
+            "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll", "PhotoReview.App.WpfWindows.dll",
         })
             Assert.Contains($"'{file}'", script, StringComparison.Ordinal);
     }
@@ -146,19 +163,122 @@ public sealed class TestFilterDriftTests
         Assert.DoesNotContain("ShellAot", release, StringComparison.Ordinal);
         Assert.DoesNotContain("-Aot", release, StringComparison.Ordinal);
 
-        // The AOT build drops the WPF bridge and keeps EventSourceSupport (without it PHOTOREVIEW_PERF_TRACE and startup-probe are blind).
+        // The AOT build keeps EventSourceSupport (without it PHOTOREVIEW_PERF_TRACE and startup-probe are blind); since WP-35 G5 the
+        // shell has no WPF bridge reference in ANY variant, so no ShellAot-conditional bridge group may come back.
         var csproj = ReadRepoFile("src/PhotoReview.Shell.Win32/PhotoReview.Shell.Win32.csproj");
         Assert.Contains("<EventSourceSupport Condition=\"'$(ShellAot)' == 'true'\">true</EventSourceSupport>", csproj, StringComparison.Ordinal);
-        Assert.Contains("<ItemGroup Condition=\"'$(ShellAot)' != 'true'\">", csproj, StringComparison.Ordinal);
+        Assert.DoesNotContain("PhotoReview.Shell.WpfBridge.csproj", csproj, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "Rule R2-A-12: the CI safety-net step covers every test project")]
+    [Fact(DisplayName = "Rule R2-A-12: the CI safety-net steps (one per test job) together cover every test project")]
     public void IntegrationSlowStep_CoversEveryTestProject()
     {
         var ci = ReadRepoFile(".github/workflows/ci.yml");
-        var step = ci[ci.IndexOf("Integration-category tests that the main filter skips", StringComparison.Ordinal)..];
+        const string marker = "- name: Run Integration-category tests that the main filter skips";
+        var steps = new List<string>();
+        for (var at = ci.IndexOf(marker, StringComparison.Ordinal); at >= 0; at = ci.IndexOf(marker, at + marker.Length, StringComparison.Ordinal))
+        {
+            var end = ci.IndexOf("\n      - name:", at + marker.Length, StringComparison.Ordinal);
+            steps.Add(end < 0 ? ci[at..] : ci[at..end]);
+        }
+
+        Assert.NotEmpty(steps);
+        foreach (var project in TestProjects())
+            Assert.Contains(steps, step => step.Contains($"'{project}'", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "Rule CI-PARALLEL: each test project is tested by exactly one job (or by two complementary namespace shards), its safety net runs in one job that built it, and the aggregate build-test-publish job needs every build/test job")]
+    public void EachProjectIsTestedInOneJob_AndTheAggregateGateNeedsAllJobs()
+    {
+        var ci = ReadRepoFile(".github/workflows/ci.yml");
+        var jobs = CiJobs(ci);
+        const string safetyMarker = "- name: Run Integration-category tests that the main filter skips";
 
         foreach (var project in TestProjects())
-            Assert.Contains($"'{project}'", step[..step.IndexOf("- name: Publish Release", StringComparison.Ordinal)], StringComparison.Ordinal);
+        {
+            var mains = jobs.SelectMany(j => j.Value.Split('\n')
+                    .Select(line => MainStepCommand.Match(line))
+                    .Where(m => m.Success && m.Groups["p"].Value == project)
+                    .Select(m => (Job: j.Key, Neg: m.Groups["neg"].Value == "!", Ns: m.Groups["ns"].Value, Sharded: m.Groups["ns"].Success)))
+                .ToArray();
+
+            if (mains.Length == 1)
+            {
+                Assert.False(mains[0].Sharded, $"{project}: a single main step must not be a shard (the other shard would be missing)");
+            }
+            else
+            {
+                // Sharded: exactly two steps, the same namespace, one positive (~) and one complement (!~), in different jobs.
+                Assert.True(mains.Length == 2, $"{project}: expected one main step or two complementary shards, found {mains.Length}");
+                Assert.All(mains, m => Assert.True(m.Sharded, $"{project}: a second main step must be a namespace shard"));
+                Assert.Equal(mains[0].Ns, mains[1].Ns);
+                Assert.NotEqual(mains[0].Neg, mains[1].Neg);
+                Assert.NotEqual(mains[0].Job, mains[1].Job);
+            }
+
+            // The safety net runs exactly once per project, in a job that builds it (checked against the slnf below).
+            var safetyJobs = jobs.Where(j =>
+            {
+                var at = j.Value.IndexOf(safetyMarker, StringComparison.Ordinal);
+                if (at < 0) return false;
+                var end = j.Value.IndexOf("\n      - name:", at + safetyMarker.Length, StringComparison.Ordinal);
+                var step = end < 0 ? j.Value[at..] : j.Value[at..end];
+                return step.Contains($"'{project}'", StringComparison.Ordinal) && step.Contains("Category=Integration&Category=Slow&", StringComparison.Ordinal);
+            }).Select(j => j.Key).ToArray();
+            Assert.Single(safetyJobs);
+        }
+
+        // Each job builds, through its solution filter (tools/ci/<job>.slnf), every project it tests.
+        foreach (var (id, text) in jobs.Where(j => j.Value.Contains("dotnet test ", StringComparison.Ordinal)))
+        {
+            var build = Regex.Match(text, @"dotnet build (?<f>tools/ci/[A-Za-z0-9-]+\.slnf) -c Release --no-restore");
+            Assert.True(build.Success, $"{id}: no `dotnet build tools/ci/<job>.slnf -c Release --no-restore` step before its tests");
+            var filter = ReadRepoFile(build.Groups["f"].Value);
+            // Projects tested by a main step (dotnet test tests/<p>/...) or listed in the safety-net foreach ('<p>', '<q>').
+            var tested = Regex.Matches(text, @"dotnet test tests/(?<p>PhotoReview\.[A-Za-z.]+\.Tests)/").Select(m => m.Groups["p"].Value)
+                .Concat(Regex.Matches(text, @"foreach \(\$project in (?<l>[^)]+)\)")
+                    .SelectMany(m => Regex.Matches(m.Groups["l"].Value, @"'(?<p>PhotoReview\.[A-Za-z.]+\.Tests)'"))
+                    .Select(m => m.Groups["p"].Value));
+            foreach (var project in tested.Distinct())
+                Assert.True(filter.Contains($"tests/{project}/{project}.csproj", StringComparison.Ordinal),
+                    $"{id}: {project} is tested but not built by {build.Groups["f"].Value}");
+        }
+
+        // The aggregate job keeps the id the required status check and release.yml look up, and waits for every job that builds or tests.
+        var aggregate = jobs["build-test-publish"];
+        foreach (var job in jobs.Keys.Where(k => k.StartsWith("test-", StringComparison.Ordinal) || k == "build-publish" || k == "compile-gate" || k == "changes"))
+            Assert.Contains(job, aggregate, StringComparison.Ordinal);
+        Assert.Contains("if: always()", aggregate, StringComparison.Ordinal);
+        Assert.DoesNotContain("publish-aot", aggregate, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "Rule CI-OPTIMIZE-ROUND2: only the test-* jobs skip the analyzers, and compile-gate compiles the whole solution with them on")]
+    public void AnalyzersAreSkippedOnlyWhereCompileGateStillRunsThem()
+    {
+        var ci = ReadRepoFile(".github/workflows/ci.yml");
+        var jobs = CiJobs(ci);
+
+        // The gate: the whole solution, no analyzer switch, so every CA*/VSTHRD*/IDE diagnostic is still an error in Release.
+        var gate = jobs["compile-gate"];
+        Assert.Contains("dotnet build PhotoReview.slnx -c Release --no-restore", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("-p:RunAnalyzers=false", gate, StringComparison.Ordinal);
+
+        // The published binaries are built with the analyzers on.
+        var publishCode = string.Join('\n', jobs["build-publish"].Split('\n').Where(l => !l.TrimStart().StartsWith('#')));
+        Assert.DoesNotContain("RunAnalyzers", publishCode, StringComparison.Ordinal);
+
+        // Every other use of the switch is on a test job's own slnf build line, never on a dotnet test, publish or other job.
+        foreach (var (id, text) in jobs)
+        {
+            foreach (var line in text.Split('\n').Where(l => l.Contains("-p:RunAnalyzers=false", StringComparison.Ordinal) && !l.TrimStart().StartsWith('#')))
+            {
+                Assert.StartsWith("test-", id, StringComparison.Ordinal);
+                Assert.Matches(@"^\s*run: dotnet build tools/ci/test-[a-z-]+\.slnf -c Release --no-restore -p:RunAnalyzers=false\s*$", line);
+            }
+        }
+
+        // Nothing in the repo's build props may switch the analyzers off for everyone (that would make the gate meaningless).
+        foreach (var file in new[] { "Directory.Build.props", "Directory.Build.targets" })
+            Assert.DoesNotContain("<RunAnalyzers>false", ReadRepoFile(file), StringComparison.Ordinal);
     }
 }

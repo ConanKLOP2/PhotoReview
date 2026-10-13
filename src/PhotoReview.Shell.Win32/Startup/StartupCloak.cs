@@ -20,19 +20,26 @@ internal sealed class StartupCloak : IDisposable
     private readonly IUiDispatcher _dispatcher;
     private readonly Action? _onRevealed;
     private readonly TimeSpan _safetyTimeout;
-    private Timer? _timer;
+    private readonly Func<TimeSpan, Action, IDisposable> _scheduleTimeout;
+    private IDisposable? _timer;
     private nint _handle;
     private bool _cloaked;
     private bool _revealed;
 
     /// <param name="setCloaked">Seam: (hwnd, cloaked) -> DWM chấp nhận. Production: <see cref="WindowsDwmCloak"/>.</param>
+    /// <param name="scheduleTimeout">
+    /// Seam: (độ trễ, việc) -> bộ hẹn giờ một lần; Dispose bộ hẹn = huỷ. Production: <see cref="System.Threading.Timer"/> (chạy việc
+    /// trên thread pool). Test tiêm bộ hẹn bằng tay để KHÔNG phụ thuộc thread pool/đồng hồ thật (CI: thread pool bị chiếm làm timer
+    /// 50 ms trễ &gt; 10 s).
+    /// </param>
     public StartupCloak(IUiDispatcher dispatcher, Action? onRevealed = null, Func<nint, bool, bool>? setCloaked = null,
-        TimeSpan? safetyTimeout = null)
+        TimeSpan? safetyTimeout = null, Func<TimeSpan, Action, IDisposable>? scheduleTimeout = null)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _onRevealed = onRevealed;
         _setCloaked = setCloaked ?? ((hwnd, cloaked) => WindowsDwmCloak.TrySetCloaked(hwnd, cloaked));
         _safetyTimeout = safetyTimeout ?? SafetyTimeout;
+        _scheduleTimeout = scheduleTimeout ?? ScheduleOnTimer;
     }
 
     /// <summary>Đang cloak và chưa bỏ.</summary>
@@ -52,7 +59,7 @@ internal sealed class StartupCloak : IDisposable
         _cloaked = _setCloaked(hwnd, true);
         if (_cloaked)
         {
-            _timer = new Timer(static state => ((StartupCloak)state!).PostReveal(), this, _safetyTimeout, Timeout.InfiniteTimeSpan);
+            _timer = _scheduleTimeout(_safetyTimeout, PostReveal);
         }
     }
 
@@ -85,6 +92,9 @@ internal sealed class StartupCloak : IDisposable
     }
 
     public void Dispose() => Stop();
+
+    private static Timer ScheduleOnTimer(TimeSpan delay, Action callback) =>
+        new(static state => ((Action)state!)(), callback, delay, Timeout.InfiniteTimeSpan);
 
     private void PostReveal() => _dispatcher.Post(Reveal);
 }

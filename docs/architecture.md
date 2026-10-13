@@ -24,9 +24,9 @@ Imaging.Wpf ─> Core (UseWPF=true; là assembly Imaging duy nhất dùng WPF, L
 Core ─> PhotoReview.Localization.Generator (source generator, netstandard2.0)
 tools/PhotoReview.Benchmark.Cli ─> App, Benchmarking, Imaging*, Platform.Windows, PerfAnalysis
 PhotoReview.App.WpfWindows (UseWPF) ─> App.Shared, Imaging.Wpf, Platform.Windows, Benchmarking, Core
-PhotoReview.Shell.Win32 (PhotoReview.exe, không WPF) ─> Shell.Rendering, Shell.Interop, Shell.WpfBridge, App.Shared, Core
+PhotoReview.Shell.Win32 (PhotoReview.exe, không WPF) ─> Shell.Rendering, Shell.Interop, App.Shared, Core
 PhotoReview.Shell.Rendering ─> App.Shared, Imaging, Shell.Interop, Core
-PhotoReview.Shell.WpfBridge (UseWPF) ─> App.WpfWindows, Core
+PhotoReview.Shell.WpfBridge (UseWPF; mồ côi từ WP-35 GĐ5, chỉ test dùng, chờ WP-37 xoá) ─> App.WpfWindows, Core
 ```
 
 `PhotoReview.Core` không phụ thuộc WPF. `MainWindow` giữ phần view/input; `MainViewModel`, coordinator và service điều phối hành vi nằm ở `PhotoReview.App.Shared` (namespace giữ `PhotoReview.App.*`). **Composition (C-16, WP-09):** `SharedServiceRegistration.AddPhotoReviewShared(SharedServiceOptions)` đăng ký mọi thứ không phụ thuộc WPF (đường dẫn, file system, settings, session, journal, file action, decoder, cache, preload, ViewModel); `App.ConfigureServices` chỉ thêm phần WPF (`IUiScheduler`, `IDialogService`, `IFolderPicker`, `IClipboardService`, `IPresentationSinkFactory`) rồi gọi hàm chung với codec `WpfBitmapSourceCodec` và decoder fallback WPF. `MainViewModelCompositionRoot` lấy `IPresentationSinkFactory` và `IClipboardService` từ DI (không còn `new WpfPresentationSink`/`new WpfClipboardService` trong lõi). Shell Win32 gọi cùng hàm với `PixelBufferImageCodec` và `WpfFallbackDecoder = null` (WP-20).
@@ -39,18 +39,18 @@ Gói phát hành có hai exe trong một thư mục (WP-30, `tools/publish-relea
 
 **Project NO-WPF:**
 - `App.Shared`: ViewModel, coordinator, input và composition không WPF; hai exe cùng dùng.
-- `App.WpfWindows`: cửa sổ phụ WPF (Settings, Recovery, Diagnostics, Benchmark...); App và shell cùng dùng, shell nạp muộn qua `Shell.WpfBridge`.
+- `App.WpfWindows`: cửa sổ phụ WPF (Settings, Recovery, Diagnostics, Benchmark...) của bản WPF `PhotoReview.App.exe`. Shell Win32 không dùng (WP-35 GĐ5): cửa sổ phụ của nó là hộp thoại Win32 gốc trong `Shell.Win32/Dialogs` (Settings 7 trang, Recovery, Diagnostics, ZoomPrompt, BatchReview, Skipped, ActionProfiles, Benchmark; `Win32SecondaryWindowPort`), giống nhau ở bản R2R và Native AOT. Quyết định: [ADR 0010](adr/0010-win32-direct2d-shell.md).
 - `Imaging.Wpf`: cầu WPF duy nhất của Imaging.
 - `Shell.Interop`: khai báo P/Invoke và COM (`LibraryImport`, `GeneratedComInterface`), không có logic.
 - `Shell.Rendering`: renderer Direct2D và `GpuKeepAlive`.
 - `Shell.Win32`: cửa sổ, overlay, menu và khởi động (`Startup/`) của `PhotoReview.exe`.
-- `Shell.WpfBridge`: project WPF duy nhất trong `Shell.*`, tham chiếu `App.WpfWindows`.
+- `Shell.WpfBridge`: project WPF duy nhất trong `Shell.*`, tham chiếu `App.WpfWindows`; không còn ai trong `src/` tham chiếu nó (WP-35 GĐ5), chờ WP-37.
 
 **Luật kiểm trong `tests/PhotoReview.Architecture.Tests`:**
 - L-SHARED: `App.Shared` không bật WPF/WinForms và không tham chiếu App, Shell.* hay Imaging.Wpf.
 - L-IMG: các Imaging* trừ `Imaging.Wpf` không dùng WPF (`LayerDependencyTests`).
 - L-WPF: chỉ App, App.WpfWindows, Imaging.Wpf, Shell.WpfBridge (và project test) bật `UseWPF` (`ShellRulesTests`).
-- L-SHELL: `Shell.Interop`, `Shell.Rendering`, `Shell.Win32` không tham chiếu WPF, WinForms, App hay Shell.WpfBridge; trong Shell.Win32 chỉ `Dialogs/WpfBridgeLoader` phụ thuộc WpfBridge.
+- L-SHELL: `Shell.Interop`, `Shell.Rendering`, `Shell.Win32` không tham chiếu WPF, WinForms, App hay Shell.WpfBridge (không ngoại lệ từ WP-35 GĐ5; `WpfBridgeLoader` đã xoá).
 - L-AOT: assembly shared/shell bật `IsAotCompatible`; không `[ComImport]`, không `DllImport` ngoài `LibraryImport`, không `dynamic`.
 
 **Đường khởi động shell** (`ShellStartup`, `Startup/`):
@@ -193,7 +193,7 @@ Workstation concurrent GC (mặc định .NET) là lựa chọn có chủ đích
 
 ## Build, test, benchmark và publish
 
-Lệnh build/test/publish/benchmark: xem [README](../README.md); quy tắc test: [TESTING.md](TESTING.md). `tools/verify-all.ps1` build solution, chạy năm project xUnit (loại `Category=Manual`; mặc định cũng loại `Native`/`Slow`, riêng `Integration`+`Slow` vẫn chạy ở lượt thêm), kiểm tra docs/OPEN-DECISIONS/i18n, publish framework-dependent và verify artifact. Benchmark và T73 GUI acceptance vẫn là gate riêng vì test tự động không chứng minh hình ảnh đã render đúng trên desktop.
+Lệnh build/test/publish/benchmark: xem [README](../README.md); quy tắc test: [TESTING.md](TESTING.md). `tools/verify-all.ps1` build solution, chạy tám project xUnit (loại `Category=Manual`; mặc định cũng loại `Native`/`Slow`, riêng `Integration`+`Slow` vẫn chạy ở lượt thêm), kiểm tra docs/OPEN-DECISIONS/i18n, publish cả hai exe (cùng thứ tự `tools/publish-release.ps1`) và verify artifact. CI (`.github/workflows/ci.yml`) tách phần test thành sáu job song song `test-core` (Core, Imaging), `test-app` (Architecture, App, Shell.WpfBridge), `test-shell` + `test-shell-settings` (Shell.Tests chia hai shard bù nhau theo namespace, kèm Shell.Integration), `test-integration` và `test-integration-slow`; `compile-gate` build cả solution với analyzer bật (build của job test bỏ analyzer); `build-test-publish` chỉ là job tổng hợp đòi `build-publish`, `compile-gate` và các job test cùng thành công (required check của master; `release.yml` tra tên này, xem [CI-OPTIMIZE-ROUND2](refactoring/decisions/CI-OPTIMIZE-ROUND2.md)); `publish-aot` là artifact tùy chọn, không chặn merge. Benchmark và T73 GUI acceptance vẫn là gate riêng vì test tự động không chứng minh hình ảnh đã render đúng trên desktop.
 
 ## Chính sách ghi session và file không đọc được (ADR 0007)
 

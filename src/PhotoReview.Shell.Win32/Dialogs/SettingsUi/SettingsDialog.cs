@@ -95,6 +95,9 @@ internal sealed unsafe class SettingsDialog : NativeDialog
     private readonly Dictionary<int, SettingsLayoutElement> _groupsById = [];
     private readonly HashSet<int> _hidden = [];
     private readonly Dictionary<nint, (int X, int Y, int W, int H)> _placed = [];
+
+    /// <summary>Handles of the page comboboxes (see <see cref="PageSurface.Place"/>: a combobox re-sizes itself while it is placed).</summary>
+    private readonly HashSet<nint> _pageCombos = [];
     private readonly Dictionary<int, IReadOnlyList<Func<string>>> _comboItems = [];
     private readonly HashSet<int> _notes = [];
     private readonly int[] _scroll;
@@ -338,24 +341,45 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         var viewport = Item(ViewportId(index));
         var items = _builders[index].Items;
         var controls = new List<DialogChromeControl>(items.Count);
+        var groupBoxes = new List<nint>();
         var instance = Kernel32.GetModuleHandle(0);
         foreach (var item in items)
         {
             // The text provider again (not the text captured at Declare time): the language may have changed since the dialog was built.
             var text = _builders[index].Texts.TryGetValue(item.Id, out var provider) ? provider() : item.Text;
-            var control = User32.CreateWindowEx(item.ExStyle, DialogTemplate.WindowClassName(item.Class), text, item.Style, 0, 0, 0, 0,
-                viewport, item.Id, instance, 0);
+            // WS_CLIPSIBLINGS on every page control (a dialog template adds it itself, CreateWindowEx does not): the controls of a page are
+            // siblings that overlap (a group box frame is a full-rect fill under the controls of its group) and are moved one by one on
+            // scroll. Without it a window's paint DC and the copy-bits blit of SetWindowPos include the siblings above it, so a scroll
+            // step copied and left stale pixels of other controls (ghost text/frames, duplicated lines).
+            var control = User32.CreateWindowEx(item.ExStyle, DialogTemplate.WindowClassName(item.Class), text,
+                item.Style | ScrollConstants.WsClipSiblings, 0, 0, 0, 0, viewport, item.Id, instance, 0);
             if (control == 0)
             {
                 continue;
             }
 
             RegisterChild(control);
+            if (item.Class == DialogControlClass.Button && (item.Style & 0xFu) == ControlConstants.BsGroupBox)
+            {
+                groupBoxes.Add(control);
+            }
+
             controls.Add(new DialogChromeControl(control, item.Class));
             if (item.Class == DialogControlClass.ComboBox)
             {
+                _pageCombos.Add(control);
                 Forward(control);
             }
+        }
+
+        // CreateWindowEx puts every new child BELOW its earlier siblings, so a group box (declared before its controls) ends up ABOVE them
+        // and WS_CLIPSIBLINGS would clip every one of them away (blank page). Only after all siblings exist can the frames go to the
+        // bottom of the z-order (one at a time, nothing is created after them): the controls of a group stay on top of its frame and keep
+        // their clipping. Group boxes are not tab stops, so the Tab order is unchanged.
+        foreach (var groupBox in groupBoxes)
+        {
+            User32.SetWindowPos(groupBox, WindowMessages.HwndBottom, 0, 0, 0, 0,
+                WindowMessages.SwpNoMove | WindowMessages.SwpNoSize | WindowMessages.SwpNoActivate);
         }
 
         ApplyChrome(controls);
@@ -1455,6 +1479,12 @@ internal sealed unsafe class SettingsDialog : NativeDialog
             User32.SetWindowPos(control, 0, rect.X, rect.Y, rect.W, rect.H,
                 WindowMessages.SwpNoZOrder | WindowMessages.SwpNoActivate | WindowMessages.SwpShowWindow);
             dialog._placed[control] = rect;
+            if (dialog._pageCombos.Contains(control))
+            {
+                // A dropdown-list combobox shrinks itself to its closed height INSIDE the SetWindowPos above (the requested height is the
+                // list height); the paint that move queued is lost with it and the combobox stayed blank until something else repainted it.
+                User32.InvalidateRect(control, null, false);
+            }
         }
 
         public void Hide(int id)

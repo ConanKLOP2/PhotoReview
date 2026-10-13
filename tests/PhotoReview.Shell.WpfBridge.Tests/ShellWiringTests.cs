@@ -17,9 +17,10 @@ using Xunit.Abstractions;
 namespace PhotoReview.Shell.WpfBridge.Tests;
 
 /// <summary>
-/// NOWPF-SHELL-WIRE-WPF-BRIDGE: đồ thị DI THẬT của shell (<see cref="ShellCompositionRoot"/>, dispatcher + vòng lặp thật, cửa sổ chủ
-/// thật) đăng ký cầu cửa sổ phụ: <see cref="IDialogService"/> và <see cref="IZoomPromptService"/> mở cửa sổ WPF thật, owner = HWND
-/// shell; cầu chỉ nạp khi dùng; dọn đúng thứ tự. Khác <see cref="SecondaryWindowBridgeTests"/> (cổng trần): ở đây đi qua đăng ký DI.
+/// NOWPF-SHELL-WIRE-WPF-BRIDGE (WP-35 GĐ5: cầu WPF đã gỡ khỏi shell): đồ thị DI THẬT của shell (<see cref="ShellCompositionRoot"/>,
+/// dispatcher + vòng lặp thật, cửa sổ chủ thật) đăng ký cổng cửa sổ phụ Win32: <see cref="IDialogService"/> và
+/// <see cref="IZoomPromptService"/> mở hộp thoại Win32 gốc, owner = HWND shell; dựng lười; dọn đúng thứ tự; KHÔNG nạp WPF.
+/// Khác <see cref="SecondaryWindowBridgeTests"/> (cầu WPF trần qua <see cref="WpfBridgePort"/> của test): ở đây đi qua đăng ký DI.
 /// </summary>
 [Trait("Category", "UI")]
 [Collection("WpfBridge")]
@@ -60,7 +61,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
                 services =>
                 {
                     services.AddSingleton<IAppPaths>(new AppPaths(root.Path, Path.Combine(root.Path, "data"), isolateConfig: true));
-                    // Cổng vắng (mô phỏng AOT/đột biến) không được mở trình soạn thảo thật của máy: launcher giả.
+                    // Cổng tạm (đột biến) không được mở trình soạn thảo thật của máy: launcher giả.
                     services.AddSingleton<IShellLauncher>(new NoLauncher());
                     configure?.Invoke(services);
                 }));
@@ -86,7 +87,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         => window.GetType().GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [window, new RoutedEventArgs()]);
 
     [Fact]
-    public async Task Registration_ResolvesTheRealPort_LazilyAndSharedByDialogsAndZoom_WithoutLoadingTheBridge()
+    public async Task Registration_ResolvesTheRealPort_LazilyAndSharedByDialogsAndZoom()
     {
         await using var harness = await BridgeHarness.StartAsync();
         await using var wired = await Wired.StartAsync(harness);
@@ -95,8 +96,8 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
 
         Assert.IsType<Win32DialogService>(dialogs);
         Assert.IsType<Win32ZoomPromptService>(zoom);
-        Assert.False(ports.Port.IsValueCreated); // chưa mở cửa sổ phụ: WpfBridgeLoader (và WPF) chưa nạp
-        Assert.Equal(0, harness.Ui.Loop.MessageFilterCount); // bộ lọc phím chỉ gắn khi cầu nạp
+        Assert.False(ports.Port.IsValueCreated); // chưa mở cửa sổ phụ: cổng (và hộp thoại) chưa dựng
+        Assert.Equal(0, harness.Ui.Loop.MessageFilterCount); // bộ lọc phím chỉ gắn khi hộp thoại modeless mở
         Assert.Same(ports.Port, wired.Ports.Port);
     }
 
@@ -118,7 +119,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         var shown = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowSettings());
         var hwnd = await harness.WaitForOwnedWindowAsync("settings shown via IDialogService");
         Assert.False(harness.IsOwnerEnabled());
-        // WP-35 GĐ3: with every page present Settings is the native Win32 dialog, so the WPF bridge (and its message filter) stays unloaded.
+        // WP-35 GĐ3: with every page present Settings is the native Win32 dialog (no WPF message filter).
         Assert.Equal(0, harness.Ui.Loop.MessageFilterCount);
         PostMessageW(hwnd, WmCommand, IdOk, 0); // Save is IDOK
         var accepted = await shown;
@@ -279,7 +280,7 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task APortRegisteredByTheTest_WinsOverTheRealBridge_AndAnAbsentBridgeFallsBack()
+    public async Task APortRegisteredByTheTest_WinsOverTheRealPort_AndNativeWindowsOpenWithoutAnyBridge()
     {
         await using var harness = await BridgeHarness.StartAsync();
         var fake = new CountingPort();
@@ -290,16 +291,16 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
             Assert.Empty(harness.OwnedVisibleWindows());
         }
 
-        await using var absent = await Wired.StartAsync(harness, s => s.AddSingleton<SecondaryWindowPortLoader>((_, _) => null));
-        // WP-35 GĐ4: Recovery là hộp thoại Win32 gốc nên mở được cả khi cầu vắng (mô phỏng AOT); đóng = trả về, dữ liệu không đổi.
+        await using var absent = await Wired.StartAsync(harness);
+        // WP-35 GĐ4/GĐ5: Recovery là hộp thoại Win32 gốc, không cần cầu; đóng = trả về, dữ liệu không đổi.
         var recovery = harness.Ui.InvokeAsync(() => absent.Dialogs.ShowRecovery());
-        BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("native recovery without the bridge"));
+        BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("native recovery"));
         await recovery;
         await harness.WaitForNoOwnedWindowAsync("native recovery closed");
 
-        // WP-35 GĐ1: cầu vắng (mô phỏng AOT) nhưng hộp thoại zoom là Win32 gốc nên vẫn mở được; đóng = huỷ = null.
+        // WP-35 GĐ1: hộp thoại zoom là Win32 gốc; đóng = huỷ = null.
         var zoom = harness.Ui.InvokeAsync(() => absent.Zoom.PromptCustomZoom(100));
-        BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("native zoom prompt without the bridge"));
+        BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("native zoom prompt"));
         Assert.Null(await zoom);
         await harness.WaitForNoOwnedWindowAsync("native zoom prompt closed");
     }

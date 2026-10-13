@@ -1,6 +1,4 @@
-using System.Collections;
 using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.Shell.Interop;
@@ -10,11 +8,10 @@ using PhotoReview.Shell.Win32.Startup;
 namespace PhotoReview.Shell.Integration.Tests.Startup;
 
 /// <summary>
-/// NOWPF-SHELL-WIRE-WPF-BRIDGE: shell THẬT (ShellStartup + DI thật, HWND trên desktop ẩn, WARP) MỞ được cửa sổ phụ WPF qua
-/// <c>IDialogService</c>/<c>IZoomPromptService</c> đăng ký mặc định (không override cổng): Settings (lưu), Recovery (không đổi dữ liệu),
-/// Diagnostics, SkippedFiles, Zoom tuỳ chọn, Benchmark modeless; rồi đóng shell khi Benchmark VÀ một hộp modal còn mở (không treo,
-/// thoát mã 0, không cửa sổ mồ côi). Project này không UseWPF nên chạm WPF bằng reflection (Application là một-cho-tiến-trình và gắn
-/// thread tạo: cả kịch bản chạy trong MỘT lần chạy shell).
+/// NOWPF-SHELL-WIRE-WPF-BRIDGE (WP-35 GĐ5: cầu WPF đã gỡ): shell THẬT (ShellStartup + DI thật, HWND trên desktop ẩn, WARP) mở được
+/// MỌI cửa sổ phụ bằng hộp thoại Win32 gốc qua <c>IDialogService</c>/<c>IZoomPromptService</c> đăng ký mặc định: Settings (lưu),
+/// Recovery (không đổi dữ liệu), Diagnostics, Zoom tuỳ chọn, Benchmark modeless; rồi đóng shell khi Benchmark VÀ một hộp modal còn mở
+/// (không treo, thoát mã 0, không cửa sổ mồ côi) và KHÔNG có assembly WPF nào được nạp trong suốt kịch bản.
 /// </summary>
 [Collection("ShellStartup")]
 [Trait("Category", "UI")]
@@ -28,7 +25,7 @@ public sealed class ShellSecondaryWindowBridgeTests
     {
         var root = ShellRun.NewRoot("wpfbridge");
         var jpeg = TestJpeg.WriteTo(Path.Combine(root, "photos", "a.jpg"));
-        // Launcher giả: nếu cầu bị đột biến/vắng, cổng tạm không được mở notepad/trình soạn thảo thật của máy.
+        // Launcher giả: nếu cổng Win32 bị đột biến/vắng, cổng tạm không được mở notepad/trình soạn thảo thật của máy.
         using var run = ShellRun.Start(root, [jpeg], configure: options => options with
         {
             ServiceOverrides = services =>
@@ -42,6 +39,8 @@ public sealed class ShellSecondaryWindowBridgeTests
         var main = run.Main!;
         var uiThread = run.OnUi(() => GetCurrentThreadId());
         var viewModel = main.ViewModel;
+
+        Assert.False(WpfLoaded(), "shell Win32 không được nạp WPF trước cửa sổ phụ nào");
 
         // 1. Settings: modal, owner = HWND shell, Lưu -> trả true và ghi config.json (SettingsStore.Changed nổ).
         var configBefore = File.Exists(run.Paths.ConfigFile) ? File.GetLastWriteTimeUtc(run.Paths.ConfigFile) : (DateTime?)null;
@@ -94,6 +93,7 @@ public sealed class ShellSecondaryWindowBridgeTests
         var modal = Open(run, () => viewModel.ShowDiagnostics());
         Assert.True(SpinWait.SpinUntil(() => OwnedWindows(uiThread, main.Hwnd).Count == 2, Bound), "benchmark + diagnostics không cùng mở");
 
+        Assert.False(WpfLoaded(), "không cửa sổ phụ nào được phép nạp WPF (WP-35 GĐ5)");
         run.RequestClose();
 
         Assert.True(run.WaitForExit(Bound), "shell không thoát khi cửa sổ phụ còn mở: " + run.Diagnostics);
@@ -132,23 +132,9 @@ public sealed class ShellSecondaryWindowBridgeTests
             : string.Join("|", Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
                 .Select(f => f + ":" + new FileInfo(f).Length + ":" + File.GetLastWriteTimeUtc(f).Ticks));
 
-    // WPF qua reflection: project test này không UseWPF (luật L-WPF); assembly nạp khi cầu mở cửa sổ phụ đầu tiên.
-    private static object OnlyVisibleWindow()
-    {
-        var application = Type.GetType("System.Windows.Application, PresentationFramework")!;
-        var current = application.GetProperty("Current")!.GetValue(null)!;
-        var windows = (IEnumerable)application.GetProperty("Windows")!.GetValue(current)!;
-        var visible = windows.Cast<object>()
-            .Where(w => (bool)w.GetType().GetProperty("IsVisible")!.GetValue(w)!)
-            .ToList();
-        return Assert.Single(visible);
-    }
-
-    private static void Click(object window, string handler)
-    {
-        var routed = Activator.CreateInstance(Type.GetType("System.Windows.RoutedEventArgs, PresentationCore")!)!;
-        window.GetType().GetMethod(handler, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [window, routed]);
-    }
+    /// <summary>Có assembly WPF nào đã nạp trong tiến trình test (shell chạy cùng tiến trình)? Project này không UseWPF nên không nạp WPF.</summary>
+    private static bool WpfLoaded() => AppDomain.CurrentDomain.GetAssemblies().Any(a =>
+        a.GetName().Name is "PresentationFramework" or "PresentationCore" or "PhotoReview.Shell.WpfBridge" or "PhotoReview.App.WpfWindows");
 
     private static List<nint> OwnedWindows(uint uiThread, nint owner)
     {
