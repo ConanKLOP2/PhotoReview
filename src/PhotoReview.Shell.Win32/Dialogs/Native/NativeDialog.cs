@@ -47,6 +47,17 @@ internal abstract unsafe class NativeDialog
     private bool _ownerDisabled;
     private bool _laidOut;
     private bool _done;
+    private bool _modeless;
+    private bool _cleanedUp;
+    private MessageLoop? _loop;
+    private ModelessFilter? _filter;
+    private Action? _closedCallback;
+    private nint _tooltip;
+    private char* _tipBuffer;
+    private int _tipCapacity;
+    private readonly Dictionary<nint, Func<int, string?>> _itemTips = [];
+    private readonly Dictionary<nint, int> _lastTipItem = [];
+    private readonly Dictionary<nint, (int, int)> _sorts = [];
     private int _result = IdCancel;
     private uint _dpi = 96;
     private int _avgCharWidth = 6;
@@ -107,6 +118,33 @@ internal abstract unsafe class NativeDialog
     /// <summary>WM_COMMAND của điều khiển khác IDOK/IDCANCEL; true = đã xử lý.</summary>
     protected virtual bool OnCommand(int id, int notification) => false;
 
+    /// <summary>
+    /// Esc / IDCANCEL từ dialog manager (không phải X/Alt+F4): true = đã xử lý (không đóng). Mặc định false = đóng như Huỷ.
+    /// Benchmark dùng để Esc huỷ lượt chạy trước, chỉ đóng khi rảnh.
+    /// </summary>
+    protected virtual bool OnCancel() => false;
+
+    /// <summary>WM_NOTIFY của điều khiển <paramref name="id"/>; true = đã xử lý và <paramref name="result"/> là giá trị trả về (DWLP_MSGRESULT).</summary>
+    protected virtual bool OnNotify(int id, int code, nint header, out nint result)
+    {
+        result = 0;
+        return false;
+    }
+
+    /// <summary>WM_HSCROLL/WM_VSCROLL của trackbar <paramref name="id"/> (<paramref name="code"/> = TB_*).</summary>
+    protected virtual void OnScroll(int id, int code)
+    {
+    }
+
+    /// <summary>Chữ + huy hiệu của dòng <paramref name="index"/> của listbox owner-draw <paramref name="id"/>.</summary>
+    protected virtual (string Text, string? Badge) ListItemText(int id, int index)
+        => (ListBoxControl.TextAt(Item(id), index), null);
+
+    /// <summary>Gọi một lần ngay trước khi cửa sổ bị huỷ (đóng bình thường, đóng từ ngoài, ngoại lệ).</summary>
+    protected virtual void OnClosed()
+    {
+    }
+
     /// <summary>Màu chữ (COLORREF) của một STATIC.</summary>
     protected virtual uint StaticTextColor(int id) => DialogColors.Text;
 
@@ -128,6 +166,7 @@ internal abstract unsafe class NativeDialog
 
         _used = true;
         _owner = owner != 0 && User32.IsWindow(owner) ? owner : 0;
+        CommonControlsInit.Ensure();
         var template = DialogTemplate.Build(Title, DialogStyle(), DialogExStyle(), Items);
         _self = GCHandle.Alloc(this);
         try
@@ -169,6 +208,86 @@ internal abstract unsafe class NativeDialog
         return _result;
     }
 
+    /// <summary>
+    /// WP-35 GĐ2: hiện hộp thoại MODELESS (không chặn, owner không bị vô hiệu hoá). Trả về ngay sau khi cửa sổ hiện; Tab/Esc/Enter do
+    /// <c>IsDialogMessage</c> trong vòng lặp của shell (bộ lọc đăng ký vào <paramref name="loop"/>; null = người gọi tự bơm, test).
+    /// Cửa sổ tự dọn khi đóng (X, nút, <see cref="Close"/>); <paramref name="closed"/> gọi đúng một lần sau khi cửa sổ đã bị huỷ.
+    /// </summary>
+    public void ShowModeless(nint owner, MessageLoop? loop = null, Action<NativeDialog>? ready = null, Action? closed = null)
+    {
+        if (_used)
+        {
+            throw new InvalidOperationException("A NativeDialog instance can be shown once.");
+        }
+
+        _used = true;
+        _closedCallback = closed;
+        _owner = owner != 0 && User32.IsWindow(owner) ? owner : 0;
+        CommonControlsInit.Ensure();
+        var template = DialogTemplate.Build(Title, DialogStyle(), DialogExStyle(), Items);
+        _self = GCHandle.Alloc(this);
+        try
+        {
+            fixed (byte* pinned = template)
+            {
+                _hwnd = User32.CreateDialogIndirectParam(Kernel32.GetModuleHandle(0), pinned, _owner, &DialogProc, GCHandle.ToIntPtr(_self));
+            }
+
+            RethrowPending();
+            if (_hwnd == 0)
+            {
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "CreateDialogIndirectParam failed.");
+            }
+        }
+        catch
+        {
+            Cleanup();
+            throw;
+        }
+
+        if (_done)
+        {
+            Cleanup();
+            return;
+        }
+
+        _modeless = true;
+        _loop = loop;
+        if (loop is not null)
+        {
+            _filter = new ModelessFilter(this);
+            loop.AddMessageFilter(_filter);
+        }
+
+        User32.ShowWindow(_hwnd, WindowMessages.SwShow);
+        User32.SetForegroundWindow(_hwnd);
+        try
+        {
+            ready?.Invoke(this);
+        }
+        catch
+        {
+            EndModal(IdCancel);
+            throw;
+        }
+    }
+
+    /// <summary>Đưa cửa sổ lên trước (khôi phục nếu đang thu nhỏ). No-op khi đã đóng.</summary>
+    public void Activate()
+    {
+        if (_hwnd == 0 || !User32.IsWindow(_hwnd))
+        {
+            return;
+        }
+
+        if (User32.IsIconic(_hwnd))
+        {
+            User32.ShowWindow(_hwnd, WindowMessages.SwRestore);
+        }
+
+        User32.SetForegroundWindow(_hwnd);
+    }
+
     /// <summary>Đóng hộp thoại như Huỷ (đóng từ ngoài, ví dụ shell đang thoát). Idempotent, gọi trên UI thread.</summary>
     public void Close() => EndModal(IdCancel);
 
@@ -182,9 +301,35 @@ internal abstract unsafe class NativeDialog
 
         _result = result;
         _done = true;
+        if (_modeless)
+        {
+            Cleanup(); // modeless: không có vòng lặp riêng nên cửa sổ được dọn ngay
+            return;
+        }
+
         if (_hwnd != 0)
         {
             User32.PostMessage(_hwnd, WindowMessages.WmNull, 0, 0); // đánh thức GetMessage của vòng lồng đang chờ
+        }
+    }
+
+    /// <summary>Bộ lọc của vòng lặp shell cho cửa sổ modeless: Tab/Esc/Enter/phím tắt qua IsDialogMessage.</summary>
+    private sealed class ModelessFilter(NativeDialog dialog) : IRawMessageFilter
+    {
+        public bool PreFilterMessage(in WindowMessage message) => false;
+
+        public bool PreFilterRawMessage(in Msg message)
+        {
+            var hwnd = dialog._hwnd;
+            if (hwnd == 0)
+            {
+                return false;
+            }
+
+            fixed (Msg* pointer = &message)
+            {
+                return User32.IsDialogMessage(hwnd, pointer);
+            }
         }
     }
 
@@ -242,7 +387,47 @@ internal abstract unsafe class NativeDialog
 
     private void Cleanup()
     {
+        if (_cleanedUp)
+        {
+            return;
+        }
+
+        _cleanedUp = true;
         _done = true;
+        if (_filter is not null)
+        {
+            _loop?.RemoveMessageFilter(_filter);
+            _filter = null;
+        }
+
+        try
+        {
+            OnClosed();
+        }
+        catch (Exception ex)
+        {
+            s_pending ??= ExceptionDispatchInfo.Capture(ex);
+        }
+
+        foreach (var list in _listViews)
+        {
+            if (User32.IsWindow(list))
+            {
+                CommonControls.RemoveWindowSubclass(list, &ListViewSubclassProc, ListViewSubclassId);
+            }
+        }
+
+        _listViews.Clear();
+        foreach (var list in _itemTips.Keys)
+        {
+            if (User32.IsWindow(list))
+            {
+                CommonControls.RemoveWindowSubclass(list, &ItemTipSubclassProc, ItemTipSubclassId);
+            }
+        }
+
+        _itemTips.Clear();
+        _lastTipItem.Clear();
         if (_ownerDisabled && User32.IsWindow(_owner))
         {
             User32.EnableWindow(_owner, true); // trước khi huỷ hộp thoại: kích hoạt trả về owner
@@ -266,10 +451,22 @@ internal abstract unsafe class NativeDialog
         DeleteObject(ref _windowBrush);
         DeleteObject(ref _inputBrush);
         _children.Clear();
+        _tooltip = 0;
+        if (_tipBuffer != null)
+        {
+            NativeMemory.Free(_tipBuffer);
+            _tipBuffer = null;
+            _tipCapacity = 0;
+        }
+
         if (_self.IsAllocated)
         {
             _self.Free();
         }
+
+        var callback = _closedCallback;
+        _closedCallback = null;
+        callback?.Invoke();
     }
 
     private static void DeleteObject(ref nint handle)
@@ -281,10 +478,18 @@ internal abstract unsafe class NativeDialog
         }
     }
 
-    private uint DialogStyle()
-        => WsDefaultDialog | DialogConstants.DsModalFrame | DialogConstants.DsNoFailCreate | (Resizable ? WindowMessages.WsThickFrame : 0);
+    /// <summary>Kiểu cửa sổ thêm (ví dụ nút thu nhỏ/phóng to của cửa sổ modeless).</summary>
+    protected virtual uint ExtraWindowStyle => 0;
 
-    private static uint DialogExStyle() => DialogConstants.WsExDlgModalFrame | DialogConstants.WsExControlParent;
+    /// <summary>Khung hộp thoại (DS_MODALFRAME): false cho cửa sổ modeless kiểu cửa sổ thường (có nút thu nhỏ/phóng to).</summary>
+    protected virtual bool UsesModalFrame => true;
+
+    private uint DialogStyle()
+        => WsDefaultDialog | (UsesModalFrame ? DialogConstants.DsModalFrame : 0) | DialogConstants.DsNoFailCreate
+            | (Resizable ? WindowMessages.WsThickFrame : 0) | ExtraWindowStyle;
+
+    private uint DialogExStyle()
+        => (UsesModalFrame ? DialogConstants.WsExDlgModalFrame : 0) | DialogConstants.WsExControlParent;
 
     // ---- WndProc ---------------------------------------------------------------------------------------------------
 
@@ -340,6 +545,21 @@ internal abstract unsafe class NativeDialog
                 EndModal(IdCancel);
                 return 1;
 
+            case ControlConstants.WmNotify:
+                return HandleNotify(hwnd, lParam);
+
+            case ControlConstants.WmDrawItem:
+                return DrawOwnerItem((byte*)lParam) ? 1 : 0;
+
+            case ControlConstants.WmHScroll:
+            case ControlConstants.WmVScroll:
+                if (lParam != 0)
+                {
+                    OnScroll(User32.GetDlgCtrlID(lParam), (int)(wParam & 0xFFFF));
+                }
+
+                return 0;
+
             case WindowMessages.WmSize:
                 if (_laidOut && (uint)wParam != SizeMinimized)
                 {
@@ -369,6 +589,7 @@ internal abstract unsafe class NativeDialog
             case DialogConstants.WmCtlColorBtn:
             case DialogConstants.WmCtlColorMsgBox:
             case DialogConstants.WmCtlColorScrollBar:
+                _ = Gdi32.SetTextColor(wParam, DialogColors.Text);
                 _ = Gdi32.SetBkColor(wParam, DialogColors.Window);
                 return _windowBrush;
 
@@ -402,11 +623,269 @@ internal abstract unsafe class NativeDialog
 
         if (id == IdCancel && notification == DialogConstants.BnClicked)
         {
-            EndModal(IdCancel);
+            if (!OnCancel())
+            {
+                EndModal(IdCancel);
+            }
+
             return true;
         }
 
         return OnCommand(id, notification);
+    }
+
+    private nint HandleNotify(nint hwnd, nint lParam)
+    {
+        var from = *(nint*)lParam;
+        var code = *(int*)(lParam + 16);
+        if (code == ControlConstants.TtnGetDispInfo)
+        {
+            ProvideTipText(lParam);
+            return 0;
+        }
+
+        var id = from != 0 ? User32.GetDlgCtrlID(from) : 0;
+        if (code == ControlConstants.NmCustomDraw && IsButton(from))
+        {
+            // Nút/checkbox/radio/group box có chủ đề: chữ lấy màu từ chủ đề (tối xám với radio/group box) - đặt màu chữ sáng ở PREPAINT.
+            if (*(uint*)(lParam + 24) == ControlConstants.CddsPrePaint)
+            {
+                _ = Gdi32.SetTextColor(*(nint*)(lParam + 32), DialogColors.TextStrong);
+            }
+
+            User32.SetWindowLongPtr(hwnd, DialogConstants.DwlpMsgResult, ControlConstants.CdrfDoDefault);
+            return 1;
+        }
+
+        if (OnNotify(id, code, lParam, out var result))
+        {
+            User32.SetWindowLongPtr(hwnd, DialogConstants.DwlpMsgResult, result);
+            return 1;
+        }
+
+        return 0;
+    }
+
+    private const nuint ListViewSubclassId = 0x4C563335; // "LV35"
+    private readonly List<nint> _listViews = [];
+
+    /// <summary>
+    /// Header của listview gửi NM_CUSTOMDRAW cho listview (cha của header), listview KHÔNG chuyển lên hộp thoại - nên subclass listview để
+    /// tự vẽ header tối (<see cref="ListViewControl.DrawHeaderItem"/>; chủ đề ItemsView vẽ chữ xám khó đọc).
+    /// </summary>
+    private void HookListView(nint list)
+    {
+        _listViews.Add(list);
+        CommonControls.SetWindowSubclass(list, &ListViewSubclassProc, ListViewSubclassId, (nuint)GCHandle.ToIntPtr(_self));
+    }
+
+    [UnmanagedCallersOnly]
+    private static nint ListViewSubclassProc(nint hwnd, uint message, nint wParam, nint lParam, nuint id, nuint refData)
+    {
+        try
+        {
+            if (message == ControlConstants.WmNotify && lParam != 0 && *(int*)(lParam + 16) == ControlConstants.NmCustomDraw
+                && *(nint*)lParam != 0 && *(nint*)lParam == ListViewControl.Header(hwnd) && refData != 0
+                && GCHandle.FromIntPtr((nint)refData).Target is NativeDialog dialog)
+            {
+                var sort = dialog._sorts.TryGetValue(hwnd, out var state) ? state : (-1, 0);
+                return ListViewControl.DrawHeaderItem(lParam, dialog.Dx(3), sort.Item1, sort.Item2);
+            }
+
+            if (message == ControlConstants.WmNcDestroy)
+            {
+                CommonControls.RemoveWindowSubclass(hwnd, &ListViewSubclassProc, id);
+            }
+        }
+        catch (Exception)
+        {
+            // Ngoại lệ không được vượt ranh giới unmanaged; header chỉ là phần thưởng thẩm mỹ.
+        }
+
+        return CommonControls.DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+
+    private static bool IsButton(nint hwnd)
+    {
+        if (hwnd == 0)
+        {
+            return false;
+        }
+
+        char* name = stackalloc char[16];
+        var length = User32.GetClassName(hwnd, name, 16);
+        return length == 6 && new ReadOnlySpan<char>(name, length).Equals("Button", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool DrawOwnerItem(byte* drawItem)
+    {
+        if (drawItem == null)
+        {
+            return false;
+        }
+
+        var id = *(int*)(drawItem + 4);
+        var itemId = *(int*)(drawItem + 8);
+        var control = *(nint*)(drawItem + 24);
+        (string Text, string? Badge) item = itemId >= 0 ? ListItemText(id, itemId) : (string.Empty, null);
+        var font = control != 0 ? (nint)User32.SendMessage(control, DialogConstants.WmGetFont, 0, 0) : 0;
+        ListBoxControl.DrawItem(drawItem, item.Text, item.Badge, font, Dx(4));
+        return true;
+    }
+
+    // ---- tooltip -----------------------------------------------------------------------------------------------------
+
+    private const nuint ItemTipSubclassId = 0x57543335; // "WT35"
+
+    /// <summary>Tooltip chữ cố định cho điều khiển <paramref name="id"/> (hiện khi rê chuột, dark theo bảng màu).</summary>
+    protected void SetTooltip(int id, string text)
+    {
+        var control = Item(id);
+        if (control == 0 || EnsureTooltip() == 0)
+        {
+            return;
+        }
+
+        fixed (char* p = text)
+        {
+            AddTool(control, (nint)p);
+        }
+    }
+
+    /// <summary>
+    /// Tooltip THEO DÒNG của listbox <paramref name="id"/>: <paramref name="textOf"/>(chỉ số dòng dưới con trỏ) trả chữ (null/rỗng =
+    /// không hiện). Listbox được subclass để đổi dòng thì tooltip hiện lại (một tool cho cả listbox, nên cuộn không lệch vùng).
+    /// </summary>
+    protected void SetItemTooltips(int id, Func<int, string?> textOf)
+    {
+        var list = Item(id);
+        if (list == 0 || EnsureTooltip() == 0)
+        {
+            return;
+        }
+
+        _itemTips[list] = textOf;
+        _lastTipItem[list] = -1;
+        AddTool(list, ControlConstants.LpstrTextCallback);
+        CommonControls.SetWindowSubclass(list, &ItemTipSubclassProc, ItemTipSubclassId, (nuint)GCHandle.ToIntPtr(_self));
+    }
+
+    private nint EnsureTooltip()
+    {
+        if (_tooltip != 0)
+        {
+            return _tooltip;
+        }
+
+        const uint WsPopup = 0x80000000;
+        const uint WsExTopmost = 0x00000008;
+        const int UseDefault = unchecked((int)0x80000000);
+        _tooltip = User32.CreateWindowEx(WsExTopmost, ControlConstants.TooltipClass, string.Empty,
+            WsPopup | ControlConstants.TtsAlwaysTip | ControlConstants.TtsNoPrefix,
+            UseDefault, UseDefault, UseDefault, UseDefault, _hwnd, 0, Kernel32.GetModuleHandle(0), 0);
+        if (_tooltip != 0)
+        {
+            // Không visual style để TTM_SETTIPBKCOLOR/TEXTCOLOR có hiệu lực (chủ đề hệ thống sẽ bỏ qua màu).
+            Uxtheme.SetWindowTheme(_tooltip, string.Empty, string.Empty);
+            User32.SendMessage(_tooltip, ControlConstants.TtmSetTipBkColor, (nint)DialogColors.FromKey("Dark.Tooltip"), 0);
+            User32.SendMessage(_tooltip, ControlConstants.TtmSetTipTextColor, (nint)DialogColors.TextStrong, 0);
+            User32.SendMessage(_tooltip, ControlConstants.TtmSetMaxTipWidth, 0, Dx(240));
+        }
+
+        return _tooltip;
+    }
+
+    private void AddTool(nint control, nint text)
+    {
+        byte* tool = stackalloc byte[ControlConstants.ToolInfoSize];
+        new Span<byte>(tool, ControlConstants.ToolInfoSize).Clear();
+        *(uint*)tool = ControlConstants.ToolInfoSize;
+        *(uint*)(tool + 4) = ControlConstants.TtfIdIsHwnd | ControlConstants.TtfSubclass;
+        *(nint*)(tool + 8) = _hwnd;
+        *(nint*)(tool + 16) = control;
+        *(nint*)(tool + 48) = text;
+        User32.SendMessage(_tooltip, ControlConstants.TtmAddTool, 0, (nint)tool);
+    }
+
+    /// <summary>Số tool đã đăng ký (test).</summary>
+    internal int TooltipToolCount => _tooltip == 0 ? 0 : (int)User32.SendMessage(_tooltip, ControlConstants.TtmGetToolCount, 0, 0);
+
+    /// <summary>Chữ tooltip hiện dành cho dòng <paramref name="index"/> của listbox <paramref name="id"/> (test).</summary>
+    internal string? ItemTooltipText(int id, int index)
+        => _itemTips.TryGetValue(Item(id), out var provider) ? provider(index) : null;
+
+    private void ProvideTipText(nint header)
+    {
+        // TTF_IDISHWND: idFrom = HWND của điều khiển; NMTTDISPINFOW.lpszText ở offset 24.
+        var control = *(nint*)(header + 8);
+        string? text = null;
+        if (_itemTips.TryGetValue(control, out var provider))
+        {
+            Point point = default;
+            if (User32.GetCursorPos(&point))
+            {
+                User32.ScreenToClient(control, &point);
+                var index = ListBoxControl.ItemFromPoint(control, point.X, point.Y);
+                _lastTipItem[control] = index;
+                text = index >= 0 ? provider(index) : null;
+            }
+        }
+
+        text ??= string.Empty;
+        EnsureTipBuffer(text.Length + 1);
+        text.AsSpan().CopyTo(new Span<char>(_tipBuffer, text.Length));
+        _tipBuffer[text.Length] = (char)0;
+        *(char**)(header + 24) = _tipBuffer;
+    }
+
+    private void EnsureTipBuffer(int chars)
+    {
+        if (_tipCapacity >= chars)
+        {
+            return;
+        }
+
+        var capacity = Math.Max(chars, 256);
+        _tipBuffer = _tipBuffer == null
+            ? (char*)NativeMemory.Alloc((nuint)capacity, sizeof(char))
+            : (char*)NativeMemory.Realloc(_tipBuffer, (nuint)capacity * sizeof(char));
+        _tipCapacity = capacity;
+    }
+
+    [UnmanagedCallersOnly]
+    private static nint ItemTipSubclassProc(nint hwnd, uint message, nint wParam, nint lParam, nuint id, nuint refData)
+    {
+        try
+        {
+            if (message == ControlConstants.WmMouseMove && refData != 0
+                && GCHandle.FromIntPtr((nint)refData).Target is NativeDialog dialog)
+            {
+                dialog.OnItemTipMouseMove(hwnd, (short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF));
+            }
+            else if (message == ControlConstants.WmNcDestroy)
+            {
+                CommonControls.RemoveWindowSubclass(hwnd, &ItemTipSubclassProc, id);
+            }
+        }
+        catch (Exception)
+        {
+            // Ngoại lệ không được vượt ranh giới unmanaged; tooltip chỉ là phần thưởng.
+        }
+
+        return CommonControls.DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+
+    private void OnItemTipMouseMove(nint list, int x, int y)
+    {
+        var index = ListBoxControl.ItemFromPoint(list, x, y);
+        if (_lastTipItem.TryGetValue(list, out var last) && last != index)
+        {
+            _lastTipItem[list] = index;
+            if (_tooltip != 0)
+            {
+                User32.SendMessage(_tooltip, ControlConstants.TtmPop, 0, 0); // hiện lại với chữ của dòng mới
+            }
+        }
     }
 
     // ---- khởi tạo / bố cục / DPI ----------------------------------------------------------------------------------------
@@ -423,6 +902,11 @@ internal abstract unsafe class NativeDialog
             var child = User32.GetDlgItem(hwnd, item.Id);
             if (child != 0)
             {
+                if (item.Class == DialogControlClass.ListView)
+                {
+                    HookListView(child);
+                }
+
                 _children.Add(child);
                 controls.Add(new DialogChromeControl(child, item.Class));
             }
@@ -562,6 +1046,33 @@ internal abstract unsafe class NativeDialog
         if (child != 0)
         {
             User32.MoveWindow(child, x, y, Math.Max(0, width), Math.Max(0, height), true);
+        }
+    }
+
+    /// <summary>Chiều cao dòng (px) của listbox owner-draw cố định; gọi lại mỗi lần bố cục (đổi DPI/font).</summary>
+    protected void SetListItemHeight(int id, int heightPx)
+    {
+        var child = Item(id);
+        if (child != 0)
+        {
+            User32.SendMessage(child, ControlConstants.LbSetItemHeight, 0, Math.Max(1, heightPx));
+        }
+    }
+
+    /// <summary>Mũi tên sắp xếp của header listview <paramref name="id"/>: <paramref name="direction"/> 0 = không, 1 = tăng, 2 = giảm.</summary>
+    protected void SetListViewSort(int id, int column, int direction)
+    {
+        var list = Item(id);
+        if (list == 0)
+        {
+            return;
+        }
+
+        _sorts[list] = (column, direction);
+        var header = ListViewControl.Header(list);
+        if (header != 0)
+        {
+            User32.InvalidateRect(header, null, true);
         }
     }
 
@@ -759,6 +1270,12 @@ internal abstract unsafe class NativeDialog
         {
             x = work.Left + (work.Right - work.Left - frame.Width) / 2;
             y = work.Top + (work.Bottom - work.Top - frame.Height) / 2;
+        }
+
+        if (Resizable)
+        {
+            // Cửa sổ kéo giãn lớn hơn vùng làm việc (màn hình nhỏ/CI 1024x768): co lại cho vừa (người dùng kéo to lại được).
+            frame = (Math.Min(frame.Width, work.Right - work.Left), Math.Min(frame.Height, work.Bottom - work.Top));
         }
 
         x = Math.Max(work.Left, Math.Min(x, work.Right - frame.Width));

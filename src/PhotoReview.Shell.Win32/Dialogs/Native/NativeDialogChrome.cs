@@ -54,9 +54,62 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
     internal const string EditTheme = "DarkMode_CFD";
     internal const string ListTheme = "DarkMode_Explorer";
 
+    // WP-35 GĐ2: combobox (ô chọn + nút thả = DarkMode_CFD như ô nhập; danh sách thả là một listbox riêng = DarkMode_Explorer),
+    // listview report (thân = DarkMode_Explorer, header = DarkMode_ItemsView), progress/trackbar (DarkMode_Explorer).
+    internal const string ComboTheme = "DarkMode_CFD";
+    internal const string ComboListTheme = "DarkMode_Explorer";
+    internal const string ListViewTheme = "DarkMode_Explorer";
+    internal const string HeaderTheme = "DarkMode_ItemsView";
+    internal const string ProgressTheme = "DarkMode_Explorer";
+    internal const string TrackbarTheme = "DarkMode_Explorer";
+    internal const string TooltipTheme = "DarkMode_Explorer";
+    internal const string ClassicTheme = "";
+
+    private static bool IsRadioOrGroupBox(nint hwnd)
+    {
+        var type = (uint)User32.GetWindowLongPtr(hwnd, WindowMessages.GwlStyle) & 0xF;
+        return type is 4 /* BS_RADIOBUTTON */ or 9 /* BS_AUTORADIOBUTTON */ or 7 /* BS_GROUPBOX */;
+    }
+
     private static readonly Lazy<DarkModeMenus> Menus = new(DarkModeMenus.CreateForCurrentSystem);
 
     public static DarkDialogChrome Instance { get; } = new();
+
+    /// <summary>Chủ đề uxtheme của một lớp điều khiển (null = không đổi).</summary>
+    internal static string? ThemeFor(DialogControlClass controlClass) => controlClass switch
+    {
+        DialogControlClass.Button => ButtonTheme,
+        DialogControlClass.Edit => EditTheme,
+        DialogControlClass.ListBox => ListTheme,
+        DialogControlClass.ComboBox => ComboTheme,
+        DialogControlClass.ListView => ListViewTheme,
+        DialogControlClass.Progress => ClassicTheme,
+        DialogControlClass.Trackbar => TrackbarTheme,
+        _ => null,
+    };
+
+    /// <summary>Phần con có cửa sổ riêng: danh sách thả của combobox, header của listview.</summary>
+    private static unsafe void ApplyParts(DarkModeMenus menus, DialogChromeControl control)
+    {
+        if (control.Class == DialogControlClass.ComboBox)
+        {
+            var list = ComboBoxControl.ListWindow(control.Hwnd);
+            if (list != 0)
+            {
+                menus.TryAllowForWindow(list);
+                Uxtheme.SetWindowTheme(list, ComboListTheme, null);
+            }
+        }
+        else if (control.Class == DialogControlClass.ListView)
+        {
+            var header = (nint)User32.SendMessage(control.Hwnd, ControlConstants.LvmGetHeader, 0, 0);
+            if (header != 0)
+            {
+                menus.TryAllowForWindow(header);
+                Uxtheme.SetWindowTheme(header, HeaderTheme, null);
+            }
+        }
+    }
 
     public void Apply(nint dialog, IReadOnlyList<DialogChromeControl> controls)
     {
@@ -75,17 +128,21 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
 
             foreach (var control in controls)
             {
-                var theme = control.Class switch
+                var theme = ThemeFor(control.Class);
+                if (control.Class == DialogControlClass.Button && IsRadioOrGroupBox(control.Hwnd))
                 {
-                    DialogControlClass.Button => ButtonTheme,
-                    DialogControlClass.Edit => EditTheme,
-                    DialogControlClass.ListBox => ListTheme,
-                    _ => null,
-                };
+                    // Chủ đề tối vẽ chữ radio/group box màu xám đậm gần như vô hình trên nền tối (thấy ở ảnh chụp GĐ2): dùng
+                    // dáng cổ điển, chữ do WM_CTLCOLORSTATIC tô sáng.
+                    theme = ClassicTheme;
+                }
+
                 if (theme is not null)
                 {
-                    Uxtheme.SetWindowTheme(control.Hwnd, theme, null);
+                    // "" + "" = không chủ đề (dáng cổ điển); chỉ "" cho sub-app name sẽ rơi về chủ đề sáng mặc định.
+                    Uxtheme.SetWindowTheme(control.Hwnd, theme, theme.Length == 0 ? string.Empty : null);
                 }
+
+                ApplyParts(menus, control);
             }
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)

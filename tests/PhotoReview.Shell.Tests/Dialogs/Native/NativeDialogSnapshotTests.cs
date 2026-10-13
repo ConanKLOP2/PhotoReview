@@ -83,41 +83,82 @@ public sealed unsafe class NativeDialogSnapshotTests
         ShowOnOwner(dialog, (d, _) =>
         {
             beforeCapture?.Invoke(d);
-            var rect = WindowRect(d.Hwnd);
-            var width = Width(rect);
-            var height = Height(rect);
-            var screen = User32.GetDC(0);
-            var memory = CreateCompatibleDC(screen);
-            var bitmap = CreateCompatibleBitmap(screen, width, height);
-            var old = Gdi32.SelectObject(memory, bitmap);
-            try
-            {
-                Drain(d); // let the first WM_PAINT/WM_ERASEBKGND of the controls run
-                PrintWindow(d.Hwnd, memory, 0);
-                var info = new byte[40];
-                BitConverter.GetBytes(40).CopyTo(info, 0);
-                BitConverter.GetBytes(width).CopyTo(info, 4);
-                BitConverter.GetBytes(-height).CopyTo(info, 8);
-                BitConverter.GetBytes((short)1).CopyTo(info, 12);
-                BitConverter.GetBytes((short)32).CopyTo(info, 14);
-                var pixels = new byte[width * height * 4];
-                fixed (byte* p = pixels)
-                fixed (byte* i = info)
-                {
-                    Gdi32.SelectObject(memory, old);
-                    _ = GetDIBits(memory, bitmap, 0, (uint)height, p, i, 0);
-                }
-
-                File.WriteAllBytes(Path.Combine(directory, name + ".png"), EncodePng(pixels, width, height));
-            }
-            finally
-            {
-                Gdi32.DeleteObject(bitmap);
-                DeleteDC(memory);
-                _ = User32.ReleaseDC(0, screen);
-            }
-
+            Drain(d); // let the first WM_PAINT/WM_ERASEBKGND of the controls run
+            CaptureWindow(Path.Combine(directory, name + ".png"), d.Hwnd);
             d.Close();
+        });
+    }
+
+    /// <summary>PrintWindow of one top-level or popup window to a PNG (the combo drop-down list is a window of its own).</summary>
+    private static void CaptureWindow(string path, nint hwnd)
+    {
+        var rect = WindowRect(hwnd);
+        var width = Width(rect);
+        var height = Height(rect);
+        var screen = User32.GetDC(0);
+        var memory = CreateCompatibleDC(screen);
+        var bitmap = CreateCompatibleBitmap(screen, width, height);
+        var old = Gdi32.SelectObject(memory, bitmap);
+        try
+        {
+            PrintWindow(hwnd, memory, 0);
+            var info = new byte[40];
+            BitConverter.GetBytes(40).CopyTo(info, 0);
+            BitConverter.GetBytes(width).CopyTo(info, 4);
+            BitConverter.GetBytes(-height).CopyTo(info, 8);
+            BitConverter.GetBytes((short)1).CopyTo(info, 12);
+            BitConverter.GetBytes((short)32).CopyTo(info, 14);
+            var pixels = new byte[width * height * 4];
+            fixed (byte* p = pixels)
+            fixed (byte* i = info)
+            {
+                Gdi32.SelectObject(memory, old);
+                _ = GetDIBits(memory, bitmap, 0, (uint)height, p, i, 0);
+            }
+
+            File.WriteAllBytes(path, EncodePng(pixels, width, height));
+        }
+        finally
+        {
+            Gdi32.DeleteObject(bitmap);
+            DeleteDC(memory);
+            _ = User32.ReleaseDC(0, screen);
+        }
+    }
+
+    /// <summary>WP-35 GĐ2: the new controls (combo + its drop-down list, multi-select badge list, report listview, progress, trackbar, ...).</summary>
+    [Fact]
+    public void WriteSnapshots_OfTheControlGallery()
+    {
+        var directory = OutputDirectory;
+        if (string.IsNullOrEmpty(directory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        using var scope = TestLocalization.Use(TestLocalization.English);
+        OnSta(() =>
+        {
+            using var styles = ActivateVisualStyles();
+            Snap(directory, "gallery", new ControlGalleryDialog());
+            Snap(directory, "gallery-150", new ControlGalleryDialog(), d => ChangeDpi(d, 144));
+            Snap(directory, "gallery-sorted", new ControlGalleryDialog(), d =>
+            {
+                ((ControlGalleryDialog)d).SortBy(1);
+                ((ControlGalleryDialog)d).SortBy(1);
+            });
+            ShowOnOwner(new ControlGalleryDialog(), (d, _) =>
+            {
+                var combo = Item(d, ControlGalleryDialog.Combo);
+                ComboBoxControl.Drop(combo, true);
+                Drain(d);
+                var list = ComboBoxControl.ListWindow(combo);
+                CaptureWindow(Path.Combine(directory, "gallery-combo-list.png"), list);
+                ComboBoxControl.Drop(combo, false);
+                d.Close();
+            });
+            return 0;
         });
     }
 
