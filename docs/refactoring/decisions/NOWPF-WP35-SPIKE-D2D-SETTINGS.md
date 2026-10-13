@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-SPIKE-D2D-SETTINGS
-order: 1230
+order: 1260
 summary: |-
   Spike (CHƯA XÁC NHẬN): trang Display của Settings dựng bằng MỘT bề mặt Direct2D (tự vẽ + lai với EDIT/COMBOBOX Win32 thật). Đo: cuộn đúng pixel 0/15 bước lệch (100 %/150 %, GPU + WARP, so ảnh mới và so ảnh cắt từ khung cao), khung P95 <= 2,5 ms tới GPU xong, mở trang 45-83 ms (bản hiện tại 76 ms trang + 66 ms cửa sổ). Bản hiện tại vá WS_CLIPSIBLINGS xanh ở chrome tối, còn đỏ ở chrome cổ điển. Công sức chuyển 7 trang + khung ước 85-110 giờ-agent. Khuyến nghị: GIỮ BẢN VÁ cho chrome tối, ghi D2D lai làm đường lùi.
 ---
