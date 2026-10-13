@@ -44,7 +44,7 @@ Defaults/Reset trang, xung đột (bắt buộc/tuỳ chọn/bí danh Return-Ent
 đổi ngôn ngữ, bố cục en/vi ở 100 %/150 %, cuộn tới ô cuối, màu, rò GDI/USER sau 5 lượt.
 
 Chạy 2026-10-13 (desktop ẩn `PRSetKeys`, filter CI): `Shell.Tests` 1 349, `Shell.Integration.Tests` 150 (1 ca đo độ trễ `InputLatency_ArrowPan` đỏ lúc máy tải, đạt khi chạy riêng),
-`WpfBridge.Tests` 39, `Architecture.Tests` 158, `App.Tests` 2 583. `PhotoReview.slnx -c Release`: 0 cảnh báo. Lặp 50 lượt bộ Shortcuts (45 ca/lượt): xem kết quả cuối PR.
+`WpfBridge.Tests` 39, `Architecture.Tests` 158, `App.Tests` 2 583. `PhotoReview.slnx -c Release`: 0 cảnh báo. Lặp 50 lượt bộ Shortcuts (45 ca/lượt): 50 đạt, 0 lỗi, không lượt nào treo.
 ILC: `tools/check-aot-warnings.ps1 -RequireToolchain` = 0 cảnh báo (PhotoReview.exe 15,2 MB). Không nạp WPF (`LazyLoadTests` giữ nguyên, đạt).
 
 Ảnh `PrintWindow` (hộp thoại ẩn, comctl32 v6) `settings-shortcuts-{top,top-150,conflict,bottom,bottom-150}-{en,vi}.png`: đã xem; hai cột, ô thẳng cột, nhãn Việt xuống dòng không
