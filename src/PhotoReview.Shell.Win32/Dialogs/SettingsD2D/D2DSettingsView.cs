@@ -1406,4 +1406,89 @@ internal sealed class D2DSettingsView
 
     private D2DAccessibleNode Node(D2DWidget w, string name, bool? isChecked, string? value, int level, PxRect bounds, bool? expanded = null)
         => new(w.Id, name, w.Role, bounds, w.Enabled, w.Focusable, ReferenceEquals(_focused, w), isChecked, value, expanded, level);
+
+    // ---- hành động từ UIA (provider D2DUiaProvider) ----------------------------------------------------------------------
+    // Mỗi hàm đi cùng đường với chuột/bàn phím (Toggle/SetSlider/ButtonInvoked/NotifyChanged) nên Changed/ButtonInvoked phát như
+    // thường. Trả false khi phần tử đang tắt (provider đổi thành UIA_E_ELEMENTNOTENABLED).
+
+    /// <summary>UIA TogglePattern.Toggle: như bấm vào ô tick.</summary>
+    public bool UiaToggle(D2DCheckWidget check)
+    {
+        if (!check.Enabled)
+        {
+            return false;
+        }
+
+        Toggle(check);
+        return true;
+    }
+
+    /// <summary>UIA InvokePattern.Invoke: như bấm nút ở chân.</summary>
+    public bool UiaInvoke(D2DButtonWidget button)
+    {
+        if (!button.Enabled)
+        {
+            return false;
+        }
+
+        ButtonInvoked?.Invoke(button);
+        return true;
+    }
+
+    /// <summary>UIA ValuePattern.SetValue trên ô nhập: lọc như khi gõ (ô số từ chối chữ). Trả false khi tắt hoặc bị từ chối.</summary>
+    public bool UiaSetText(D2DFieldWidget field, string text, out bool rejected)
+    {
+        rejected = false;
+        if (!field.Enabled)
+        {
+            return false;
+        }
+
+        if (text.Length > 0)
+        {
+            var probe = new D2DTextBox(field.Box.NumericOnly, field.Box.MaxLength, field.Box.AllowDecimal);
+            if (!probe.Insert(text) || probe.Text != text)
+            {
+                rejected = true;
+                return false;
+            }
+        }
+
+        field.Box.Text = text;
+        ResetCaret();
+        NotifyChanged(field);
+        return true;
+    }
+
+    /// <summary>UIA RangeValuePattern.SetValue: giá trị đã kiểm khoảng.</summary>
+    public bool UiaSetSlider(D2DSliderWidget slider, int value)
+    {
+        if (!slider.Enabled)
+        {
+            return false;
+        }
+
+        SetSlider(slider, value);
+        return true;
+    }
+
+    /// <summary>UIA ExpandCollapsePattern: mở/đóng danh sách của combobox.</summary>
+    public bool UiaSetExpanded(D2DComboWidget combo, bool expanded)
+    {
+        if (!combo.Enabled)
+        {
+            return false;
+        }
+
+        if (expanded)
+        {
+            OpenCombo(combo);
+        }
+        else if (ReferenceEquals(_openCombo, combo))
+        {
+            CloseCombo();
+        }
+
+        return true;
+    }
 }
