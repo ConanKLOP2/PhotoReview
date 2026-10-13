@@ -38,6 +38,9 @@ Seven xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`,
 
 `tests/PhotoReview.TestSupport/PropertyRunner.cs` runs seeded random properties (`Properties/` folders of Core/Imaging tests; no FsCheck, the offline restore has no such package). CI uses fixed seeds 1..3. Set `PHOTOREVIEW_PROP_SEED=<int>` to replay one seed or `random` for one fresh seed; every failure message names the seed, the iteration and this variable.
 
+## Stale-preview tests (INV-1)
+
+"An old preview overwrites the new one" is tested without time: every decode, thumbnail, zoom original and refresh stat is a gate the test opens in the order it chooses (`App.Tests/Coordinators/StalePreviewHarness` + `StalePreviewOverwriteTests`; shell layer `Shell.Tests/Viewing/PresentationStaleOrderTests`; real shell `Shell.Integration.Tests/Startup/ShellStalePreviewTests`). The invariant is checked on the whole sink event log, not only the final state. Table of paths x orderings, how to add a case: [NOWPF-STALEPREVIEW-TESTS](refactoring/decisions/NOWPF-STALEPREVIEW-TESTS.md).
 ## Mutation tests
 
 [Stryker.NET](MUTATION-TESTING.md) measures how well the tests pin behaviour (manual, not part of CI): how to run it safely and the 2026-10-03 baseline.
