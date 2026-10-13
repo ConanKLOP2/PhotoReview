@@ -177,10 +177,13 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
     /// single colour equal to the page background: the signature of a control painted over by a sibling above it. Group boxes are skipped
     /// (their rectangle legitimately is mostly background) and so are controls without text that have no border of their own.
     /// </summary>
-    private static List<string> BlankControls(SettingsDialog dialog, byte[] pixels, int width, int height)
+    internal static List<string> BlankControls(SettingsDialog dialog, byte[] pixels, int width, int height)
+        => BlankControls(dialog, pixels, width, height, WindowRect(dialog.Hwnd));
+
+    /// <summary>Như trên, nhưng <paramref name="origin"/> là gốc (toạ độ màn hình) của ảnh <paramref name="pixels"/>: cửa sổ hộp thoại hoặc vùng client của viewport.</summary>
+    internal static List<string> BlankControls(SettingsDialog dialog, byte[] pixels, int width, int height, Rect origin)
     {
         var result = new List<string>();
-        var origin = WindowRect(dialog.Hwnd);
         var viewportRect = WindowRect(H(dialog, SettingsDialog.ViewportId(dialog.ActivePageIndex)));
         var background = DominantColor(pixels, width, height, viewportRect.Left - origin.Left, viewportRect.Top - origin.Top,
             viewportRect.Right - origin.Left, viewportRect.Bottom - origin.Top);
@@ -269,7 +272,7 @@ public sealed unsafe class SettingsScrollRepaintFixTests(ITestOutputHelper outpu
     /// static that neither scrolls nor tracks hover. <c>PHOTOREVIEW_SCROLL_CURSOR_OVER_PAGE=1</c> parks it over the page instead (reproduces
     /// that CI condition on an interactive desktop).
     /// </summary>
-    private static void ParkCursor(SettingsDialog dialog)
+    internal static void ParkCursor(SettingsDialog dialog)
     {
         var overPage = Environment.GetEnvironmentVariable("PHOTOREVIEW_SCROLL_CURSOR_OVER_PAGE") == "1";
         var target = WindowRect(H(dialog, overPage ? SettingsDialog.ViewportId(dialog.ActivePageIndex) : SettingsDialog.HeaderId));

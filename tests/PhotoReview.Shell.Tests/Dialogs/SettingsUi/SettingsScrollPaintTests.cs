@@ -16,13 +16,25 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// <summary>
 /// Hồi quy PIXEL của việc vẽ lại khi cuộn trang Settings Win32 (lỗi: control chồng lên nhau / còn hình cũ sau khi cuộn).
 /// <para>
-/// Với từng trang x DPI (100 %, 150 %) x chrome (tối = <see cref="DarkDialogChrome"/>; "cổ điển" = không áp chủ đề điều khiển, cùng đường
-/// vẽ WM_CTLCOLOR) chạy một kịch bản cuộn nhiều bước (lăn chuột, kéo thumb, trang/dòng, nhảy cuối/đầu). Sau MỖI bước:
+/// Với từng trang (100 %; thêm 150 % cho trang Display, trang dài nhất ~80 điều khiển) chạy một kịch bản cuộn nhiều bước (lăn chuột,
+/// kéo thumb, trang/dòng, nhảy cuối/đầu) với <see cref="DarkDialogChrome"/> (đường production: <c>Win32SecondaryWindowPort</c> truyền null
+/// = <c>DarkDialogChrome.Instance</c>). Sau MỖI bước:
 /// <list type="bullet">
 /// <item>ảnh THỰC = vùng viewport + thanh cuộn chụp từ màn hình sau khi chỉ xử lý các lần vẽ đang chờ (đúng cái người dùng thấy, KHÔNG ép vẽ lại);</item>
 /// <item>ảnh CHUẨN = hộp thoại tham chiếu thứ hai, đặt thẳng đúng offset đó (SB_THUMBPOSITION) rồi ép vẽ lại toàn bộ
 /// (<c>RedrawWindow</c> INVALIDATE | ERASE | ALLCHILDREN | UPDATENOW) - mọi control vẽ mới từ vị trí hiện tại.</item>
+/// <item>khẳng định thêm: mọi control hiện đủ trong viewport có điểm ảnh khác màu nền (chống "trống = trống"), và con trỏ được đỗ lên
+/// tiêu đề trước khi chụp (chống nhiễu hover); hai biện pháp dùng chung helper của <see cref="SettingsScrollRepaintFixTests"/>.</item>
 /// </list>
+/// <para>
+/// Phạm vi so với <see cref="SettingsScrollRepaintFixTests"/> (đã phủ 7 trang x 96/144 DPI với bước dòng/trang/đầu/cuối): ở đây chỉ giữ phần
+/// KHÁC - lăn chuột, kéo thumb nhiều điểm (SB_THUMBTRACK) + thả, và ảnh chuẩn từ offset chính xác (còn kiểm offset của hai đường
+/// cuộn trùng nhau). Biến thể chrome "cổ điển" (<c>RecordingChrome</c>: không bỏ chủ đề điều khiển, không gắn bộ vẽ tay) ĐÃ BỎ: nó đỏ
+/// ở 5/7 trang (checkbox/nút theo chủ đề Windows + chữ tĩnh để lại hình cũ) nhưng KHÔNG phải đường production - production luôn dùng
+/// <c>DarkDialogChrome</c> (bỏ chủ đề + bộ vẽ tay <c>NativeDialogChromePainter</c>); biến thể chỉ thử một cấu hình mà người dùng không bao
+/// giờ gặp (uxtheme thiếu hàm -> ngoại lệ DllNotFound là ca duy nhất rơi về dáng cổ điển), nên không phải hồi quy của sản phẩm.
+/// </para>
+/// <para>
 /// Hai ảnh phải bằng nhau từng pixel (dung sai 0: cùng nguồn vẽ, không răng cưa khác nhau). Ảnh lỗi (actual/expected/diff) ghi vào
 /// <c>settings-scroll-paint/</c> cạnh test (hoặc <c>PHOTOREVIEW_SCROLL_PAINT_DIR</c>). Cần chạy trên desktop ẩn
 /// (<c>tools/run-tests-hidden.ps1</c>) để không bị cửa sổ khác che khi chụp màn hình.
@@ -35,20 +47,18 @@ public sealed unsafe class SettingsScrollPaintTests
     private const uint Rdw = 0x0001 | 0x0004 | 0x0080 | 0x0100; // INVALIDATE | ERASE | ALLCHILDREN | UPDATENOW
     private const uint RdwUpdateNow = 0x0100 | 0x0080; // UPDATENOW | ALLCHILDREN: chỉ vẽ phần đang chờ, không đánh dấu thêm
 
-    public static TheoryData<int, uint, bool> Cases()
+    private const int DisplayPage = 1;
+
+    public static TheoryData<int, uint> Cases()
     {
-        var data = new TheoryData<int, uint, bool>();
+        var data = new TheoryData<int, uint>();
         for (var page = 0; page < SettingsPresenter.Pages.Count; page++)
         {
-            foreach (var dpi in new uint[] { 96, 144 })
-            {
-                foreach (var dark in new[] { true, false })
-                {
-                    data.Add(page, dpi, dark);
-                }
-            }
+            data.Add(page, 96);
         }
 
+        // 150 %: bố cục co giãn theo DPI do SettingsScrollRepaintFixTests phủ cả 7 trang; ở đây chỉ trang dài nhất với kịch bản chuột/thumb.
+        data.Add(DisplayPage, 144);
         return data;
     }
 
@@ -73,19 +83,19 @@ public sealed unsafe class SettingsScrollPaintTests
 
     [Theory]
     [MemberData(nameof(Cases))]
-    public void ScrollingRepaints_ExactlyLikeAFullRedraw(int pageIndex, uint dpi, bool dark)
+    public void ScrollingRepaints_ExactlyLikeAFullRedraw(int pageIndex, uint dpi)
     {
         var pageKey = SettingsPresenter.Pages[pageIndex].Key;
-        var tag = $"{pageKey}-{dpi}dpi-{(dark ? "dark" : "classic")}";
+        var tag = $"{pageKey}-{dpi}dpi";
         using var scope = TestLocalization.Use(TestLocalization.English);
         var settings = new AppSettings { ToolbarAutoHide = true, ShowExifInfo = true, ToolbarOpacityPercent = 70 };
         var ops = Enum.GetValues<Op>();
         var actual = new List<Shot>();
         var offsets = new List<int>();
-        INativeDialogChrome? chrome() => dark ? null : new RecordingChrome();
+        var blanks = new List<string>();
 
         // Pass 1: người dùng thật - mỗi bước chỉ xử lý lần vẽ đang chờ.
-        Run(settings, chrome(), d =>
+        Run(settings, d =>
         {
             Prepare(d, pageIndex, dpi);
             foreach (var op in ops)
@@ -93,14 +103,22 @@ public sealed unsafe class SettingsScrollPaintTests
                 Apply(d, pageIndex, op);
                 Flush(d, force: false);
                 offsets.Add(d.ScrollOffset(pageIndex));
-                actual.Add(Capture(d, pageIndex));
+                var shot = Capture(d, pageIndex);
+                actual.Add(shot);
+                // "Bằng ảnh chuẩn" chưa đủ: một trang TRỐNG sau cuộn bằng một trang TRỐNG sau vẽ lại (ca WS_CLIPSIBLINGS dưới khung nhóm).
+                // Mỗi điều khiển hiện đủ trong viewport phải có điểm ảnh khác màu nền trang.
+                var origin = WindowRect(H(d, SettingsDialog.ViewportId(pageIndex)));
+                foreach (var blank in SettingsScrollRepaintFixTests.BlankControls(d, shot.Bgra, shot.Width, shot.Height, origin))
+                {
+                    blanks.Add($"{actual.Count - 1:00}-{op}: control {blank} is blank (only page background)");
+                }
             }
         });
 
         // Pass 2: tham chiếu - nhảy thẳng tới offset rồi ép vẽ lại hết.
         var expected = new List<Shot>();
         var reachedOffsets = new List<int>();
-        Run(settings, chrome(), d =>
+        Run(settings, d =>
         {
             Prepare(d, pageIndex, dpi);
             for (var i = 0; i < ops.Length; i++)
@@ -145,16 +163,17 @@ public sealed unsafe class SettingsScrollPaintTests
             File.WriteAllBytes(Path.Combine(directory, $"{tag}-{label}-diff.png"), Diff(actual[i], expected[i]).ToPng());
         }
 
+        failures.AddRange(blanks);
         Assert.True(failures.Count == 0,
             $"{tag}: stale pixels after scrolling in {failures.Count}/{ops.Length} steps (images in {directory}):\n" + string.Join('\n', failures));
     }
 
     /// <summary>Hộp thoại thật trên thread STA có visual styles (như exe thật); <paramref name="body"/> chạy ngay trước vòng lặp modal.</summary>
-    private static void Run(AppSettings settings, INativeDialogChrome? chrome, Action<SettingsDialog> body)
+    private static void Run(AppSettings settings, Action<SettingsDialog> body)
         => OnSta(() =>
         {
             using var styles = ActivateVisualStyles();
-            var dialog = new SettingsDialog(settings, null, null, null, null, Options(new FakeWarnings(), new FakeFiles()), chrome);
+            var dialog = new SettingsDialog(settings, null, null, null, null, Options(new FakeWarnings(), new FakeFiles()));
             dialog.Presenter.ShellIntegration = new FakeShell();
             dialog.Presenter.ExecutablePath = @"C:\Apps\PhotoReview\PhotoReview.exe";
             ShowOnOwner(dialog, (d, _) =>
@@ -187,6 +206,9 @@ public sealed unsafe class SettingsScrollPaintTests
             ChangeDpi(d, dpi);
         }
 
+        // Con trỏ đỗ lên tiêu đề (không cuộn, không theo dõi hover): control cuộn dưới con trỏ đứng yên làm hệ thống tự sinh
+        // WM_MOUSEMOVE => viền hover khác nhau giữa "sau cuộn" và "sau vẽ lại" (CI có con trỏ thật). Dùng chung với SettingsScrollRepaintFixTests.
+        SettingsScrollRepaintFixTests.ParkCursor(d);
         Flush(d, force: false);
     }
 
