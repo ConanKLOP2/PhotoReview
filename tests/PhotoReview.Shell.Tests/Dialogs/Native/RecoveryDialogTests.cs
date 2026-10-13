@@ -1132,6 +1132,7 @@ public sealed class RecoveryDialogTests
         var entries = ThreeEntries(rig);
         var first = await rig.OpenAsync(entries);
         await rig.CheckDoneAsync(first);
+        await rig.PickAsync(first, 0); // warm-up also paints the selected state (one-time GDI caches of the hand-drawn chrome)
         await rig.OnUi(() => first.Close()); // warm-up: class registration, comctl32 init
         var before = await rig.OnUi(() => (GdiObjects(), UserObjects()));
 

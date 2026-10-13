@@ -633,16 +633,27 @@ public sealed unsafe class NativeControlsTests
     {
         var (gdi, user) = OnSta(() =>
         {
-            // Warm up once (class registration, comctl32 init) so only a per-dialog leak shows.
-            ShowOnOwner(new ControlGalleryDialog(), (d, _) => d.Close());
-            var gdiBefore = GdiObjects();
-            var userBefore = UserObjects();
-            for (var i = 0; i < 6; i++)
+            // Warm up (class registration, comctl32 init, and the one-time GDI caches of the first PAINT: focus-rect pattern brush,
+            // DC cache) with the same body as the loop, so only a per-dialog leak shows.
+            for (var warm = 0; warm < 2; warm++)
             {
                 ShowOnOwner(new ControlGalleryDialog(), (d, _) =>
                 {
                     ComboBoxControl.Drop(Item(d, ControlGalleryDialog.Combo), true);
                     ComboBoxControl.Drop(Item(d, ControlGalleryDialog.Combo), false);
+                    Drain(d);
+                    d.Close();
+                });
+            }
+            var gdiBefore = GdiObjects();
+            var userBefore = UserObjects();
+            for (var i = 0; i < 12; i++)
+            {
+                ShowOnOwner(new ControlGalleryDialog(), (d, _) =>
+                {
+                    ComboBoxControl.Drop(Item(d, ControlGalleryDialog.Combo), true);
+                    ComboBoxControl.Drop(Item(d, ControlGalleryDialog.Combo), false);
+                    Drain(d);
                     d.Close();
                 });
             }
