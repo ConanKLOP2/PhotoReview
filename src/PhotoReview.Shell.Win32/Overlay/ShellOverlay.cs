@@ -37,6 +37,9 @@ internal sealed class ShellOverlayOptions
     /// <summary>Báo lỗi một lệnh bất đồng bộ (tên lệnh, ngoại lệ).</summary>
     public Action<string, Exception>? OnCommandFailed { get; init; }
 
+    /// <summary>Dựng/hiện menu Tools ném ngoại lệ: ghi shell-errors.log + dòng trạng thái "Menu error"; null thì dùng <see cref="OnCommandFailed"/>.</summary>
+    public Action<Exception>? OnMenuFailed { get; init; }
+
     /// <summary>Đồng hồ Stopwatch cho hẹn giờ auto-hide (test).</summary>
     public Func<long>? Timestamp { get; init; }
 
@@ -530,6 +533,18 @@ internal sealed class ShellOverlay : IDisposable
         {
             chosen = menus.Show(ToolsMenu.Build(_model.HasImages), anchor);
         }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            chosen = null;
+            if (_options.OnMenuFailed is { } onMenuFailed)
+            {
+                onMenuFailed(ex);
+            }
+            else
+            {
+                _options.OnCommandFailed?.Invoke("Tools menu", ex);
+            }
+        }
         finally
         {
             _toolsOpen = false;
@@ -543,9 +558,16 @@ internal sealed class ShellOverlay : IDisposable
             return;
         }
 
-        if (ToolsMenu.Execute(chosen, _options.Commands, _model.HasImages) is { } run)
+        try
         {
-            ObserveFailure(chosen, run);
+            if (ToolsMenu.Execute(chosen, _options.Commands, _model.HasImages) is { } run)
+            {
+                ObserveFailure(chosen, run);
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _options.OnCommandFailed?.Invoke(chosen, ex);
         }
     }
 

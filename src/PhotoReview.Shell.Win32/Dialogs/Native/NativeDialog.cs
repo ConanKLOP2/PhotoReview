@@ -1,4 +1,4 @@
-using System.Runtime.ExceptionServices;
+﻿using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Hosting;
@@ -162,6 +162,22 @@ internal abstract unsafe class NativeDialog
     protected virtual void OnClosed()
     {
     }
+
+    /// <summary>
+    /// WP-35 GĐ3a: thông điệp cửa sổ mà khung không xử lý (WM_APP của chính hộp thoại, WM_MOUSEWHEEL do cửa sổ chứa trang chuyển lên...).
+    /// true = đã xử lý và <paramref name="result"/> là kết quả (DWLP_MSGRESULT); false = để dialog manager xử lý mặc định.
+    /// </summary>
+    protected virtual bool OnWindowMessage(uint message, nint wParam, nint lParam, out nint result)
+    {
+        result = 0;
+        return false;
+    }
+
+    /// <summary>
+    /// WP-35 GĐ3a: phím (WM_KEYDOWN...) TRƯỚC khi <c>IsDialogMessage</c> thấy nó (Ctrl+Tab đổi trang: dialog manager không làm).
+    /// true = đã xử lý, không đưa tiếp cho dialog manager.
+    /// </summary>
+    protected virtual bool OnDialogKey(in Msg message) => false;
 
     /// <summary>Màu chữ (COLORREF) của một STATIC.</summary>
     protected virtual uint StaticTextColor(int id) => DialogColors.Text;
@@ -384,7 +400,7 @@ internal abstract unsafe class NativeDialog
                 break;
             }
 
-            if (_hwnd != 0 && User32.IsDialogMessage(_hwnd, &message))
+            if (_hwnd != 0 && (OnDialogKey(message) || User32.IsDialogMessage(_hwnd, &message)))
             {
                 continue;
             }
@@ -397,6 +413,11 @@ internal abstract unsafe class NativeDialog
     /// <summary>Message cho hộp thoại (Tab, Enter, Esc, phím tắt) xử lý bằng IsDialogMessage trước khi tới bộ lọc/dispatch.</summary>
     private bool ClaimDialogMessage(ref Msg message)
     {
+        if (_hwnd != 0 && OnDialogKey(message))
+        {
+            return true;
+        }
+
         fixed (Msg* pointer = &message)
         {
             return _hwnd != 0 && User32.IsDialogMessage(_hwnd, pointer);
@@ -645,6 +666,12 @@ internal abstract unsafe class NativeDialog
                 return _inputBrush;
 
             default:
+                if (OnWindowMessage(message, wParam, lParam, out var handledResult))
+                {
+                    User32.SetWindowLongPtr(hwnd, DialogConstants.DwlpMsgResult, handledResult);
+                    return 1;
+                }
+
                 return 0;
         }
     }
@@ -759,7 +786,8 @@ internal abstract unsafe class NativeDialog
         return length == 4 && new ReadOnlySpan<char>(name, length).Equals("Edit", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsButton(nint hwnd)
+    /// <summary>Lớp "Button" (nút, tick, radio, group box): chữ của chúng coi '&amp;' là phím tắt (phải nhân đôi để hiện).</summary>
+    protected static bool IsButton(nint hwnd)
     {
         if (hwnd == 0)
         {
@@ -949,6 +977,7 @@ internal abstract unsafe class NativeDialog
     {
         _hwnd = hwnd;
         _dpi = DpiFor(_owner != 0 ? _owner : hwnd);
+        ShellIcons.Apply(hwnd, _dpi); // icon app trên tiêu đề/Alt-Tab của hộp thoại phụ
         _windowBrush = Gdi32.CreateSolidBrush(DialogColors.Window);
         _inputBrush = Gdi32.CreateSolidBrush(DialogColors.Input);
         var controls = new List<DialogChromeControl>(Items.Count);
@@ -1093,7 +1122,48 @@ internal abstract unsafe class NativeDialog
     /// <summary>Chiều cao một dòng chữ (px).</summary>
     protected int LineHeight => _lineHeight;
 
-    protected nint Item(int id) => User32.GetDlgItem(_hwnd, id);
+    private readonly List<nint> _childHosts = [];
+
+    /// <summary>Cookie (GCHandle) của hộp thoại cho <c>refData</c> của subclass của lớp dẫn xuất; hợp lệ tới sau khi cửa sổ bị huỷ.</summary>
+    protected nuint SelfRefData => (nuint)GCHandle.ToIntPtr(_self);
+
+    /// <summary>
+    /// WP-35 GĐ3a: cửa sổ chứa (con của hộp thoại) mà điều khiển của template được <c>SetParent</c> vào (trang Settings cuộn được);
+    /// <see cref="Item"/> tìm cả trong các cửa sổ này để id vẫn tra được.
+    /// </summary>
+    protected void AddChildHost(nint host) => _childHosts.Add(host);
+
+    /// <summary>
+    /// WP-35 GĐ3a: điều khiển do lớp dẫn xuất tạo SAU khi hộp thoại đã có (trang Settings tạo lười): đặt font thân hiện hành và cho vào
+    /// danh sách con để đổi DPI/font cập nhật theo và <c>Cleanup</c> dọn.
+    /// </summary>
+    protected void RegisterChild(nint control)
+    {
+        if (control == 0)
+        {
+            return;
+        }
+
+        _children.Add(control);
+        User32.SendMessage(control, DialogConstants.WmSetFont, _font, 0);
+    }
+
+    /// <summary>Áp giao diện tối cho điều khiển tạo thêm sau (cùng chủ đề như điều khiển của template; không đụng title bar).</summary>
+    protected void ApplyChrome(IReadOnlyList<DialogChromeControl> controls) => _chrome.ApplyControls(_hwnd, controls);
+
+    protected nint Item(int id)
+    {
+        var child = User32.GetDlgItem(_hwnd, id);
+        for (var i = 0; child == 0 && i < _childHosts.Count; i++)
+        {
+            child = User32.GetDlgItem(_childHosts[i], id);
+        }
+
+        return child;
+    }
+
+    /// <summary>HWND của điều khiển <paramref name="id"/> (0 khi không có): test và view ghép.</summary>
+    internal nint ControlHandle(int id) => Item(id);
 
     protected void Place(int id, int x, int y, int width, int height)
     {
@@ -1346,6 +1416,7 @@ internal abstract unsafe class NativeDialog
         }
 
         _dpi = newDpi;
+        ShellIcons.Apply(_hwnd, newDpi);
         ApplyFonts();
         if (Resizable)
         {

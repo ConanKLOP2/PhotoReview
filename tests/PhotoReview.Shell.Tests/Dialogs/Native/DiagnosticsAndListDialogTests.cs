@@ -14,7 +14,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.Native;
 /// <c>DiagnosticsPresenter</c>/<c>SkippedFilesPresenter</c>/<c>BatchReviewPresenter</c> (cùng văn bản) và với các cửa sổ WPF
 /// (nút nào đóng/xác nhận, Enter/Esc, kéo giãn).
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "UI")]
 public sealed class DiagnosticsAndListDialogTests
 {

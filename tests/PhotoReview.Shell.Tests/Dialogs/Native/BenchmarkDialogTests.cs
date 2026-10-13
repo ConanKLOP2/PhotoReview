@@ -22,7 +22,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.Native;
 /// chép giá trị vào điều khiển, khoá điều khiển khi chạy, Esc/Close/X giữa chừng, sắp xếp + tô hàng, Tab qua vòng lặp shell, DPI,
 /// ngôn ngữ, rò rỉ. Không Sleep/Delay, không so ManagedThreadId.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "UI")]
 public sealed class BenchmarkDialogTests
 {

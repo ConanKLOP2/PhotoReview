@@ -259,6 +259,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
                 return User32.DefWindowProc(hwnd, message, wParam, lParam);
             case WindowMessages.WmCreate:
                 _created = true;
+                ShellIcons.Apply(hwnd, _dpi);
                 return 0;
             case WindowMessages.WmDestroy:
                 OnDestroy();
@@ -270,6 +271,7 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
                 break;
             case WindowMessages.WmDpiChanged:
                 ApplyDpiChange(LowWord(wParam), (Rect*)lParam);
+                ShellIcons.Apply(hwnd, _dpi); // icon thanh tác vụ/tiêu đề theo DPI mới
                 break;
             case WindowMessages.WmActivate:
                 UpdateActive(LowWord(wParam) != PendingUser32.WaInactive);
@@ -490,6 +492,8 @@ internal sealed unsafe class ShellWindow : IShellWindow, IDisposable
                     Size = (uint)sizeof(WndClassEx),
                     WndProc = WndProcThunk.ShellWindowProc,
                     Instance = Kernel32.GetModuleHandle(0),
+                    Icon = ShellIcons.LoadBig(0),
+                    IconSmall = ShellIcons.LoadSmall(0),
                     ClassName = className,
                 };
                 if (User32.RegisterClassEx(&windowClass) == 0)

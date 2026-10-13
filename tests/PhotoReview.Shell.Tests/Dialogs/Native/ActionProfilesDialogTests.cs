@@ -15,7 +15,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.Native;
 /// kiểm VIEW: chép đúng giá trị vào/ra điều khiển, thứ tự "lưu hàng trước rồi mở hàng mới", Add/Remove/Import/Export/Apply, modal,
 /// dialog manager (Enter/Esc), bố cục theo DPI và tiếng Việt.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "UI")]
 public sealed class ActionProfilesDialogTests
 {

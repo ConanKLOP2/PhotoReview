@@ -12,6 +12,9 @@
     <RootNamespace>PhotoReview.Shell.Win32</RootNamespace>
     <!-- PerMonitorV2 + comctl32 v6 (TaskDialogIndirect ở WP-19a). -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Shell menus/icon fix: cùng icon với bản WPF (PhotoReview.App\Assets\PhotoReview.ico); lớp cửa sổ + WM_SETICON nạp từ tài nguyên
+         của exe (Hosting/ShellIcons.cs), nên exe/thanh tác vụ/Alt-Tab/hộp thoại có icon mà không phụ thuộc WPF. -->
+    <ApplicationIcon>..\PhotoReview.App\Assets\PhotoReview.ico</ApplicationIcon>
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- perf(startup): biên dịch trước (R2R) mã của exe và gói khi publish, như bản WPF (ảnh đầu không bị JIT chặn). Chỉ publish. -->

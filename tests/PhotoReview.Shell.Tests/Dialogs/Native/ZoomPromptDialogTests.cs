@@ -11,7 +11,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.Native;
 /// WP-35 GĐ1: hộp thoại zoom tuỳ chọn Win32 gốc (parity với <c>ClickZoomCustomDialogTests</c> của bản WPF). Cửa sổ THẬT trên thread STA
 /// riêng; người dùng được mô phỏng bằng SendMessage/IsDialogMessage đồng bộ trong callback <c>ready</c>.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "UI")]
 public sealed class ZoomPromptDialogTests
 {
