@@ -856,8 +856,8 @@ jobs:
             exit 1
           fi
 
-  # NO-WPF (WP-36): the OPTIONAL Native AOT variant of PhotoReview.exe (no WPF bridge: the Settings/Diagnostics/Recovery windows
-  # do not open until WP-35). A separate artifact, never part of release-publish and never a release gate: continue-on-error, no
+  # NO-WPF (WP-36): the OPTIONAL Native AOT variant of PhotoReview.exe (no WPF bridge; since WP-35 GĐ5 (#500) every secondary
+  # window is a Win32 dialog, so Settings/Diagnostics/Recovery open in this build too). A separate artifact, never part of release-publish and never a release gate: continue-on-error, no
   # `needs` link from tag-version. It runs beside build-test-publish so it does not lengthen the pipeline. windows-latest already
   # has Visual Studio (MSVC + vswhere); publish-release.ps1 puts vswhere on PATH for ILCompiler and, with -RequireAot, fails when
   # MSVC is missing. The wall time of the step is written to the job summary.
