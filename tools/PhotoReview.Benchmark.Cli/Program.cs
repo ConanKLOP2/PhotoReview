@@ -116,6 +116,18 @@ if (args.Length is 2 or 4 && args[0] == "--ui-next-probe" && (args.Length == 2 |
     return;
 }
 
+if (PhotoReview.Benchmark.Cli.PerfCompare.PerfCompareCommand.IsCompare(args))
+{
+    Environment.ExitCode = PhotoReview.Benchmark.Cli.PerfCompare.PerfCompareCommand.RunCompare(args, Console.Out, Console.Error);
+    return;
+}
+
+if (PhotoReview.Benchmark.Cli.PerfCompare.PerfCompareCommand.IsExport(args))
+{
+    Environment.ExitCode = PhotoReview.Benchmark.Cli.PerfCompare.PerfCompareCommand.RunExport(args, Console.Out, Console.Error);
+    return;
+}
+
 if (args.Length >= 1 && args[0] == "--startup-probe")
 {
     try { Environment.ExitCode = PhotoReview.Benchmark.Cli.ShellHost.StartupProbeCommand.Run(args); }
@@ -246,7 +258,8 @@ foreach (var mode in new[]
 {
     "--benchmark-list-profiles", "--benchmark <folder> <profile,...>", "--benchmark-all <folder> [output]", "--benchmark-actions <folder> [output]",
     "--ui-next-probe <folder> [--cache-dir DIR]", "--perf-session ...", "--preload-bench <folder> [n]", "--perf-analyze <dir> [--rules <file>]",
-    "--startup-probe --shell <exe> [--wpf <exe>] --source <folder> [--count n --rounds n --warmup n --seed n --keys n --out dir]", "--io-decode-split ...", "--decoder-bench ...", "--decoder-bench --raw <folder> <outDir> [iterations=3]", "--explorer-probe <folder>", "--raw-survey <dir> [--markdown <out.md>]",
+    "--startup-probe --shell <exe> [--wpf <exe>] --source <folder> [--count n --rounds n --warmup n --seed n --keys n --out dir --perf-json file]",
+    "compare <baseline.json> <current.json> [--threshold-percent 5 --min-abs-ms 1 --min-abs-mb 16 --busy-cpu 60 --max-cv 25 --min-samples 3 --json f --markdown f]", "--perf-export <perf-session dir> [--out file.json]", "--io-decode-split ...", "--decoder-bench ...", "--decoder-bench --raw <folder> <outDir> [iterations=3]", "--explorer-probe <folder>", "--raw-survey <dir> [--markdown <out.md>]",
 })
     Console.Error.WriteLine("  " + mode);
 Environment.ExitCode = 2;

@@ -45,6 +45,17 @@ Seven xUnit projects run by `tools/verify-all.ps1` and CI: `Architecture.Tests`,
 
 [Stryker.NET](MUTATION-TESTING.md) measures how well the tests pin behaviour (manual, not part of CI): how to run it safely and the 2026-10-03 baseline.
 
+## Perf results as JSON and `compare` (local, optional)
+
+`PhotoReview.Benchmark.Cli --startup-probe ...` also writes a structured result (schema `photoreview.perf-result` v1: scenario, machine CPU/RAM/OS/GPU, commit, runs, background CPU + noise flags, per-metric samples with P50/P95/min/max/MAD) to `work/perf/*.json` (git-ignored) and `<out>/perf-result.json`; `--perf-export <perf-session dir>` does the same for `--perf-session` runs (GC counts/pauses, peak WS, source reads, decode ms, key settle). Compare two files (a baseline and a new run):
+
+```powershell
+.\tools\diag\perf-compare.ps1 -Baseline tools\perf-baselines\$env:COMPUTERNAME.json -Current work\perf\startup-probe-<machine>-<utc>.json
+# or: PhotoReview.Benchmark.Cli.exe compare <baseline.json> <current.json> [--threshold-percent 5 --min-abs-ms 1 --busy-cpu 60 --json out.json --markdown out.md]
+```
+
+Per metric the high-side outliers are dropped by MAD (WP-29 rule), medians are compared against `max(5 %, absolute floor)` (1 ms, 16 MB, 1 count) and a 95 % interval of the difference: **REGRESSION** only when the whole interval is beyond the threshold, **WARN** when the point estimate is but the interval is not, **INCONCLUSIVE** (never a false regression) when the machine is busy (> 60 % CPU), the spread is > 25 % of the median, samples < 3, a metric is missing, or the machine/parameters differ. Exit codes: 0 PASS/WARN, 1 REGRESSION, 2 usage/schema/scenario error, 3 INCONCLUSIVE. `.\toolserify-all.ps1 -PerfGate` runs the published exes through `tools/diag/perf-gate.ps1` against `tools/perf-baselines/<COMPUTERNAME>.json` (skipped when absent; INCONCLUSIVE is a warning; off in CI). Baselines are committed only when the owner decides (`perf-gate.ps1 -UpdateBaseline`). Detail and a worked run: [perf note](refactoring/perf/2026-10-13-perf-json-compare.md).
+
 ## Shell tests (NO-WPF)
 
 `PhotoReview.Shell.Tests` (no WPF, runs in CI) covers the Win32 shell logic and Direct2D rendering; its pixel checks run on WARP (`Category=Integration`). `PhotoReview.Shell.Integration.Tests` drives the real `PhotoReview.exe` window (`Category=UI`): run it on the hidden desktop with `tools/run-tests-hidden.ps1 tests/PhotoReview.Shell.Integration.Tests` (arguments go to `dotnet test`). `PhotoReview.exe --smoke` is the quick check: it creates the window and exits 0.
