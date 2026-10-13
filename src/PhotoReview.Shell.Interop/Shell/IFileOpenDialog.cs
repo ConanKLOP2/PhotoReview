@@ -18,11 +18,15 @@ internal static class ShellGuids
     public const string DropTarget = "00000122-0000-0000-c000-000000000046";
     public const string DataObject = "0000010e-0000-0000-c000-000000000046";
     public const string ClsidFileOpenDialog = "dc1c5a9c-e88a-4dde-a5a1-60f82a20aef7";
+    public const string FileSaveDialog = "84bccd23-5fde-4cdb-aea4-af64b83d78ab";
+    public const string ClsidFileSaveDialog = "c0b4e2f3-ba21-4773-8dba-335ec946eb8b";
 
     public static readonly Guid IidFileOpenDialog = new(FileOpenDialog);
     public static readonly Guid IidShellItem = new(ShellItem);
     public static readonly Guid IidDataObject = new(DataObject);
     public static readonly Guid ClsidFileOpenDialogGuid = new(ClsidFileOpenDialog);
+    public static readonly Guid IidFileSaveDialog = new(FileSaveDialog);
+    public static readonly Guid ClsidFileSaveDialogGuid = new(ClsidFileSaveDialog);
 }
 
 /// <summary>FILEOPENDIALOGOPTIONS.</summary>
@@ -142,6 +146,18 @@ internal unsafe partial interface IFileOpenDialog : IFileDialog
     [PreserveSig] int GetSelectedItems(out nint items);                                            // [28]
 }
 
+/// <summary>WP-35 GĐ1: hộp thoại lưu tệp (IFileSaveDialog = IFileDialog + 5 hàm; chỉ cần phần IFileDialog nên các slot thêm là chỗ giữ).</summary>
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
+[Guid(ShellGuids.FileSaveDialog)]
+internal unsafe partial interface IFileSaveDialog : IFileDialog
+{
+    [PreserveSig] int Reserved27SetSaveAsItem(nint item);                                          // [27]
+    [PreserveSig] int Reserved28SetProperties(nint store);                                         // [28]
+    [PreserveSig] int Reserved29SetCollectedProperties(nint list, int appendDefault);              // [29]
+    [PreserveSig] int Reserved30GetProperties(out nint store);                                     // [30]
+    [PreserveSig] int Reserved31ApplyProperties(nint item, nint store, nint hwnd, nint sink);      // [31]
+}
+
 internal static unsafe partial class ShellNative
 {
     private const uint ClsctxInprocServer = 0x1;
@@ -169,6 +185,14 @@ internal static unsafe partial class ShellNative
         ComInterop.Check(CoCreateInstanceNative(ShellGuids.ClsidFileOpenDialogGuid, 0, ClsctxInprocServer,
             ShellGuids.IidFileOpenDialog, out nint raw));
         return ComInterop.Wrap<IFileOpenDialog>(raw);
+    }
+
+    /// <summary>Tạo IFileSaveDialog (COM đã khởi tạo trên luồng gọi).</summary>
+    public static IFileSaveDialog CreateFileSaveDialog()
+    {
+        ComInterop.Check(CoCreateInstanceNative(ShellGuids.ClsidFileSaveDialogGuid, 0, ClsctxInprocServer,
+            ShellGuids.IidFileSaveDialog, out nint raw));
+        return ComInterop.Wrap<IFileSaveDialog>(raw);
     }
 
     /// <summary>IDataObject rỗng của shell (SetData/GetData tuỳ ý) - dùng cho kéo-thả ra ngoài và test.</summary>

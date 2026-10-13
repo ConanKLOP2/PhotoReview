@@ -5,6 +5,7 @@ using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Shell.Win32.Dialogs;
+using PhotoReview.Shell.Win32.Dialogs.Native;
 using PhotoReview.Shell.Win32.Hosting;
 using PhotoReview.Shell.Win32.Viewing;
 
@@ -43,12 +44,24 @@ internal static class ShellCompositionRoot
         services.AddSingleton<IClipboardService>(_ => new Win32ClipboardService(host.OwnerWindow));
         services.AddSingleton(sp => new FolderPicker(sp.GetService<IShellFolderDialog>() ?? UnwiredShellFolderDialog.Instance, host.OwnerWindow));
         services.AddSingleton<IFolderPicker, ShellFolderPickerAdapter>();
-        // NOWPF-SHELL-WIRE-WPF-BRIDGE: cổng cửa sổ phụ nạp lười (WpfBridgeLoader qua SecondaryWindowPorts) dùng chung cho
-        // IDialogService và IZoomPromptService; ISecondaryWindowPort đăng ký sẵn (test) thắng cầu thật. Bản Native AOT: cầu vắng
-        // (TryLoad = null) nên cổng tạm trả lời. Chủ sở hữu duy nhất của cổng = SecondaryWindowPortHost (Dispose đóng cửa sổ phụ).
+        // WP-35 GĐ1: cổng cửa sổ phụ = SecondaryWindowRouter. Cửa sổ đã có hộp thoại Win32 gốc (Diagnostics, SkippedFiles, BatchReview,
+        // ZoomPrompt) mở bằng Win32SecondaryWindowPort (không WPF, chạy cả ở bản Native AOT); cửa sổ chưa có (Settings, Recovery,
+        // Benchmark) rơi về cầu WPF nạp lười (WpfBridgeLoader qua SecondaryWindowPorts) và, khi cầu vắng (bản AOT / nạp lỗi), về
+        // cổng tạm SecondaryWindowFallback. ISecondaryWindowPort đăng ký sẵn (test) thắng tất cả. Chủ sở hữu duy nhất của cổng =
+        // SecondaryWindowPortHost (Dispose đóng hộp thoại Win32 + cửa sổ WPF còn mở).
         services.AddSingleton<SecondaryWindowPortLoader>(SecondaryWindowPorts.TryLoad);
+        // Cổng vắng (bản Native AOT / nạp cầu lỗi): Settings mở config.json, cửa sổ khác báo "không có trong bản này"
+        // qua dòng trạng thái của view model thật (ShellNoticeSink: MainViewModel là transient, không resolve lại được).
+        services.AddSingleton(sp => new SecondaryWindowFallback(sp.GetRequiredService<IAppPaths>(),
+            sp.GetService<IShellLauncher>() ?? ProcessShellLauncher.Instance, sp.GetRequiredService<ShellNoticeSink>().Show));
+        services.AddSingleton<IShellFileDialog, NativeShellFileDialog>();
         services.AddSingleton(sp => new SecondaryWindowPortHost(new Lazy<ISecondaryWindowPort?>(
-            () => sp.GetService<ISecondaryWindowPort>() ?? sp.GetRequiredService<SecondaryWindowPortLoader>()(sp, host.Loop),
+            () => sp.GetService<ISecondaryWindowPort>() ?? new SecondaryWindowRouter(
+                new Win32SecondaryWindowPort(sp),
+                new Lazy<ISecondaryWindowPort?>(
+                    () => sp.GetRequiredService<SecondaryWindowPortLoader>()(sp, host.Loop),
+                    LazyThreadSafetyMode.ExecutionAndPublication),
+                sp.GetRequiredService<SecondaryWindowFallback>()),
             LazyThreadSafetyMode.ExecutionAndPublication)));
         services.AddSingleton<IZoomPromptService>(sp =>
             new Win32ZoomPromptService(host.OwnerWindow, sp.GetRequiredService<SecondaryWindowPortHost>().Port));
@@ -56,10 +69,7 @@ internal static class ShellCompositionRoot
             host.OwnerWindow,
             sp.GetRequiredService<FolderPicker>(),
             sp.GetRequiredService<SecondaryWindowPortHost>().Port,
-            // Cổng vắng (bản Native AOT / nạp cầu lỗi): Settings mở config.json, cửa sổ khác báo "không có trong bản này"
-            // qua dòng trạng thái của view model thật (ShellNoticeSink: MainViewModel là transient, không resolve lại được).
-            new SecondaryWindowFallback(sp.GetRequiredService<IAppPaths>(), sp.GetService<IShellLauncher>() ?? ProcessShellLauncher.Instance,
-                sp.GetRequiredService<ShellNoticeSink>().Show)));
+            sp.GetRequiredService<SecondaryWindowFallback>()));
 
         // 2. Đồ thị dùng chung: codec nền tảng = PixelBuffer, không decoder WPF (INV-12 theo NE-8: WicDirect). ThumbnailDecoder
         // là trường dự trữ (v1.3 bỏ): từ WP-06 ThumbnailCache nhận codec, nên chỉ cần một decoder hợp lệ để qua kiểm null.

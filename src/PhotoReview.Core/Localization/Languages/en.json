@@ -977,5 +977,6 @@
   "status.secondaryUnavailable.recovery": "Recovery window is not available in this build; run recovery in the full build.",
   "status.secondaryUnavailable.skippedFiles": "Skipped-files window is not available in this build.",
   "status.secondaryUnavailable.batchReview": "Batch review window is not available in this build; nothing was changed.",
-  "status.secondaryUnavailable.benchmark": "Benchmark window is not available in this build."
+  "status.secondaryUnavailable.benchmark": "Benchmark window is not available in this build.",
+  "diagnostics.copy": "Copy"
 }
