@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-G3B-SHORTCUTS
-order: 1170
+order: 1190
 summary: |-
   WP-35 GĐ3b (CHƯA XÁC NHẬN, phương án B của spike S3): trang SHORTCUTS của Settings Win32 - 27 ô bắt phím (EDIT chỉ đọc, subclass WM_KEYDOWN/WM_SYSKEYDOWN, cùng bộ ghi tên phím của WPF qua KeyIdMapping + SettingsPresenter.CaptureShortcut, không chữ/IME lọt vào ô), 14 nút xoá cho phím tuỳ chọn, "Khôi phục phím mặc định", cảnh báo trùng phím trực tiếp + dấu cảnh báo theo ô, nút mở Action profiles (modal lồng, JSON action dùng chung với trang khác). Khung mở rộng CỘNG THÊM (KeyGrid/Warning, ô bắt phím, Context.ActionsJson/EditActionProfiles). 28 đột biến: 25 chết, 3 sống đều tương đương/không quan sát được. 0 cảnh báo ILC; không nạp WPF.
 ---
