@@ -61,5 +61,10 @@ có `ProcessorCount` thread nên callback có thể xếp sau hàng đợi > 10 
   thuộc thread pool nên hết lỗi bất kể nguyên nhân là pool hay GC/lịch CPU.
 - Các ca "rò GDI/USER" (`NativeControlsTests`, `DiagnosticsAndListDialogTests`, `ZoomPromptDialogTests`) ghi ở
   NOWPF-WP35-G3B-PAGE-MOUSE mục 5 KHÔNG nằm trong phạm vi sửa này (không có đỏ nào trong 7 lượt cục bộ).
+- Báo từ agent CI: `Benchmark_HasADarkBackground...` đỏ ~4/8 run thí nghiệm (khớp cơ chế 2.1, đua theo thời gian). Ngoài phạm vi,
+  thuộc App.Tests (không sửa ở PR này): `DarkScrollBarRenderingTests.ScrollViewer_WithAppDarkTheme_RendersDarkThumbAndCorner`
+  ("ScrollViewer render timed out", 1 lần) - render WPF trên thread STA riêng với `Join(15 s)` cố định, lớp không có
+  `[Collection]`; nghi khởi động WPF lạnh dưới tải (cùng họ "ngưỡng đồng hồ thật khi chạy song song") chứ KHÔNG phải cơ chế
+  activation-context ở 2.1. Chưa điều tra sâu; giao agent App/Integration nếu cần.
 - `NativeDialogSnapshotTests.WriteSnapshots_OfActionProfilesAndBenchmark` còn bật styles ở một việc và không tắt (chỉ chạy khi có biến
   môi trường `PHOTOREVIEW_DIALOG_SNAPSHOTS`, không vào CI).
