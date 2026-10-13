@@ -44,6 +44,12 @@ internal interface ISettingsPageView
 
     /// <summary>Cửa sổ đóng.</summary>
     void OnClosed();
+
+    /// <summary>
+    /// Trang vừa được chuyển tới (sau khi điều khiển đã tạo + nạp). Chỗ làm tươi dữ liệu phụ thuộc trang khác (ví dụ tóm tắt phím zoom
+    /// của trang Mouse theo ô phím đang gõ ở trang Shortcuts).
+    /// </summary>
+    void OnActivated();
 }
 
 /// <summary>Cài đặt mặc định (không làm gì) cho <see cref="ISettingsPageView"/>: trang chỉ ghi đè phần cần.</summary>
@@ -77,6 +83,10 @@ internal abstract class SettingsPageBase : ISettingsPageView
     public virtual int? FocusTarget(SettingsFocusField field) => null;
 
     public virtual void OnClosed()
+    {
+    }
+
+    public virtual void OnActivated()
     {
     }
 }

@@ -48,6 +48,12 @@ internal sealed class SettingsPageContext
     /// <summary>Đặt lại khoảng của thanh trượt (RAM tối thiểu đổi theo cửa sổ preload).</summary>
     public void SetSliderRange(int id, int min, int max) => _dialog.SetSliderRange(id, min, max);
 
+    /// <summary>Tooltip (hiện khi rê chuột) của điều khiển <paramref name="id"/>; chữ lấy lại mỗi lần hiện nên tự theo ngôn ngữ.</summary>
+    public void SetTooltip(int id, Func<string> text) => _dialog.SetControlTooltip(id, text);
+
+    /// <summary>Chữ các ô phím tắt như đang gõ ở trang Shortcuts (trang chưa mở thì giá trị đã nạp của bản làm việc).</summary>
+    public IReadOnlyDictionary<string, string> CurrentShortcutTexts() => _dialog.CollectAll().ShortcutTexts;
+
     public void SetEnabled(int id, bool enabled) => _dialog.SetControlEnabled(id, enabled);
 
     public bool IsEnabled(int id) => _dialog.IsControlEnabled(id);

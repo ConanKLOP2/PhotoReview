@@ -16,6 +16,7 @@ internal static class SettingsPageCatalog
         ["Diagnostics"] = static () => new DiagnosticsSettingsPage(),
         ["Display"] = static () => new DisplaySettingsPage(),
         ["General"] = static () => new GeneralSettingsPage(),
+        ["Mouse"] = static () => new MouseSettingsPage(),
     };
 
     /// <summary>Khoá các trang đã có bản Win32.</summary>
