@@ -46,3 +46,5 @@ bằng cách đổi trạng thái thành ĐÃ XÁC NHẬN (hoặc chọn phươn
 ## Không làm mà không hỏi (vẫn cần người dùng)
 - NE-1/2/5/8 đã chốt trước đó. Chế độ chạy nền/khay, cài thêm toolchain (MSVC + SDK đã cài 2026-10-12; agent không tự cài), xoá dữ liệu người dùng, bất cứ thay đổi
   nào chạm Thùng rác thật: KHÔNG tự làm.
+
+NE-4 cập nhật 2026-10-14: dòng NE-4 ở trên là lịch sử. Menu chuột phải và menu Tools nay là menu tự vẽ owner-draw nền tối, KHÔNG còn dùng uxtheme ordinal (`SetPreferredAppMode`/`FlushMenuThemes`, 135/136), theo commit bbc258bb (#499); chi tiết [NOWPF-SHELL-MENUS-ICON](NOWPF-SHELL-MENUS-ICON.md) và [NOWPF-DIALOG-CHROME-NO-ORDINAL](NOWPF-DIALOG-CHROME-NO-ORDINAL.md). Hiển thị trên màn hình thật build 26300 vẫn CHƯA XÁC NHẬN. Hoàn tác vẫn chỉ ở lớp menu Shell.

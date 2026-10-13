@@ -151,8 +151,10 @@ public sealed unsafe class D2DDrawContext : IDrawContext
             throw new ArgumentException("The text layout was not created by the Direct2D text renderer.", nameof(layout));
         }
 
+        // L2 (WP-27): EnableColorFont = glyph màu (COLR/CPAL của Segoe UI Emoji); None vẽ emoji thành nét đơn sắc. Chữ thường
+        // (không có lớp màu) ra y hệt None; số đo layout không phụ thuộc cờ này nên hộp bao toolbar không đổi.
         Context.DrawTextLayout(new D2dPointF((float)origin.X, (float)origin.Y), native.NativeLayout, PrepareBrush(color),
-            D2dDrawTextOptions.None);
+            D2dDrawTextOptions.EnableColorFont);
     }
 
     public void PushClip(RectD rect)

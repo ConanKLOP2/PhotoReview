@@ -338,6 +338,65 @@ public sealed class DWriteTextRendererTests
         }
     }
 
+    /// <summary>Số pixel có độ bão hoà (kênh R,G,B chênh nhau &gt; 60) và số pixel khác nền xám. Chữ xám trên nền xám luôn cho 0 bão hoà.</summary>
+    private static (int Saturated, int NonBackground) Colour(ITextLayout layout, ColorF background, ColorF ink)
+    {
+        using D2DRenderSurface surface = D2DRenderSurface.CreateOffscreenSurface(720, 140, 1.0);
+        using PixelBuffer pixels = RenderTestImages.Render(surface, dc =>
+        {
+            dc.Clear(background);
+            dc.DrawText(layout, new PointD(10, 10), ink);
+        });
+        int saturated = 0, nonBackground = 0;
+        byte bg = (byte)Math.Round(background.R * 255);
+        for (int y = 0; y < pixels.Height; y++)
+        {
+            ReadOnlySpan<byte> row = pixels.GetRow(y);
+            for (int x = 0; x < pixels.Width; x++)
+            {
+                byte b = row[x * 4], g = row[(x * 4) + 1], r = row[(x * 4) + 2];
+                if (Math.Abs(r - bg) > 8 || Math.Abs(g - bg) > 8 || Math.Abs(b - bg) > 8)
+                {
+                    nonBackground++;
+                }
+
+                if (Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b)) > 60)
+                {
+                    saturated++;
+                }
+            }
+        }
+
+        return (saturated, nonBackground);
+    }
+
+    [Fact]
+    public void ColourEmoji_DrawnWithColour_NotMonochrome()
+    {
+        // L2 (WP-27): DrawTextLayout phải bật ENABLE_COLOR_FONT, nếu không Segoe UI Emoji ra nét đơn sắc.
+        // Nền và mực đều xám (R=G=B): mọi pixel có độ bão hoà chỉ có thể đến từ glyph màu.
+        using var renderer = NewRenderer();
+        using ITextLayout layout = renderer.CreateLayout("📂 📁 🔍 ❤", new TextStyle("Segoe UI", 48), 700, TextTrimming.CharacterEllipsis);
+
+        (int saturated, int nonBackground) = Colour(layout, new ColorF(0.12f, 0.12f, 0.12f, 1f), new ColorF(0.9f, 0.9f, 0.9f, 1f));
+
+        Assert.True(nonBackground > 2000, $"emoji not drawn at all: {nonBackground} non-background pixels");
+        Assert.True(saturated > 500, $"emoji drawn monochrome: only {saturated} saturated pixels of {nonBackground} drawn");
+    }
+
+    [Fact]
+    public void PlainText_StaysMonochrome_WhenColourFontsAreEnabled()
+    {
+        // Chữ thường không được ra màu lạ từ đường glyph màu: chỉ có sắc độ của brush (xám).
+        using var renderer = NewRenderer();
+        using ITextLayout layout = renderer.CreateLayout("Trường Đại học – abc", new TextStyle("Segoe UI", 48), 700, TextTrimming.CharacterEllipsis);
+
+        (int saturated, int nonBackground) = Colour(layout, new ColorF(0.12f, 0.12f, 0.12f, 1f), new ColorF(0.9f, 0.9f, 0.9f, 1f));
+
+        Assert.True(nonBackground > 1000, $"text not drawn: {nonBackground}");
+        Assert.Equal(0, saturated);
+    }
+
     [Fact]
     public void RendererDispose_ReleasesTheDirectWriteFactoryImmediately()
     {
