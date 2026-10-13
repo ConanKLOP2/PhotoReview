@@ -206,6 +206,33 @@ public sealed class ShellOverlayBehaviorTests
         Assert.False(rig.Overlay.Toolbar.IsHitTestVisible);
     }
 
+    [Fact]
+    public void ToolsMenu_WhenTheHostThrows_ReportsTheFailureAndRestoresTheToolbarState()
+    {
+        using OverlayRig rig = NewRig();
+        rig.Menus!.WhileOpen = () => throw new InvalidOperationException("menu boom");
+
+        ClickButton(rig, rig.Overlay.Toolbar.Tools);
+
+        Assert.False(rig.Overlay.IsToolsMenuOpen);
+        Assert.False(rig.Overlay.Toolbar.Tools.IsChecked);
+        var failure = Assert.Single(rig.Failures);
+        Assert.Equal("Tools menu", failure.Item1);
+        Assert.IsType<InvalidOperationException>(failure.Item2);
+    }
+
+    [Fact]
+    public void ToolsMenu_WhenACommandThrowsSynchronously_ReportsItInsteadOfPropagating()
+    {
+        using OverlayRig rig = NewRig();
+        rig.Menus!.Choose = "Tools.Diagnostics";
+        rig.Commands.ThrowOnDiagnostics = true;
+
+        ClickButton(rig, rig.Overlay.Toolbar.Tools);
+
+        var failure = Assert.Single(rig.Failures);
+        Assert.Equal("Tools.Diagnostics", failure.Item1);
+    }
     // Overlay thông tin ------------------------------------------------------------------------------------------------
 
     [Fact]

@@ -77,6 +77,7 @@ internal sealed partial class ShellMainWindow
             Tooltips = tooltips,
             ClientOriginOnScreenDip = ClientOriginOnScreenDip,
             OnCommandFailed = OnOverlayCommandFailed,
+            OnMenuFailed = ex => ReportMenuFailed("ToolsMenu", ex),
         });
         _overlay = overlay;
         overlay.Update(OverlayModel.From(_viewModel));

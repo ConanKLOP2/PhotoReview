@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using PhotoReview.App.Input;
 using PhotoReview.App.Menus;
 using PhotoReview.Shell.Interop;
@@ -7,8 +7,7 @@ using PhotoReview.Shell.Win32.Menus;
 namespace PhotoReview.Shell.Tests.Menus;
 
 /// <summary>
-/// WP-24: những điều host menu native phải giữ khi dùng làm menu chuột phải: neo theo DPI (phần thuần), bật menu tối ở MỖI lần mở
-/// (uxtheme giả), và huỷ mọi HMENU (gốc + submenu) sau khi đóng - bằng Esc hay chọn mục. Cửa sổ chủ là lớp STATIC ẩn; phím
+/// WP-24: những điều host menu native phải giữ khi dùng làm menu chuột phải: neo theo DPI (phần thuần), vẽ tay (owner-draw, không uxtheme ordinal), và huỷ mọi HMENU (gốc + submenu) sau khi đóng - bằng Esc hay chọn mục. Cửa sổ chủ là lớp STATIC ẩn; phím
 /// được PostMessage trước khi mở (vòng lặp modal của TrackPopupMenuEx đọc chúng).
 /// </summary>
 [Trait("Category", "Native")]
@@ -22,37 +21,6 @@ public sealed unsafe partial class NativeContextMenuHostTests
     [LibraryImport("user32.dll", EntryPoint = "IsMenu")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool IsMenu(nint menu);
-
-    private static int s_modeCalls;
-    private static int s_lastMode = -1;
-    private static int s_flushCalls;
-    private static nint s_allowedWindow;
-
-    [UnmanagedCallersOnly]
-    private static int FakeSetPreferredAppMode(int mode)
-    {
-        s_modeCalls++;
-        s_lastMode = mode;
-        return 0;
-    }
-
-    [UnmanagedCallersOnly]
-    private static void FakeFlushMenuThemes() => s_flushCalls++;
-
-    [UnmanagedCallersOnly]
-    private static int FakeAllowDarkModeForWindow(nint hwnd, int allow)
-    {
-        s_allowedWindow = hwnd;
-        return allow;
-    }
-
-    private static nint Resolve(int ordinal) => ordinal switch
-    {
-        DarkModeMenus.SetPreferredAppModeOrdinal => (nint)(delegate* unmanaged<int, int>)&FakeSetPreferredAppMode,
-        DarkModeMenus.FlushMenuThemesOrdinal => (nint)(delegate* unmanaged<void>)&FakeFlushMenuThemes,
-        DarkModeMenus.AllowDarkModeForWindowOrdinal => (nint)(delegate* unmanaged<nint, int, int>)&FakeAllowDarkModeForWindow,
-        _ => 0,
-    };
 
     private static MenuItemModel Command(string id, string text) => new(id, MenuItemKind.Command, text, null, true, false, [], null);
 
@@ -100,27 +68,6 @@ public sealed unsafe partial class NativeContextMenuHostTests
 
         Assert.Equal(expectedX, px);
         Assert.Equal(expectedY, py);
-    }
-
-    [Fact]
-    public void Show_EnablesDarkMenusOnEveryOpen_AndAllowsTheOwnerWindow()
-    {
-        s_modeCalls = 0;
-        s_lastMode = -1;
-        s_flushCalls = 0;
-        s_allowedWindow = 0;
-        var dark = new DarkModeMenus(Resolve, DarkModeMenus.MinimumBuild);
-
-        var result = ShowWithKeys(owner => new NativePopupMenuHost(() => owner, dark), ModelWithSubmenu, VkEscape);
-        var firstAllowed = s_allowedWindow;
-        var second = ShowWithKeys(owner => new NativePopupMenuHost(() => owner, dark), ModelWithSubmenu, VkEscape);
-
-        Assert.Null(result);
-        Assert.Null(second);
-        Assert.Equal(DarkModeMenus.ForceDark, s_lastMode);
-        Assert.Equal(1, s_modeCalls); // DarkModeMenus nhớ kết quả lần đầu
-        Assert.Equal(1, s_flushCalls);
-        Assert.NotEqual(0, firstAllowed); // cửa sổ chủ được cho phép tối
     }
 
     [Fact]

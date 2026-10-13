@@ -35,7 +35,16 @@ internal sealed class FakeOverlayCommands : IOverlayCommands
 
     public void ShowRecovery() => Calls.Add("Recovery");
 
-    public void ShowDiagnostics() => Calls.Add("Diagnostics");
+    public bool ThrowOnDiagnostics { get; set; }
+
+    public void ShowDiagnostics()
+    {
+        Calls.Add("Diagnostics");
+        if (ThrowOnDiagnostics)
+        {
+            throw new InvalidOperationException("diagnostics boom");
+        }
+    }
 
     public void ShowBenchmark() => Calls.Add("Benchmark");
 

@@ -62,6 +62,9 @@ internal interface IContextMenuActions
 
     /// <summary>Một lệnh thất bại: log và hiện "action failed" (như <c>MainWindow.RunGuardedAsync</c>).</summary>
     void ReportActionFailed(string actionName, Exception exception);
+
+    /// <summary>Dựng/hiện menu ném ngoại lệ: shell-errors.log + dòng trạng thái "Menu error: ...". Mặc định như một lệnh thất bại.</summary>
+    void ReportMenuFailed(Exception exception) => ReportActionFailed("Menu", exception);
 }
 
 /// <summary>
@@ -115,6 +118,12 @@ internal sealed class ContextMenuController
         {
             var items = BuildModel();
             chosen = items.Count == 0 ? null : MenuHost.Show(items, screenPointDip);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Trước đây ngoại lệ bay ra WndProc của WM_CONTEXTMENU (menu "lỗi" mà không dấu vết): ghi lại và báo trạng thái.
+            chosen = null;
+            _actions.ReportMenuFailed(ex);
         }
         finally
         {

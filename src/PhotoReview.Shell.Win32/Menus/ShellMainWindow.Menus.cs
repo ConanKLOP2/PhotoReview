@@ -1,7 +1,9 @@
 using PhotoReview.App.Input;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Settings;
 using PhotoReview.Shell.Win32.Input;
 using PhotoReview.Shell.Win32.Menus;
+using PhotoReview.Shell.Win32.Startup;
 
 namespace PhotoReview.Shell.Win32;
 
@@ -71,6 +73,19 @@ internal sealed partial class ShellMainWindow : IContextMenuActions
     void IContextMenuActions.CopyFullPathname() => _viewModel.CopyFullPathname();
 
     void IContextMenuActions.ShowSettings() => _viewModel.ShowSettings();
+
+    void IContextMenuActions.ReportMenuFailed(Exception exception) => ReportMenuFailed("ContextMenu", exception);
+
+    /// <summary>
+    /// Dựng/hiện menu ném ngoại lệ: ghi <c>shell-errors.log</c> (kể cả khi log chung tắt) + log chung + dòng trạng thái không chặn
+    /// "Menu error: ..." (thay vì nuốt im lặng). Có thể gọi từ lúc modal; chỉ chạm view model trên UI thread.
+    /// </summary>
+    internal void ReportMenuFailed(string context, Exception exception)
+    {
+        ShellErrorLog.Report(context, exception);
+        _log.Error($"{context} failed", exception);
+        _viewModel.StatusText = Tr.StatusMenuFailed(UserFacingError.Describe(exception));
+    }
 
     void IContextMenuActions.ReportActionFailed(string actionName, Exception exception) =>
         ((IShellInputHost)this).ReportActionFailed(actionName, exception);

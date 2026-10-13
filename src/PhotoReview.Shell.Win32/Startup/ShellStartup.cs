@@ -261,6 +261,7 @@ internal sealed class ShellStartup : IDisposable
 
         var log = services.GetRequiredService<ILog>();
         var paths = services.GetRequiredService<IAppPaths>();
+        ShellErrorLog.Configure(Path.Combine(Path.GetDirectoryName(paths.ConfigFile) ?? string.Empty, ShellErrorLog.FileName));
 
         // perf(startup): thứ tự xem của Explorer là phần chậm nhất khi mở một ảnh (~1-2 s COM xuyên tiến trình cho thư mục lớn):
         // bắt đầu ngay, song song với settings/cửa sổ; folder load nối vào truy vấn này thay vì tự chạy.
