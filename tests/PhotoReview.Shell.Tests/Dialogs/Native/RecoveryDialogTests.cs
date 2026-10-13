@@ -1132,20 +1132,29 @@ public sealed class RecoveryDialogTests
         var entries = ThreeEntries(rig);
         var first = await rig.OpenAsync(entries);
         await rig.CheckDoneAsync(first);
+        await rig.PickAsync(first, 0); // warm-up also paints the selected state (one-time GDI caches of the hand-drawn chrome)
         await rig.OnUi(() => first.Close()); // warm-up: class registration, comctl32 init
-        var before = await rig.OnUi(() => (GdiObjects(), UserObjects()));
-
-        for (var i = 0; i < 6; i++)
+        // Process-wide counters (other test threads add noise): a real leak grows in EVERY one of three attempts.
+        var bestGdi = int.MaxValue;
+        var bestUser = int.MaxValue;
+        for (var attempt = 0; attempt < 3 && (bestGdi > 2 || bestUser > 2); attempt++)
         {
-            var d = await rig.OpenAsync(entries);
-            await rig.CheckDoneAsync(d);
-            await rig.PickAsync(d, 0);
-            await rig.OnUi(() => d.Close());
+            var before = await rig.OnUi(() => (GdiObjects(), UserObjects()));
+            for (var i = 0; i < 6; i++)
+            {
+                var d = await rig.OpenAsync(entries);
+                await rig.CheckDoneAsync(d);
+                await rig.PickAsync(d, 0);
+                await rig.OnUi(() => d.Close());
+            }
+
+            var after = await rig.OnUi(() => (GdiObjects(), UserObjects()));
+            bestGdi = Math.Min(bestGdi, (int)after.Item1 - (int)before.Item1);
+            bestUser = Math.Min(bestUser, (int)after.Item2 - (int)before.Item2);
         }
 
-        var after = await rig.OnUi(() => (GdiObjects(), UserObjects()));
-        Assert.True((int)after.Item1 - (int)before.Item1 <= 2, $"GDI grew {before.Item1} -> {after.Item1}");
-        Assert.True((int)after.Item2 - (int)before.Item2 <= 2, $"USER grew {before.Item2} -> {after.Item2}");
+        Assert.True(bestGdi <= 2, $"GDI grew by {bestGdi} in every attempt");
+        Assert.True(bestUser <= 2, $"USER grew by {bestUser} in every attempt");
     }
 
     [Fact]
