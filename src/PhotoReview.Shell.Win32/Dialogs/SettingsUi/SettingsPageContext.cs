@@ -34,6 +34,29 @@ internal sealed class SettingsPageContext
 
     public void SetChecked(int id, bool value) => _dialog.SetControlChecked(id, value);
 
+    /// <summary>Chỉ số của radio đang chọn trong nhóm <paramref name="ids"/> (theo thứ tự khai báo); -1 nếu không có radio nào chọn.</summary>
+    public int RadioIndex(IReadOnlyList<int> ids)
+    {
+        for (var i = 0; i < ids.Count; i++)
+        {
+            if (_dialog.IsControlChecked(ids[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>Chọn radio <paramref name="index"/> của nhóm và bỏ chọn các radio còn lại (BM_SETCHECK không tự bỏ chọn bạn bè); ngoài khoảng = không chọn gì.</summary>
+    public void SetRadioIndex(IReadOnlyList<int> ids, int index)
+    {
+        for (var i = 0; i < ids.Count; i++)
+        {
+            _dialog.SetControlChecked(ids[i], i == index);
+        }
+    }
+
     public int ComboIndex(int id) => _dialog.ComboSelectedIndex(id);
 
     public void SetComboIndex(int id, int index) => _dialog.SetComboSelectedIndex(id, index);

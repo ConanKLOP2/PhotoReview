@@ -15,6 +15,7 @@ internal static class SettingsPageCatalog
     {
         ["Diagnostics"] = static () => new DiagnosticsSettingsPage(),
         ["Display"] = static () => new DisplaySettingsPage(),
+        ["Files"] = static () => new FilesSettingsPage(),
         ["General"] = static () => new GeneralSettingsPage(),
     };
 
