@@ -43,6 +43,13 @@ public sealed partial class ShellMenuRenderingTests
     private static ShellRun Start(string label)
     {
         var root = ShellRun.NewRoot(label);
+        if (Environment.GetEnvironmentVariable("PHOTOREVIEW_TEST_CONFIG") is { Length: > 0 } config && File.Exists(config))
+        {
+            // Chẩn đoán trên máy thật: chạy với BẢN SAO cấu hình của người dùng (đọc, không ghi lại bản gốc).
+            Directory.CreateDirectory(Path.Combine(root, "data"));
+            File.Copy(config, Path.Combine(root, "data", "config.json"));
+        }
+
         var png = Path.Combine(root, "lib", "a", "image.png");
         TestPng.WriteTo(png, 64, 48);
         var run = ShellRun.Start(root, [png]);

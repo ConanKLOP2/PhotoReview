@@ -37,10 +37,14 @@ internal static unsafe partial class ShellIcons
         if (cx <= 0 || cy <= 0) return 0;
         var icon = LoadImage(Kernel32.GetModuleHandle(0), ResourceId, ImageIcon, cx, cy, LrShared);
         if (icon != 0) return icon;
+#if SHELL_AOT
+        return 0; // AOT: PhotoReview.exe chính là module có icon (nhánh trên); không có assembly rời để thử.
+#else
         // Khi chạy dưới host khác (test: testhost.exe) tài nguyên nằm trong assembly PhotoReview.dll.
 #pragma warning disable IL3002 // GetHINSTANCE trả -1 trong single-file: LoadImage thất bại -> 0 (icon mặc định), vô hại; exe đã có icon ở nhánh trên.
         return LoadImage(Marshal.GetHINSTANCE(typeof(ShellIcons).Module), ResourceId, ImageIcon, cx, cy, LrShared);
 #pragma warning restore IL3002
+#endif
     }
 
     /// <summary>Icon lớn của lớp cửa sổ theo DPI hệ thống (0 nếu thiếu).</summary>

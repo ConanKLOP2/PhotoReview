@@ -54,6 +54,27 @@ public sealed class ShellErrorLogTests : IDisposable
         Assert.True(text.Split(Environment.NewLine).Count(l => l.StartsWith("    ", StringComparison.Ordinal)) <= ShellErrorLog.MaxStackFrames);
     }
 
+    private static void Recurse(int depth)
+    {
+        if (depth == 0)
+        {
+            throw new InvalidOperationException("deep");
+        }
+
+        Recurse(depth - 1);
+        GC.KeepAlive(depth);
+    }
+
+    [Fact]
+    public void Format_KeepsExactlyTheFirstTwelveStackFrames_OfADeepException()
+    {
+        var deep = Assert.Throws<InvalidOperationException>(() => Recurse(40));
+
+        var text = ShellErrorLog.Format(DateTime.UtcNow, "deep", deep);
+
+        var frames = text.Split(Environment.NewLine).Count(l => l.StartsWith("    at ", StringComparison.Ordinal));
+        Assert.Equal(ShellErrorLog.MaxStackFrames, frames);
+    }
     [Fact]
     public void Format_IncludesTheInnerExceptionBriefly()
     {
@@ -95,9 +116,9 @@ public sealed class ShellErrorLogTests : IDisposable
     {
         var path = Path.Combine(_dir, ShellErrorLog.FileName);
         Directory.CreateDirectory(_dir);
-        var old = string.Concat(Enumerable.Range(0, 200).Select(i => "OLD-" + i.ToString(CultureInfo.InvariantCulture) + new string('.', 40) + "\n"));
+        var old = string.Concat(Enumerable.Range(0, 200).Select(i => "OLD-" + i.ToString("D3", CultureInfo.InvariantCulture) + new string('.', 42) + "\n"));
         File.WriteAllText(path, old);
-        var limit = 2000L;
+        var limit = 2002L; // 200 dòng x 50 byte; nửa cuối = 1001 byte nên điểm cắt rơi GIỮA một dòng
 
         ShellErrorLog.Append(path, "after", Thrown("fresh"), limit);
 
@@ -105,7 +126,7 @@ public sealed class ShellErrorLogTests : IDisposable
         Assert.True(text.Length < limit, "tệp không được cắt");
         Assert.Contains("[after]", text, StringComparison.Ordinal);
         Assert.Contains("OLD-199", text, StringComparison.Ordinal); // giữ phần mới nhất
-        Assert.DoesNotContain("OLD-0" + new string('.', 40), text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OLD-000", text, StringComparison.Ordinal);
         Assert.StartsWith("OLD-", text, StringComparison.Ordinal); // bắt đầu ở đầu dòng
     }
 
