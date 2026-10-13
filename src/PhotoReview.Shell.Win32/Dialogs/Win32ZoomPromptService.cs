@@ -17,5 +17,15 @@ internal sealed class Win32ZoomPromptService : IZoomPromptService
         _secondary = secondary ?? throw new ArgumentNullException(nameof(secondary));
     }
 
-    public int? PromptCustomZoom(int currentPercent) => _secondary.Value?.PromptCustomZoom(_ownerProvider(), currentPercent);
+    public int? PromptCustomZoom(int currentPercent)
+    {
+        try
+        {
+            return _secondary.Value?.PromptCustomZoom(_ownerProvider(), currentPercent);
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or FileNotFoundException or FileLoadException or BadImageFormatException)
+        {
+            return null; // cầu hỏng/đã dọn: như người dùng huỷ (không đổi zoom)
+        }
+    }
 }

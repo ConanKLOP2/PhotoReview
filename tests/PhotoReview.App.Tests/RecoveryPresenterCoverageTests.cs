@@ -1,3 +1,4 @@
+using PhotoReview.App.Presenters;
 using System.Windows.Media;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
@@ -29,10 +30,10 @@ public sealed class RecoveryPresenterCoverageTests
     [InlineData(RecoveryPathStatus.Unreadable, 0xFF, 0x6B, 0x6B)]
     public void PathView_ColoursAndWordsTheStatusOfThePath(RecoveryPathStatus status, byte r, byte g, byte b)
     {
-        var view = RecoveryPresenter.PathView("Source", PathCheck(status), Entry(), folderMissingNote: false);
+        var view = RecoveryPresentation.PathView("Source", PathCheck(status), Entry(), folderMissingNote: false);
 
-        Assert.Equal(Color.FromRgb(r, g, b), ColorOf(view.StatusBrush));
-        Assert.Equal(Tr.RecoveryDetailStatus(RecoveryPresenter.PathStatusText(status)), view.StatusText);
+        Assert.Equal(Color.FromRgb(r, g, b), ColorOf(RecoveryBrushes.For(view.StatusTone)));
+        Assert.Equal(Tr.RecoveryDetailStatus(RecoveryPresentation.PathStatusText(status)), view.StatusText);
         Assert.Equal("Source", view.Title);
         Assert.Equal(@"C:\a.jpg", view.Path);
         Assert.Null(view.Note);
@@ -41,40 +42,40 @@ public sealed class RecoveryPresenterCoverageTests
     [Fact]
     public void PathStatusText_GivesEachStatusItsOwnWording()
     {
-        var texts = Enum.GetValues<RecoveryPathStatus>().Select(RecoveryPresenter.PathStatusText).ToList();
+        var texts = Enum.GetValues<RecoveryPathStatus>().Select(RecoveryPresentation.PathStatusText).ToList();
 
-        Assert.Equal(Tr.RecoveryPathStatusExists, RecoveryPresenter.PathStatusText(RecoveryPathStatus.Exists));
-        Assert.Equal(Tr.RecoveryPathStatusMissing, RecoveryPresenter.PathStatusText(RecoveryPathStatus.Missing));
-        Assert.Equal(Tr.RecoveryPathStatusChanged, RecoveryPresenter.PathStatusText(RecoveryPathStatus.Changed));
-        Assert.Equal(Tr.RecoveryPathStatusUnreadable, RecoveryPresenter.PathStatusText(RecoveryPathStatus.Unreadable));
+        Assert.Equal(Tr.RecoveryPathStatusExists, RecoveryPresentation.PathStatusText(RecoveryPathStatus.Exists));
+        Assert.Equal(Tr.RecoveryPathStatusMissing, RecoveryPresentation.PathStatusText(RecoveryPathStatus.Missing));
+        Assert.Equal(Tr.RecoveryPathStatusChanged, RecoveryPresentation.PathStatusText(RecoveryPathStatus.Changed));
+        Assert.Equal(Tr.RecoveryPathStatusUnreadable, RecoveryPresentation.PathStatusText(RecoveryPathStatus.Unreadable));
         Assert.Equal(texts.Count, texts.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
     public void PathView_WithTheFolderMissingNote_CarriesTheFolderMissingText()
     {
-        var view = RecoveryPresenter.PathView("Destination", PathCheck(RecoveryPathStatus.Missing, null, null), Entry(), folderMissingNote: true);
+        var view = RecoveryPresentation.PathView("Destination", PathCheck(RecoveryPathStatus.Missing, null, null), Entry(), folderMissingNote: true);
 
         Assert.Equal(Tr.RecoveryDetailFolderMissing, view.Note);
         Assert.Equal(Tr.RecoveryDetailNowMissing, view.NowText);
-        Assert.Equal(RecoveryPresenter.JournalText(Entry()), view.JournalText);
+        Assert.Equal(RecoveryPresentation.JournalText(Entry()), view.JournalText);
     }
 
     [Fact]
     public void NowText_ForAnUnreadableFile_SaysItCouldNotBeRead_AndAChangedOneStillShowsItsSizeAndTime()
     {
-        Assert.Equal(Tr.RecoveryDetailNowUnreadable, RecoveryPresenter.NowText(PathCheck(RecoveryPathStatus.Unreadable)));
-        Assert.Equal(Tr.RecoveryDetailNowMissing, RecoveryPresenter.NowText(PathCheck(RecoveryPathStatus.Missing)));
-        Assert.Equal(Tr.RecoveryDetailNowPresent(RecoveryPresenter.FormatSize(77), RecoveryPresenter.FormatTime(Stamp)),
-            RecoveryPresenter.NowText(PathCheck(RecoveryPathStatus.Changed, 77)));
+        Assert.Equal(Tr.RecoveryDetailNowUnreadable, RecoveryPresentation.NowText(PathCheck(RecoveryPathStatus.Unreadable)));
+        Assert.Equal(Tr.RecoveryDetailNowMissing, RecoveryPresentation.NowText(PathCheck(RecoveryPathStatus.Missing)));
+        Assert.Equal(Tr.RecoveryDetailNowPresent(RecoveryPresentation.FormatSize(77), RecoveryPresentation.FormatTime(Stamp)),
+            RecoveryPresentation.NowText(PathCheck(RecoveryPathStatus.Changed, 77)));
         Assert.NotEqual(Tr.RecoveryDetailNowUnreadable, Tr.RecoveryDetailNowMissing);
     }
 
     [Fact]
     public void NeutralBrush_IsTheFrozenGrayUsedForUncoloredStates()
     {
-        Assert.Equal(Color.FromRgb(0xB0, 0xB0, 0xB0), ColorOf(RecoveryPresenter.NeutralBrush));
-        Assert.True(RecoveryPresenter.NeutralBrush.IsFrozen);
+        Assert.Equal(Color.FromRgb(0xB0, 0xB0, 0xB0), ColorOf(RecoveryBrushes.NeutralBrush));
+        Assert.True(RecoveryBrushes.NeutralBrush.IsFrozen);
     }
 
     [Theory]
@@ -102,10 +103,10 @@ public sealed class RecoveryPresenterCoverageTests
             RecoveryVerdict.Conflict => Tr.RecoveryGroupConflict,
             RecoveryVerdict.Lost => Tr.RecoveryGroupLost,
             RecoveryVerdict.Unknown => Tr.RecoveryGroupUnreadable,
-            _ => RecoveryPresenter.VerdictText(verdict), // no member-specific wording: the plain verdict text
+            _ => RecoveryPresentation.VerdictText(verdict), // no member-specific wording: the plain verdict text
         };
 
-        var text = RecoveryPresenter.GroupStatusText(verdict, member, PathCheck(RecoveryPathStatus.Exists), null);
+        var text = RecoveryPresentation.GroupStatusText(verdict, member, PathCheck(RecoveryPathStatus.Exists), null);
 
         Assert.Equal(expected, text); // a member without a destination shows only the state
         Assert.False(string.IsNullOrWhiteSpace(text));
@@ -119,7 +120,7 @@ public sealed class RecoveryPresenterCoverageTests
         {
             RecoveryVerdict.AlreadyDone, RecoveryVerdict.CanRetry, RecoveryVerdict.NotRecycled, RecoveryVerdict.SourceChanged,
             RecoveryVerdict.Conflict, RecoveryVerdict.Lost, RecoveryVerdict.Unknown,
-        }.Select(v => RecoveryPresenter.GroupStatusText(v, member, PathCheck(RecoveryPathStatus.Exists), null)).ToList();
+        }.Select(v => RecoveryPresentation.GroupStatusText(v, member, PathCheck(RecoveryPathStatus.Exists), null)).ToList();
 
         Assert.Equal(texts.Count, texts.Distinct(StringComparer.Ordinal).Count());
     }
@@ -127,7 +128,7 @@ public sealed class RecoveryPresenterCoverageTests
     [Fact]
     public void RetryConfirmText_SingleFileEntry_NamesTheOperationAndTheFileNameOnly()
     {
-        var text = RecoveryPresenter.RetryConfirmText(Entry(FileOperationType.Copy), null, allowPermanentDelete: false);
+        var text = RecoveryPresentation.RetryConfirmText(Entry(FileOperationType.Copy), null, allowPermanentDelete: false);
 
         Assert.Equal(Tr.DialogConfirmRetryMessage(Tr.EnumFileOperationCopy, "a.jpg"), text);
         Assert.DoesNotContain(@"C:\photos", text, StringComparison.Ordinal);
@@ -136,7 +137,7 @@ public sealed class RecoveryPresenterCoverageTests
     [Fact]
     public void RetryConfirmText_CancelledSingleFileEntry_SaysARetryFinishesIt()
     {
-        var text = RecoveryPresenter.RetryConfirmText(Entry(FileOperationType.Move, JournalErrors.CancelledByUser), null, allowPermanentDelete: true);
+        var text = RecoveryPresentation.RetryConfirmText(Entry(FileOperationType.Move, JournalErrors.CancelledByUser), null, allowPermanentDelete: true);
 
         Assert.Equal(Tr.RecoveryRetryConfirmCancelled(Tr.EnumFileOperationMove, 1), text);
     }
@@ -144,25 +145,25 @@ public sealed class RecoveryPresenterCoverageTests
     [Fact]
     public void RetryConfirmText_NullEntry_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => RecoveryPresenter.RetryConfirmText(null!, null, allowPermanentDelete: false));
+        Assert.Throws<ArgumentNullException>(() => RecoveryPresentation.RetryConfirmText(null!, null, allowPermanentDelete: false));
     }
 
     [Fact]
     public void OperationText_NamesEachOperation_AndFallsBackToTheEnumNameForUnknownOnes()
     {
-        Assert.Equal(Tr.EnumFileOperationMove, RecoveryPresenter.OperationText(FileOperationType.Move));
-        Assert.Equal(Tr.EnumFileOperationCopy, RecoveryPresenter.OperationText(FileOperationType.Copy));
-        Assert.Equal(Tr.EnumFileOperationRecycle, RecoveryPresenter.OperationText(FileOperationType.Recycle));
-        Assert.Equal("99", RecoveryPresenter.OperationText((FileOperationType)99));
+        Assert.Equal(Tr.EnumFileOperationMove, RecoveryPresentation.OperationText(FileOperationType.Move));
+        Assert.Equal(Tr.EnumFileOperationCopy, RecoveryPresentation.OperationText(FileOperationType.Copy));
+        Assert.Equal(Tr.EnumFileOperationRecycle, RecoveryPresentation.OperationText(FileOperationType.Recycle));
+        Assert.Equal("99", RecoveryPresentation.OperationText((FileOperationType)99));
     }
 
     [Fact]
     public void StateText_NamesEachJournalState_AndFallsBackToTheEnumNameForUnknownOnes()
     {
-        Assert.Equal(Tr.EnumJournalStatePrepared, RecoveryPresenter.StateText(JournalState.Prepared));
-        Assert.Equal(Tr.EnumJournalStateCommitted, RecoveryPresenter.StateText(JournalState.Committed));
-        Assert.Equal(Tr.EnumJournalStateFailed, RecoveryPresenter.StateText(JournalState.Failed));
-        Assert.Equal("99", RecoveryPresenter.StateText((JournalState)99));
+        Assert.Equal(Tr.EnumJournalStatePrepared, RecoveryPresentation.StateText(JournalState.Prepared));
+        Assert.Equal(Tr.EnumJournalStateCommitted, RecoveryPresentation.StateText(JournalState.Committed));
+        Assert.Equal(Tr.EnumJournalStateFailed, RecoveryPresentation.StateText(JournalState.Failed));
+        Assert.Equal("99", RecoveryPresentation.StateText((JournalState)99));
     }
 
     [Fact]
@@ -170,7 +171,7 @@ public sealed class RecoveryPresenterCoverageTests
     {
         var asked = new List<string>();
 
-        var result = RecoveryPresenter.NearestExistingFolder("   ", folder =>
+        var result = RecoveryPresentation.NearestExistingFolder("   ", folder =>
         {
             asked.Add(folder);
             return true;
@@ -183,7 +184,7 @@ public sealed class RecoveryPresenterCoverageTests
     [Fact]
     public void NearestExistingFolder_NullPredicate_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => RecoveryPresenter.NearestExistingFolder(@"C:\a.jpg", null!));
+        Assert.Throws<ArgumentNullException>(() => RecoveryPresentation.NearestExistingFolder(@"C:\a.jpg", null!));
     }
 
     [Fact]
@@ -193,8 +194,8 @@ public sealed class RecoveryPresenterCoverageTests
         var asLocalKind = DateTime.SpecifyKind(Stamp, DateTimeKind.Local);
         var asUnspecifiedKind = DateTime.SpecifyKind(Stamp, DateTimeKind.Unspecified);
 
-        Assert.Equal(RecoveryPresenter.FormatTime(Stamp), RecoveryPresenter.FormatTime(asLocalKind));
-        Assert.Equal(RecoveryPresenter.FormatTime(Stamp), RecoveryPresenter.FormatTime(asUnspecifiedKind));
-        Assert.Equal(Stamp.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture), RecoveryPresenter.FormatTime(Stamp));
+        Assert.Equal(RecoveryPresentation.FormatTime(Stamp), RecoveryPresentation.FormatTime(asLocalKind));
+        Assert.Equal(RecoveryPresentation.FormatTime(Stamp), RecoveryPresentation.FormatTime(asUnspecifiedKind));
+        Assert.Equal(Stamp.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture), RecoveryPresentation.FormatTime(Stamp));
     }
 }

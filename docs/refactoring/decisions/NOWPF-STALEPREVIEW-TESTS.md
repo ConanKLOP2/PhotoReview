@@ -1,6 +1,6 @@
 ---
 id: NOWPF-STALEPREVIEW
-order: 1060
+order: 1090
 summary: |-
   Bước 2 kế hoạch "chứng minh bằng bằng chứng" (2026-10-13): bằng chứng TẤT ĐỊNH cho lỗi "preview CŨ ghi đè preview MỚI" trên mọi đường
   hiển thị (ImagePresenter dùng chung WPF/shell, PreviewImageService, composer/GpuImageCache/prefetcher/sink của shell Win32). Scheduler và

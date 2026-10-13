@@ -330,7 +330,14 @@ public sealed class WpfDialogHostSeamTests
     }
 
     private static T Field<T>(object target, string name)
-        => (T)typeof(RecoveryWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(target)!;
+        => (T)PresenterField(target, name)!;
+
+    // WP-35 G0: the retry/permanent-delete delegates now live in the window's presenter.
+    private static object? PresenterField(object window, string name)
+    {
+        var presenter = typeof(RecoveryWindow).GetField("_presenter", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        return presenter.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(presenter);
+    }
 
     [Fact]
     public void ShowRecovery_PassesRetryOnlyWhenARetryServiceIsRegistered()
@@ -343,8 +350,8 @@ public sealed class WpfDialogHostSeamTests
                 services.AddSingleton(new RecoveryRetryService(journal, new PhysicalFileSystem(), new SystemClock())), out _);
             try
             {
-                Assert.Null(typeof(RecoveryWindow).GetField("_retry", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(without));
-                Assert.NotNull(typeof(RecoveryWindow).GetField("_retry", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(with));
+                Assert.Null(PresenterField(without, "_retry"));
+                Assert.NotNull(PresenterField(with, "_retry"));
             }
             finally
             {
