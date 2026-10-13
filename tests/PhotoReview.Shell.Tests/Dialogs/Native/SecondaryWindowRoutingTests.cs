@@ -90,9 +90,9 @@ public sealed class SecondaryWindowRoutingTests
     ];
 
     private static (SecondaryWindowRouter Router, Spy Native, Spy? Bridge, Func<bool> BridgeLoaded, List<string> Notices, NoLauncher Launcher) Build(
-        bool bridgePresent, bool bridgeThrows = false)
+        bool bridgePresent, bool bridgeThrows = false, bool nativeSettings = false)
     {
-        var native = new Spy(Win32Kinds);
+        var native = new Spy(nativeSettings ? [.. Win32Kinds, SecondaryWindowKind.Settings] : Win32Kinds);
         var bridge = bridgePresent ? new Spy(Enum.GetValues<SecondaryWindowKind>()) : null;
         var loaded = false;
         var lazy = new Lazy<ISecondaryWindowPort?>(() =>
@@ -134,6 +134,20 @@ public sealed class SecondaryWindowRoutingTests
         Assert.Equal(["settings", "recovery"], bridge!.Calls);
         Assert.Empty(native.Calls);
         Assert.True(loaded());
+        Assert.Empty(notices);
+    }
+
+    [Fact]
+    public void Settings_GoesToTheWin32Port_WhenItSupportsIt_AndNeverLoadsTheBridge()
+    {
+        // WP-35 GĐ3a: once the Win32 port takes Settings (flag or every page present) the WPF bridge is not even loaded for it.
+        var (router, native, bridge, loaded, notices, _) = Build(bridgePresent: true, nativeSettings: true);
+
+        Assert.True(router.ShowSettings(0, SettingsTarget.ExternalEditor));
+
+        Assert.Equal(["settings"], native.Calls);
+        Assert.Empty(bridge!.Calls);
+        Assert.False(loaded());
         Assert.Empty(notices);
     }
 

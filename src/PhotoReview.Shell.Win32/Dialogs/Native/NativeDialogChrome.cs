@@ -94,6 +94,7 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
         DialogControlClass.Button => ButtonTheme,
         DialogControlClass.Edit => EditTheme,
         DialogControlClass.ListBox => ListTheme,
+        DialogControlClass.ScrollBar => ListTheme,
         DialogControlClass.ComboBox => ComboTheme,
         DialogControlClass.ListView => ListViewTheme,
         DialogControlClass.Progress => ProgressTheme,
