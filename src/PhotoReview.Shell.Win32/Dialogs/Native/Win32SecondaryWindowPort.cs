@@ -1,12 +1,15 @@
 using Microsoft.Extensions.DependencyInjection;
+using PhotoReview.App.Localization;
 using PhotoReview.App.Presenters;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Settings;
+using PhotoReview.Core.Updates;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
+using PhotoReview.Shell.Win32.Dialogs.SettingsUi;
 using PhotoReview.Shell.Win32.Hosting;
 
 namespace PhotoReview.Shell.Win32.Dialogs.Native;
@@ -34,6 +37,8 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     private readonly List<NativeDialog> _open = [];
     private readonly IDialogWarningSink? _warnings;
     private readonly BenchmarkDialogSeams? _benchmarkSeams;
+    private readonly SettingsDialogOptions? _settingsOptions;
+    private readonly Func<bool>? _settingsEnabled;
     private BenchmarkDialog? _benchmark;
     private readonly int _uiThreadId = Environment.CurrentManagedThreadId;
     private bool _disposed;
@@ -43,8 +48,11 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     /// <param name="ready">Test: gọi sau khi hộp thoại đã hiện, trước vòng lặp modal (mô phỏng người dùng).</param>
     /// <param name="loop">Vòng lặp của shell: vòng modal chạy lồng trong nó (khung hình, việc nền, phím WPF modeless); null = đơn giản.</param>
     public Win32SecondaryWindowPort(IServiceProvider services, INativeDialogChrome? chrome = null, Action<NativeDialog>? ready = null,
-        MessageLoop? loop = null, IDialogWarningSink? warnings = null, BenchmarkDialogSeams? benchmark = null)
+        MessageLoop? loop = null, IDialogWarningSink? warnings = null, BenchmarkDialogSeams? benchmark = null,
+        SettingsDialogOptions? settings = null, Func<bool>? settingsEnabled = null)
     {
+        _settingsOptions = settings;
+        _settingsEnabled = settingsEnabled;
         _warnings = warnings;
         _benchmarkSeams = benchmark;
         _services = services ?? throw new ArgumentNullException(nameof(services));
@@ -56,11 +64,51 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     /// <summary>Số hộp thoại đang mở (kể cả lồng nhau).</summary>
     internal int OpenCount => _open.Count;
 
+    /// <summary>Biến môi trường (ẩn) bật cửa sổ Settings Win32 khi chưa đủ trang: <c>PHOTOREVIEW_SETTINGS_WIN32=1</c>.</summary>
+    internal const string SettingsEnvironmentVariable = "PHOTOREVIEW_SETTINGS_WIN32";
+
+    /// <summary>
+    /// WP-35 GĐ3a: cổng Win32 nhận Settings khi ĐỦ MỌI trang (<see cref="SettingsPageCatalog.IsComplete"/>) hoặc khi bật cờ ẩn; chưa đủ
+    /// thì cầu WPF (bản hybrid) hoặc cổng tạm (Native AOT: mở config.json) làm mặc định.
+    /// </summary>
+    internal bool SettingsEnabled
+        => _settingsEnabled?.Invoke()
+            ?? (SettingsPageCatalog.IsComplete
+                || string.Equals(Environment.GetEnvironmentVariable(SettingsEnvironmentVariable), "1", StringComparison.Ordinal));
+
     public bool Supports(SecondaryWindowKind kind)
         => kind is SecondaryWindowKind.Diagnostics or SecondaryWindowKind.SkippedFiles or SecondaryWindowKind.BatchReview
-            or SecondaryWindowKind.ZoomPrompt or SecondaryWindowKind.Benchmark or SecondaryWindowKind.ActionProfiles;
+            or SecondaryWindowKind.ZoomPrompt or SecondaryWindowKind.Benchmark or SecondaryWindowKind.ActionProfiles
+            || (kind == SecondaryWindowKind.Settings && SettingsEnabled);
 
-    public bool ShowSettings(nint ownerHwnd, SettingsTarget target) => false;
+    /// <summary>
+    /// WP-35 GĐ3a: Settings MODAL (<see cref="SettingsDialog"/>); true khi đã lưu (Save hoặc Apply) để người gọi nạp lại cấu hình.
+    /// </summary>
+    public bool ShowSettings(nint ownerHwnd, SettingsTarget target)
+    {
+        if (_disposed)
+        {
+            return false;
+        }
+
+        var store = _services.GetService<SettingsStore>();
+        if (store is null)
+        {
+            return false;
+        }
+
+        var baseOptions = _settingsOptions ?? new SettingsDialogOptions();
+        var options = baseOptions with
+        {
+            Target = target,
+            Files = baseOptions.Files ?? _services.GetService<IShellFileDialog>(),
+            Warnings = baseOptions.Warnings ?? _warnings,
+        };
+        var dialog = new SettingsDialog(store.Current, store, _services.GetService<IImageDecoderFactory>(),
+            _services.GetService<LocalizationService>(), _services.GetService<IUpdateChecker>(), options, _chrome);
+        Run(dialog, ownerHwnd);
+        return dialog.Saved;
+    }
 
     public void ShowRecovery(nint ownerHwnd)
     {

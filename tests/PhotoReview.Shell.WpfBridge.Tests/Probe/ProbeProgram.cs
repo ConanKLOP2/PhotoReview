@@ -10,6 +10,7 @@ using PhotoReview.Core.Settings;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Dialogs;
 using PhotoReview.Shell.Win32.Hosting;
+using Xunit;
 
 namespace PhotoReview.Shell.WpfBridge.Tests.Probe;
 
@@ -18,6 +19,7 @@ namespace PhotoReview.Shell.WpfBridge.Tests.Probe;
 /// shell, mở một cửa sổ phụ modal rồi đóng, in ra danh sách assembly WPF đã nạp ở từng bước (test cha so sánh).
 /// Dòng kết quả: <c>STAGE tên | wpf=a,b,c</c>; thêm <c>TIMING tên=ms</c>.
 /// </summary>
+[Collection("GlobalState")] // TEST-09: the native scenario sets PHOTOREVIEW_SETTINGS_WIN32 (only ever in the probe process)
 internal static class ProbeProgram
 {
     private static readonly string[] WpfAssemblyPrefixes = ["PresentationFramework", "PresentationCore", "WindowsBase", "System.Xaml", "PhotoReview.App.WpfWindows"];
@@ -132,6 +134,8 @@ internal static class ProbeProgram
     private static int RunNativeScenario(IServiceProvider unused, MessageLoop loop)
     {
         _ = unused;
+        // WP-35 GĐ3a: the hidden flag that routes Settings to the Win32 dialog while some pages are still missing.
+        Environment.SetEnvironmentVariable("PHOTOREVIEW_SETTINGS_WIN32", "1");
         var shell = PhotoReview.Shell.Win32.Startup.ShellCompositionRoot.Build(
             new PhotoReview.Shell.Win32.Startup.ShellHostServices(loop.Dispatcher, () => 0, loop),
             new PhotoReview.Shell.Win32.Startup.ShellPresentationHub(),
@@ -172,8 +176,14 @@ internal static class ProbeProgram
         var port = shell.GetRequiredService<PhotoReview.Shell.Win32.Dialogs.SecondaryWindowPortHost>().Port.Value!;
         var edited = port.ShowActionProfiles(0, [new PhotoReview.Core.Settings.ReviewAction { Name = "Keep", Shortcut = "F6" }]);
         Report("after-action-profiles");
+
+        // WP-35 GĐ3a: Settings (modal, flag on) closed with WM_CLOSE = Cancel -> false; still no WPF.
+        CloseSoon();
+        var settingsSaved = dialogs.ShowSettings();
+        Report("after-settings");
         Console.WriteLine("RESULT batch=" + batch + " zoom=" + (picked?.ToString(CultureInfo.InvariantCulture) ?? "null")
-            + " benchmark=" + benchmarkOpened + "/" + benchmarkSingle + " actionProfiles=" + (edited is null ? "null" : "list"));
+            + " benchmark=" + benchmarkOpened + "/" + benchmarkSingle + " actionProfiles=" + (edited is null ? "null" : "list")
+            + " settings=" + settingsSaved);
         (shell as IDisposable)?.Dispose();
         return batch || picked is not null ? 1 : 0;
     }
@@ -189,7 +199,7 @@ internal static class ProbeProgram
         {
             seen.Add(clock.Elapsed.TotalMilliseconds - started);
             d.Close();
-        });
+        }, settingsEnabled: () => true);
         var skipped = new[] { new SkippedEntry(@"C:\photos\a.jpg", "locked"), new SkippedEntry(@"C:\photos\b.jpg", "denied") };
         var batch = new[] { new BatchReviewItem(@"C:\photos\a.jpg", 10), new BatchReviewItem(@"C:\photos\b.jpg", 20) };
         string Last() => seen[^1].ToString("F1", CultureInfo.InvariantCulture);
@@ -207,6 +217,9 @@ internal static class ProbeProgram
             started = clock.Elapsed.TotalMilliseconds;
             port.ShowBatchReview(0, batch);
             Console.WriteLine($"TIMING native-batch-r{round}-ms={Last()}");
+            started = clock.Elapsed.TotalMilliseconds;
+            port.ShowSettings(0, SettingsTarget.Default);
+            Console.WriteLine($"TIMING native-settings-r{round}-ms={Last()}");
         }
 
         port.Dispose();

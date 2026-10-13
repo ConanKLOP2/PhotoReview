@@ -49,6 +49,16 @@ public sealed unsafe class InteropSignatureTests
 
     [Trait("Category", "HotPath")]
     [Fact]
+    public void ScrollInfo_Size_Is28()
+    {
+        // SCROLLINFO: cbSize, fMask, nMin, nMax, nPage, nPos, nTrackPos (7 x 4 bytes)
+        Assert.Equal(28, sizeof(ScrollInfo));
+        Assert.Equal(20, Marshal.OffsetOf<ScrollInfo>(nameof(ScrollInfo.Pos)).ToInt32());
+        Assert.Equal(24, Marshal.OffsetOf<ScrollInfo>(nameof(ScrollInfo.TrackPos)).ToInt32());
+    }
+
+    [Trait("Category", "HotPath")]
+    [Fact]
     public void MonitorInfo_Size_Is40()
     {
         Assert.Equal(40, sizeof(MonitorInfo)); // MONITORINFO: cbSize + RECT + RECT + DWORD

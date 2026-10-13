@@ -44,14 +44,15 @@ public sealed class LazyLoadTests(ITestOutputHelper output)
         foreach (var stage in new[]
                  {
                      "shell-built", "services-resolved", "after-diagnostics", "after-four-native-windows", "after-benchmark",
-                     "after-action-profiles",
+                     "after-action-profiles", "after-settings",
                  })
         {
             Assert.DoesNotContain(stages[stage], n => WpfCore.Contains(n) || n == "PhotoReview.Shell.WpfBridge");
         }
 
         // Benchmark opened as ONE modeless window (a second open added none); Action profiles closed as Cancel -> null.
-        Assert.Contains("RESULT batch=False zoom=null benchmark=True/True actionProfiles=null", lines);
+        // WP-35 GĐ3a: Settings (flag on) opened as the Win32 dialog and was cancelled: nothing saved, WPF never loaded.
+        Assert.Contains("RESULT batch=False zoom=null benchmark=True/True actionProfiles=null settings=False", lines);
     }
 
     [Fact]
@@ -65,6 +66,7 @@ public sealed class LazyLoadTests(ITestOutputHelper output)
         }
 
         Assert.Contains(lines, l => l.StartsWith("TIMING native-batch-r8", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("TIMING native-settings-r8", StringComparison.Ordinal));
     }
 
     [Fact]

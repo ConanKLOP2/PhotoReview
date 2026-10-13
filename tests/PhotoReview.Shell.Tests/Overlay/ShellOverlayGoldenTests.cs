@@ -14,7 +14,7 @@ namespace PhotoReview.Shell.Tests.Overlay;
 public sealed class OverlayLocalizationGroup
 {
     /// <summary>Test đổi <c>Localizer</c> toàn tiến trình: chạy một mình, không song song với test khác.</summary>
-    public const string Name = "OverlayLocalization";
+    public const string Name = "GlobalState";
 }
 
 /// <summary>
@@ -23,7 +23,7 @@ public sealed class OverlayLocalizationGroup
 /// <c>overlay-boxes.v1.json</c> +/- 2 DIP: 6 panel x 3 cửa sổ x 2 DPI x 2 cỡ chữ = 72 ca. Chuỗi cố định của recorder được đẩy
 /// qua <see cref="OverlayModel"/> (cùng đường mà view model dùng). Không phụ thuộc kích thước màn hình runner.
 /// </summary>
-[Collection("OverlayLocalization")]
+[Collection("GlobalState")]
 [Trait("Category", "Native")]
 public sealed class ShellOverlayGoldenTests(ITestOutputHelper output)
 {
