@@ -49,8 +49,8 @@ internal sealed unsafe class BenchmarkDialog : NativeDialog, IBenchmarkView, IDi
     private readonly EventHandler _languageHandler;
     private int _sortColumn = -1;
     private int _sortDirection;
-    private bool _running;
     private bool _textsApplied;
+    private int _statusHeight;
 
     /// <param name="initialFolder">Thư mục ban đầu của ô thư mục (null = Pictures).</param>
     /// <param name="ui">Bộ lập lịch UI (tiến độ từ luồng nền).</param>
@@ -511,7 +511,13 @@ internal sealed unsafe class BenchmarkDialog : NativeDialog, IBenchmarkView, IDi
         }
 
         SetItemText(StatusId, text);
-        RunLayout(); // dòng trạng thái xuống dòng: bảng kết quả co/giãn theo
+        // Tiến độ đến rất dày: chỉ bố cục lại (xoá + vẽ cả cửa sổ) khi số dòng của trạng thái đổi, bảng kết quả co/giãn theo đó.
+        var width = Math.Max(1, CurrentClientSize().Width - (2 * Margin));
+        var height = text.Length == 0 ? 0 : MeasureTextHeight(text, width, BodyFont);
+        if (height != _statusHeight)
+        {
+            RunLayout();
+        }
     }
 
     void IBenchmarkView.SetProgress(double fraction)
@@ -529,7 +535,6 @@ internal sealed unsafe class BenchmarkDialog : NativeDialog, IBenchmarkView, IDi
             return;
         }
 
-        _running = running;
         var focus = User32.GetFocus();
         Enable(RunId, !running);
         Enable(QuickCheckId, !running);
@@ -621,6 +626,7 @@ internal sealed unsafe class BenchmarkDialog : NativeDialog, IBenchmarkView, IDi
         Place(ProgressId, m, y, content, Math.Max(Dy(4), Dy(5)));
         y += Dy(5) + Dy(4);
         var status = string.IsNullOrEmpty(GetItemText(StatusId)) ? 0 : MeasureItemHeight(StatusId, content);
+        _statusHeight = status;
         Place(StatusId, m, y, content, status);
         y += status + Dy(6);
 

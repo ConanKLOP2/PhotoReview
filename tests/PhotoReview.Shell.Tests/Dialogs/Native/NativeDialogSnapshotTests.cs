@@ -1,7 +1,11 @@
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using PhotoReview.App.Presenters;
+using PhotoReview.Benchmarking;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Model;
+using PhotoReview.Core.Settings;
+using PhotoReview.Shell.Tests.Hosting;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Dialogs.Native;
@@ -64,7 +68,7 @@ public sealed unsafe class NativeDialogSnapshotTests
         }
     }
 
-    private static void ChangeDpi(NativeDialog dialog, uint dpi)
+    internal static void ChangeDpi(NativeDialog dialog, uint dpi)
     {
         var current = WindowRect(dialog.Hwnd);
         var factor = dpi / (double)dialog.Dpi;
@@ -78,7 +82,7 @@ public sealed unsafe class NativeDialogSnapshotTests
         User32.SendMessage(dialog.Hwnd, WindowMessages.WmDpiChanged, (nint)((dpi << 16) | dpi), (nint)(&suggested));
     }
 
-    private static void Snap(string directory, string name, NativeDialog dialog, Action<NativeDialog>? beforeCapture = null)
+    internal static void Snap(string directory, string name, NativeDialog dialog, Action<NativeDialog>? beforeCapture = null)
     {
         ShowOnOwner(dialog, (d, _) =>
         {
@@ -90,7 +94,7 @@ public sealed unsafe class NativeDialogSnapshotTests
     }
 
     /// <summary>PrintWindow of one top-level or popup window to a PNG (the combo drop-down list is a window of its own).</summary>
-    private static void CaptureWindow(string path, nint hwnd)
+    internal static void CaptureWindow(string path, nint hwnd)
     {
         var rect = WindowRect(hwnd);
         var width = Width(rect);
@@ -249,4 +253,109 @@ public sealed unsafe class NativeDialogSnapshotTests
 
     [DllImport("gdi32.dll")]
     private static extern int GetDIBits(nint hdc, nint bitmap, uint start, uint lines, byte* bits, byte* info, uint usage);
+}
+
+/// <summary>WP-35 GĐ2 (thủ công): ảnh chụp Action profiles (modal) và Benchmark (modeless, có kết quả); tách lớp vì cần <c>await</c>.</summary>
+[Collection("OverlayLocalization")]
+[Trait("Category", "Manual")]
+public sealed class NativeDialogSnapshotWindowsTests
+{
+    private static string? OutputDirectory => Environment.GetEnvironmentVariable("PHOTOREVIEW_DIALOG_SNAPSHOTS");
+
+    /// <summary>WP-35 GĐ2: Action profiles (modal) and the Benchmark window (modeless) with results, en + vi, 100 % and 150 %.</summary>
+    [Fact]
+    public async Task WriteSnapshots_OfActionProfilesAndBenchmark()
+    {
+        var directory = OutputDirectory;
+        if (string.IsNullOrEmpty(directory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        foreach (var (code, localizer) in new[] { ("en", TestLocalization.English), ("vi", TestLocalization.Vietnamese) })
+        {
+            using var scope = TestLocalization.Use(localizer);
+            await using var ui = await UiThread.StartAsync();
+            // comctl32 v6 stays active for the thread's lifetime (the thread ends with the iteration; no out-of-order deactivation).
+            await ui.InvokeAsync(() => _ = ActivateVisualStyles());
+            var actions = new List<ReviewAction>
+            {
+                new() { Name = "Keep", Shortcut = "F6", Operation = FileOperationType.Move, Destination = "Keep", Confirm = false },
+                new() { Name = "Copy to the review folder", Shortcut = "F7", Operation = FileOperationType.Copy, Destination = "Review", Confirm = true },
+                new() { Name = "Trash", Shortcut = "F8", Operation = FileOperationType.Recycle, Destination = "x", Confirm = false },
+            };
+            await ui.InvokeAsync(() =>
+            {
+                NativeDialogSnapshotTests.Snap(directory, $"actionprofiles-{code}", new ActionProfilesDialog(actions), d => Select(d, 1));
+                NativeDialogSnapshotTests.Snap(directory, $"actionprofiles-{code}-150", new ActionProfilesDialog(actions), d =>
+                {
+                    Select(d, 1);
+                    NativeDialogSnapshotTests.ChangeDpi(d, 144);
+                });
+            });
+
+            var owner = await ui.InvokeAsync(() => CreateOwner());
+            BenchmarkDialog? dialog = null;
+            await ui.InvokeAsync(() =>
+            {
+                dialog = new BenchmarkDialog(@"C:\Photos\trip", ui.Dispatcher,
+                    (profile, _) => new SnapshotSession(profile),
+                    (_, _, _) => null, _ => { }, (_, _, _) => ["a.jpg"], _ => Task.FromResult(@"C:\Temp\summary.json"));
+                dialog.ShowModeless(owner, ui.Loop);
+                SelectProfiles(dialog, "fast-sequential", "preview-light", "original-correctness", "fast-balanced");
+            });
+            await ui.RunAsync(() => dialog!.Presenter.RunSelectedAsync(
+                dialog.Presenter.ProfileItems.Where(i => i.Profile.Id is "fast-sequential" or "preview-light" or "original-correctness" or "fast-balanced")
+                    .Select(i => i.Profile).ToArray(), @"C:\Photos\trip", "64"));
+            await ui.InvokeAsync(() =>
+            {
+                ListViewControl.SelectRow(Item(dialog!, BenchmarkDialog.ResultsId), 1);
+                Drain(dialog!);
+                NativeDialogSnapshotTests.CaptureWindow(Path.Combine(directory, $"benchmark-{code}.png"), dialog!.Hwnd);
+                dialog.SortBy(6);
+                Drain(dialog);
+                NativeDialogSnapshotTests.CaptureWindow(Path.Combine(directory, $"benchmark-{code}-sorted.png"), dialog.Hwnd);
+                NativeDialogSnapshotTests.ChangeDpi(dialog, 144);
+                Drain(dialog);
+                NativeDialogSnapshotTests.CaptureWindow(Path.Combine(directory, $"benchmark-{code}-150.png"), dialog.Hwnd);
+                dialog.Close();
+                DestroyOwner(owner);
+            });
+        }
+    }
+
+    private static void SelectProfiles(BenchmarkDialog dialog, params string[] ids)
+    {
+        var list = Item(dialog, BenchmarkDialog.ProfilesId);
+        ListBoxControl.SelectAll(list, false);
+        for (var i = 0; i < dialog.Presenter.ProfileItems.Count; i++)
+        {
+            if (ids.Contains(dialog.Presenter.ProfileItems[i].Profile.Id))
+            {
+                ListBoxControl.SetSelected(list, i, true);
+            }
+        }
+    }
+
+    private static void Select(NativeDialog dialog, int index)
+    {
+        ListBoxControl.SelectSingle(Item(dialog, ActionProfilesDialog.ListId), index);
+        Command(dialog, ActionProfilesDialog.ListId, ControlConstants.LbnSelChange);
+    }
+
+    private sealed class SnapshotSession(BenchmarkProfile profile) : IBenchmarkProfileSession
+    {
+        public Task<BenchmarkReport> RunAsync(string folder, IProgress<BenchmarkProgress> progress, CancellationToken cancellationToken)
+        {
+            var failed = profile.Id == "original-correctness";
+            double[] samples = failed ? [] : profile.Id == "preview-light" ? [9, 10, 11, 13] : [12, 15, 18, 22, 31];
+            var workload = failed ? BenchmarkWorkload.Correctness : BenchmarkWorkload.Sequential;
+            var status = failed ? BenchmarkResultStatus.Fail : BenchmarkResultStatus.Pass;
+            return Task.FromResult(new BenchmarkReport("snap-" + profile.Id, DateTimeOffset.UnixEpoch, folder,
+                [new BenchmarkPhaseResult(profile.Id, workload, samples, status)]));
+        }
+
+        public ValueTask DisposeAsync() => default;
+    }
 }

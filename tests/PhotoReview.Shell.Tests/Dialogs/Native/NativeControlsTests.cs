@@ -125,7 +125,7 @@ public sealed unsafe class NativeControlsTests
     [InlineData("ComboBox", "DarkMode_CFD")]
     [InlineData("ListView", "DarkMode_Explorer")]
     [InlineData("Trackbar", "DarkMode_Explorer")]
-    [InlineData("Progress", "")]
+    [InlineData("Progress", "DarkMode_Explorer")]
     public void DarkTheme_PerControlClass(string controlClass, string theme)
         => Assert.Equal(theme, DarkDialogChrome.ThemeFor(Enum.Parse<DialogControlClass>(controlClass)));
 
@@ -164,7 +164,7 @@ public sealed unsafe class NativeControlsTests
         Assert.Equal(string.Empty, ThemeOf(radio));
         Assert.Equal(string.Empty, ThemeOf(group));
         Assert.Equal("DarkMode_Explorer", ThemeOf(check));
-        Assert.Equal(string.Empty, ThemeOf(progress));
+        Assert.Equal("DarkMode_Explorer", ThemeOf(progress));
         Assert.Equal("DarkMode_Explorer", ThemeOf(slider));
         Assert.Equal("DarkMode_CFD", ThemeOf(edit));
         Assert.Equal(string.Empty, calls.Last(c => c.Hwnd == radio).Ids); // classic = sub-app "" AND ids "" (not the light default)
@@ -435,20 +435,6 @@ public sealed unsafe class NativeControlsTests
         });
 
         Assert.Equal(expectedPosition, position);
-    }
-
-    [Fact]
-    public void Progress_UsesTheAccentBar_OnTheSurfaceBackground()
-    {
-        var (bar, back) = Run((d, _) =>
-        {
-            var progress = Item(d, ControlGalleryDialog.Progress);
-            return ((uint)User32.SendMessage(progress, 0x040F /* PBM_GETBARCOLOR */, 0, 0),
-                (uint)User32.SendMessage(progress, 0x040E /* PBM_GETBKCOLOR */, 0, 0));
-        }, visualStyles: true);
-
-        Assert.Equal(DialogColors.FromKey("Dark.Accent"), bar);
-        Assert.Equal(DialogColors.FromKey("Dark.Surface"), back);
     }
 
     [Fact]

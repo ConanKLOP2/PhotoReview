@@ -489,10 +489,9 @@ internal static class ProgressControl
 
     public static void Configure(nint progress)
     {
+        // Màu do chủ đề DarkMode_Explorer (nền tối, vạch sáng): dáng cổ điển + PBM_SETBARCOLOR vẽ khung 3D trắng chói trên nền tối
+        // (thấy ở ảnh chụp GĐ2), nên không đặt màu tay.
         User32.SendMessage(progress, ControlConstants.PbmSetRange32, 0, Scale);
-        // Không chủ đề (chrome) nên hai màu này có hiệu lực: vạch tiến độ màu nhấn trên nền Dark.Surface.
-        User32.SendMessage(progress, ControlConstants.PbmSetBarColor, 0, (nint)DialogColors.FromKey("Dark.Accent"));
-        User32.SendMessage(progress, ControlConstants.PbmSetBkColor, 0, (nint)DialogColors.FromKey("Dark.Surface"));
     }
 
     public static void SetFraction(nint progress, double fraction)
