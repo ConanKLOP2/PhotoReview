@@ -1,0 +1,9 @@
+{
+  "solution": {
+    "path": "../../PhotoReview.slnx",
+    "projects": [
+      "src/PhotoReview.App/PhotoReview.App.csproj",
+      "src/PhotoReview.Shell.Win32/PhotoReview.Shell.Win32.csproj"
+    ]
+  }
+}
