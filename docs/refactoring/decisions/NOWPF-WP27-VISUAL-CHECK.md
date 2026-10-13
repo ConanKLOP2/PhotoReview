@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP27-VISUAL-CHECK
-order: 1240
+order: 1250
 summary: |-
   WP-27 (kiểm bằng mắt shell Win32 trên desktop ẩn, 2026-10-14, master 0a15b79d): menu chuột phải/Tools tối đúng (en+vi, 100/150 %, hover, tắt, dấu chọn, submenu), 8 hộp thoại phụ tối không cắt/chồng chữ; 2 LỖI: (1) SAU #503 mọi trang Settings TRỐNG (điều khiển bị group box cắt vì WS_CLIPSIBLINGS, test #503 không thấy), (2) emoji đơn sắc (DrawText không bật EnableColorFont). Chưa kiểm: F11 hai màn hình, DPI hai màn hình, title bar tối DWM. Không sửa mã; ảnh ở perf/wp27-visual.
 ---
