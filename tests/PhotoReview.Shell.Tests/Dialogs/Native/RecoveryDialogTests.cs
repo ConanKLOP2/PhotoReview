@@ -752,6 +752,76 @@ public sealed class RecoveryDialogTests
         Assert.Equal(0, await rig.OnUi(() => d.Hwnd));
     }
 
+    [Fact]
+    public async Task WhileARetryRuns_TheWaitCursorIsShownOverTheDialog_AndOnlyThen()
+    {
+        await using var rig = await RecoveryRig.StartAsync();
+        var gate = new TaskCompletionSource<RecoveryRetryResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var d = await rig.OpenAsync(ThreeEntries(rig), retry: _ => gate.Task);
+        await rig.CheckDoneAsync(d);
+        await rig.PickAsync(d, 0);
+        var arrow = await rig.OnUi(() => User32.LoadCursor(0, 32512));
+        var wait = await rig.OnUi(() => User32.LoadCursor(0, 32514));
+        var hit = (nint)((0x0200 << 16) | 1); // WM_MOUSEMOVE over HTCLIENT
+
+        await rig.ClickAsync(d, RecoveryDialog.RetryId);
+        var whileBusy = await rig.OnUi(() =>
+        {
+            User32.SetCursor(arrow);
+            var handled = User32.SendMessage(d.Hwnd, WindowMessages.WmSetCursor, Item(d, RecoveryDialog.ListId), hit);
+            return (handled, GetCursor());
+        });
+        gate.SetResult(Rejected());
+        await rig.RetryDoneAsync(d);
+        await rig.CheckDoneAsync(d);
+        var afterwards = await rig.OnUi(() =>
+        {
+            User32.SetCursor(arrow);
+            User32.SendMessage(d.Hwnd, WindowMessages.WmSetCursor, Item(d, RecoveryDialog.ListId), hit);
+            return GetCursor();
+        });
+
+        Assert.Equal(1, whileBusy.handled);
+        Assert.Equal(wait, whileBusy.Item2);
+        Assert.Equal(arrow, afterwards);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern nint GetCursor();
+
+    [Fact]
+    public async Task ReadOnlyBoxes_ArePaintedLikeInputFields_WhileLabelsKeepTheWindowColour()
+    {
+        await using var rig = await RecoveryRig.StartAsync();
+        var d = await rig.OpenAsync(ThreeEntries(rig), autoCheck: false);
+        await rig.PickAsync(d, 0);
+
+        var (details, path, label) = await rig.OnUi(() =>
+        {
+            const uint WmCtlColorStatic = 0x0138;
+            var hdc = User32.GetDC(d.Hwnd);
+            try
+            {
+                uint BackgroundFor(int id)
+                {
+                    User32.SendMessage(d.Hwnd, WmCtlColorStatic, hdc, Item(d, id));
+                    return Gdi32.GetBkColor(hdc);
+                }
+
+                return (BackgroundFor(RecoveryDialog.DetailsId), BackgroundFor(RecoveryDialog.SourcePathId),
+                    BackgroundFor(RecoveryDialog.SummaryId));
+            }
+            finally
+            {
+                _ = User32.ReleaseDC(d.Hwnd, hdc);
+            }
+        });
+
+        Assert.Equal(DialogColors.Input, details);
+        Assert.Equal(DialogColors.Input, path);
+        Assert.Equal(DialogColors.Window, label);
+    }
+
     // ---- Clear (dismiss) -------------------------------------------------------------------------------------------------------------
 
     [Fact]

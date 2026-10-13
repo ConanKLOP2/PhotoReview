@@ -75,7 +75,7 @@ public sealed class ShellSecondaryWindowFallbackTests
         Assert.Equal(Tr.RecoveryTitle, run.OnUi(() => WindowText(dialog)));
         Assert.NotEqual(Tr.StatusSecondaryUnavailableRecovery, run.OnUi(() => run.Main!.ViewModel.StatusText));
         Assert.True(PostMessage(dialog, 0x0010 /* WM_CLOSE */, 0, 0));
-        Assert.True(recovery.Wait(Bound), "Recovery không đóng");
+        Assert.True(SpinWait.SpinUntil(() => recovery.IsCompleted, Bound), "Recovery không đóng");
         Assert.Single(launcher.Opens); // Recovery không chạm launcher
 
         run.RequestClose();
