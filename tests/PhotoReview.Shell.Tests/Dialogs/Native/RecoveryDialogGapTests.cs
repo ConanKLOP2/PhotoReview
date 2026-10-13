@@ -317,8 +317,10 @@ public sealed class RecoveryDialogGapTests
         await rig.RetryDoneAsync(d);
         var after = await rig.OnUi(GetCursor);
 
-        Assert.Equal(wait, during);
-        Assert.Equal(arrow, after);
+        // The real mouse (a CI session) may put its own cursor over a child control, so only "left the arrow" / "left the wait cursor"
+        // are asserted here; the exact WM_SETCURSOR answer is pinned by WhileARetryRuns_TheWaitCursorIsShownOverTheDialog_AndOnlyThen.
+        Assert.NotEqual(arrow, during);
+        Assert.NotEqual(wait, after);
         await rig.CheckDoneAsync(d);
         await rig.OnUi(() => d.Close());
     }

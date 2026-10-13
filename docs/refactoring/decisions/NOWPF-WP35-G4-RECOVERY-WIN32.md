@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-G4
-order: 1140
+order: 1150
 summary: |-
   WP-35 GĐ4 (phương án B của spike S3, CHƯA XÁC NHẬN): cửa sổ Recovery là hộp thoại Win32 gốc MODAL, chỉ là VIEW của RecoveryWindowPresenter (không đổi presenter, RecoveryFileCheck, RecoveryRetryService): danh sách đa chọn owner-draw có huy hiệu theo RecoveryTone, bộ lọc, chi tiết (sao chép/mở thư mục), kiểm tra nền có trạng thái/huỷ, Retry/Clear với xác nhận như WPF, từ chối đóng khi đang Retry. Cổng Win32 ưu tiên Recovery, cầu WPF chỉ còn Settings; bản AOT mở Recovery thật. Kiểm trên bản sao journal thật (Failed/Prepared/Superseded/Delete-failed): file nguồn/đích/journal đúng sau từng hành động. Mở <= 108 ms (R2R, máy yên), 0 cảnh báo ILC, không nạp WPF.
 ---
