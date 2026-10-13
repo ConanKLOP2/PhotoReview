@@ -173,6 +173,60 @@ public sealed class SettingsShortcutsPageTests : IDisposable
         Assert.Equal(expected, ShortcutsSettingsPage.AllRows.Select(row => row.Property).ToArray());
     }
 
+    private sealed class FakeSurface : ISettingsLayoutSurface
+    {
+        public Dictionary<int, (int X, int Y, int W, int H)> Placed { get; } = [];
+
+        public Func<int, int> LabelHeight { get; init; } = _ => 14;
+
+        public int Dx(int dialogUnits) => dialogUnits * 2;
+
+        public int Dy(int dialogUnits) => dialogUnits * 2;
+
+        public int LineHeight => 14;
+
+        public int FieldHeight => 24;
+
+        public string TextOf(int id) => "x";
+
+        public int TextHeight(int id, int width) => LabelHeight(id);
+
+        public int TextWidth(string text) => 20;
+
+        public bool IsHidden(int id) => false;
+
+        public int ComboDropHeight(int id) => 0;
+
+        public void Place(int id, int x, int y, int width, int height) => Placed[id] = (x, y, width, height);
+
+        public void Hide(int id)
+        {
+        }
+    }
+
+    [Fact]
+    public void KeyGridRow_IsAsTallAsItsTallestWrappedLabel_AndBoxesAlignInColumns()
+    {
+        var cells = new[]
+        {
+            new SettingsKeyCell(1, 2, 3), new SettingsKeyCell(4, 5, 0), new SettingsKeyCell(6, 7, 8), new SettingsKeyCell(9, 10, 0),
+        };
+        var element = new SettingsKeyGridElement(cells);
+        var surface = new FakeSurface { LabelHeight = id => id == 4 ? 60 : 14 };
+        var height = element.Place(surface, 0, 0, 700); // wide: two columns
+        Assert.Equal(surface.Placed[2].X, surface.Placed[7].X);
+        Assert.NotEqual(surface.Placed[2].X, surface.Placed[5].X);
+        // row 1 holds the 60 px label, so row 2 starts at least 60 px (+ gap) below row 1's top
+        Assert.True(surface.Placed[7].Y >= 60,
+            $"row 2 box at {surface.Placed[7].Y}");
+        Assert.True(height >= 60 + 24 + 10, $"height {height}");
+
+        var narrow = new FakeSurface();
+        _ = element.Place(narrow, 0, 0, 200); // narrow: one column
+        Assert.Equal(narrow.Placed[2].X, narrow.Placed[5].X);
+        Assert.True(narrow.Placed[5].Y > narrow.Placed[2].Y);
+    }
+
     [Fact]
     public void AKeyBox_IsPaintedLikeAnInput_NotLikeALabel()
     {
