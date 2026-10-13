@@ -50,7 +50,25 @@ public sealed class TestFilterDriftTests
             .Select(dir => Path.GetFileName(dir)!)
             .Where(name => Directory.GetFiles(Path.Combine(RepoScan.Root, "tests", name), "*.csproj").Length > 0);
 
-    private const string SharedFilterArgument = "--filter \"$env:TEST_FILTER\"";
+    // A project's main CI step: the shared TEST_FILTER, optionally narrowed to one namespace shard by
+    // `&FullyQualifiedName~<ns>` (this shard) or `&FullyQualifiedName!~<ns>` (the complement shard). Anything else is drift.
+    private static readonly Regex MainStepCommand = new(
+        @"dotnet test tests/(?<p>PhotoReview\.[A-Za-z.]+\.Tests)/\k<p>\.csproj -c Release --no-build --filter ""\$env:TEST_FILTER(?:&FullyQualifiedName(?<neg>!?)~(?<ns>[A-Za-z0-9_.]+))?""",
+        RegexOptions.CultureInvariant);
+
+    private static Dictionary<string, string> CiJobs(string ci)
+    {
+        var jobStarts = Regex.Matches(ci, @"^  (?<id>[a-z][a-z0-9-]*):\s*$", RegexOptions.Multiline)
+            .Where(m => m.Index > ci.IndexOf("\njobs:", StringComparison.Ordinal)).ToArray();
+        var jobs = new Dictionary<string, string>();
+        for (var i = 0; i < jobStarts.Length; i++)
+        {
+            var end = i + 1 < jobStarts.Length ? jobStarts[i + 1].Index : ci.Length;
+            jobs[jobStarts[i].Groups["id"].Value] = ci[jobStarts[i].Index..end];
+        }
+
+        return jobs;
+    }
 
     [Fact(DisplayName = "Rule R2-A-12: every CI dotnet test command passes the shared TEST_FILTER (or the Integration+Slow safety net)")]
     public void EveryCiTestCommand_PassesTheSharedFilter()
@@ -63,15 +81,14 @@ public sealed class TestFilterDriftTests
         // A step that defines TEST_FILTER but forgets to pass it would silently run Native/Slow/Manual tests (or none).
         foreach (var command in commands)
         {
-            var usesShared = command.Contains(SharedFilterArgument, StringComparison.Ordinal);
+            var usesShared = MainStepCommand.IsMatch(command);
             var usesSafetyNet = command.Contains("--filter \"Category=Integration&Category=Slow&", StringComparison.Ordinal);
             Assert.True(usesShared || usesSafetyNet, $"CI test command without the shared filter: {command.Trim()}");
         }
 
         // ...and every test project has a main step with the shared filter.
         foreach (var project in TestProjects())
-            Assert.Contains(commands, c => c.Contains($"tests/{project}/{project}.csproj", StringComparison.Ordinal)
-                && c.Contains(SharedFilterArgument, StringComparison.Ordinal));
+            Assert.Contains(commands, c => MainStepCommand.Match(c) is { Success: true } m && m.Groups["p"].Value == project);
 
         // verify-all.ps1's per-project run passes the filter it builds (checked against CI above).
         Assert.Contains("'--filter', $filter,", ReadRepoFile("tools/verify-all.ps1"), StringComparison.Ordinal);
@@ -170,26 +187,57 @@ public sealed class TestFilterDriftTests
             Assert.Contains(steps, step => step.Contains($"'{project}'", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "Rule CI-PARALLEL: each test project's main step and safety-net step run in the same job, and the aggregate build-test-publish job needs every build/test job")]
+    [Fact(DisplayName = "Rule CI-PARALLEL: each test project is tested by exactly one job (or by two complementary namespace shards), its safety net runs in one job that built it, and the aggregate build-test-publish job needs every build/test job")]
     public void EachProjectIsTestedInOneJob_AndTheAggregateGateNeedsAllJobs()
     {
         var ci = ReadRepoFile(".github/workflows/ci.yml");
-        var jobStarts = Regex.Matches(ci, @"^  (?<id>[a-z][a-z0-9-]*):\s*$", RegexOptions.Multiline)
-            .Where(m => m.Index > ci.IndexOf("\njobs:",StringComparison.Ordinal)).ToArray();
-        var jobs = new Dictionary<string, string>();
-        for (var i = 0; i < jobStarts.Length; i++)
-        {
-            var end = i + 1 < jobStarts.Length ? jobStarts[i + 1].Index : ci.Length;
-            jobs[jobStarts[i].Groups["id"].Value] = ci[jobStarts[i].Index..end];
-        }
+        var jobs = CiJobs(ci);
+        const string safetyMarker = "- name: Run Integration-category tests that the main filter skips";
 
         foreach (var project in TestProjects())
         {
-            var owners = jobs.Where(j => j.Value.Contains($"dotnet test tests/{project}/{project}.csproj -c Release --no-build --filter \"$env:TEST_FILTER\"", StringComparison.Ordinal))
-                .Select(j => j.Key).ToArray();
-            var owner = Assert.Single(owners);
-            Assert.Contains($"'{project}'", jobs[owner], StringComparison.Ordinal);
-            Assert.Contains("Category=Integration&Category=Slow&", jobs[owner], StringComparison.Ordinal);
+            var mains = jobs.SelectMany(j => j.Value.Split('\n')
+                    .Select(line => MainStepCommand.Match(line))
+                    .Where(m => m.Success && m.Groups["p"].Value == project)
+                    .Select(m => (Job: j.Key, Neg: m.Groups["neg"].Value == "!", Ns: m.Groups["ns"].Value, Sharded: m.Groups["ns"].Success)))
+                .ToArray();
+
+            if (mains.Length == 1)
+            {
+                Assert.False(mains[0].Sharded, $"{project}: a single main step must not be a shard (the other shard would be missing)");
+            }
+            else
+            {
+                // Sharded: exactly two steps, the same namespace, one positive (~) and one complement (!~), in different jobs.
+                Assert.True(mains.Length == 2, $"{project}: expected one main step or two complementary shards, found {mains.Length}");
+                Assert.All(mains, m => Assert.True(m.Sharded, $"{project}: a second main step must be a namespace shard"));
+                Assert.Equal(mains[0].Ns, mains[1].Ns);
+                Assert.NotEqual(mains[0].Neg, mains[1].Neg);
+                Assert.NotEqual(mains[0].Job, mains[1].Job);
+            }
+
+            // The safety net runs exactly once per project, in a job that also runs one of its main steps.
+            var safetyJobs = jobs.Where(j =>
+            {
+                var at = j.Value.IndexOf(safetyMarker, StringComparison.Ordinal);
+                if (at < 0) return false;
+                var end = j.Value.IndexOf("\n      - name:", at + safetyMarker.Length, StringComparison.Ordinal);
+                var step = end < 0 ? j.Value[at..] : j.Value[at..end];
+                return step.Contains($"'{project}'", StringComparison.Ordinal) && step.Contains("Category=Integration&Category=Slow&", StringComparison.Ordinal);
+            }).Select(j => j.Key).ToArray();
+            var safetyJob = Assert.Single(safetyJobs);
+            Assert.Contains(mains, m => m.Job == safetyJob);
+        }
+
+        // Each job builds, through its solution filter (tools/ci/<job>.slnf), every project it tests.
+        foreach (var (id, text) in jobs.Where(j => j.Value.Contains("dotnet test ", StringComparison.Ordinal)))
+        {
+            var build = Regex.Match(text, @"dotnet build (?<f>tools/ci/[A-Za-z0-9-]+\.slnf) -c Release --no-restore");
+            Assert.True(build.Success, $"{id}: no `dotnet build tools/ci/<job>.slnf -c Release --no-restore` step before its tests");
+            var filter = ReadRepoFile(build.Groups["f"].Value);
+            foreach (Match tested in Regex.Matches(text, @"dotnet test tests/(?<p>PhotoReview\.[A-Za-z.]+\.Tests)/"))
+                Assert.True(filter.Contains($"tests/{tested.Groups["p"].Value}/{tested.Groups["p"].Value}.csproj", StringComparison.Ordinal),
+                    $"{id}: {tested.Groups["p"].Value} is tested but not built by {build.Groups["f"].Value}");
         }
 
         // The aggregate job keeps the id the required status check and release.yml look up, and waits for every job that builds or tests.
