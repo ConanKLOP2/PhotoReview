@@ -17,6 +17,7 @@ internal static class SettingsPageCatalog
         ["Display"] = static () => new DisplaySettingsPage(),
         ["Files"] = static () => new FilesSettingsPage(),
         ["General"] = static () => new GeneralSettingsPage(),
+        ["Mouse"] = static () => new MouseSettingsPage(),
         ["Performance"] = static () => new PerformanceSettingsPage(),
         ["Shortcuts"] = static () => new ShortcutsSettingsPage(),
     };

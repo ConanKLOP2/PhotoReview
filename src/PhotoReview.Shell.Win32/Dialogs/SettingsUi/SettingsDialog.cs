@@ -561,6 +561,7 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         SetItemText(PageTitleId, _pages[index].Title);
         _scroll[index] = 0;
         _dirty[index] = true;
+        _pages[index].OnActivated();
         User32.ShowWindow(Item(ViewportId(index)), WindowMessages.SwShow);
         if (layout)
         {
@@ -1100,6 +1101,9 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         TrackbarControl.Configure(slider, min, max, 1, 1, Math.Max(1, (max - min) / 10));
         TrackbarControl.SetPosition(slider, Math.Clamp(position, min, max));
     }
+
+    /// <summary>Tooltip dạng callback (chữ hỏi lại mỗi lần hiện) cho một điều khiển thường (nút tick...).</summary>
+    internal void SetControlTooltip(int id, Func<string> text) => SetItemTooltips(id, _ => text());
 
     internal void SetControlEnabled(int id, bool enabled) => User32.EnableWindow(Item(id), enabled);
 

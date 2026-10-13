@@ -536,8 +536,8 @@ public sealed class ZoomPromptDialogTests
                 });
             }
 
-            Assert.True(GdiObjects() <= gdi, "GDI objects leaked");
-            Assert.True(UserObjects() <= user, "USER objects leaked");
+            Assert.True(SettlesAtOrBelow(GdiObjects, gdi), "GDI objects leaked");
+            Assert.True(SettlesAtOrBelow(UserObjects, user), "USER objects leaked");
             return 0;
         });
     }

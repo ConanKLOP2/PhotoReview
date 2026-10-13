@@ -7,6 +7,7 @@ using PhotoReview.Core.Localization;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Dialogs;
 using PhotoReview.Shell.Win32.Dialogs.Native;
+using PhotoReview.Shell.Win32.Dialogs.SettingsUi;
 using static PhotoReview.Shell.Tests.Dialogs.Native.NativeDialogTestKit;
 
 namespace PhotoReview.Shell.Tests.Dialogs.Native;
@@ -203,7 +204,9 @@ public sealed class SecondaryWindowRoutingTests
 
         foreach (var kind in Enum.GetValues<SecondaryWindowKind>())
         {
-            Assert.Equal(Win32Kinds.Contains(kind), port.Supports(kind));
+            // Settings is a Win32 window of its own once every page of the catalog exists (WP-35 GĐ3: the last page, Mouse).
+            var expected = Win32Kinds.Contains(kind) || (kind == SecondaryWindowKind.Settings && SettingsPageCatalog.IsComplete);
+            Assert.Equal(expected, port.Supports(kind));
         }
 
         Assert.False(port.ShowSettings(0, SettingsTarget.Default));

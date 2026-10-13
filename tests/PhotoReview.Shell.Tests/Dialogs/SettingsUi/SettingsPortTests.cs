@@ -61,7 +61,8 @@ public sealed class SettingsPortTests : IDisposable
     [Fact]
     public void TheHiddenEnvironmentFlag_EnablesSettings_WithoutTheCatalogBeingComplete()
     {
-        Assert.False(SettingsPageCatalog.IsComplete, "while pages are missing the flag is the only way in");
+        // While pages are missing the flag is the only way in; with every page present Settings is Win32 without it.
+        var complete = SettingsPageCatalog.IsComplete;
         var previous = Environment.GetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable);
         try
         {
@@ -70,9 +71,9 @@ public sealed class SettingsPortTests : IDisposable
                 using var provider = Services(null);
                 using var port = new Win32SecondaryWindowPort(provider);
                 Environment.SetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable, null);
-                Assert.False(port.Supports(SecondaryWindowKind.Settings));
+                Assert.Equal(complete, port.Supports(SecondaryWindowKind.Settings));
                 Environment.SetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable, "0");
-                Assert.False(port.Supports(SecondaryWindowKind.Settings));
+                Assert.Equal(complete, port.Supports(SecondaryWindowKind.Settings));
                 Environment.SetEnvironmentVariable(Win32SecondaryWindowPort.SettingsEnvironmentVariable, "1");
                 Assert.True(port.Supports(SecondaryWindowKind.Settings));
                 return 0;

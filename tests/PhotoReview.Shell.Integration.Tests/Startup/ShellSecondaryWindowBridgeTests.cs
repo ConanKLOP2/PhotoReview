@@ -48,7 +48,8 @@ public sealed class ShellSecondaryWindowBridgeTests
         var settings = Open(run, () => viewModel.ShowSettings());
         var settingsHwnd = WaitOwned(run, uiThread, "settings");
         Assert.False(IsWindowEnabled(main.Hwnd), "modal phải vô hiệu hoá cửa sổ chủ");
-        run.OnUi(() => Click(OnlyVisibleWindow(), "Save_Click"));
+        // WP-35 GĐ3 (đủ 7 trang): Settings là hộp thoại Win32 gốc (Lưu = IDOK), không còn cửa sổ WPF của cầu.
+        Assert.True(User32.PostMessage(settingsHwnd, WindowMessages.WmCommand, WindowMessages.IdOk, 0));
         Finished(settings, "Settings không đóng sau Lưu: " + run.Diagnostics);
         WaitNoOwned(run, uiThread, "settings closed");
         Assert.True(File.Exists(run.Paths.ConfigFile), "Lưu phải ghi config.json");

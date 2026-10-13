@@ -100,6 +100,13 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         Assert.Same(ports.Port, wired.Ports.Port);
     }
 
+    private const uint WmCommand = 0x0111;
+    private const nint IdOk = 1;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", ExactSpelling = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool PostMessageW(nint hwnd, uint message, nint wParam, nint lParam);
+
     [Fact]
     public async Task Settings_ThroughTheDialogService_IsOwnedByTheShell_AndSavingRaisesStoreChanged()
     {
@@ -111,8 +118,9 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         var shown = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowSettings());
         var hwnd = await harness.WaitForOwnedWindowAsync("settings shown via IDialogService");
         Assert.False(harness.IsOwnerEnabled());
-        Assert.Equal(1, harness.Ui.Loop.MessageFilterCount); // cầu đã nạp và gắn bộ lọc vào vòng lặp thật của shell
-        await harness.Ui.InvokeAsync(() => Invoke(VisibleWindow(), "Save_Click"));
+        // WP-35 GĐ3: with every page present Settings is the native Win32 dialog, so the WPF bridge (and its message filter) stays unloaded.
+        Assert.Equal(0, harness.Ui.Loop.MessageFilterCount);
+        PostMessageW(hwnd, WmCommand, IdOk, 0); // Save is IDOK
         var accepted = await shown;
 
         await harness.WaitForNoOwnedWindowAsync("settings closed");

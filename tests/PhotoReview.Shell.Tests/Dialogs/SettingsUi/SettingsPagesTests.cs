@@ -634,9 +634,17 @@ public sealed class SettingsPagesTests : IDisposable
         original.Shortcuts.Next = "N";
         var saved = Saved(original, d =>
         {
-            var mouse = SettingsPresenter.Pages.ToList().FindIndex(p => p.Key == "Mouse");
-            GoTo(d, mouse);
-            Assert.IsType<PendingSettingsPage>(d.Pages[mouse]);
+            // The first page that still has no Win32 view (null once every page is done: nothing left to check).
+            var pendingKeys = SettingsPageCatalog.PendingKeys;
+            var pendingKey = pendingKeys.Count > 0 ? pendingKeys[0] : null;
+            if (pendingKey is null)
+            {
+                return;
+            }
+
+            var pending = SettingsPresenter.Pages.ToList().FindIndex(p => p.Key == pendingKey);
+            GoTo(d, pending);
+            Assert.IsType<PendingSettingsPage>(d.Pages[pending]);
         });
 
         Assert.Equal(150, saved.ClickZoomPercent);

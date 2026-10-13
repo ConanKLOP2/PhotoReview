@@ -239,6 +239,21 @@ internal static unsafe class NativeDialogTestKit
 
     public static uint UserObjects() => User32.GetGuiResources(Kernel32.GetCurrentProcess(), DialogConstants.GrUserObjects);
 
+    /// <summary>
+    /// True when <paramref name="read"/> reaches <paramref name="baseline"/> or below within a bounded wait. The GDI/USER counters are
+    /// process-wide, so a window another test class (parallel collection) is still tearing down can add a transient +1: a real leak
+    /// stays above the baseline for the whole wait, a transient one does not.
+    /// </summary>
+    public static bool SettlesAtOrBelow(Func<uint> read, uint baseline)
+    {
+        return SpinWait.SpinUntil(() =>
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            return read() <= baseline;
+        }, TimeSpan.FromSeconds(5));
+    }
+
     /// <summary>Có WM_QUIT đang chờ trong hàng đợi (không lấy ra)?</summary>
     public static bool HasQuitPending(out int exitCode)
     {
