@@ -113,7 +113,7 @@
 
         <DataGrid x:Name="ResultsGrid" Grid.Row="3">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="{x:Static local:BenchmarkResultRow.BestSymbol}" Binding="{Binding BestMarker}" Width="36"/>
+                <DataGridTextColumn Header="{x:Static local:BenchmarkWindow.BestSymbol}" Binding="{Binding BestMarker}" Width="36"/>
                 <DataGridTextColumn Header="{loc:Tr benchmark.column.profile}" Binding="{Binding ProfileName}" Width="2*"/>
                 <DataGridTextColumn Header="{loc:Tr benchmark.column.loadingMode}" Binding="{Binding LoadingModeText}" Width="90"/>
                 <DataGridTextColumn Header="{loc:Tr benchmark.column.workload}" Binding="{Binding WorkloadText}" Width="100"/>

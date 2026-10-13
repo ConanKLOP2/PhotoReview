@@ -1,55 +1,43 @@
-using System.Diagnostics.CodeAnalysis;
-using PhotoReview.Benchmarking;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Text;
-using System.Text.Json;
 using System.Windows;
-using PhotoReview.Core.Catalog;
+using System.Windows.Threading;
+using PhotoReview.App.Presenters;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
-using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Wpf;
 
 namespace PhotoReview.App;
 
-public partial class BenchmarkWindow : Window, IDisposable
+/// <summary>
+/// The Benchmark window (modeless): a thin WPF view. Profile list, Run / Quick check / Cancel, progress, the result grid,
+/// report saving and the close-mid-run handling live in <see cref="BenchmarkPresenter"/> (WP-35 G2a).
+/// </summary>
+public partial class BenchmarkWindow : Window, IDisposable, IBenchmarkView
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    /// <summary>Header of the best-marker column (the XAML cannot reach the App.Shared constant by x:Static).</summary>
+    public const string BestSymbol = BenchmarkResultRow.BestSymbol;
 
-    /// <summary>perf(bench-window): "Quick check" always runs this profile (fast-sequential) with a shortened
-    /// iteration count, regardless of what is selected in <see cref="ProfilesList"/>.</summary>
-    private const string QuickCheckProfileId = "fast-sequential";
-    private const int QuickCheckIterations = 10;
-
-    /// <summary>Default first-N image cap (mirrors the CLI's <c>--benchmark-all</c> <c>Take(64)</c>); 0 means "all".</summary>
-    private const int DefaultImageLimit = 64;
-
-    private readonly ObservableCollection<BenchmarkResultRow> _rows = [];
-    private readonly List<BenchmarkProfileItem> _profileItems = [.. BenchmarkProfiles.All.Select(p => new BenchmarkProfileItem(p))];
-    private CancellationTokenSource? _cts;
-    private string? _lastReport;
+    private readonly BenchmarkPresenter _presenter;
 
     public BenchmarkWindow(string? initialFolder)
     {
         InitializeComponent();
         DarkTitleBarChrome.Apply(this);
-        FolderText.Text = initialFolder ?? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-        foreach (var item in _profileItems) ProfilesList.Items.Add(item);
-        ProfilesList.SelectedItems.Add(_profileItems.First(i => i.Profile.Id == "fast-sequential"));
-        ImageLimitText.Text = DefaultImageLimit.ToString(CultureInfo.InvariantCulture);
-        ResultsGrid.ItemsSource = _rows;
+        _presenter = new BenchmarkPresenter(this, new WindowUiScheduler(Dispatcher),
+            BenchmarkProfileSession.Factory(WpfBitmapSourceCodec.Instance, () => new WpfBitmapImageDecoder()));
+        FolderText.Text = BenchmarkPresenter.InitialFolder(initialFolder);
+        foreach (var item in _presenter.ProfileItems) ProfilesList.Items.Add(item);
+        ProfilesList.SelectedItems.Add(_presenter.DefaultSelection);
+        ImageLimitText.Text = BenchmarkPresenter.DefaultImageLimitText;
+        ResultsGrid.ItemsSource = _presenter.Rows;
         Localizer.CurrentChanged += OnLanguageChanged;
     }
 
     // XAML texts follow a language switch through {loc:Tr}; the profile list and the grid cells are
     // code-provided, so refresh them here (the window is modeless and can stay open across a switch).
-    private void OnLanguageChanged(object? sender, EventArgs e) => _ = Dispatcher.InvokeAsync(() =>
-    {
-        foreach (var item in _profileItems) item.NotifyTextsChanged();
-        ResultsGrid.Items.Refresh();
-    });
+    private void OnLanguageChanged(object? sender, EventArgs e) => _ = Dispatcher.InvokeAsync(_presenter.NotifyLanguageChanged);
 
     private void Browse_Click(object sender, RoutedEventArgs e)
     {
@@ -66,44 +54,20 @@ public partial class BenchmarkWindow : Window, IDisposable
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
         var profiles = ProfilesList.SelectedItems.Cast<BenchmarkProfileItem>().Select(i => i.Profile).ToArray();
-        if (profiles.Length == 0) { StatusText.Text = Tr.BenchmarkStatusNoProfileSelected; return; }
-        await RunAsync(profiles);
+        await _presenter.RunSelectedAsync(profiles, FolderText.Text, ImageLimitText.Text);
     }
 
-    // "Quick check" (perf(bench-window)): a fixed, fast smoke run -- fast-sequential only, 10 iterations,
-    // 1 warm-up (the profile's default WarmupCount) -- that never touches ProfilesList.SelectedItems, so a
-    // careful multi-profile comparison the user set up is left alone.
+    // "Quick check": a fixed, fast smoke run that never touches ProfilesList.SelectedItems.
     [SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = AsyncVoidJustification.WpfEventHandler)]
-    private async void QuickCheck_Click(object sender, RoutedEventArgs e)
-    {
-        var profile = BuildQuickCheckProfile();
-        if (profile is null) { StatusText.Text = Tr.BenchErrorUnexpected($"Unknown profile '{QuickCheckProfileId}'"); return; }
-        await RunAsync([profile]);
-    }
+    private async void QuickCheck_Click(object sender, RoutedEventArgs e) =>
+        await _presenter.QuickCheckAsync(FolderText.Text, ImageLimitText.Text);
 
-    /// <summary>The exact profile "Quick check" runs: fast-sequential with a shortened iteration count (1
-    /// warm-up, its default). A test seam so the override is asserted against production wiring, not a
-    /// re-derived expression (mutation: dropping the <c>with</c> override must fail this).</summary>
-    internal static BenchmarkProfile? BuildQuickCheckProfile() =>
-        BenchmarkProfiles.Find(QuickCheckProfileId) is { } profile ? profile with { Iterations = QuickCheckIterations } : null;
-
-    private void Cancel_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
-
-    /// <summary>Parses <see cref="ImageLimitText"/>: 0 (or blank/invalid) means "all"; otherwise the first-N cap
-    /// (perf(bench-window), mirrors the CLI's <c>--benchmark-all</c> <c>Take(64)</c>).</summary>
-    private int ImageLimit => int.TryParse(ImageLimitText.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0
-        ? n : 0;
-
-    /// <summary>First-N cap applied to the folder's supported files, in the same order the caller enumerated
-    /// them; 0 (or a limit &gt;= the file count) means "all". A test seam for the actual production logic
-    /// (mutation: removing the cap must fail a test asserting the shorter length).</summary>
-    internal static string[] ApplyImageLimit(IReadOnlyList<string> files, int limit) =>
-        limit > 0 && files.Count > limit ? [.. files.Take(limit)] : [.. files];
+    private void Cancel_Click(object sender, RoutedEventArgs e) => _presenter.Cancel();
 
     // This window is opened modelessly (dialog.Show() in MainWindow), not via ShowDialog(),
     // so IsCancel/DialogResult cannot be used on the Close button -- WPF throws
-    // InvalidOperationException when a non-dialog Window's DialogResult is set. Cancel any
-    // running benchmark before closing so the background run doesn't outlive the window.
+    // InvalidOperationException when a non-dialog Window's DialogResult is set. OnClosed cancels
+    // any running benchmark so the background run doesn't outlive the window.
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     protected override void OnClosed(EventArgs e)
@@ -116,185 +80,34 @@ public partial class BenchmarkWindow : Window, IDisposable
     public void Dispose()
     {
         GC.SuppressFinalize(this);
-        var cts = Interlocked.Exchange(ref _cts, null);
-        if (cts is null) return;
-        cts.Cancel();
-        cts.Dispose();
+        _presenter.Dispose();
     }
 
-    /// <summary>How many top-level entries <see cref="EnumerateImageFiles"/> checks between cancellation polls: fine
-    /// enough that Cancel/Close lands promptly on a huge or slow/NAS folder, coarse enough that checking the token
-    /// is not itself a per-file cost.</summary>
-    private const int EnumerationCancellationCheckInterval = 256;
+    private void OpenReport_Click(object sender, RoutedEventArgs e) => _presenter.OpenReport();
 
-    /// <summary>
-    /// Background-thread scan (R11): folder existence, the full top-level file listing filtered to supported image
-    /// types (in the same enumeration order as before) and the image-count cap (see <see cref="ApplyImageLimit"/>). A large or slow/NAS folder can hold tens
-    /// of thousands of top-level entries, so this used to run synchronously on the dialog's dispatcher before its
-    /// first await; moving it here keeps the window (and Cancel) responsive while the scan runs.
-    /// <see cref="Directory.EnumerateFiles(string, string, System.IO.SearchOption)"/> has no cancellation overload,
-    /// so <paramref name="cancellationToken"/> is polled every <see cref="EnumerationCancellationCheckInterval"/>
-    /// entries instead -- Cancel/Close can interrupt a slow scan instead of only the profile run that used to
-    /// follow it. A test seam for the actual production logic. Camera RAW files are never listed even with RAW support on:
-    /// the benchmark executor builds its <c>PreviewImageService</c> without the RAW-routed decoder, so a RAW would fail or
-    /// measure the WIC fallback instead of the real RAW path.
-    /// </summary>
-    internal static string[] EnumerateImageFiles(string folder, int imageLimit, CancellationToken cancellationToken = default)
+    private void OpenResultFolder_Click(object sender, RoutedEventArgs e) => _presenter.OpenResultFolder();
+
+    // ---- IBenchmarkView ----
+
+    void IBenchmarkView.SetStatus(string text) => StatusText.Text = text;
+
+    void IBenchmarkView.SetProgress(double fraction) => RunProgress.Value = fraction;
+
+    void IBenchmarkView.SetRunning(bool running)
     {
-        if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
-        var supported = new List<string>();
-        var seen = 0;
-        foreach (var path in Directory.EnumerateFiles(folder, "*.*", System.IO.SearchOption.TopDirectoryOnly))
-        {
-            if (++seen % EnumerationCancellationCheckInterval == 0) cancellationToken.ThrowIfCancellationRequested();
-            if (ImageFileTypes.IsSupported(path, rawEnabled: false)) supported.Add(path);
-        }
-        cancellationToken.ThrowIfCancellationRequested();
-        // perf(bench-window): cap to the first N files in the same (enumeration) order as before this change,
-        // same idea as the CLI's --benchmark-all Take(64) -- a large real folder no longer forces every run
-        // (including "Quick check") to decode thousands of images just to compare configurations. 0 = all.
-        return ApplyImageLimit(supported, imageLimit);
+        RunButton.IsEnabled = !running;
+        QuickCheckButton.IsEnabled = !running;
+        CancelButton.IsEnabled = running;
+        BrowseButton.IsEnabled = !running;
+        ProfilesList.IsEnabled = !running;
+        ImageLimitText.IsEnabled = !running;
+        FolderText.IsEnabled = !running;
     }
 
-    private async Task RunAsync(BenchmarkProfile[] profiles)
-    {
-        // UI-thread reads captured before the background hop; DirectoryNotFoundException (thrown by
-        // EnumerateImageFiles when the folder is gone) is a subtype of IOException, so it must be caught
-        // ahead of the generic IOException/UnauthorizedAccessException clause below to keep its own message.
-        var folder = FolderText.Text;
-        var imageLimit = ImageLimit;
-        // Created before the scan (not after, as before this change) so Cancel/Close can interrupt a slow
-        // enumeration too, not only the profile run that used to follow it.
-        _cts = new CancellationTokenSource();
-        // Captured once: Dispose() (window closed mid-run) nulls _cts, and re-reading it per profile threw an NRE that
-        // was reported as a bogus Fail row. A cancelled token instead ends the run through the normal cancel path.
-        var runToken = _cts.Token;
-        RunButton.IsEnabled = false; QuickCheckButton.IsEnabled = false; CancelButton.IsEnabled = true; BrowseButton.IsEnabled = false; ProfilesList.IsEnabled = false; ImageLimitText.IsEnabled = false; FolderText.IsEnabled = false;
-        _rows.Clear();
-        RunProgress.Value = 0;
-        var sessionReports = new List<BenchmarkReport>();
-        try
-        {
-            string[] files;
-            try
-            {
-                files = await Task.Run(() => EnumerateImageFiles(folder, imageLimit, runToken), runToken);
-            }
-            catch (DirectoryNotFoundException) { StatusText.Text = Tr.BenchmarkStatusFolderMissing; return; }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                StatusText.Text = Tr.BenchmarkStatusCannotReadFolder(ex.Message);
-                return;
-            }
-            if (files.Length == 0) { StatusText.Text = Tr.BenchmarkStatusNoImages; return; }
-
-            var profileIndex = 0;
-            foreach (var profile in profiles)
-            {
-                profileIndex++;
-                var currentIndex = profileIndex;
-                var progress = new Progress<BenchmarkProgress>(p =>
-                {
-                    RunProgress.Value = p.Total == 0 ? 0 : (double)p.Completed / p.Total;
-                    StatusText.Text = Tr.BenchmarkStatusProgress(currentIndex, profiles.Length, p.ProfileId, p.Completed, p.Total, BenchmarkText.ProgressMessage(p.Message));
-                });
-                var executor = new BenchmarkImageExecutor(profile, files, WpfBitmapSourceCodec.Instance,
-                    decoder: new WpfBitmapImageDecoder());
-                var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
-                // DetailedLogging distinguishes the logging-on/logging-off profiles: without
-                // toggling AppLog around the run, both profiles measured identical (whatever
-                // the app's ambient setting happened to be) logging overhead.
-                // (shared with the CLI via BenchmarkProfileScope so both front ends apply the profile identically)
-                var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled, () => AppLog.EnabledWriteCount);
-                try
-                {
-                    // The per-iteration workload logic (correctness guard, file-action mapping,
-                    // preload warm-up) lives in BenchmarkWorkloadRunner and is shared with the
-                    // CLI runner (PhotoReview.Benchmark.Cli/Program.cs) so both front ends exercise the
-                    // same real behavior instead of the CLI running a decode-only stand-in.
-                    var report = await BenchmarkEngine.RunPreparedAsync(folder, profile,
-                        (_, workload, iteration, ct) => BenchmarkWorkloadRunner.PrepareIterationAsync(executor, files, profile, workload, iteration, random, BenchmarkRecycleBin.Create(() => PhotoReview.Platform.Windows.WindowsRecycleBin.Instance), ct),
-                        progress, cancellationToken: runToken);
-                    sessionReports.Add(report);
-                    foreach (var phase in report.Phases) _rows.Add(new BenchmarkResultRow(profile, phase));
-                    RecomputeBest();
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    AppLog.Error($"Benchmark profile failed: {profile.Id}", ex);
-                    _rows.Add(new BenchmarkResultRow(profile, new BenchmarkPhaseResult(profile.Id, profile.Workload, [], BenchmarkResultStatus.Fail, ex.Message), ex));
-                    RecomputeBest();
-                    StatusText.Text = Tr.BenchmarkStatusProfileFailed(BenchmarkText.ProfileName(profile), BenchmarkText.Describe(ex));
-                }
-                finally
-                {
-                    // Nested: a throwing logging restore must not skip the executor's disposal (the scope is disposed here only).
-                    try { loggingScope.Dispose(); }
-                    finally { await executor.DisposeAsync(); }
-                }
-            }
-            if (sessionReports.Count > 0)
-            {
-                await SaveSessionSummaryAsync(sessionReports);
-                StatusText.Text = Tr.BenchmarkStatusDone(sessionReports.Count, profiles.Length, _lastReport);
-            }
-        }
-        catch (OperationCanceledException) { StatusText.Text = Tr.BenchmarkStatusCanceled; }
-        catch (Exception ex) { StatusText.Text = Tr.BenchStatusFailed(BenchmarkText.Describe(ex)); }
-        finally
-        {
-            RunButton.IsEnabled = true; QuickCheckButton.IsEnabled = true; CancelButton.IsEnabled = false; BrowseButton.IsEnabled = true; ProfilesList.IsEnabled = true; ImageLimitText.IsEnabled = true; FolderText.IsEnabled = true;
-            Dispose();
-        }
-    }
-
-    /// <summary>Marks the lowest-P95 Pass row within each Workload group so profiles
-    /// that share a workload (the actual "which mode is fastest" comparison) are
-    /// visibly ranked, reusing the same ordering the CLI/report ranking uses.</summary>
-    private void RecomputeBest()
-    {
-        foreach (var row in _rows) row.IsBest = false;
-        var phases = _rows.Select(r => r.Phase).ToArray();
-        foreach (var workload in _rows.Select(r => r.Workload).Distinct())
-        {
-            var ranked = BenchmarkRanking.Rank(phases, workload);
-            var winnerId = ranked.Count > 0 ? ranked[0].ProfileId : null;
-            if (winnerId is null) continue;
-            var winner = _rows.FirstOrDefault(r => r.Workload == workload && r.Phase.ProfileId == winnerId);
-            if (winner is not null) winner.IsBest = true;
-        }
-        ResultsGrid.Items.Refresh();
-    }
-
-    /// <summary>File name of one profile's report; a report with no phases (nothing measured) must not throw here.</summary>
-    internal static string ReportFileName(BenchmarkReport report) =>
-        $"{(report.Phases.Count > 0 ? report.Phases[0].ProfileId : "report")}-{report.RunId}.json";
-
-    private async Task SaveSessionSummaryAsync(IReadOnlyList<BenchmarkReport> reports)
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
-        Directory.CreateDirectory(dir);
-        foreach (var report in reports)
-            await File.WriteAllTextAsync(Path.Combine(dir, ReportFileName(report)), report.ToJson());
-        var summaryPath = Path.Combine(dir, "summary.json");
-        await File.WriteAllTextAsync(summaryPath, JsonSerializer.Serialize(reports, JsonOptions));
-        _lastReport = summaryPath;
-    }
-
-    private void OpenReport_Click(object sender, RoutedEventArgs e)
-    {
-        if (_lastReport is not null && File.Exists(_lastReport)) StartExplorer($"/select,\"{_lastReport}\"");
-    }
-
-    private void OpenResultFolder_Click(object sender, RoutedEventArgs e)
-    {
-        var dir = _lastReport is null ? Path.GetTempPath() : Path.GetDirectoryName(_lastReport)!;
-        StartExplorer(dir);
-    }
+    void IBenchmarkView.RefreshRows() => ResultsGrid.Items.Refresh();
 
     /// <summary>Opens Explorer and disposes the process handle; a launch failure is logged (the dispatcher would swallow it silently).</summary>
-    private static void StartExplorer(string arguments)
+    void IBenchmarkView.OpenInExplorer(string arguments)
     {
         try
         {
@@ -305,131 +118,15 @@ public partial class BenchmarkWindow : Window, IDisposable
             AppLog.Error("Could not start Explorer", ex);
         }
     }
-}
 
-/// <summary>Presentation row for one profile's result in the comparison grid.
-/// Wraps the profile and its raw <see cref="BenchmarkPhaseResult"/> so ranking
-/// can reuse <see cref="BenchmarkRanking"/> instead of re-deriving P50/P95 order.</summary>
-public sealed class BenchmarkResultRow(BenchmarkProfile profile, BenchmarkPhaseResult phase, Exception? error = null)
-{
-    public BenchmarkProfile Profile { get; } = profile;
-    /// <summary>Trophy marker for the best row; also the (language-neutral) column header.</summary>
-    public const string BestSymbol = "🏆";
-
-    public BenchmarkPhaseResult Phase { get; } = phase;
-    public bool IsBest { get; set; }
-    /// <summary>The exception behind a failed profile (null for library-reported results); used for translated text.</summary>
-    public Exception? Error { get; } = error;
-
-    public string ProfileName => BenchmarkText.ProfileName(Profile);
-    public LoadingMode LoadingMode => Profile.LoadingMode;
-    public string LoadingModeText => BenchmarkText.LoadingModeText(LoadingMode);
-    public BenchmarkWorkload Workload => Phase.Workload;
-    public string WorkloadText => BenchmarkText.WorkloadText(Workload);
-    public int Count => Phase.Count;
-    public BenchmarkResultStatus Status => Phase.Status;
-    public string BestMarker => IsBest ? BestSymbol : "";
-    public string P50Text => MillisecondsText(Phase.P50);
-    public string P95Text => MillisecondsText(Phase.P95);
-    public string P99Text => MillisecondsText(Phase.P99);
-    public string MaxText => MillisecondsText(Phase.Max);
-    private string MillisecondsText(double value) => Count == 0 ? Tr.BenchNoValue : Tr.UnitMilliseconds(value.ToString("F0", CultureInfo.CurrentCulture));
-    public string StatusText => Status switch
+    /// <summary>The window's dispatcher as the presenter's UI scheduler (progress comes from background threads).</summary>
+    private sealed class WindowUiScheduler(Dispatcher dispatcher) : IUiScheduler
     {
-        BenchmarkResultStatus.Pass => Tr.EnumBenchmarkResultStatusPass,
-        BenchmarkResultStatus.Warn => Tr.EnumBenchmarkResultStatusWarn,
-        BenchmarkResultStatus.Fail => Phase.Message switch
-        {
-            null => Tr.EnumBenchmarkResultStatusFail,
-            BenchmarkEngine.ResultCorrectnessFailed => Tr.BenchmarkResultCorrectnessFailed,
-            var message => Tr.BenchResultFailedDetail(Error is null ? message : BenchmarkText.Describe(Error)),
-        },
-        _ => Tr.EnumBenchmarkResultStatusInsufficientData,
-    };
-}
+        public void Post(Action action) => _ = dispatcher.BeginInvoke(action);
 
-/// <summary>List item for one profile: the library keeps the English name/description (reports, CLI —
-/// Q-L4); the window shows the catalog text for the current language.</summary>
-public sealed class BenchmarkProfileItem(BenchmarkProfile profile) : INotifyPropertyChanged
-{
-    public BenchmarkProfile Profile { get; } = profile;
-    public string Name => BenchmarkText.ProfileName(Profile);
-    public string Description => BenchmarkText.ProfileDescription(Profile);
+        public Task InvokeAsync(Action action) => dispatcher.InvokeAsync(action).Task;
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    internal void NotifyTextsChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
-}
-
-/// <summary>Display texts for the Benchmark window. Profile texts are looked up by id with the key pattern
-/// <c>benchmark.profile.&lt;camelCaseId&gt;.name|description</c> (e.g. <c>fast-sequential</c> →
-/// <c>benchmark.profile.fastSequential.name</c>); a profile without a key shows the library's English text.</summary>
-public static class BenchmarkText
-{
-    public static string ProfileName(BenchmarkProfile profile) => Lookup(ProfileKey(profile.Id, "name"), profile.Name);
-
-    public static string ProfileDescription(BenchmarkProfile profile) => Lookup(ProfileKey(profile.Id, "description"), profile.Description);
-
-    /// <summary>"fast-sequential" + "name" → "benchmark.profile.fastSequential.name".</summary>
-    public static string ProfileKey(string profileId, string field)
-    {
-        var sb = new StringBuilder("benchmark.profile.", 64);
-        var upper = false;
-        foreach (var c in profileId)
-        {
-            if (c == '-') { upper = true; continue; }
-            sb.Append(upper ? char.ToUpperInvariant(c) : c);
-            upper = false;
-        }
-        return sb.Append('.').Append(field).ToString();
-    }
-
-    /// <summary>Maps the library's fixed-English progress messages to catalog text; others pass through.</summary>
-    public static string ProgressMessage(string message) => message switch
-    {
-        BenchmarkEngine.ProgressOk => Tr.BenchmarkProgressOk,
-        BenchmarkEngine.ProgressCorrectnessFailed => Tr.BenchmarkProgressCorrectnessFailed,
-        _ => message,
-    };
-
-    public static string LoadingModeText(LoadingMode mode) => mode switch
-    {
-        LoadingMode.Fast => Tr.EnumLoadingModeFast,
-        LoadingMode.Preview => Tr.EnumLoadingModePreview,
-        LoadingMode.Original => Tr.EnumLoadingModeOriginal,
-        _ => mode.ToString(),
-    };
-
-    public static string WorkloadText(BenchmarkWorkload workload) => workload switch
-    {
-        BenchmarkWorkload.FirstFrame => Tr.EnumBenchmarkWorkloadFirstFrame,
-        BenchmarkWorkload.Sequential => Tr.EnumBenchmarkWorkloadSequential,
-        BenchmarkWorkload.Random => Tr.EnumBenchmarkWorkloadRandom,
-        BenchmarkWorkload.WarmNext => Tr.EnumBenchmarkWorkloadWarmNext,
-        BenchmarkWorkload.Preload => Tr.EnumBenchmarkWorkloadPreload,
-        BenchmarkWorkload.FileAction => Tr.EnumBenchmarkWorkloadFileAction,
-        BenchmarkWorkload.Correctness => Tr.EnumBenchmarkWorkloadCorrectness,
-        _ => workload.ToString(),
-    };
-
-    /// <summary>Translated sentence for a failed benchmark: known library problems map to catalog text, any other
-    /// exception keeps its (OS/technical) message inside a translated wrapper.</summary>
-    public static string Describe(Exception ex)
-    {
-        ArgumentNullException.ThrowIfNull(ex);
-        return ex switch
-        {
-            BenchmarkProfileException { Problem: BenchmarkProfileProblem.NotImplemented } p =>
-                Tr.BenchErrorNotImplemented(BenchmarkProfiles.Find(p.ProfileId) is { } profile ? ProfileName(profile) : p.ProfileId),
-            BenchmarkProfileException { Problem: BenchmarkProfileProblem.MissingIdOrMode } => Tr.BenchErrorProfileIncomplete,
-            BenchmarkProfileException p => Tr.BenchErrorProfileSettings(p.ProfileId),
-            _ => Tr.BenchErrorUnexpected(ex.Message),
-        };
-    }
-
-    private static string Lookup(string key, string fallback)
-    {
-        var localizer = Localizer.Current;
-        return localizer.Contains(key) ? localizer.Get(key) : fallback;
+        public ValueTask YieldAsync(CancellationToken cancellationToken = default) =>
+            new(dispatcher.InvokeAsync(static () => { }, DispatcherPriority.Background, cancellationToken).Task);
     }
 }

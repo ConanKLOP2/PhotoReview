@@ -1,4 +1,5 @@
 using PhotoReview.App;
+using PhotoReview.App.Presenters;
 using PhotoReview.Benchmarking;
 
 namespace PhotoReview.Integration.Tests;
@@ -6,8 +7,8 @@ namespace PhotoReview.Integration.Tests;
 /// <summary>
 /// perf(bench-window): "Quick check" (fast-sequential, 10 iterations) and the image-limit control both go
 /// through small static test seams on <see cref="BenchmarkWindow"/> so the exact production wiring is
-/// asserted, not a re-derived expression -- see <see cref="BenchmarkWindow.BuildQuickCheckProfile"/> and
-/// <see cref="BenchmarkWindow.ApplyImageLimit"/>.
+/// asserted, not a re-derived expression -- see <see cref="BenchmarkPresenter.BuildQuickCheckProfile"/> and
+/// <see cref="BenchmarkPresenter.ApplyImageLimit"/>.
 /// </summary>
 [Trait("Category", "Integration")]
 public sealed class BenchmarkWindowQuickCheckTests
@@ -15,7 +16,7 @@ public sealed class BenchmarkWindowQuickCheckTests
     [Fact(DisplayName = "Quick check always runs fast-sequential with 10 iterations, keeping its default (1) warm-up")]
     public void BuildQuickCheckProfile_IsFastSequentialWithTenIterations()
     {
-        var profile = BenchmarkWindow.BuildQuickCheckProfile();
+        var profile = BenchmarkPresenter.BuildQuickCheckProfile();
 
         Assert.NotNull(profile);
         Assert.Equal("fast-sequential", profile!.Id);
@@ -32,7 +33,7 @@ public sealed class BenchmarkWindowQuickCheckTests
     {
         var files = Enumerable.Range(0, fileCount).Select(i => $"C:\\photos\\img-{i:000}.jpg").ToArray();
 
-        var result = BenchmarkWindow.ApplyImageLimit(files, limit);
+        var result = BenchmarkPresenter.ApplyImageLimit(files, limit);
 
         Assert.Equal(expectedCount, result.Length);
         Assert.Equal(files.Take(expectedCount), result);
