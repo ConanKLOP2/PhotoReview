@@ -68,7 +68,7 @@ public sealed class SettingsD2DPerfTests(ITestOutputHelper output)
         var label = $"{dpi}dpi {(hosted ? "hybrid-c1" : "selfdrawn-c2")} {(warp ? "WARP" : "GPU")}";
         var cpuLoad = Environment.GetEnvironmentVariable("PHOTOREVIEW_D2D_NOTE") ?? string.Empty;
         Line($"== {label} {cpuLoad}");
-        var options = new D2DSettingsWindowOptions(Dark: true, EditMode: hosted ? D2DEditMode.HostedWin32 : D2DEditMode.SelfDrawn, DpiOverride: dpi, PreferWarp: warp);
+        var options = new D2DSettingsHostOptions(Dark: true, EditMode: hosted ? D2DEditMode.HostedWin32 : D2DEditMode.SelfDrawn, DpiOverride: dpi, PreferWarp: warp);
 
         // ---- mở trang Display: dựng cửa sổ + trang + Load + khung đầu (tới GPU xong). Vòng đầu = lạnh (JIT của testhost).
         var construct = new List<double>();
@@ -81,7 +81,7 @@ public sealed class SettingsD2DPerfTests(ITestOutputHelper output)
             for (var round = 0; round < OpenRounds; round++)
             {
                 var t0 = Stopwatch.GetTimestamp();
-                using var window = new D2DSettingsWindow(options, () => PhotoReview.Core.Localization.Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
+                using var window = new D2DSettingsHost(options, () => PhotoReview.Core.Localization.Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
                 var t1 = Stopwatch.GetTimestamp();
                 ((D2DDisplayPage)window.Page).Load(state);
                 window.View.Layout(window.View.ClientWidth, window.View.ClientHeight, window.Scale);
@@ -128,7 +128,7 @@ public sealed class SettingsD2DPerfTests(ITestOutputHelper output)
             privateBefore = Process.GetCurrentProcess().PrivateMemorySize64;
             gdiBefore = User32.GetGuiResources(Process.GetCurrentProcess().Handle, 0);
             userBefore = User32.GetGuiResources(Process.GetCurrentProcess().Handle, 1);
-            using var window = new D2DSettingsWindow(options, () => PhotoReview.Core.Localization.Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
+            using var window = new D2DSettingsHost(options, () => PhotoReview.Core.Localization.Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
             ((D2DDisplayPage)window.Page).Load(state);
             window.View.Layout(window.View.ClientWidth, window.View.ClientHeight, window.Scale);
             window.PushValuesToHosted();

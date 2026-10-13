@@ -168,7 +168,7 @@ public sealed class SettingsD2DScrollPixelTests(ITestOutputHelper output)
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
         var mode = hosted ? D2DEditMode.HostedWin32 : D2DEditMode.SelfDrawn;
-        var options = new D2DSettingsWindowOptions(Dark: true, EditMode: mode, DpiOverride: dpi);
+        var options = new D2DSettingsHostOptions(Dark: true, EditMode: mode, DpiOverride: dpi);
         var report = WithWindow(options, (window, page) =>
         {
             var view = window.View;
@@ -288,7 +288,7 @@ public sealed class SettingsD2DScrollPixelTests(ITestOutputHelper output)
         view.MouseUp(x, y);
     }
 
-    private static void SendToWindow(D2DSettingsWindow window, Op op)
+    private static void SendToWindow(D2DSettingsHost window, Op op)
     {
         var view = window.View;
         var hwnd = window.Hwnd;
@@ -339,7 +339,7 @@ public sealed class SettingsD2DScrollPixelTests(ITestOutputHelper output)
         }
     }
 
-    private static void DragThumbMessages(D2DSettingsWindow window, int target, params int[] via)
+    private static void DragThumbMessages(D2DSettingsHost window, int target, params int[] via)
     {
         var view = window.View;
         var hwnd = window.Hwnd;
@@ -358,7 +358,7 @@ public sealed class SettingsD2DScrollPixelTests(ITestOutputHelper output)
         User32.SendMessage(hwnd, WindowMessages.WmLButtonUp, 0, MakeLParam(x, y));
     }
 
-    private static unsafe void AssertHostedGeometry(D2DSettingsWindow window)
+    private static unsafe void AssertHostedGeometry(D2DSettingsHost window)
     {
         var areas = window.View.HostedAreas().ToList();
         var handles = window.HostedHandles;

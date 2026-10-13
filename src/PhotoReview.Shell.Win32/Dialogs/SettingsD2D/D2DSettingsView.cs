@@ -13,7 +13,7 @@ internal enum D2DCursorKind
 /// <summary>
 /// SPIKE (WP-35 D2D Settings): TOÀN BỘ trang Settings là MỘT bề mặt Direct2D. Lớp này không có HWND: bố cục (px nguyên), vẽ vào
 /// <see cref="D2DDrawContext"/>, cuộn (offset px + vẽ lại cả khung + thanh cuộn tự vẽ), chuột, bàn phím (Tab/mũi tên/Space/focus ring),
-/// ô nhập tự vẽ, combobox tự vẽ, nút, cây trợ năng. Cửa sổ (<see cref="D2DSettingsWindow"/>) chỉ chuyển thông điệp vào đây.
+/// ô nhập tự vẽ, combobox tự vẽ, nút, cây trợ năng. Cửa sổ (<see cref="D2DSettingsHost"/>) chỉ chuyển thông điệp vào đây.
 /// <para>
 /// Toạ độ: mọi số là px thiết bị; bề mặt D2D tạo ở DPI 96 (1 DIP = 1 px) và bố cục tự nhân DPI, nên toạ độ khớp pixel (cỡ chữ cũng tính px).
 /// Vẽ lại: MỖI khung xoá và vẽ cả cửa sổ (không có vùng bẩn, không ScrollWindow) - nên không thể còn hình cũ khi cuộn.

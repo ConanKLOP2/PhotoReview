@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -21,6 +21,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsD2D;
 /// </summary>
 [Collection("GlobalState")]
 [Trait("Category", "UI")]
+[Trait("Category", "Slow")] // tiến trình client ngoài + UIA trễ ~2 s trên desktop ẩn: không vào bộ lọc mặc định
 public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
 {
     private const int HrElementNotEnabled = unchecked((int)0x80040200);
@@ -55,8 +56,8 @@ public sealed class SettingsD2DUiaTests(ITestOutputHelper output)
         ToolbarOpacityPercent = 70,
     };
 
-    private static T WithUia<T>(Func<D2DSettingsWindow, UiaHost, T> body, AppSettings? settings = null)
-        => WithWindow(new D2DSettingsWindowOptions(Dark: true), (window, _) =>
+    private static T WithUia<T>(Func<D2DSettingsHost, UiaHost, T> body, AppSettings? settings = null)
+        => WithWindow(new D2DSettingsHostOptions(Dark: true), (window, _) =>
         {
             using var provider = D2DUiaProvider.Install(window);
             using var host = new UiaHost(window);
@@ -944,7 +945,7 @@ internal sealed partial class UiaFocusListener : IUiaFocusHandler
 }
 
 /// <summary>Gọi client UIA trên thread MTA trong khi thread gọi (STA, chủ cửa sổ) bơm thông điệp; có hạn chót 30 s.</summary>
-internal sealed class UiaHost(D2DSettingsWindow window) : IDisposable
+internal sealed class UiaHost(D2DSettingsHost window) : IDisposable
 {
     private static readonly Guid CUIAutomation = new("ff48dba4-60ef-4201-aa87-54103eef594e");
     private static readonly Guid IUIAutomation = new("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee");

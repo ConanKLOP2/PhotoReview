@@ -1,4 +1,4 @@
-﻿using System.Runtime.ExceptionServices;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using PhotoReview.Shell.Interop;
@@ -13,7 +13,7 @@ namespace PhotoReview.Shell.Win32.Dialogs.SettingsD2D;
 /// <para>
 /// Luồng: UIA gọi provider từ thread RPC (MTA), còn view chỉ an toàn trên thread UI. Mọi lời gọi vào view được chuyển sang thread UI
 /// bằng <c>SendMessage(WM_GETOBJECT, work, magic)</c> tới cửa sổ (<see cref="OnUi{T}"/>) - thread UI phải bơm thông điệp (như app thật).
-/// Cài vào cửa sổ qua <see cref="D2DSettingsWindow.GetObjectHandler"/> (seam WM_GETOBJECT sẵn có), không sửa WndProc.
+/// Cài vào cửa sổ qua <see cref="D2DSettingsHost.GetObjectHandler"/> (seam WM_GETOBJECT sẵn có), không sửa WndProc.
 /// </para>
 /// </summary>
 internal sealed class D2DUiaProvider : IDisposable
@@ -62,14 +62,14 @@ internal sealed class D2DUiaProvider : IDisposable
     private static readonly Guid FragmentIid = new("f7063da8-8359-439c-9297-bbc5299a7d87");
     private static readonly Guid FragmentRootIid = new("620ce2a5-ab8f-40a9-86cb-de3c75599b58");
 
-    private readonly D2DSettingsWindow _window;
+    private readonly D2DSettingsHost _window;
     private readonly int _uiThreadId;
     private readonly Dictionary<string, D2DUiaNode> _nodes = [];
     private readonly Dictionary<string, bool> _lastEnabled = [];
     private readonly D2DUiaRoot _root;
     private bool _disposed;
 
-    private D2DUiaProvider(D2DSettingsWindow window)
+    private D2DUiaProvider(D2DSettingsHost window)
     {
         _window = window;
         _uiThreadId = Environment.CurrentManagedThreadId;
@@ -77,7 +77,7 @@ internal sealed class D2DUiaProvider : IDisposable
     }
 
     /// <summary>Cài provider vào cửa sổ (gọi sau khi tạo cửa sổ, trên thread UI). Trả đối tượng để gỡ bằng <see cref="Dispose"/>.</summary>
-    public static D2DUiaProvider Install(D2DSettingsWindow window)
+    public static D2DUiaProvider Install(D2DSettingsHost window)
     {
         var provider = new D2DUiaProvider(window);
         window.GetObjectHandler = provider.OnWmGetObject;
@@ -151,7 +151,7 @@ internal sealed class D2DUiaProvider : IDisposable
 
     private sealed class UiaWork(Func<object?> body)
     {
-        public object? Result { get; private set; }
+        public object? Value { get; private set; }
 
         public Exception? Error { get; private set; }
 
@@ -161,7 +161,7 @@ internal sealed class D2DUiaProvider : IDisposable
         {
             try
             {
-                Result = body();
+                Value = body();
             }
             catch (Exception ex)
             {
@@ -206,7 +206,7 @@ internal sealed class D2DUiaProvider : IDisposable
             ExceptionDispatchInfo.Capture(error).Throw();
         }
 
-        return (T)work.Result!;
+        return (T)work.Value!;
     }
 
     internal void OnUi(Action body) => OnUi<object?>(() =>

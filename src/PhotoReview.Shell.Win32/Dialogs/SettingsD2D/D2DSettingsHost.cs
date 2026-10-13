@@ -9,8 +9,8 @@ using PhotoReview.Shell.Win32.Hosting.PendingInterop;
 
 namespace PhotoReview.Shell.Win32.Dialogs.SettingsD2D;
 
-/// <summary>Tuỳ chọn tạo <see cref="D2DSettingsWindow"/>.</summary>
-internal sealed record D2DSettingsWindowOptions(
+/// <summary>Tuỳ chọn tạo <see cref="D2DSettingsHost"/>.</summary>
+internal sealed record D2DSettingsHostOptions(
     bool Dark = true,
     D2DEditMode EditMode = D2DEditMode.SelfDrawn,
     int ClientWidthDip = 640,
@@ -26,7 +26,7 @@ internal sealed record D2DSettingsWindowOptions(
 /// control EDIT/COMBOBOX Win32 thật đặt chồng lên bề mặt tại đúng ô, cắt vùng (SetWindowRgn) theo viewport khi cuộn.
 /// Một thread (UI) sở hữu; WndProc <see cref="UnmanagedCallersOnly"/> như <c>ShellWindow</c>.
 /// </summary>
-internal sealed unsafe class D2DSettingsWindow : IDisposable
+internal sealed unsafe class D2DSettingsHost : IDisposable
 {
     private const string ClassName = "PhotoReview.SettingsD2D.Surface";
     private const uint DefaultDpi = 96;
@@ -38,7 +38,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
     private static readonly object ClassGate = new();
     private static bool classRegistered;
 
-    private readonly D2DSettingsWindowOptions _options;
+    private readonly D2DSettingsHostOptions _options;
     private readonly DWriteTextRenderer _text;
     private readonly Win32Clipboard _clipboard;
     private readonly List<HostedControl> _hosted = [];
@@ -55,7 +55,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
     private bool _inSizeChange;
     private ExceptionDispatchInfo? _pending;
 
-    public D2DSettingsWindow(D2DSettingsWindowOptions options, Func<string> title, Func<D2DSettingsView, object> buildPage)
+    public D2DSettingsHost(D2DSettingsHostOptions options, Func<string> title, Func<D2DSettingsView, object> buildPage)
     {
         _options = options;
         _text = new DWriteTextRenderer();
@@ -117,7 +117,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
     /// <summary>Đối tượng trang đã dựng (<c>D2DDisplayPage</c>).</summary>
     public object Page { get; }
 
-    public D2DRenderSurface Surface => _surface ?? throw new ObjectDisposedException(nameof(D2DSettingsWindow));
+    public D2DRenderSurface Surface => _surface ?? throw new ObjectDisposedException(nameof(D2DSettingsHost));
 
     public uint Dpi => _dpi;
 
@@ -753,13 +753,13 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
     [UnmanagedCallersOnly]
     private static nint SurfaceWndProc(nint hwnd, uint message, nint wParam, nint lParam)
     {
-        D2DSettingsWindow? window = null;
+        D2DSettingsHost? window = null;
         try
         {
             if (message == WindowMessages.WmNcCreate)
             {
                 var cookie = *(nint*)lParam;
-                window = GCHandle.FromIntPtr(cookie).Target as D2DSettingsWindow;
+                window = GCHandle.FromIntPtr(cookie).Target as D2DSettingsHost;
                 if (window is null)
                 {
                     return 0;
@@ -770,7 +770,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
             else
             {
                 var cookie = User32.GetWindowLongPtr(hwnd, WindowMessages.GwlpUserData);
-                window = cookie == 0 ? null : GCHandle.FromIntPtr(cookie).Target as D2DSettingsWindow;
+                window = cookie == 0 ? null : GCHandle.FromIntPtr(cookie).Target as D2DSettingsHost;
             }
 
             if (window is null)
@@ -802,7 +802,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
     {
         try
         {
-            var window = GCHandle.FromIntPtr((nint)refData).Target as D2DSettingsWindow;
+            var window = GCHandle.FromIntPtr((nint)refData).Target as D2DSettingsHost;
             if (window is not null)
             {
                 switch (message)
@@ -851,7 +851,7 @@ internal sealed unsafe class D2DSettingsWindow : IDisposable
         return handled;
     }
 
-    private sealed class Win32Clipboard(D2DSettingsWindow owner) : ID2DClipboard
+    private sealed class Win32Clipboard(D2DSettingsHost owner) : ID2DClipboard
     {
         public string? GetText()
         {

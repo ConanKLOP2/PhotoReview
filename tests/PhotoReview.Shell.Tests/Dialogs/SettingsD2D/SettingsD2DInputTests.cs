@@ -367,7 +367,7 @@ public sealed class SettingsD2DInputTests(ITestOutputHelper output)
     public void Hosted_RealEditRejectsLettersViaES_NUMBER_AndFeedsTheView()
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
-        var options = new D2DSettingsWindowOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
+        var options = new D2DSettingsHostOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
         WithWindow(options, (window, page) =>
         {
             var edit = window.HostedHandles.First(h => h.Id == "ToolbarAutoHideDelay").Hwnd;
@@ -390,7 +390,7 @@ public sealed class SettingsD2DInputTests(ITestOutputHelper output)
     public void Hosted_RealComboChangesSelection_ByKeyboardAndReachesTheForm()
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
-        var options = new D2DSettingsWindowOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
+        var options = new D2DSettingsHostOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
         WithWindow(options, (window, page) =>
         {
             var combo = window.HostedHandles.First(h => h.Id == "ScalingQuality").Hwnd;
@@ -414,7 +414,7 @@ public sealed class SettingsD2DInputTests(ITestOutputHelper output)
     public void Hosted_TabFromViewWidgetMovesRealFocusIntoTheEdit_AndTabLeavesIt()
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
-        var options = new D2DSettingsWindowOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
+        var options = new D2DSettingsHostOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
         WithWindow(options, (window, page) =>
         {
             var v = window.View;

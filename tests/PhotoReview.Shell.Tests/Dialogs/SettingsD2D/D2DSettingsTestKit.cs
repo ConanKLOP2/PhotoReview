@@ -163,12 +163,12 @@ internal static unsafe class D2DTestKit
     public const int VkDown = 0x28;
 
     /// <summary>Mở cửa sổ D2D thật trên thread STA, nạp trang Display, chạy <paramref name="body"/>, luôn đóng cửa sổ.</summary>
-    public static T WithWindow<T>(D2DSettingsWindowOptions options, Func<D2DSettingsWindow, D2DDisplayPage, T> body, AppSettings? settings = null)
+    public static T WithWindow<T>(D2DSettingsHostOptions options, Func<D2DSettingsHost, D2DDisplayPage, T> body, AppSettings? settings = null)
         => OnSta(() =>
         {
             var presenter = new SettingsPresenter(settings ?? new AppSettings { ToolbarAutoHide = true, ShowExifInfo = true, ToolbarOpacityPercent = 70 });
             var state = presenter.LoadFields();
-            using var window = new D2DSettingsWindow(options, () => Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
+            using var window = new D2DSettingsHost(options, () => Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
             var page = (D2DDisplayPage)window.Page;
             page.Load(state);
             window.View.Layout(window.View.ClientWidth, window.View.ClientHeight, window.Scale);

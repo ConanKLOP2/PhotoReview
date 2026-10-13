@@ -1,4 +1,4 @@
-﻿using PhotoReview.App.Presenters;
+using PhotoReview.App.Presenters;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Settings;
 using PhotoReview.Shell.Interop;
@@ -25,13 +25,13 @@ internal static unsafe class D2DSettingsSpike
         }
 
         var mode = env ?? string.Empty;
-        var options = new D2DSettingsWindowOptions(
+        var options = new D2DSettingsHostOptions(
             Dark: !mode.Contains("light", StringComparison.OrdinalIgnoreCase),
             EditMode: mode.Contains("hybrid", StringComparison.OrdinalIgnoreCase) ? D2DEditMode.HostedWin32 : D2DEditMode.SelfDrawn,
             QuitOnClose: true);
         var presenter = new SettingsPresenter(new AppSettings());
         var state = presenter.LoadFields();
-        using var window = new D2DSettingsWindow(options, () => Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
+        using var window = new D2DSettingsHost(options, () => Tr.SettingsNavDisplay, v => new D2DDisplayPage(v));
         using var uia = D2DUiaProvider.Install(window); // cây UIA (Narrator) của lối vào thử
         var page = (D2DDisplayPage)window.Page;
         page.Load(state);

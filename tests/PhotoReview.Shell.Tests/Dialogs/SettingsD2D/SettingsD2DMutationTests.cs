@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using PhotoReview.App.Presenters;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
@@ -249,7 +249,7 @@ public sealed class SettingsD2DMutationTests
     public void Hosted_EditIsClippedToTheViewport_WhenItStraddlesTheTopEdge()
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
-        var options = new D2DSettingsWindowOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
+        var options = new D2DSettingsHostOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
         WithWindow(options, (window, page) =>
         {
             var v = window.View;
@@ -273,7 +273,7 @@ public sealed class SettingsD2DMutationTests
     public void Hosted_EditIsDisabledWithItsParentTick_ThroughRealMouseMessages()
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
-        var options = new D2DSettingsWindowOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
+        var options = new D2DSettingsHostOptions(Dark: true, EditMode: D2DEditMode.HostedWin32);
         WithWindow(options, (window, page) =>
         {
             var v = window.View;
