@@ -1,5 +1,4 @@
 using PhotoReview.Shell.Interop;
-using PhotoReview.Shell.Win32.Menus;
 using PhotoReview.Shell.Win32.Overlay;
 using PhotoReview.Shell.Win32.Windowing;
 
@@ -49,35 +48,17 @@ internal static class DialogColors
 }
 
 /// <summary>
-/// Giao diện tối của hộp thoại Win32 (spike S3 mục 2): title bar <c>DWMWA_USE_IMMERSIVE_DARK_MODE</c> (qua <see cref="TitleBar"/>),
-/// chế độ ứng dụng tối của uxtheme (ordinal 135, như menu native: <see cref="DarkModeMenus"/>) và chủ đề điều khiển
-/// <c>DarkMode_Explorer</c> (nút, thanh cuộn, listbox) / <c>DarkMode_CFD</c> (ô nhập). Không bao giờ ném: thiếu hàm = nền sáng.
-/// Nền hộp thoại, chữ và ô nhập tô qua WM_CTLCOLOR* của <see cref="NativeDialog"/>.
+/// Giao diện tối của hộp thoại Win32 KHÔNG phụ thuộc chủ đề hệ thống (sửa nguy cơ "nền trắng + chữ sáng" như lỗi menu của PR #492
+/// trên Windows 11 build 26300): title bar <c>DWMWA_USE_IMMERSIVE_DARK_MODE</c> (qua <see cref="TitleBar"/>, API công bố) + mọi điều
+/// khiển bị xoá chủ đề (<c>SetWindowTheme("", "")</c> = dáng cổ điển) rồi vẽ tay bằng bảng màu <c>Dark.*</c>
+/// (<see cref="NativeDialogChromePainter"/>). KHÔNG còn gọi uxtheme ordinal (<c>SetPreferredAppMode</c>/<c>FlushMenuThemes</c>/
+/// <c>AllowDarkModeForWindow</c>) và KHÔNG dùng chủ đề <c>DarkMode_*</c>. Nền hộp thoại, chữ và ô nhập tô qua WM_CTLCOLOR* của
+/// <see cref="NativeDialog"/>. Không bao giờ ném: thiếu hàm = giữ dáng cổ điển.
 /// </summary>
 internal sealed class DarkDialogChrome : INativeDialogChrome
 {
-    internal const string ButtonTheme = "DarkMode_Explorer";
-    internal const string EditTheme = "DarkMode_CFD";
-    internal const string ListTheme = "DarkMode_Explorer";
-
-    // WP-35 GĐ2: combobox (ô chọn + nút thả = DarkMode_CFD như ô nhập; danh sách thả là một listbox riêng = DarkMode_Explorer),
-    // listview report (thân = DarkMode_Explorer, header = DarkMode_ItemsView), progress/trackbar (DarkMode_Explorer).
-    internal const string ComboTheme = "DarkMode_CFD";
-    internal const string ComboListTheme = "DarkMode_Explorer";
-    internal const string ListViewTheme = "DarkMode_Explorer";
-    internal const string HeaderTheme = "DarkMode_ItemsView";
-    internal const string ProgressTheme = "DarkMode_Explorer";
-    internal const string TrackbarTheme = "DarkMode_Explorer";
-    internal const string TooltipTheme = "DarkMode_Explorer";
+    /// <summary>"" = không chủ đề (dáng cổ điển): sub-app name VÀ sub-id-list đều rỗng (chỉ "" cho sub-app sẽ rơi về chủ đề sáng mặc định).</summary>
     internal const string ClassicTheme = "";
-
-    private static bool IsRadioOrGroupBox(nint hwnd)
-    {
-        var type = (uint)User32.GetWindowLongPtr(hwnd, WindowMessages.GwlStyle) & 0xF;
-        return type is 4 /* BS_RADIOBUTTON */ or 9 /* BS_AUTORADIOBUTTON */ or 7 /* BS_GROUPBOX */;
-    }
-
-    private static readonly Lazy<DarkModeMenus> Menus = new(DarkModeMenus.CreateForCurrentSystem);
 
     public static DarkDialogChrome Instance { get; } = new();
 
@@ -94,38 +75,72 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
         _setTheme = setTheme ?? throw new ArgumentNullException(nameof(setTheme));
     }
 
-    /// <summary>Chủ đề uxtheme của một lớp điều khiển (null = không đổi).</summary>
+    /// <summary>
+    /// Chủ đề uxtheme của một lớp điều khiển: <see cref="ClassicTheme"/> cho mọi lớp có bộ vẽ tay hoặc viền phẳng; null = không đổi
+    /// (Static: chữ do WM_CTLCOLORSTATIC tô).
+    /// </summary>
     internal static string? ThemeFor(DialogControlClass controlClass) => controlClass switch
     {
-        DialogControlClass.Button => ButtonTheme,
-        DialogControlClass.Edit => EditTheme,
-        DialogControlClass.ListBox => ListTheme,
-        DialogControlClass.ScrollBar => ListTheme,
-        DialogControlClass.ComboBox => ComboTheme,
-        DialogControlClass.ListView => ListViewTheme,
-        DialogControlClass.Progress => ProgressTheme,
-        DialogControlClass.Trackbar => TrackbarTheme,
+        DialogControlClass.Button or DialogControlClass.Edit or DialogControlClass.ListBox or DialogControlClass.ScrollBar
+            or DialogControlClass.ComboBox or DialogControlClass.ListView or DialogControlClass.Progress
+            or DialogControlClass.Trackbar => ClassicTheme,
         _ => null,
     };
 
-    /// <summary>
-    /// Chủ đề của một điều khiển cụ thể: như <see cref="ThemeFor"/>, trừ radio/group box dùng dáng cổ điển (<see cref="ClassicTheme"/>):
-    /// chủ đề tối vẽ chữ của chúng xám đậm gần như vô hình trên nền tối (thấy ở ảnh chụp GĐ2), còn dáng cổ điển để chữ do
-    /// WM_CTLCOLORSTATIC tô sáng.
-    /// </summary>
-    internal static string? ThemeForControl(nint hwnd, DialogControlClass controlClass)
-        => controlClass == DialogControlClass.Button && IsRadioOrGroupBox(hwnd) ? ClassicTheme : ThemeFor(controlClass);
+    /// <summary>Chủ đề của một điều khiển cụ thể (hiện chỉ phụ thuộc lớp; giữ chữ ký để trang Settings gọi được).</summary>
+    internal static string? ThemeForControl(nint hwnd, DialogControlClass controlClass) => ThemeFor(controlClass);
 
-    /// <summary>Phần con có cửa sổ riêng: danh sách thả của combobox, header của listview.</summary>
-    private unsafe void ApplyParts(DarkModeMenus menus, DialogChromeControl control)
+    public void Apply(nint dialog, IReadOnlyList<DialogChromeControl> controls)
+    {
+        try
+        {
+            TitleBar.Apply(dialog);
+            NativeDialogChromePainter.AttachDialog(dialog);
+            ApplyControlThemes(controls);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // Windows không có hàm: hộp thoại giữ dáng cổ điển, không phải lỗi.
+        }
+    }
+
+    /// <summary>Giao diện cho điều khiển tạo thêm sau khi hộp thoại đã dựng (trang Settings tạo lười).</summary>
+    public void ApplyControls(nint dialog, IReadOnlyList<DialogChromeControl> controls)
+    {
+        try
+        {
+            ApplyControlThemes(controls);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // Windows không có hàm: giữ dáng cổ điển, không phải lỗi.
+        }
+    }
+
+    private void ApplyControlThemes(IReadOnlyList<DialogChromeControl> controls)
+    {
+        foreach (var control in controls)
+        {
+            var theme = ThemeForControl(control.Hwnd, control.Class);
+            if (theme is not null)
+            {
+                _setTheme(control.Hwnd, theme, theme);
+            }
+
+            NativeDialogChromePainter.Attach(control.Hwnd, NativeDialogChromePainter.KindFor(control.Hwnd, control.Class));
+            ApplyParts(control);
+        }
+    }
+
+    /// <summary>Phần con có cửa sổ riêng: danh sách thả của combobox, header của listview (cũng bỏ chủ đề, tránh chữ xám của chủ đề).</summary>
+    private unsafe void ApplyParts(DialogChromeControl control)
     {
         if (control.Class == DialogControlClass.ComboBox)
         {
             var list = ComboBoxControl.ListWindow(control.Hwnd);
             if (list != 0)
             {
-                menus.TryAllowForWindow(list);
-                _setTheme(list, ComboListTheme, null);
+                _setTheme(list, ClassicTheme, ClassicTheme);
             }
         }
         else if (control.Class == DialogControlClass.ListView)
@@ -133,64 +148,9 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
             var header = (nint)User32.SendMessage(control.Hwnd, ControlConstants.LvmGetHeader, 0, 0);
             if (header != 0)
             {
-                menus.TryAllowForWindow(header);
-                _setTheme(header, HeaderTheme, null);
+                _setTheme(header, ClassicTheme, ClassicTheme);
+                NativeDialogChromePainter.Attach(header, ChromePaintKind.HeaderFiller);
             }
-        }
-    }
-
-    public void Apply(nint dialog, IReadOnlyList<DialogChromeControl> controls)
-    {
-        try
-        {
-            TitleBar.Apply(dialog);
-            var menus = Menus.Value;
-            if (menus.TryEnable())
-            {
-                menus.TryAllowForWindow(dialog);
-            }
-
-            ApplyControlThemes(menus, controls);
-        }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
-        {
-            // Windows không có hàm: hộp thoại hiện nền sáng, không phải lỗi.
-        }
-    }
-
-    /// <summary>Chủ đề cho điều khiển tạo thêm sau khi hộp thoại đã dựng (trang Settings tạo lười).</summary>
-    public void ApplyControls(nint dialog, IReadOnlyList<DialogChromeControl> controls)
-    {
-        try
-        {
-            ApplyControlThemes(Menus.Value, controls);
-        }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
-        {
-            // Windows không có hàm: nền sáng, không phải lỗi.
-        }
-    }
-
-    private void ApplyControlThemes(DarkModeMenus menus, IReadOnlyList<DialogChromeControl> controls)
-    {
-        if (menus.TryEnable())
-        {
-            foreach (var control in controls)
-            {
-                menus.TryAllowForWindow(control.Hwnd);
-            }
-        }
-
-        foreach (var control in controls)
-        {
-            var theme = ThemeForControl(control.Hwnd, control.Class);
-            if (theme is not null)
-            {
-                // "" + "" = không chủ đề (dáng cổ điển); chỉ "" cho sub-app name sẽ rơi về chủ đề sáng mặc định.
-                _setTheme(control.Hwnd, theme, theme.Length == 0 ? string.Empty : null);
-            }
-
-            ApplyParts(menus, control);
         }
     }
 }
