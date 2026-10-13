@@ -75,6 +75,19 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
 
     public static DarkDialogChrome Instance { get; } = new();
 
+    private readonly Action<nint, string, string?> _setTheme;
+
+    public DarkDialogChrome()
+        : this(static (hwnd, app, ids) => Uxtheme.SetWindowTheme(hwnd, app, ids))
+    {
+    }
+
+    /// <param name="setTheme">Test: ghi lại (HWND, chủ đề, danh sách phụ) thay cho <c>SetWindowTheme</c> thật.</param>
+    internal DarkDialogChrome(Action<nint, string, string?> setTheme)
+    {
+        _setTheme = setTheme ?? throw new ArgumentNullException(nameof(setTheme));
+    }
+
     /// <summary>Chủ đề uxtheme của một lớp điều khiển (null = không đổi).</summary>
     internal static string? ThemeFor(DialogControlClass controlClass) => controlClass switch
     {
@@ -97,7 +110,7 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
         => controlClass == DialogControlClass.Button && IsRadioOrGroupBox(hwnd) ? ClassicTheme : ThemeFor(controlClass);
 
     /// <summary>Phần con có cửa sổ riêng: danh sách thả của combobox, header của listview.</summary>
-    private static unsafe void ApplyParts(DarkModeMenus menus, DialogChromeControl control)
+    private unsafe void ApplyParts(DarkModeMenus menus, DialogChromeControl control)
     {
         if (control.Class == DialogControlClass.ComboBox)
         {
@@ -105,7 +118,7 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
             if (list != 0)
             {
                 menus.TryAllowForWindow(list);
-                Uxtheme.SetWindowTheme(list, ComboListTheme, null);
+                _setTheme(list, ComboListTheme, null);
             }
         }
         else if (control.Class == DialogControlClass.ListView)
@@ -114,7 +127,7 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
             if (header != 0)
             {
                 menus.TryAllowForWindow(header);
-                Uxtheme.SetWindowTheme(header, HeaderTheme, null);
+                _setTheme(header, HeaderTheme, null);
             }
         }
     }
@@ -140,7 +153,7 @@ internal sealed class DarkDialogChrome : INativeDialogChrome
                 if (theme is not null)
                 {
                     // "" + "" = không chủ đề (dáng cổ điển); chỉ "" cho sub-app name sẽ rơi về chủ đề sáng mặc định.
-                    Uxtheme.SetWindowTheme(control.Hwnd, theme, theme.Length == 0 ? string.Empty : null);
+                    _setTheme(control.Hwnd, theme, theme.Length == 0 ? string.Empty : null);
                 }
 
                 ApplyParts(menus, control);

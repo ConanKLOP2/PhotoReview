@@ -26,10 +26,11 @@ public sealed unsafe class NativeControlsTests
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DeleteDC(nint hdc);
 
-    private static T Run<T>(Func<ControlGalleryDialog, nint, T> body, INativeDialogChrome? chrome = null)
+    private static T Run<T>(Func<ControlGalleryDialog, nint, T> body, INativeDialogChrome? chrome = null, bool visualStyles = false)
     {
         return OnSta(() =>
         {
+            using var styles = visualStyles ? ActivateVisualStyles() : null; // comctl32 v6: PBM_GETBARCOLOR and friends
             T result = default!;
             var dialog = new ControlGalleryDialog(chrome);
             ShowOnOwner(dialog, (d, owner) =>
@@ -140,6 +141,33 @@ public sealed unsafe class NativeControlsTests
         Assert.Equal(DarkDialogChrome.ClassicTheme, radio);
         Assert.Equal(DarkDialogChrome.ClassicTheme, group);
         Assert.Equal(DarkDialogChrome.ButtonTheme, check);
+    }
+
+    [Fact]
+    public void RealChrome_ThemesEachControl_IncludingTheComboDropDownAndTheListViewHeader()
+    {
+        var calls = new List<(nint Hwnd, string Theme, string? Ids)>();
+        var chrome = new DarkDialogChrome((hwnd, theme, ids) => calls.Add((hwnd, theme, ids)));
+
+        var (combo, comboList, report, header, radio, group, check, progress, slider, edit) = Run((d, _) => (
+            Item(d, ControlGalleryDialog.Combo), ComboBoxControl.ListWindow(Item(d, ControlGalleryDialog.Combo)),
+            Item(d, ControlGalleryDialog.Report), ListViewControl.Header(Item(d, ControlGalleryDialog.Report)),
+            Item(d, ControlGalleryDialog.RadioA), Item(d, ControlGalleryDialog.Group), Item(d, ControlGalleryDialog.Check),
+            Item(d, ControlGalleryDialog.Progress), Item(d, ControlGalleryDialog.Slider), Item(d, ControlGalleryDialog.Count)),
+            chrome);
+
+        string? ThemeOf(nint hwnd) => calls.Where(c => c.Hwnd == hwnd).Select(c => c.Theme).LastOrDefault();
+        Assert.Equal("DarkMode_CFD", ThemeOf(combo));
+        Assert.Equal("DarkMode_Explorer", ThemeOf(comboList));
+        Assert.Equal("DarkMode_Explorer", ThemeOf(report));
+        Assert.Equal("DarkMode_ItemsView", ThemeOf(header));
+        Assert.Equal(string.Empty, ThemeOf(radio));
+        Assert.Equal(string.Empty, ThemeOf(group));
+        Assert.Equal("DarkMode_Explorer", ThemeOf(check));
+        Assert.Equal(string.Empty, ThemeOf(progress));
+        Assert.Equal("DarkMode_Explorer", ThemeOf(slider));
+        Assert.Equal("DarkMode_CFD", ThemeOf(edit));
+        Assert.Equal(string.Empty, calls.Last(c => c.Hwnd == radio).Ids); // classic = sub-app "" AND ids "" (not the light default)
     }
 
     // ---- combobox -----------------------------------------------------------------------------------------------------
@@ -407,6 +435,77 @@ public sealed unsafe class NativeControlsTests
         });
 
         Assert.Equal(expectedPosition, position);
+    }
+
+    [Fact]
+    public void Progress_UsesTheAccentBar_OnTheSurfaceBackground()
+    {
+        var (bar, back) = Run((d, _) =>
+        {
+            var progress = Item(d, ControlGalleryDialog.Progress);
+            return ((uint)User32.SendMessage(progress, 0x040F /* PBM_GETBARCOLOR */, 0, 0),
+                (uint)User32.SendMessage(progress, 0x040E /* PBM_GETBKCOLOR */, 0, 0));
+        }, visualStyles: true);
+
+        Assert.Equal(DialogColors.FromKey("Dark.Accent"), bar);
+        Assert.Equal(DialogColors.FromKey("Dark.Surface"), back);
+    }
+
+    [Fact]
+    public void ListView_HeaderShowsTheSortArrowOnlyOnTheSortedColumn()
+    {
+        var (unsorted, sorted, otherColumn) = Run((d, _) =>
+        {
+            var report = Item(d, ControlGalleryDialog.Report);
+            var header = ListViewControl.Header(report);
+            // Pixels of the arrow area (right end of a 90 x 20 header cell) after drawing column `column`.
+            uint[] Cell(int column)
+            {
+                var screen = User32.GetDC(0);
+                var memory = CreateCompatibleDC(screen);
+                var bitmap = CreateCompatibleBitmap(screen, 90, 20);
+                var old = Gdi32.SelectObject(memory, bitmap);
+                try
+                {
+                    var buffer = new byte[ControlConstants.NmCustomDrawSize];
+                    fixed (byte* p = buffer)
+                    {
+                        *(nint*)p = header;
+                        *(int*)(p + 16) = ControlConstants.NmCustomDraw;
+                        *(uint*)(p + 24) = ControlConstants.CddsItemPrePaint;
+                        *(nint*)(p + 32) = memory;
+                        *(Rect*)(p + 40) = new Rect { Left = 0, Top = 0, Right = 90, Bottom = 20 };
+                        *(nint*)(p + 56) = column;
+                        User32.SendMessage(report, ControlConstants.WmNotify, 0, (nint)p);
+                    }
+
+                    var pixels = new List<uint>();
+                    for (var x = 62; x < 82; x++)
+                    {
+                        for (var y = 3; y < 17; y++)
+                        {
+                            pixels.Add(GetPixel(memory, x, y));
+                        }
+                    }
+
+                    return [.. pixels];
+                }
+                finally
+                {
+                    Gdi32.SelectObject(memory, old);
+                    Gdi32.DeleteObject(bitmap);
+                    DeleteDC(memory);
+                    _ = User32.ReleaseDC(0, screen);
+                }
+            }
+
+            var before = Cell(1);
+            d.SortBy(1);
+            return (before, Cell(1), Cell(2));
+        });
+
+        Assert.Equal(unsorted, otherColumn); // an unsorted column looks the same before and after sorting another one
+        Assert.NotEqual(unsorted, sorted); // the sorted column gained an arrow
     }
 
     [Fact]

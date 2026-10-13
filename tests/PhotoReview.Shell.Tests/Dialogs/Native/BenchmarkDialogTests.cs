@@ -303,6 +303,38 @@ public sealed class BenchmarkDialogTests
     }
 
     [Fact]
+    public async Task ASecondRun_ClearsTheOldRows_BeforeItsFirstResult()
+    {
+        await using var rig = await Rig.StartAsync();
+        var d = await rig.OpenAsync();
+        await RunTwoProfilesAsync(rig, d);
+        var firstRows = await rig.OnUi(() => ListViewControl.Count(Item(d, BenchmarkDialog.ResultsId)));
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource();
+        rig.Behaviors["preview-light"] = async (_, _) =>
+        {
+            started.SetResult();
+            await release.Task;
+            return Report("preview-light", [1]);
+        };
+
+        await rig.OnUi(() =>
+        {
+            SelectOnly(d, "preview-light");
+            Command(d, BenchmarkDialog.RunId);
+        });
+        await started.Task.WaitAsync(Bound);
+        var during = await rig.OnUi(() => ListViewControl.Count(Item(d, BenchmarkDialog.ResultsId)));
+        release.SetResult();
+        await (await rig.OnUi(() => d.LastRunTask!)).WaitAsync(Bound);
+        await rig.FlushAsync();
+
+        Assert.Equal(3, firstRows);
+        Assert.Equal(0, during);
+        Assert.Equal(1, await rig.OnUi(() => ListViewControl.Count(Item(d, BenchmarkDialog.ResultsId))));
+    }
+
+    [Fact]
     public async Task QuickCheck_RunsTheFixedProfile_WhateverIsSelected()
     {
         await using var rig = await Rig.StartAsync();

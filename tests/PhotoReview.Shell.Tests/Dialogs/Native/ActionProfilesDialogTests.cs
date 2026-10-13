@@ -49,7 +49,7 @@ public sealed class ActionProfilesDialogTests
     {
         public List<(string Title, string Message)> Shown { get; } = [];
 
-        public void Warn(nint owner, string title, string message) => Shown.Add((title, message));
+        public void ShowWarning(nint owner, string title, string message) => Shown.Add((title, message));
     }
 
     private static List<ReviewAction> Sample() =>

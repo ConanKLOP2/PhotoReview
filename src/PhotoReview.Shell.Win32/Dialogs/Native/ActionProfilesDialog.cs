@@ -9,7 +9,7 @@ namespace PhotoReview.Shell.Win32.Dialogs.Native;
 internal interface IDialogWarningSink
 {
     /// <summary>Hiện cảnh báo modal trên <paramref name="owner"/>; chặn tới khi người dùng đóng.</summary>
-    void Warn(nint owner, string title, string message);
+    void ShowWarning(nint owner, string title, string message);
 }
 
 /// <summary><see cref="IDialogWarningSink"/> thật: <c>TaskDialogIndirect</c> (biểu tượng cảnh báo, một nút OK) như <c>MessageBox</c> của bản WPF.</summary>
@@ -17,7 +17,7 @@ internal sealed class TaskDialogWarningSink : IDialogWarningSink
 {
     public static TaskDialogWarningSink Instance { get; } = new();
 
-    public void Warn(nint owner, string title, string message)
+    public void ShowWarning(nint owner, string title, string message)
         => new NativeTaskDialogPort().Show(owner, title, message, TaskDialogKind.Error);
 }
 
@@ -299,7 +299,7 @@ internal sealed class ActionProfilesDialog : NativeDialog
         var imported = ActionProfilesPresenter.TryImport(path, out var error);
         if (imported is null)
         {
-            _warnings.Warn(Hwnd, Tr.DialogImportActionsFailedTitle, error);
+            _warnings.ShowWarning(Hwnd, Tr.DialogImportActionsFailedTitle, error);
             return;
         }
 
@@ -325,7 +325,7 @@ internal sealed class ActionProfilesDialog : NativeDialog
 
         if (ActionProfilesPresenter.TryExport(path, _presenter.Actions) is { } error)
         {
-            _warnings.Warn(Hwnd, Tr.DialogExportActionsFailedTitle, error);
+            _warnings.ShowWarning(Hwnd, Tr.DialogExportActionsFailedTitle, error);
         }
     }
 
@@ -335,7 +335,7 @@ internal sealed class ActionProfilesDialog : NativeDialog
         var result = _presenter.Apply();
         if (!result.Accepted)
         {
-            _warnings.Warn(Hwnd, Tr.DialogActionProfilesInvalidTitle, result.Message ?? string.Empty);
+            _warnings.ShowWarning(Hwnd, Tr.DialogActionProfilesInvalidTitle, result.Message ?? string.Empty);
             return false;
         }
 
