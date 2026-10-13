@@ -2,12 +2,12 @@
 id: CI-PARALLEL-TEST-JOBS
 order: 1220
 summary: |-
-  CI: job `build-test-publish` tách thành 3 job test song song + `build-publish`; `build-test-publish` còn là job tổng hợp (CHƯA XÁC NHẬN, 2026-10-13).
+  CI: job `build-test-publish` tách thành job test song song (đã merge #502, 2026-10-13) + `build-publish`; `build-test-publish` còn là job tổng hợp (cấu trúc sau đó được thay bằng CI-OPTIMIZE-ROUND2 #508).
 ---
 
 # CI-PARALLEL-TEST-JOBS - tách bước test của ci.yml theo RUNNER (2026-10-13)
 
-Trạng thái: **CHƯA XÁC NHẬN** (đổi workflow CI cần chủ repo xem; PR không bật auto-merge). Hoàn tác: revert PR.
+Trạng thái: **ĐÃ MERGE #502** (cập nhật 2026-10-14). Cấu trúc 3 job test ở mục 2 đã được thay bằng CI-OPTIMIZE-ROUND2 (#508): 6 job test song song + `compile-gate`; mục 2 giữ làm lịch sử. Hoàn tác: revert PR.
 
 ## 1. Vấn đề
 

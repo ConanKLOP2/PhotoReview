@@ -4,8 +4,8 @@ param(
     [string]$OutputDirectory = '',
     # CI restores the whole solution once; pass this so the two publishes do not restore again.
     [switch]$NoRestore,
-    # WP-36: ALSO publish the OPTIONAL Native AOT variant of PhotoReview.exe (no WPF bridge: the Settings/Diagnostics/Recovery
-    # windows do not open) into its own folder. Needs the MSVC C++ build tools; without them the AOT step is skipped with a
+    # WP-36: ALSO publish the OPTIONAL Native AOT variant of PhotoReview.exe (no WPF bridge; since WP-35 GĐ5 (#500) every
+    # secondary window is a Win32 dialog, so the AOT build opens Settings/Diagnostics/Recovery too) into its own folder. Needs the MSVC C++ build tools; without them the AOT step is skipped with a
     # warning and the normal publish is untouched. The default release (framework-dependent R2R hybrid) never changes.
     [switch]$Aot,
     # Same as -Aot, but missing MSVC or a failed AOT publish FAILS the script (the CI job whose only purpose is the AOT artifact).
@@ -35,8 +35,8 @@ $out = [IO.Path]::GetFullPath($OutputDirectory)
 if ($AotOnly -and -not ($Aot -or $RequireAot)) { throw '-AotOnly needs -Aot or -RequireAot.' }
 
 # NO-WPF WP-36: PhotoReview.exe as Native AOT (-p:ShellAot=true in Shell.Win32.csproj: PublishAot + EventSourceSupport, no WPF
-# bridge). It is an OPTIONAL second artifact, never part of the normal release folder: the default release stays the hybrid R2R
-# build that can open the WPF secondary windows until WP-35 replaces them.
+# bridge). It is an OPTIONAL second artifact, never part of the normal release folder: the default release stays the framework-dependent
+# R2R build, never AOT.
 function Find-VsWhere {
     if ($VsWherePath) {
         if (Test-Path -LiteralPath $VsWherePath -PathType Leaf) { return $VsWherePath }
