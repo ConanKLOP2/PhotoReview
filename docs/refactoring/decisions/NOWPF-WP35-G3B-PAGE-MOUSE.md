@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-G3B-MOUSE
-order: 1190
+order: 1200
 summary: |-
   WP-35 GÄ3b (CHÆ¯A XÃC NHáº¬N, tiáº¿p NOWPF-WP35-G3A): trang Mouse cá»§a SettingsDialog Win32 - 20 thuá»™c tÃ­nh (zoom/click/bÆ°á»›c phÃ­m/neo Fit width 1-2/giá»¯ zoom/chuá»™t giá»¯a 11 má»¥c, con lÄƒn, kinetic, mÅ©i tÃªn á»Ÿ mÃ©p, chuyá»ƒn áº£nh Fade + Ms, touchpad + khoáº£ng vuá»‘t) vÃ  18 Ã´ tick menu chuá»™t pháº£i dá»±ng báº±ng mÃ£ theo `ContextMenuItems.Items`; má»¥c Settings luÃ´n báº­t + tooltip. Khung chá»‰ Cá»˜NG THÃŠM 3 thá»© nhá» (hook OnActivated, SetTooltip, CurrentShortcutTexts). 19 Ä‘á»™t biáº¿n cháº¡y: 18 cháº¿t á»Ÿ bÆ°á»›c 1, 1 sá»‘ng (M04) Ä‘Æ°á»£c láº¥p báº±ng test má»›i, 0 sá»‘ng tháº­t.
 ---

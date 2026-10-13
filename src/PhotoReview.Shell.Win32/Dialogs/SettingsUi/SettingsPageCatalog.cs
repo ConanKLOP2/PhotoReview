@@ -19,6 +19,7 @@ internal static class SettingsPageCatalog
         ["General"] = static () => new GeneralSettingsPage(),
         ["Mouse"] = static () => new MouseSettingsPage(),
         ["Performance"] = static () => new PerformanceSettingsPage(),
+        ["Shortcuts"] = static () => new ShortcutsSettingsPage(),
     };
 
     /// <summary>Khoá các trang đã có bản Win32.</summary>
