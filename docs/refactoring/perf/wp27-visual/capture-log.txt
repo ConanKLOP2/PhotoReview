@@ -1,0 +1,325 @@
+menu-context-en-open: 256x415 nearWhite=0.8% colours=101 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-en-hover3: 256x415 nearWhite=0.8% colours=139 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-sub-en: 256x415 nearWhite=0.8% colours=124 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-sub-en-level1: 242x388 nearWhite=0.6% colours=145 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-tools-en-open: 286x174 nearWhite=0.5% colours=96 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-tools-en-hover2: 286x174 nearWhite=0.5% colours=123 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-en-150-open: 373x622 nearWhite=0.9% colours=84 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-en-150-hover3: 373x622 nearWhite=0.9% colours=118 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-sub-en-150: 373x622 nearWhite=0.9% colours=105 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-sub-en-150-level1: 352x580 nearWhite=0.7% colours=126 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-tools-en-150-open: 419x258 nearWhite=0.5% colours=82 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-tools-en-150-hover2: 419x258 nearWhite=0.6% colours=105 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-synthetic-en-open: 548x183 nearWhite=0.6% colours=129 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-synthetic-en-hover-disabled: 548x183 nearWhite=0.6% colours=130 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-synthetic-sub-en: 548x183 nearWhite=0.6% colours=157 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-synthetic-sub-en-level1: 135x62 nearWhite=0.6% colours=67 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-vi-open: 259x415 nearWhite=0.9% colours=105 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-vi-hover3: 259x415 nearWhite=0.9% colours=149 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-sub-vi: 259x415 nearWhite=0.9% colours=135 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-sub-vi-level1: 329x388 nearWhite=0.6% colours=151 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-tools-vi-open: 217x174 nearWhite=0.7% colours=91 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-tools-vi-hover2: 217x174 nearWhite=0.7% colours=120 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-vi-150-open: 377x622 nearWhite=1.0% colours=95 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-vi-150-hover3: 377x622 nearWhite=1.0% colours=130 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-context-sub-vi-150: 377x622 nearWhite=1.0% colours=121 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-tools-vi-150-open: 315x258 nearWhite=0.7% colours=80 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-tools-vi-150-hover2: 315x258 nearWhite=0.7% colours=103 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-synthetic-vi-open: 548x183 nearWhite=0.6% colours=129 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-synthetic-vi-hover-disabled: 548x183 nearWhite=0.6% colours=130 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-synthetic-sub-vi: 548x183 nearWhite=0.6% colours=157 attempts=1 bitbltVsPrintWindowDiffPixels=0
+menu-synthetic-sub-vi-level1: 135x62 nearWhite=0.6% colours=67 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-top: 961x658 nearWhite=2.0% colours=760 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-mid: 961x658 nearWhite=2.0% colours=760 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-bottom: 961x658 nearWhite=2.0% colours=760 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-focus: 961x658 nearWhite=2.0% colours=759 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-top: 961x658 nearWhite=1.4% colours=761 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-mid: 961x658 nearWhite=1.4% colours=765 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-bottom: 961x658 nearWhite=1.4% colours=765 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-focus: 961x658 nearWhite=1.4% colours=760 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-top: 961x658 nearWhite=1.0% colours=756 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-mid: 961x658 nearWhite=1.0% colours=734 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-bottom: 961x658 nearWhite=1.0% colours=734 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-focus: 961x658 nearWhite=1.0% colours=755 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-top: 961x658 nearWhite=0.7% colours=757 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-mid: 961x658 nearWhite=0.7% colours=757 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-bottom: 961x658 nearWhite=0.7% colours=757 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-focus: 961x658 nearWhite=0.7% colours=756 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-top: 961x658 nearWhite=1.6% colours=815 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-mid: 961x658 nearWhite=1.5% colours=766 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-bottom: 961x658 nearWhite=1.5% colours=766 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-focus: 961x658 nearWhite=1.6% colours=816 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-top: 961x658 nearWhite=1.4% colours=774 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-mid: 961x658 nearWhite=1.5% colours=835 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-bottom: 961x658 nearWhite=1.4% colours=825 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-focus: 961x658 nearWhite=1.4% colours=773 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-top: 961x658 nearWhite=0.7% colours=754 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-mid: 961x658 nearWhite=0.7% colours=754 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-bottom: 961x658 nearWhite=0.7% colours=754 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-focus: 961x658 nearWhite=0.7% colours=753 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-150-top: 1441x987 nearWhite=1.6% colours=739 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-150-mid: 1441x987 nearWhite=1.6% colours=739 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-150-bottom: 1441x987 nearWhite=1.6% colours=739 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-150-focus: 1441x987 nearWhite=1.6% colours=738 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-150-top: 1441x987 nearWhite=1.1% colours=739 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-150-mid: 1441x987 nearWhite=1.1% colours=743 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-150-bottom: 1441x987 nearWhite=1.1% colours=743 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-150-focus: 1441x987 nearWhite=1.1% colours=738 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-150-top: 1441x987 nearWhite=0.8% colours=737 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-150-mid: 1441x987 nearWhite=0.8% colours=717 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-150-bottom: 1441x987 nearWhite=0.8% colours=717 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-150-focus: 1441x987 nearWhite=0.8% colours=736 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-150-top: 1441x987 nearWhite=0.5% colours=735 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-150-mid: 1441x987 nearWhite=0.5% colours=735 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-150-bottom: 1441x987 nearWhite=0.5% colours=735 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-150-focus: 1441x987 nearWhite=0.5% colours=734 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-150-top: 1441x987 nearWhite=1.3% colours=780 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-150-mid: 1441x987 nearWhite=1.2% colours=733 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-150-bottom: 1441x987 nearWhite=1.2% colours=733 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-150-focus: 1441x987 nearWhite=1.3% colours=781 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-150-top: 1441x987 nearWhite=1.1% colours=754 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-150-mid: 1441x987 nearWhite=1.2% colours=806 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-150-bottom: 1441x987 nearWhite=1.1% colours=788 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-150-focus: 1441x987 nearWhite=1.1% colours=753 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-150-top: 1441x987 nearWhite=0.5% colours=731 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-150-mid: 1441x987 nearWhite=0.5% colours=731 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-150-bottom: 1441x987 nearWhite=0.5% colours=731 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-150-focus: 1441x987 nearWhite=0.5% colours=730 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-noclip-top: 961x658 nearWhite=2.2% colours=904 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-noclip-mid: 961x658 nearWhite=2.2% colours=904 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-noclip-bottom: 961x658 nearWhite=2.2% colours=904 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-noclip-focus: 961x658 nearWhite=2.3% colours=905 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-noclip-top: 961x658 nearWhite=1.8% colours=880 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-noclip-mid: 961x658 nearWhite=2.0% colours=902 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-noclip-bottom: 961x658 nearWhite=2.0% colours=902 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-noclip-focus: 961x658 nearWhite=1.8% colours=880 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-noclip-top: 961x658 nearWhite=1.4% colours=873 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-noclip-mid: 961x658 nearWhite=1.3% colours=881 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-noclip-bottom: 961x658 nearWhite=1.5% colours=788 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-noclip-focus: 961x658 nearWhite=1.4% colours=874 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-noclip-top: 961x658 nearWhite=0.9% colours=864 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-noclip-mid: 961x658 nearWhite=0.9% colours=864 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-noclip-bottom: 961x658 nearWhite=0.9% colours=864 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-noclip-focus: 961x658 nearWhite=1.0% colours=864 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-noclip-top: 961x658 nearWhite=2.2% colours=883 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-noclip-mid: 961x658 nearWhite=2.0% colours=881 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-noclip-bottom: 961x658 nearWhite=2.0% colours=881 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-noclip-focus: 961x658 nearWhite=2.2% colours=884 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-noclip-top: 961x658 nearWhite=1.9% colours=900 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-noclip-mid: 961x658 nearWhite=1.6% colours=859 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-noclip-bottom: 961x658 nearWhite=1.6% colours=858 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-noclip-focus: 961x658 nearWhite=2.0% colours=900 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-noclip-top: 961x658 nearWhite=0.8% colours=763 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-noclip-mid: 961x658 nearWhite=0.8% colours=763 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-noclip-bottom: 961x658 nearWhite=0.8% colours=763 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-noclip-focus: 961x658 nearWhite=0.9% colours=763 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-150-noclip-top: 1441x987 nearWhite=1.8% colours=857 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-150-noclip-mid: 1441x987 nearWhite=1.8% colours=856 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-150-noclip-bottom: 1441x987 nearWhite=1.8% colours=856 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-en-150-noclip-focus: 1441x987 nearWhite=1.9% colours=858 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-150-noclip-top: 1441x987 nearWhite=1.4% colours=821 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-150-noclip-mid: 1441x987 nearWhite=1.5% colours=861 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-150-noclip-bottom: 1441x987 nearWhite=1.5% colours=839 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-en-150-noclip-focus: 1441x987 nearWhite=1.4% colours=821 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-150-noclip-top: 1441x987 nearWhite=1.0% colours=834 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-150-noclip-mid: 1441x987 nearWhite=1.0% colours=843 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-150-noclip-bottom: 1441x987 nearWhite=1.1% colours=764 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-en-150-noclip-focus: 1441x987 nearWhite=1.0% colours=834 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-150-noclip-top: 1441x987 nearWhite=0.6% colours=819 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-150-noclip-mid: 1441x987 nearWhite=0.6% colours=819 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-150-noclip-bottom: 1441x987 nearWhite=0.6% colours=819 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-en-150-noclip-focus: 1441x987 nearWhite=0.7% colours=819 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-150-noclip-top: 1441x987 nearWhite=1.6% colours=835 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-150-noclip-mid: 1441x987 nearWhite=1.5% colours=824 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-150-noclip-bottom: 1441x987 nearWhite=1.5% colours=824 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-en-150-noclip-focus: 1441x987 nearWhite=1.6% colours=836 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-150-noclip-top: 1441x987 nearWhite=1.5% colours=854 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-150-noclip-mid: 1441x987 nearWhite=1.3% colours=824 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-150-noclip-bottom: 1441x987 nearWhite=1.2% colours=815 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-en-150-noclip-focus: 1441x987 nearWhite=1.6% colours=854 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-150-noclip-top: 1441x987 nearWhite=0.6% colours=738 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-150-noclip-mid: 1441x987 nearWhite=0.6% colours=738 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-150-noclip-bottom: 1441x987 nearWhite=0.6% colours=738 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-en-150-noclip-focus: 1441x987 nearWhite=0.6% colours=738 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-top: 961x658 nearWhite=0.7% colours=770 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-mid: 961x658 nearWhite=0.7% colours=770 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-bottom: 961x658 nearWhite=0.7% colours=770 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-focus: 961x658 nearWhite=0.7% colours=769 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-top: 961x658 nearWhite=1.4% colours=775 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-mid: 961x658 nearWhite=1.4% colours=781 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-bottom: 961x658 nearWhite=1.4% colours=781 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-focus: 961x658 nearWhite=1.4% colours=774 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-top: 961x658 nearWhite=1.1% colours=775 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-mid: 961x658 nearWhite=1.0% colours=746 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-bottom: 961x658 nearWhite=1.0% colours=746 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-focus: 961x658 nearWhite=1.1% colours=774 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-top: 961x658 nearWhite=0.7% colours=773 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-mid: 961x658 nearWhite=0.7% colours=773 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-bottom: 961x658 nearWhite=0.7% colours=773 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-focus: 961x658 nearWhite=0.7% colours=772 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-top: 961x658 nearWhite=1.6% colours=817 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-mid: 961x658 nearWhite=1.5% colours=773 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-bottom: 961x658 nearWhite=1.5% colours=773 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-focus: 961x658 nearWhite=1.6% colours=818 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-top: 961x658 nearWhite=1.3% colours=793 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-mid: 961x658 nearWhite=1.5% colours=863 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-bottom: 961x658 nearWhite=1.3% colours=847 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-focus: 961x658 nearWhite=1.3% colours=792 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-top: 961x658 nearWhite=0.7% colours=777 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-mid: 961x658 nearWhite=0.7% colours=777 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-bottom: 961x658 nearWhite=0.7% colours=777 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-focus: 961x658 nearWhite=0.7% colours=776 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-150-top: 1441x987 nearWhite=1.6% colours=752 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-150-mid: 1441x987 nearWhite=1.6% colours=750 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-150-bottom: 1441x987 nearWhite=1.6% colours=750 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-150-focus: 1441x987 nearWhite=1.6% colours=751 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-150-top: 1441x987 nearWhite=1.1% colours=747 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-150-mid: 1441x987 nearWhite=1.1% colours=752 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-150-bottom: 1441x987 nearWhite=1.1% colours=752 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-150-focus: 1441x987 nearWhite=1.1% colours=746 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-150-top: 1441x987 nearWhite=0.8% colours=754 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-150-mid: 1441x987 nearWhite=0.8% colours=729 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-150-bottom: 1441x987 nearWhite=0.8% colours=729 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-150-focus: 1441x987 nearWhite=0.8% colours=753 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-150-top: 1441x987 nearWhite=0.5% colours=739 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-150-mid: 1441x987 nearWhite=0.5% colours=739 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-150-bottom: 1441x987 nearWhite=0.5% colours=739 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-150-focus: 1441x987 nearWhite=0.5% colours=738 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-150-top: 1441x987 nearWhite=1.3% colours=788 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-150-mid: 1441x987 nearWhite=1.2% colours=742 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-150-bottom: 1441x987 nearWhite=1.2% colours=742 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-150-focus: 1441x987 nearWhite=1.3% colours=789 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-150-top: 1441x987 nearWhite=1.1% colours=771 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-150-mid: 1441x987 nearWhite=1.2% colours=840 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-150-bottom: 1441x987 nearWhite=1.1% colours=765 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-150-focus: 1441x987 nearWhite=1.1% colours=770 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-150-top: 1441x987 nearWhite=0.5% colours=743 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-150-mid: 1441x987 nearWhite=0.5% colours=743 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-150-bottom: 1441x987 nearWhite=0.5% colours=743 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-150-focus: 1441x987 nearWhite=0.5% colours=742 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-noclip-top: 961x658 nearWhite=1.0% colours=937 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-noclip-mid: 961x658 nearWhite=1.0% colours=937 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-noclip-bottom: 961x658 nearWhite=1.0% colours=937 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-noclip-focus: 961x658 nearWhite=1.1% colours=938 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-noclip-top: 961x658 nearWhite=1.8% colours=901 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-noclip-mid: 961x658 nearWhite=2.0% colours=933 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-noclip-bottom: 961x658 nearWhite=2.0% colours=933 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-noclip-focus: 961x658 nearWhite=1.9% colours=901 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-noclip-top: 961x658 nearWhite=1.6% colours=914 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-noclip-mid: 961x658 nearWhite=1.4% colours=926 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-noclip-bottom: 961x658 nearWhite=1.6% colours=806 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-noclip-focus: 961x658 nearWhite=1.6% colours=915 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-noclip-top: 961x658 nearWhite=0.9% colours=899 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-noclip-mid: 961x658 nearWhite=0.9% colours=899 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-noclip-bottom: 961x658 nearWhite=0.9% colours=899 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-noclip-focus: 961x658 nearWhite=1.0% colours=899 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-noclip-top: 961x658 nearWhite=2.2% colours=894 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-noclip-mid: 961x658 nearWhite=2.1% colours=905 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-noclip-bottom: 961x658 nearWhite=2.1% colours=905 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-noclip-focus: 961x658 nearWhite=2.2% colours=895 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-noclip-top: 961x658 nearWhite=1.9% colours=940 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-noclip-mid: 961x658 nearWhite=1.6% colours=893 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-noclip-bottom: 961x658 nearWhite=1.5% colours=880 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-noclip-focus: 961x658 nearWhite=2.0% colours=940 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-noclip-top: 961x658 nearWhite=0.8% colours=783 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-noclip-mid: 961x658 nearWhite=0.8% colours=783 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-noclip-bottom: 961x658 nearWhite=0.8% colours=783 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-noclip-focus: 961x658 nearWhite=0.8% colours=783 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-150-noclip-top: 1441x987 nearWhite=1.8% colours=899 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-150-noclip-mid: 1441x987 nearWhite=1.8% colours=896 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-150-noclip-bottom: 1441x987 nearWhite=1.8% colours=896 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p0-vi-150-noclip-focus: 1441x987 nearWhite=1.9% colours=900 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-150-noclip-top: 1441x987 nearWhite=1.4% colours=838 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-150-noclip-mid: 1441x987 nearWhite=1.5% colours=888 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-150-noclip-bottom: 1441x987 nearWhite=1.5% colours=863 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p1-vi-150-noclip-focus: 1441x987 nearWhite=1.4% colours=838 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-150-noclip-top: 1441x987 nearWhite=1.1% colours=867 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-150-noclip-mid: 1441x987 nearWhite=1.0% colours=876 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-150-noclip-bottom: 1441x987 nearWhite=1.2% colours=787 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p2-vi-150-noclip-focus: 1441x987 nearWhite=1.1% colours=867 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-150-noclip-top: 1441x987 nearWhite=0.6% colours=842 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-150-noclip-mid: 1441x987 nearWhite=0.6% colours=842 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-150-noclip-bottom: 1441x987 nearWhite=0.6% colours=842 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p3-vi-150-noclip-focus: 1441x987 nearWhite=0.7% colours=842 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-150-noclip-top: 1441x987 nearWhite=1.6% colours=850 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-150-noclip-mid: 1441x987 nearWhite=1.5% colours=851 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-150-noclip-bottom: 1441x987 nearWhite=1.5% colours=851 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p4-vi-150-noclip-focus: 1441x987 nearWhite=1.6% colours=851 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-150-noclip-top: 1441x987 nearWhite=1.5% colours=895 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-150-noclip-mid: 1441x987 nearWhite=1.3% colours=865 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-150-noclip-bottom: 1441x987 nearWhite=1.2% colours=848 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p5-vi-150-noclip-focus: 1441x987 nearWhite=1.5% colours=895 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-150-noclip-top: 1441x987 nearWhite=0.5% colours=754 attempts=2 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-150-noclip-mid: 1441x987 nearWhite=0.5% colours=754 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-150-noclip-bottom: 1441x987 nearWhite=0.5% colours=754 attempts=1 bitbltVsPrintWindowDiffPixels=0
+settings-p6-vi-150-noclip-focus: 1441x987 nearWhite=0.6% colours=754 attempts=1 bitbltVsPrintWindowDiffPixels=0
+diag child 0: class=Button style=44000007 vis=False rect=(272,92,0x0) text=Language / Ngôn ngữ
+diag child 1: class=Static style=44000080 vis=False rect=(272,92,0x0) text=Interface language
+diag child 2: class=ComboBox style=44010203 vis=False rect=(272,92,0x23) text=
+diag child 3: class=Button style=44010000 vis=False rect=(272,92,0x0) text=Open languages folder
+diag child 4: class=Button style=44010000 vis=False rect=(272,92,0x0) text=Reload translations
+diag child 5: class=Button style=44010000 vis=False rect=(272,92,0x0) text=Export strings to translate
+diag child 6: class=Static style=44000080 vis=False rect=(272,92,0x0) text=Translations are plain JSON files. Files in the languages folder override the built-in text or add a new language.
+diag child 7: class=Button style=54000007 vis=True rect=(272,92,634x226) text=General
+diag child 8: class=Static style=54000080 vis=True rect=(286,121,230x15) text=Image order
+diag child 9: class=ComboBox style=54010203 vis=True rect=(527,116,365x23) text=Default (folder order)
+diag child 10: class=Static style=54000080 vis=True rect=(527,151,365x60) text=Name follows the order of the Explorer window showing the folder, when there is one. Name A→Z, Name Z→A and Default never do. Default shows the files exactly in the order the folder lists them, with no sorting.
+diag child 11: class=Static style=54000080 vis=True rect=(286,225,230x15) text=Initial zoom
+diag child 12: class=ComboBox style=54010203 vis=True rect=(527,220,365x23) text=Fit
+diag child 13: class=Static style=54000080 vis=True rect=(286,260,230x15) text=Instance mode
+diag child 14: class=ComboBox style=54010203 vis=True rect=(527,255,365x23) text=Single window (default)
+diag child 15: class=Static style=54000080 vis=True rect=(527,290,365x15) text=Applies after restarting PhotoReview.
+diag child 16: class=Button style=54000007 vis=True rect=(272,333,634x102) text=Updates
+diag child 17: class=Button style=54010000 vis=True rect=(286,357,124x26) text=Check for updates
+diag child 18: class=Button style=44010000 vis=False rect=(272,92,0x0) text=Open download page
+diag child 19: class=Static style=44000080 vis=False rect=(272,92,0x0) text=
+diag child 20: class=Static style=54000080 vis=True rect=(286,392,606x30) text=This is the only feature that uses the network, and only when you click the button. Nothing about your photos or folders is sent. Updates are never downloaded or installed automatically.
+diag child 21: class=Button style=54000007 vis=True rect=(272,450,634x141) text=Explorer integration
+diag child 22: class=Static style=54000080 vis=True rect=(286,474,606x15) text=Not in Explorer's right-click menu.
+diag child 23: class=Button style=54010000 vis=True rect=(286,498,143x26) text=Add to Explorer menu
+diag child 24: class=Button style=5C010000 vis=True rect=(440,498,179x26) text=Remove from Explorer menu
+diag child 25: class=Static style=54000080 vis=True rect=(286,533,606x45) text=Adds "Browse with PhotoReview" to Explorer's right-click menu on folders and on empty space inside a folder. Only for your Windows user (no administrator rights). It applies immediately, not on Save; removing it deletes just those two entries.
+diag-base: 961x658 nearWhite=2.0% colours=760 attempts=2 bitbltVsPrintWindowDiffPixels=0
+diag-base-noclipsib: 961x658 nearWhite=2.2% colours=904 attempts=1 bitbltVsPrintWindowDiffPixels=0
+hud-en-dpi100: 800x480 offscreen case=hud-fit chromaPixels=200303 (no-HUD 221063)
+hud-en-dpi150: 1200x720 offscreen case=hud-fit-dpi150 chromaPixels=450884 (no-HUD 497663)
+emoji-en: 720x140 offscreen chromaPixels=0
+hud-vi-dpi100: 800x480 offscreen case=hud-fit chromaPixels=198506 (no-HUD 221063)
+hud-vi-dpi150: 1200x720 offscreen case=hud-fit-dpi150 chromaPixels=446865 (no-HUD 497663)
+emoji-vi: 720x140 offscreen chromaPixels=0
+zoom-en: 366x171 nearWhite=1.9% colours=636 attempts=2 bitbltVsPrintWindowDiffPixels=0
+zoom-error-en: 366x194 nearWhite=1.8% colours=684 attempts=2 bitbltVsPrintWindowDiffPixels=0
+diagnostics-en: 716x517 nearWhite=1.6% colours=678 attempts=2 bitbltVsPrintWindowDiffPixels=0
+skipped-en: 839x423 nearWhite=5.9% colours=655 attempts=2 bitbltVsPrintWindowDiffPixels=0
+batch-en: 839x564 nearWhite=5.0% colours=721 attempts=2 bitbltVsPrintWindowDiffPixels=0
+zoom-en-150: 522x275 nearWhite=1.2% colours=596 attempts=2 bitbltVsPrintWindowDiffPixels=0
+zoom-error-en-150: 522x338 nearWhite=1.0% colours=635 attempts=2 bitbltVsPrintWindowDiffPixels=0
+diagnostics-en-150: 1022x836 nearWhite=1.1% colours=650 attempts=2 bitbltVsPrintWindowDiffPixels=0
+skipped-en-150: 1258x634 nearWhite=4.2% colours=616 attempts=2 bitbltVsPrintWindowDiffPixels=0
+batch-en-150: 1258x846 nearWhite=3.8% colours=697 attempts=2 bitbltVsPrintWindowDiffPixels=0
+zoom-vi: 366x171 nearWhite=2.0% colours=705 attempts=2 bitbltVsPrintWindowDiffPixels=0
+zoom-error-vi: 366x194 nearWhite=1.8% colours=749 attempts=2 bitbltVsPrintWindowDiffPixels=0
+diagnostics-vi: 716x517 nearWhite=1.8% colours=690 attempts=2 bitbltVsPrintWindowDiffPixels=0
+skipped-vi: 839x423 nearWhite=5.7% colours=682 attempts=2 bitbltVsPrintWindowDiffPixels=0
+batch-vi: 839x564 nearWhite=5.0% colours=776 attempts=2 bitbltVsPrintWindowDiffPixels=0
+zoom-vi-150: 522x275 nearWhite=1.2% colours=668 attempts=2 bitbltVsPrintWindowDiffPixels=0
+zoom-error-vi-150: 522x313 nearWhite=1.1% colours=706 attempts=2 bitbltVsPrintWindowDiffPixels=0
+diagnostics-vi-150: 1022x836 nearWhite=1.1% colours=657 attempts=2 bitbltVsPrintWindowDiffPixels=0
+skipped-vi-150: 1258x634 nearWhite=4.1% colours=640 attempts=2 bitbltVsPrintWindowDiffPixels=0
+batch-vi-150: 1258x846 nearWhite=3.8% colours=753 attempts=2 bitbltVsPrintWindowDiffPixels=0
+actionprofiles-en: 786x470 nearWhite=1.2% colours=805 attempts=2 bitbltVsPrintWindowDiffPixels=0
+actionprofiles-en-150: 1179x712 nearWhite=0.8% colours=774 attempts=2 bitbltVsPrintWindowDiffPixels=0
+benchmark-en-before-run: 926x658 nearWhite=1.4% colours=990 attempts=2 bitbltVsPrintWindowDiffPixels=0
+benchmark-en: 926x658 nearWhite=1.7% colours=1177 attempts=1 bitbltVsPrintWindowDiffPixels=0
+benchmark-en-150: 1389x987 nearWhite=1.2% colours=1089 attempts=2 bitbltVsPrintWindowDiffPixels=0
+recovery-en: 1241x658 nearWhite=0.6% colours=923 attempts=2 bitbltVsPrintWindowDiffPixels=0
+recovery-en-selected: 1241x658 nearWhite=1.7% colours=1140 attempts=1 bitbltVsPrintWindowDiffPixels=0
+recovery-en-150: 1861x987 nearWhite=1.2% colours=1037 attempts=2 bitbltVsPrintWindowDiffPixels=0
+actionprofiles-vi: 786x470 nearWhite=1.2% colours=852 attempts=2 bitbltVsPrintWindowDiffPixels=0
+actionprofiles-vi-150: 1179x712 nearWhite=0.9% colours=805 attempts=2 bitbltVsPrintWindowDiffPixels=0
+benchmark-vi-before-run: 926x658 nearWhite=1.4% colours=1008 attempts=2 bitbltVsPrintWindowDiffPixels=0
+benchmark-vi: 926x658 nearWhite=1.7% colours=1211 attempts=1 bitbltVsPrintWindowDiffPixels=0
+benchmark-vi-150: 1389x987 nearWhite=1.2% colours=1120 attempts=2 bitbltVsPrintWindowDiffPixels=0
+recovery-vi: 1241x658 nearWhite=0.6% colours=960 attempts=2 bitbltVsPrintWindowDiffPixels=0
+recovery-vi-selected: 1241x658 nearWhite=1.6% colours=1199 attempts=1 bitbltVsPrintWindowDiffPixels=0
+recovery-vi-150: 1861x987 nearWhite=1.2% colours=1085 attempts=2 bitbltVsPrintWindowDiffPixels=0
