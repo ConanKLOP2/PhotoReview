@@ -4,7 +4,7 @@ param(
     [string]$OutputDirectory = '',
     # CI restores the whole solution once; pass this so the two publishes do not restore again.
     [switch]$NoRestore,
-    # WP-36: ALSO publish the OPTIONAL Native AOT variant of PhotoReview.exe (no WPF bridge; since WP-35 GĐ5 (#500) every
+    # WP-36: ALSO publish the OPTIONAL Native AOT variant of PhotoReview.exe (no WPF bridge; since WP-35 GD5 (#500) every
     # secondary window is a Win32 dialog, so the AOT build opens Settings/Diagnostics/Recovery too) into its own folder. Needs the MSVC C++ build tools; without them the AOT step is skipped with a
     # warning and the normal publish is untouched. The default release (framework-dependent R2R hybrid) never changes.
     [switch]$Aot,
