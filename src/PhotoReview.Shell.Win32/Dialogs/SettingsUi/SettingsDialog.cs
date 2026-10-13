@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using PhotoReview.App;
+using PhotoReview.App.Input;
 using PhotoReview.App.Localization;
 using PhotoReview.App.Presenters;
 using PhotoReview.Core.Abstractions;
@@ -40,6 +41,12 @@ internal sealed record SettingsDialogOptions
 
     /// <summary>Ctrl có đang giữ không (test thay để mô phỏng Ctrl+Tab).</summary>
     public Func<bool>? ControlKeyDown { get; init; }
+
+    /// <summary>
+    /// WP-35 GĐ3b: mở Action profiles MODAL lồng trên cửa sổ Settings (owner, danh sách hiện tại) -&gt; danh sách đã sửa hoặc null khi huỷ
+    /// (cổng Win32 gắn <c>ShowActionProfiles</c> của nó; null = trang Shortcuts báo "không mở được trình sửa").
+    /// </summary>
+    public Func<nint, IReadOnlyList<ReviewAction>, IReadOnlyList<ReviewAction>?>? ShowActionProfiles { get; init; }
 }
 
 /// <summary>
@@ -72,7 +79,12 @@ internal sealed unsafe class SettingsDialog : NativeDialog
     private const uint WmAppQueue = WindowMessages.WmApp + 0x36;
     private const nuint ForwardAllSubclassId = 0x53543335; // "ST35"
     private const nuint WheelSubclassId = 0x57483335; // "WH35"
+    private const nuint KeyBoxSubclassId = 0x4B423335; // "KB35"
 
+    private readonly HashSet<int> _keyBoxes = [];
+    private readonly HashSet<int> _warningTexts = [];
+    private nint _keyBoxBrush;
+    private string? _actionsJson;
     private readonly SettingsPresenter _presenter;
     private readonly IReadOnlyList<ISettingsPageView> _pages;
     private readonly SettingsPageBuilder[] _builders;
@@ -212,6 +224,9 @@ internal sealed unsafe class SettingsDialog : NativeDialog
                 _notes.Add(note);
             }
 
+            _keyBoxes.UnionWith(builder.KeyBoxes);
+            _warningTexts.UnionWith(builder.WarningTexts);
+
             foreach (var element in Flatten(builder.Elements))
             {
                 if (element is SettingsGroupElement group)
@@ -329,11 +344,16 @@ internal sealed unsafe class SettingsDialog : NativeDialog
             TrackbarControl.Configure(Item(id), range.Min, range.Max, 1, 1, Math.Max(1, (range.Max - range.Min) / 10));
         }
 
+        foreach (var id in builder.KeyBoxes)
+        {
+            HookKeyBox(Item(id));
+        }
+
         _pages[index].Attach(_context);
         _loading = true;
         try
         {
-            _pages[index].Load(_presenter.LoadFields());
+            _pages[index].Load(WorkingFields());
         }
         finally
         {
@@ -368,12 +388,79 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         {
             page.OnClosed();
         }
+
+        if (_keyBoxBrush != 0)
+        {
+            Gdi32.DeleteObject(_keyBoxBrush);
+            _keyBoxBrush = 0;
+        }
     }
 
     // ---- nạp / thu giá trị ------------------------------------------------------------------------------------------------
 
+    /// <summary>Form của bản làm việc cho một trang mới tạo: <c>LoadFields()</c> + JSON action đang sửa (nếu đã đổi qua trình sửa Action profiles).</summary>
+    private SettingsFormState WorkingFields()
+    {
+        var state = _presenter.LoadFields();
+        if (_actionsJson is not null)
+        {
+            state.ActionsJson = _actionsJson;
+        }
+        else
+        {
+            _actionsJson = state.ActionsJson;
+        }
+
+        return state;
+    }
+
+    /// <summary>
+    /// JSON action đang làm việc (ô chữ JSON của trang Files và nút "Edit action profiles" của trang Shortcuts cùng sửa MỘT giá trị:
+    /// như ô <c>ActionsText</c> chung của bản WPF). Khởi tạo từ bản làm việc; Defaults/Import đặt lại.
+    /// </summary>
+    internal string ActionsJson => _actionsJson ??= _presenter.LoadFields().ActionsJson;
+
+    /// <summary>JSON action theo các ô hiện có của mọi trang (kể cả sửa tay chưa lưu); ghi nhớ làm giá trị làm việc.</summary>
+    internal string RefreshActionsJsonFromPages()
+    {
+        var json = CollectAll().ActionsJson;
+        _actionsJson = json;
+        return json;
+    }
+
+    /// <summary>
+    /// Một trang (trình sửa Action profiles) đổi JSON action: ghi vào bản làm việc rồi nạp lại MỌI trang khác đã tạo từ form hiện tại
+    /// (các sửa chưa lưu khác được giữ nguyên) để ô chữ JSON, cảnh báo trùng phím... thấy giá trị mới.
+    /// </summary>
+    internal void SetActionsJson(string json, ISettingsPageView? source)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        _actionsJson = json;
+        var state = CollectAll();
+        state.ActionsJson = json; // a page with its own JSON box collected its stale text above
+        _loading = true;
+        try
+        {
+            for (var i = 0; i < _pages.Count; i++)
+            {
+                if (_created[i] && !ReferenceEquals(_pages[i], source))
+                {
+                    _pages[i].Load(state);
+                }
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        _dirty.AsSpan().Fill(true);
+        RelayoutActivePage();
+    }
+
     private void LoadAll(SettingsFormState state)
     {
+        _actionsJson = state.ActionsJson;
         _loading = true;
         try
         {
@@ -400,7 +487,7 @@ internal sealed unsafe class SettingsDialog : NativeDialog
     /// <summary>Form đầy đủ: giá trị đã nạp của bản làm việc, rồi mỗi trang ghi đè phần của nó (trang chưa chuyển giữ nguyên).</summary>
     internal SettingsFormState CollectAll()
     {
-        var state = _presenter.LoadFields();
+        var state = WorkingFields();
         for (var i = 0; i < _pages.Count; i++)
         {
             if (_created[i])
@@ -460,19 +547,134 @@ internal sealed unsafe class SettingsDialog : NativeDialog
         const uint VkTab = 0x09;
         const int VkControl = 0x11;
         const int VkShift = 0x10;
-        if (message.Message != WindowMessages.WmKeyDown || message.WParam != (nint)VkTab)
+        if (message.Message == WindowMessages.WmKeyDown && message.WParam == (nint)VkTab)
+        {
+            var control = Options.ControlKeyDown?.Invoke() ?? (User32.GetKeyState(VkControl) < 0);
+            if (!control)
+            {
+                return false; // plain Tab is never captured: it moves focus (also out of a key box)
+            }
+
+            CyclePage(forward: User32.GetKeyState(VkShift) >= 0);
+            return true;
+        }
+
+        // A key box takes the key BEFORE IsDialogMessage sees it: Enter would press Save, arrows/Space would be dialog navigation.
+        return message.Message is WindowMessages.WmKeyDown or WindowMessages.WmSysKeyDown && IsKeyBox(message.Hwnd)
+            && CaptureKey(message.Hwnd, message.WParam, message.LParam);
+    }
+
+    // ---- ô bắt phím (trang Shortcuts) --------------------------------------------------------------------------------------------
+
+    /// <summary><paramref name="hwnd"/> có phải ô bắt phím của một trang đã tạo không.</summary>
+    internal bool IsKeyBox(nint hwnd)
+    {
+        if (hwnd == 0 || _keyBoxes.Count == 0)
         {
             return false;
         }
 
-        var control = Options.ControlKeyDown?.Invoke() ?? (User32.GetKeyState(VkControl) < 0);
-        if (!control)
+        var id = User32.GetDlgCtrlID(hwnd);
+        return id != 0 && _keyBoxes.Contains(id) && Item(id) == hwnd;
+    }
+
+    /// <summary>
+    /// Ô bắt phím: WM_KEYDOWN/WM_SYSKEYDOWN -&gt; <see cref="KeyIdMapping"/> -&gt; <see cref="SettingsPresenter.CaptureShortcut"/> (cùng bộ ghi của
+    /// bản WPF: tên phím chuẩn hoá, KHÔNG có Ctrl/Shift/Alt; Tab/Esc/phím bổ trợ/Win... trả null = không nuốt, giữ chuyển focus và Esc huỷ).
+    /// IME báo VK_PROCESSKEY thì lấy phím thật bằng <c>ImmGetVirtualKey</c>. Ghi chữ -&gt; EN_CHANGE như một lần sửa.
+    /// </summary>
+    internal bool CaptureKey(nint hwnd, nint wParam, nint lParam)
+    {
+        var id = User32.GetDlgCtrlID(hwnd);
+        if (id == 0 || !_keyBoxes.Contains(id))
         {
             return false;
         }
 
-        CyclePage(forward: User32.GetKeyState(VkShift) >= 0);
+        var virtualKey = (int)(wParam & 0xFFFF);
+        if (virtualKey == Imm32.VkProcessKey)
+        {
+            var real = (int)Imm32.ImmGetVirtualKey(hwnd);
+            if (real != 0)
+            {
+                virtualKey = real;
+            }
+        }
+
+        var key = KeyIdMapping.FromVirtualKey(virtualKey, (lParam & 0x01000000) != 0);
+        if (SettingsPresenter.CaptureShortcut(key, key.ToString()) is not { } text)
+        {
+            return false;
+        }
+
+        SetItemText(id, text);
+        User32.SendMessage(hwnd, DialogConstants.EmSetSel, 0, -1);
         return true;
+    }
+
+    private void HookKeyBox(nint box)
+    {
+        if (box == 0)
+        {
+            return;
+        }
+
+        // No IME context: a Vietnamese/Telex IME can neither compose into the box nor swallow the key.
+        _ = Imm32.ImmAssociateContext(box, 0);
+        CommonControls.SetWindowSubclass(box, &KeyBoxProc, KeyBoxSubclassId, SelfRefData);
+    }
+
+    [UnmanagedCallersOnly]
+    private static nint KeyBoxProc(nint hwnd, uint message, nint wParam, nint lParam, nuint id, nuint refData)
+    {
+        try
+        {
+            switch (message)
+            {
+                case WindowMessages.WmKeyDown:
+                case WindowMessages.WmSysKeyDown:
+                    if (refData != 0 && GCHandle.FromIntPtr((nint)refData).Target is SettingsDialog dialog && dialog.CaptureKey(hwnd, wParam, lParam))
+                    {
+                        return 0;
+                    }
+
+                    break;
+                case WindowMessages.WmChar:
+                case WindowMessages.WmSysChar:
+                case 0x0103: // WM_DEADCHAR
+                case 0x0107: // WM_SYSDEADCHAR
+                case 0x0286: // WM_IME_CHAR
+                case 0x010D: // WM_IME_STARTCOMPOSITION
+                case 0x010F: // WM_IME_COMPOSITION
+                case 0x0302: // WM_PASTE
+                case 0x0300: // WM_CUT
+                case 0x0303: // WM_CLEAR
+                case 0x0304: // WM_UNDO
+                    return 0; // no text ever reaches the box except through CaptureKey
+                case ControlConstants.WmNcDestroy:
+                    CommonControls.RemoveWindowSubclass(hwnd, &KeyBoxProc, id);
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            // Ngoại lệ không được vượt ranh giới unmanaged.
+        }
+
+        return CommonControls.DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+
+    /// <summary>Màu của ô bắt phím (chỉ đọc nên gửi WM_CTLCOLORSTATIC): như ô nhập, chữ sáng.</summary>
+    private nint KeyBoxColors(nint hdc)
+    {
+        _ = Gdi32.SetTextColor(hdc, DialogColors.TextStrong);
+        _ = Gdi32.SetBkColor(hdc, DialogColors.Input);
+        if (_keyBoxBrush == 0)
+        {
+            _keyBoxBrush = Gdi32.CreateSolidBrush(DialogColors.Input);
+        }
+
+        return _keyBoxBrush;
     }
 
     // ---- lệnh -------------------------------------------------------------------------------------------------------------
@@ -666,6 +868,11 @@ internal sealed unsafe class SettingsDialog : NativeDialog
             if (refData != 0 && GCHandle.FromIntPtr((nint)refData).Target is SettingsDialog dialog && dialog.Hwnd != 0)
             {
                 var forward = false;
+                if (message == DialogConstants.WmCtlColorStatic && id == ForwardAllSubclassId && dialog.IsKeyBox(lParam))
+                {
+                    return dialog.KeyBoxColors(wParam);
+                }
+
                 if (message == WindowMessages.WmMouseWheel)
                 {
                     forward = !ComboBoxControl.IsDropped(hwnd);
@@ -1137,7 +1344,15 @@ internal sealed unsafe class SettingsDialog : NativeDialog
     }
 
     protected override uint StaticTextColor(int id)
-        => _notes.Contains(id) ? DialogColors.FromKey("Dark.TextMuted") : base.StaticTextColor(id);
+        => _notes.Contains(id) ? DialogColors.FromKey("Dark.TextMuted")
+            : _warningTexts.Contains(id) ? DialogColors.Warning
+            : base.StaticTextColor(id);
+
+    /// <summary>Tooltip chữ cố định cho điều khiển của trang (nút xoá phím...). Gọi một lần khi trang tạo; không tự đổi theo ngôn ngữ.</summary>
+    internal void SetControlTooltip(int id, string text) => SetTooltip(id, text);
+
+    /// <summary>Id của ô bắt phím (test).</summary>
+    internal bool IsKeyBoxId(int id) => _keyBoxes.Contains(id);
 
     /// <summary>Bề mặt đo/đặt của <see cref="SettingsLayoutElement"/> trên cửa sổ thật.</summary>
     private sealed class PageSurface(SettingsDialog dialog) : ISettingsLayoutSurface

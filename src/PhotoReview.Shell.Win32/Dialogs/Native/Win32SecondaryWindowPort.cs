@@ -103,6 +103,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
             Target = target,
             Files = baseOptions.Files ?? _services.GetService<IShellFileDialog>(),
             Warnings = baseOptions.Warnings ?? _warnings,
+            ShowActionProfiles = baseOptions.ShowActionProfiles ?? ShowActionProfiles,
         };
         var dialog = new SettingsDialog(store.Current, store, _services.GetService<IImageDecoderFactory>(),
             _services.GetService<LocalizationService>(), _services.GetService<IUpdateChecker>(), options, _chrome);
