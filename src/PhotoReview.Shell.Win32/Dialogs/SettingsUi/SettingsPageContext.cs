@@ -23,6 +23,9 @@ internal sealed class SettingsPageContext
     /// <summary>Hộp thoại Open/Save của shell (null trong test không cấp).</summary>
     public IShellFileDialog? Files => _dialog.Files;
 
+    /// <summary>Nhà máy bộ giải mã (trang Performance: TurboJpeg có khả dụng không); null = không biết.</summary>
+    public PhotoReview.Imaging.Decoding.IImageDecoderFactory? DecoderFactory => _dialog.DecoderFactory;
+
     /// <summary>Tuỳ chọn/seam của cửa sổ (OpenUrl, StartExplorer, Version...).</summary>
     public SettingsDialogOptions Options => _dialog.Options;
 
