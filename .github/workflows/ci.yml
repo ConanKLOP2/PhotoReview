@@ -234,12 +234,7 @@ jobs:
       # Builds only the test projects of this job (and what they reference), not the whole solution: the full-solution
       # compile gate lives in build-publish.
       - name: Build test projects (Release)
-        shell: powershell
-        run: |
-          foreach ($project in 'PhotoReview.Architecture.Tests', 'PhotoReview.Core.Tests', 'PhotoReview.Imaging.Tests', 'PhotoReview.App.Tests') {
-            dotnet build "tests/$project/$project.csproj" -c Release --no-restore
-            if ($LASTEXITCODE -ne 0) { throw "Build failed for $project (exit $LASTEXITCODE)" }
-          }
+        run: dotnet build tools/ci/test-core.slnf -c Release --no-restore
 
       - name: Run Architecture tests (HotPath)
         shell: pwsh
@@ -327,12 +322,7 @@ jobs:
       # Builds only the test projects of this job (and what they reference), not the whole solution: the full-solution
       # compile gate lives in build-publish.
       - name: Build test projects (Release)
-        shell: powershell
-        run: |
-          foreach ($project in 'PhotoReview.Shell.Tests', 'PhotoReview.Shell.Integration.Tests', 'PhotoReview.Shell.WpfBridge.Tests') {
-            dotnet build "tests/$project/$project.csproj" -c Release --no-restore
-            if ($LASTEXITCODE -ne 0) { throw "Build failed for $project (exit $LASTEXITCODE)" }
-          }
+        run: dotnet build tools/ci/test-shell.slnf -c Release --no-restore
 
       - name: Run Shell tests (HotPath)
         shell: pwsh
@@ -416,12 +406,7 @@ jobs:
       # Builds only the test projects of this job (and what they reference), not the whole solution: the full-solution
       # compile gate lives in build-publish.
       - name: Build test projects (Release)
-        shell: powershell
-        run: |
-          foreach ($project in 'PhotoReview.Integration.Tests') {
-            dotnet build "tests/$project/$project.csproj" -c Release --no-restore
-            if ($LASTEXITCODE -ne 0) { throw "Build failed for $project (exit $LASTEXITCODE)" }
-          }
+        run: dotnet build tools/ci/test-integration.slnf -c Release --no-restore
 
       - name: Run Integration tests (HotPath)
         shell: pwsh
