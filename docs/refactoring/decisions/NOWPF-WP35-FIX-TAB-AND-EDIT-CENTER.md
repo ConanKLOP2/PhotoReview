@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-FIX-TAB-AND-EDIT-CENTER
-order: 1300
+order: 1330
 summary: |-
   WP-35 sửa lỗi (CHƯA XÁC NHẬN): (A) "màn trống sau Tab đầu tiên" trên Settings Win32 KHÔNG tái hiện trên master sau #511 (đã có test hồi quy xanh, 14 ca, và đột biến bỏ HWND_BOTTOM làm 14/14 đỏ). (B) chữ trong ô nhập một dòng cao (ô số / ô bắt phím) dính mép trên: EM_SETRECT bị ô một dòng bỏ qua, nên EditTextCentering dịch đỉnh vùng client xuống (WM_NCCALCSIZE) + tô dải bù bằng nền ô (WM_NCPAINT) để chữ số/chữ hoa nằm giữa; test điểm ảnh 4 ca (96/144 DPI x vi/en) đỏ trước sửa, xanh sau.
 ---
