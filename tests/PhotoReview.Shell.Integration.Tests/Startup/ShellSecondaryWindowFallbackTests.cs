@@ -40,7 +40,7 @@ public sealed class ShellSecondaryWindowFallbackTests
     }
 
     [Fact]
-    public void SettingsAndRecovery_WithNoBridge_OpenConfigJsonAndShowTheStatusNotice()
+    public void SettingsFallsBack_WithNoBridge_AndRecoveryStillOpensAsAWin32Window()
     {
         var root = ShellRun.NewRoot("aotfallback");
         var jpeg = TestJpeg.WriteTo(Path.Combine(root, "photos", "a.jpg"));
@@ -65,13 +65,63 @@ public sealed class ShellSecondaryWindowFallbackTests
         Assert.Equal("open", opens[0].Verb);
         Assert.Equal(Tr.StatusSecondaryUnavailableSettings, run.OnUi(() => run.Main!.ViewModel.StatusText));
 
-        // WP-35 GĐ1: Diagnostics đã có hộp thoại Win32 gốc nên không còn rơi về cổng tạm; Recovery thì vẫn (chưa có view Win32).
-        run.OnUi(() => run.Main!.ViewModel.ShowRecovery());
-        Assert.Equal(Tr.StatusSecondaryUnavailableRecovery, run.OnUi(() => run.Main!.ViewModel.StatusText));
+        // WP-35 GĐ1/GĐ4: Diagnostics và Recovery đã có hộp thoại Win32 gốc nên không còn rơi về cổng tạm (kể cả khi cầu vắng):
+        // Recovery MỞ THẬT (modal, owner = HWND shell), không chạm launcher, rồi đóng bằng WM_CLOSE.
+        var uiThread = run.OnUi(() => GetCurrentThreadId());
+        var recovery = run.Main!.Dispatcher.InvokeAsync(() => run.Main!.ViewModel.ShowRecovery());
+        nint dialog = 0;
+        Assert.True(SpinWait.SpinUntil(() => (dialog = OwnedBy(uiThread, run.Main!.Hwnd)) != 0, Bound),
+            "Recovery không mở khi cầu vắng: " + run.Diagnostics);
+        Assert.Equal(Tr.RecoveryTitle, run.OnUi(() => WindowText(dialog)));
+        Assert.NotEqual(Tr.StatusSecondaryUnavailableRecovery, run.OnUi(() => run.Main!.ViewModel.StatusText));
+        Assert.True(PostMessage(dialog, 0x0010 /* WM_CLOSE */, 0, 0));
+        Assert.True(recovery.Wait(Bound), "Recovery không đóng");
         Assert.Single(launcher.Opens); // Recovery không chạm launcher
 
         run.RequestClose();
         Assert.True(run.WaitForExit(Bound), "shell không thoát sau WM_CLOSE: " + run.Diagnostics);
         Assert.Null(run.Error);
     }
+
+    private static nint OwnedBy(uint uiThread, nint owner)
+    {
+        nint found = 0;
+        EnumThreadWindows(uiThread, (hwnd, _) =>
+        {
+            if (hwnd != owner && IsWindowVisible(hwnd) && GetWindow(hwnd, 4 /* GW_OWNER */) == owner)
+            {
+                found = hwnd;
+            }
+
+            return true;
+        }, 0);
+        return found;
+    }
+
+    private static string WindowText(nint hwnd)
+    {
+        var buffer = new char[256];
+        var length = GetWindowText(hwnd, buffer, buffer.Length);
+        return new string(buffer, 0, Math.Max(0, length));
+    }
+
+    private delegate bool EnumWindowsProc(nint hwnd, nint lParam);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool EnumThreadWindows(uint threadId, EnumWindowsProc callback, nint lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(nint hwnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern nint GetWindow(nint hwnd, uint command);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int GetWindowText(nint hwnd, char[] text, int maxCount);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool PostMessage(nint hwnd, uint message, nint wParam, nint lParam);
 }

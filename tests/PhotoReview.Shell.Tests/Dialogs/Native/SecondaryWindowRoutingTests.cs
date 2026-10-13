@@ -86,7 +86,7 @@ public sealed class SecondaryWindowRoutingTests
     private static readonly SecondaryWindowKind[] Win32Kinds =
     [
         SecondaryWindowKind.Diagnostics, SecondaryWindowKind.SkippedFiles, SecondaryWindowKind.BatchReview, SecondaryWindowKind.ZoomPrompt,
-        SecondaryWindowKind.Benchmark, SecondaryWindowKind.ActionProfiles,
+        SecondaryWindowKind.Benchmark, SecondaryWindowKind.ActionProfiles, SecondaryWindowKind.Recovery,
     ];
 
     private static (SecondaryWindowRouter Router, Spy Native, Spy? Bridge, Func<bool> BridgeLoaded, List<string> Notices, NoLauncher Launcher) Build(
@@ -117,8 +117,9 @@ public sealed class SecondaryWindowRoutingTests
         Assert.Equal(150, router.PromptCustomZoom(0, 100));
         router.ShowBenchmark(0, null);
         Assert.NotNull(router.ShowActionProfiles(0, []));
+        router.ShowRecovery(0); // WP-35 GĐ4: Recovery is a Win32 window now
 
-        Assert.Equal(["diagnostics", "skipped", "batch", "zoom", "benchmark", "actionProfiles"], native.Calls);
+        Assert.Equal(["diagnostics", "skipped", "batch", "zoom", "benchmark", "actionProfiles", "recovery"], native.Calls);
         Assert.Empty(bridge!.Calls);
         Assert.False(loaded(), "the WPF bridge must not even be loaded for windows the Win32 port supports");
     }
@@ -129,9 +130,8 @@ public sealed class SecondaryWindowRoutingTests
         var (router, native, bridge, loaded, notices, _) = Build(bridgePresent: true);
 
         Assert.True(router.ShowSettings(0, SettingsTarget.Default));
-        router.ShowRecovery(0);
 
-        Assert.Equal(["settings", "recovery"], bridge!.Calls);
+        Assert.Equal(["settings"], bridge!.Calls); // WP-35 GĐ4: only Settings is left on the bridge
         Assert.Empty(native.Calls);
         Assert.True(loaded());
         Assert.Empty(notices);
@@ -143,15 +143,15 @@ public sealed class SecondaryWindowRoutingTests
         var (router, native, _, loaded, notices, launcher) = Build(bridgePresent: false);
 
         Assert.False(router.ShowSettings(0, SettingsTarget.Default)); // opens config.json, nothing saved
-        router.ShowRecovery(0);
-        router.ShowBenchmark(0, null); // WP-35 GĐ2: a real window now, not a notice (also in the AOT build)
+        router.ShowRecovery(0); // WP-35 GĐ4: a real window now, not a notice (also in the AOT build)
+        router.ShowBenchmark(0, null); // WP-35 GĐ2: likewise
         router.ShowDiagnostics(0);
         Assert.True(router.ShowBatchReview(0, []));
 
         Assert.True(loaded());
         Assert.Single(launcher.Opened);
-        Assert.Equal(["benchmark", "diagnostics", "batch"], native.Calls);
-        Assert.Equal([Tr.StatusSecondaryUnavailableSettings, Tr.StatusSecondaryUnavailableRecovery], notices);
+        Assert.Equal(["recovery", "benchmark", "diagnostics", "batch"], native.Calls);
+        Assert.Equal([Tr.StatusSecondaryUnavailableSettings], notices);
     }
 
     [Fact]
@@ -159,10 +159,10 @@ public sealed class SecondaryWindowRoutingTests
     {
         var (router, native, _, _, notices, _) = Build(bridgePresent: true, bridgeThrows: true);
 
-        router.ShowRecovery(0);
+        Assert.False(router.ShowSettings(0, SettingsTarget.Default)); // Settings is the one window still on the bridge
         router.ShowDiagnostics(0);
 
-        Assert.Equal([Tr.StatusSecondaryUnavailableRecovery], notices);
+        Assert.Equal([Tr.StatusSecondaryUnavailableSettings], notices);
         Assert.Equal(["diagnostics"], native.Calls);
     }
 
@@ -176,7 +176,7 @@ public sealed class SecondaryWindowRoutingTests
         Assert.False(untouched.Bridge!.Disposed);
 
         var used = Build(bridgePresent: true);
-        used.Router.ShowRecovery(0);
+        Assert.True(used.Router.ShowSettings(0, SettingsTarget.Default));
         used.Router.Dispose();
         Assert.True(used.Native.Disposed);
         Assert.True(used.Bridge!.Disposed);

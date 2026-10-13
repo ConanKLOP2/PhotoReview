@@ -172,8 +172,23 @@ internal static class ProbeProgram
         var port = shell.GetRequiredService<PhotoReview.Shell.Win32.Dialogs.SecondaryWindowPortHost>().Port.Value!;
         var edited = port.ShowActionProfiles(0, [new PhotoReview.Core.Settings.ReviewAction { Name = "Keep", Shortcut = "F6" }]);
         Report("after-action-profiles");
+
+        // WP-35 GĐ4: Recovery (modal, journal rỗng của thư mục tạm riêng) cũng là hộp thoại Win32 gốc: không nạp WPF/cầu.
+        // Không có journal thì cửa sổ không mở và ScheduleClose sẽ quay mãi: dừng sớm thay vì chờ.
+        if (shell.GetService<PhotoReview.Core.FileActions.OperationJournal>() is null)
+        {
+            Console.WriteLine("ERROR no OperationJournal in the shell DI");
+            return 1;
+        }
+
+        var recoveryBefore = VisibleWindows().Count;
+        CloseSoon();
+        dialogs.ShowRecovery();
+        var recoveryClosed = VisibleWindows().Count == recoveryBefore;
+        Report("after-recovery");
         Console.WriteLine("RESULT batch=" + batch + " zoom=" + (picked?.ToString(CultureInfo.InvariantCulture) ?? "null")
-            + " benchmark=" + benchmarkOpened + "/" + benchmarkSingle + " actionProfiles=" + (edited is null ? "null" : "list"));
+            + " benchmark=" + benchmarkOpened + "/" + benchmarkSingle + " actionProfiles=" + (edited is null ? "null" : "list")
+            + " recovery=" + recoveryClosed);
         (shell as IDisposable)?.Dispose();
         return batch || picked is not null ? 1 : 0;
     }

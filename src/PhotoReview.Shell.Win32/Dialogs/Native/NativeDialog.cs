@@ -140,6 +140,24 @@ internal abstract unsafe class NativeDialog
     protected virtual (string Text, string? Badge) ListItemText(int id, int index)
         => (ListBoxControl.TextAt(Item(id), index), null);
 
+    /// <summary>
+    /// WP-35 GĐ4: dòng phụ (chữ nhỏ, màu phụ) vẽ dưới tiêu đề của dòng owner-draw; null = dòng đơn như trước. Chiều cao dòng do
+    /// view đặt (<see cref="SetListItemHeight"/>).
+    /// </summary>
+    protected virtual string? ListItemSubtitle(int id, int index) => null;
+
+    /// <summary>WP-35 GĐ4: màu (COLORREF) của chữ + viền huy hiệu của dòng; null = màu huy hiệu mặc định.</summary>
+    protected virtual uint? ListItemBadgeColor(int id, int index) => null;
+
+    /// <summary>
+    /// WP-35 GĐ4: người dùng được phép đóng (X, Alt+F4, WM_CLOSE) lúc này? Mặc định có. Recovery từ chối khi đang chạy Retry
+    /// (R2-A-01). <see cref="Close"/> từ ngoài (shell thoát) luôn đóng - không treo vòng lặp lồng.
+    /// </summary>
+    protected virtual bool CanCloseByUser => true;
+
+    /// <summary>WP-35 GĐ4: hiện con trỏ chờ trên mọi vùng của hộp thoại (việc nền đang chạy, như <c>Cursor = Wait</c> của WPF).</summary>
+    protected virtual bool WaitCursor => false;
+
     /// <summary>Gọi một lần ngay trước khi cửa sổ bị huỷ (đóng bình thường, đóng từ ngoài, ngoại lệ).</summary>
     protected virtual void OnClosed()
     {
@@ -542,8 +560,22 @@ internal abstract unsafe class NativeDialog
                 return HandleCommand((int)(wParam & 0xFFFF), (int)((wParam >> 16) & 0xFFFF)) ? 1 : 0;
 
             case WindowMessages.WmClose:
-                EndModal(IdCancel);
+                if (CanCloseByUser)
+                {
+                    EndModal(IdCancel);
+                }
+
                 return 1;
+
+            case WindowMessages.WmSetCursor:
+                if (WaitCursor)
+                {
+                    _ = User32.SetCursor(User32.LoadCursor(0, IdcWait));
+                    User32.SetWindowLongPtr(hwnd, DialogConstants.DwlpMsgResult, 1);
+                    return 1;
+                }
+
+                return 0;
 
             case ControlConstants.WmNotify:
                 return HandleNotify(hwnd, lParam);
@@ -594,6 +626,14 @@ internal abstract unsafe class NativeDialog
                 return _windowBrush;
 
             case DialogConstants.WmCtlColorStatic:
+                if (IsEdit(lParam))
+                {
+                    // Ô nhập chỉ đọc (ES_READONLY) gửi WM_CTLCOLORSTATIC: vẽ như ô nhập (nền Input), chữ theo StaticTextColor.
+                    _ = Gdi32.SetTextColor(wParam, StaticTextColor(User32.GetDlgCtrlID(lParam)));
+                    _ = Gdi32.SetBkColor(wParam, DialogColors.Input);
+                    return _inputBrush;
+                }
+
                 _ = Gdi32.SetTextColor(wParam, StaticTextColor(User32.GetDlgCtrlID(lParam)));
                 _ = Gdi32.SetBkColor(wParam, DialogColors.Window);
                 return _windowBrush;
@@ -705,6 +745,20 @@ internal abstract unsafe class NativeDialog
         return CommonControls.DefSubclassProc(hwnd, message, wParam, lParam);
     }
 
+    private const nint IdcWait = 32514;
+
+    private static bool IsEdit(nint hwnd)
+    {
+        if (hwnd == 0)
+        {
+            return false;
+        }
+
+        char* name = stackalloc char[8];
+        var length = User32.GetClassName(hwnd, name, 8);
+        return length == 4 && new ReadOnlySpan<char>(name, length).Equals("Edit", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsButton(nint hwnd)
     {
         if (hwnd == 0)
@@ -729,7 +783,8 @@ internal abstract unsafe class NativeDialog
         var control = *(nint*)(drawItem + 24);
         (string Text, string? Badge) item = itemId >= 0 ? ListItemText(id, itemId) : (string.Empty, null);
         var font = control != 0 ? (nint)User32.SendMessage(control, DialogConstants.WmGetFont, 0, 0) : 0;
-        ListBoxControl.DrawItem(drawItem, item.Text, item.Badge, font, Dx(4));
+        ListBoxControl.DrawItem(drawItem, item.Text, item.Badge, font, Dx(4),
+            itemId >= 0 ? ListItemSubtitle(id, itemId) : null, itemId >= 0 ? ListItemBadgeColor(id, itemId) : null);
         return true;
     }
 
