@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
@@ -36,6 +37,33 @@ public sealed class JournalConcurrencyTests : IDisposable
         if (!barrier.SignalAndWait(TimeSpan.FromSeconds(20))) throw new TimeoutException("barrier participants did not all arrive within 20 s");
     }
 
+    /// <summary>
+    /// Waits for the threads, failing only when NOBODY makes progress for 30 s (a real hang). The run itself takes as long as the
+    /// machine's CPU share makes it: a fixed total budget would again measure the scheduler. On a hang the retry loops are stopped.
+    /// </summary>
+    private static void JoinWhileProgressing(IReadOnlyList<Thread> threads, Func<int> progress, CancellationTokenSource stop, string what)
+    {
+        var last = -1;
+        var lastChange = Stopwatch.GetTimestamp();
+        try
+        {
+            foreach (var thread in threads)
+            {
+                while (!thread.Join(TimeSpan.FromSeconds(1)))
+                {
+                    var now = progress();
+                    if (now != last) { last = now; lastChange = Stopwatch.GetTimestamp(); }
+                    else Assert.True(Stopwatch.GetTimestamp() - lastChange < 30 * Stopwatch.Frequency, $"{what} made no progress for 30 s (hung)");
+                }
+            }
+        }
+        catch
+        {
+            stop.Cancel(); // do not leave a retry loop spinning behind a failed test
+            throw;
+        }
+    }
+
     private void RethrowThreadFailures()
     {
         if (_threadFailures.TryDequeue(out var first)) first.Throw();
@@ -49,6 +77,8 @@ public sealed class JournalConcurrencyTests : IDisposable
         var paths = new AppPaths(_root.Path);
         var start = new Barrier(writers);
         var acknowledged = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var refusals = 0;
+        using var stop = new CancellationTokenSource();
 
         var threads = Enumerable.Range(0, writers).Select(w => Background(Captured(() =>
         {
@@ -58,19 +88,30 @@ public sealed class JournalConcurrencyTests : IDisposable
             for (var i = 0; i < perWriter; i++)
             {
                 var id = $"w{w}-{i}";
-                try
+                // The journal's own retry budget is a COUNT of attempts (OperationJournal.AppendAttempts, ~100 ms of sleeps), not
+                // a promise: a writer that is descheduled while it holds the file makes the others exhaust it (production then
+                // reports a journal error and the caller retries). How many appends survive that is CPU scheduling, so it is not
+                // a pass/fail condition (it flaked at 72..118 of 240 under background load). Like the production caller, retry the
+                // refused append; every refusal must leave no half-written record (checked below), and each record is
+                // acknowledged exactly once.
+                while (true)
                 {
-                    journal.Append(Entry(id));
-                    acknowledged.Add(id);
-                }
-                catch (IOException)
-                {
-                    // Bounded retries exhausted under heavy contention: allowed, but the record must then not exist half-written.
+                    try
+                    {
+                        journal.Append(Entry(id));
+                        acknowledged.Add(id);
+                        break;
+                    }
+                    catch (IOException) when (!stop.IsCancellationRequested)
+                    {
+                        Interlocked.Increment(ref refusals);
+                        Thread.Yield();
+                    }
                 }
             }
         }))).ToList();
         threads.ForEach(t => t.Start());
-        foreach (var t in threads) Assert.True(t.Join(TimeSpan.FromSeconds(30)), "writer thread hung");
+        JoinWhileProgressing(threads, () => acknowledged.Count, stop, "writer threads");
         RethrowThreadFailures();
 
         var lines = File.ReadAllLines(paths.JournalFile).Where(l => l.Length > 0).ToList();
@@ -83,7 +124,10 @@ public sealed class JournalConcurrencyTests : IDisposable
         }
         foreach (var id in acknowledged) Assert.Contains(id, ids);
         Assert.Equal(ids.Count, lines.Count);
-        Assert.True(acknowledged.Count >= writers * perWriter / 2, $"only {acknowledged.Count}/{writers * perWriter} appends got through the retry budget");
+        // Nothing lost, nothing invented: every record every writer was told is stored is exactly the set on disk.
+        // (refusals = how often the retry budget was exhausted: scheduling-dependent, reported for information only.)
+        Assert.True(writers * perWriter == acknowledged.Count, $"{acknowledged.Count}/{writers * perWriter} acknowledged ({Volatile.Read(ref refusals)} refused attempts)");
+        Assert.Equal(acknowledged.Count, ids.Count);
     }
 
     [Fact(DisplayName = "Concurrent reconcile and append on two instances leave every record parseable and no false Failed after Committed")]
@@ -109,22 +153,29 @@ public sealed class JournalConcurrencyTests : IDisposable
         }
 
         var start = new Barrier(2);
-        var committed = new System.Collections.Concurrent.ConcurrentBag<string>();
+        using var stop = new CancellationTokenSource();
+        var committed =new System.Collections.Concurrent.ConcurrentBag<string>();
         var commit = Background(Captured(() =>
         {
             Rendezvous(start);
             foreach (var prepared in entries)
             {
                 File.WriteAllText(prepared.Destination!, "x"); // the copy completes, then Committed is journaled
-                try
+                while (true)
                 {
-                    owner.Append(prepared with { State = JournalState.Committed });
-                    committed.Add(prepared.Id);
-                }
-                catch (IOException)
-                {
-                    // Bounded append retries exhausted while the reconciler held the file (a loaded machine): production
-                    // reports this as a journal error, the operation stays Prepared or is reconciled; not asserted below.
+                    try
+                    {
+                        owner.Append(prepared with { State = JournalState.Committed });
+                        committed.Add(prepared.Id);
+                        break;
+                    }
+                    catch (IOException) when (!stop.IsCancellationRequested)
+                    {
+                        // The journal's bounded (count-based) append retries ran out while the reconciler held the file; on a
+                        // starved machine that is scheduling, not a defect, so retry like the production caller instead of
+                        // asserting how many got through at the first attempt.
+                        Thread.Yield();
+                    }
                 }
             }
         }));
@@ -142,15 +193,14 @@ public sealed class JournalConcurrencyTests : IDisposable
         }));
         commit.Start();
         reconcile.Start();
-        Assert.True(commit.Join(TimeSpan.FromSeconds(30)), "commit thread hung");
-        Assert.True(reconcile.Join(TimeSpan.FromSeconds(30)), "reconcile thread hung");
+        JoinWhileProgressing([commit, reconcile], () => committed.Count, stop, "commit/reconcile threads");
         RethrowThreadFailures();
 
         // Reconcile may have judged an operation Failed just before its destination appeared; whoever won each race, the
         // copy really completed, so every operation whose Committed was acknowledged must end Committed (FA-01).
         var notCommitted = owner.ReadFailedOperations().Concat(owner.ReadPendingOperations()).Select(e => e.Id).ToHashSet();
         foreach (var id in committed) Assert.DoesNotContain(id, notCommitted);
-        Assert.True(committed.Count >= operations / 2, $"only {committed.Count}/{operations} Committed appends got through the retry budget");
+        Assert.Equal(operations, committed.Count);
     }
 
     [Fact(DisplayName = "The single-action gate admits exactly one of many simultaneous actions; the rest are rejected as busy")]
