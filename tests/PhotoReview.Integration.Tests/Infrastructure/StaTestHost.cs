@@ -312,12 +312,20 @@ public sealed class StaTestHostSmokeTests
 
     private static async Task<InvalidOperationException> RunExpectingGuardedDialogAsync(Func<Task> body)
     {
-        using var stop = new CancellationTokenSource();
         var run = StaTestHost.RunAsync(body, GuardHangBound);
-        var first = await Task.WhenAny(run, Task.Delay(GuardHangBound + TimeSpan.FromSeconds(30), stop.Token));
-        stop.Cancel();
-        Assert.True(ReferenceEquals(first, run), "The real dialog was not force-closed by Win32DialogGuard: the STA body is hanging in it.");
-        return await Assert.ThrowsAsync<InvalidOperationException>(() => run);
+        try
+        {
+            await run.WaitAsync(GuardHangBound + TimeSpan.FromSeconds(30));
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail("The real dialog was not force-closed by Win32DialogGuard: the STA body is hanging in it.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex;
+        }
+        throw new Xunit.Sdk.XunitException("The body finished without the dialog being reported as an InvalidOperationException.");
     }
 
     [Fact]
