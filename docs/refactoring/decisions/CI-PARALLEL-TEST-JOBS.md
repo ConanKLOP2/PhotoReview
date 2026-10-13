@@ -2,51 +2,51 @@
 id: CI-PARALLEL-TEST-JOBS
 order: 1220
 summary: |-
-  CI: job `build-test-publish` tÃ¡ch thÃ nh 3 job test song song + `build-publish`; `build-test-publish` cÃ²n lÃ  job tá»•ng há»£p (CHÆ¯A XÃC NHáº¬N, 2026-10-13).
+  CI: job `build-test-publish` tách thành 3 job test song song + `build-publish`; `build-test-publish` còn là job tổng hợp (CHƯA XÁC NHẬN, 2026-10-13).
 ---
 
-# CI-PARALLEL-TEST-JOBS - tÃ¡ch bÆ°á»›c test cá»§a ci.yml theo RUNNER (2026-10-13)
+# CI-PARALLEL-TEST-JOBS - tách bước test của ci.yml theo RUNNER (2026-10-13)
 
-Tráº¡ng thÃ¡i: **CHÆ¯A XÃC NHáº¬N** (Ä‘á»•i workflow CI cáº§n chá»§ repo xem; PR khÃ´ng báº­t auto-merge). HoÃ n tÃ¡c: revert PR.
+Trạng thái: **CHƯA XÁC NHẬN** (đổi workflow CI cần chủ repo xem; PR không bật auto-merge). Hoàn tác: revert PR.
 
-## 1. Váº¥n Ä‘á»
+## 1. Vấn đề
 
-Job `build-test-publish` cháº¡y tuáº§n tá»± trÃªn 1 runner `windows-latest` (2 vCPU): run 38411060424 = 730 s (restore+cache 36 s,
-Build Release cáº£ solution 136 s, test ~500 s, Publish 33 s). TÃ¡ch tiáº¿n trÃ¬nh trÃªn 1 runner khÃ´ng cÃ³ lá»£i (2 vCPU); tÃ¡ch theo
-RUNNER (job riÃªng) thÃ¬ cÃ³.
+Job `build-test-publish` chạy tuần tự trên 1 runner `windows-latest` (2 vCPU): run 38411060424 = 730 s (restore+cache 36 s,
+Build Release cả solution 136 s, test ~500 s, Publish 33 s). Tách tiến trình trên 1 runner không có lợi (2 vCPU); tách theo
+RUNNER (job riêng) thì có.
 
-## 2. Thay Ä‘á»•i
+## 2. Thay đổi
 
-| Job | Viá»‡c | Ghi chÃº |
+| Job | Việc | Ghi chú |
 |---|---|---|
-| `changes` (ubuntu) | PR chá»‰ Ä‘á»•i `docs/**`, `README.md`, `CLAUDE.md`, `task_on_progress.md` thÃ¬ `code=false` | push/dispatch luÃ´n `code=true`; `AGENTS.md` KHÃ”NG thuá»™c danh sÃ¡ch (Architecture test Ä‘á»c nÃ³) |
-| `build-publish` | Build Release cáº£ `PhotoReview.slnx` (cá»•ng biÃªn dá»‹ch, warning = lá»—i), Show version, Publish, Verify, upload `release-publish` | khÃ´ng chá» test |
-| `test-core` | Architecture, Core, Imaging, App | chá»‰ build 4 project test nÃ y + phá»¥ thuá»™c |
+| `changes` (ubuntu) | PR chỉ đổi `docs/**`, `README.md`, `CLAUDE.md`, `task_on_progress.md` thì `code=false` | push/dispatch luôn `code=true`; `AGENTS.md` KHÔNG thuộc danh sách (Architecture test đọc nó) |
+| `build-publish` | Build Release cả `PhotoReview.slnx` (cổng biên dịch, warning = lỗi), Show version, Publish, Verify, upload `release-publish` | không chờ test |
+| `test-core` | Architecture, Core, Imaging, App | chỉ build 4 project test này + phụ thuộc |
 | `test-shell` | Shell, Shell.Integration, Shell.WpfBridge | |
-| `test-integration` | Integration + bÆ°á»›c Integration+Slow (17 test, 76 s) | |
-| `build-test-publish` | JOB Tá»”NG Há»¢P (ubuntu, `if: always()`): thÃ nh cÃ´ng chá»‰ khi `changes` + 4 job trÃªn Ä‘á»u `success` (hoáº·c cÃ¹ng `skipped` khi PR chá»‰ docs) | GIá»® tÃªn: lÃ  required check cá»§a master vÃ  `release.yml` tra tÃªn nÃ y trÃªn commit cá»§a tag |
+| `test-integration` | Integration + bước Integration+Slow (17 test, 76 s) | |
+| `build-test-publish` | JOB TỔNG HỢP (ubuntu, `if: always()`): thành công chỉ khi `changes` + 4 job trên đều `success` (hoặc cùng `skipped` khi PR chỉ docs) | GIỮ tên: là required check của master và `release.yml` tra tên này trên commit của tag |
 
-- `tag-version` giá»¯ `needs: [build-test-publish, repo-checks]` (ngá»¯ nghÄ©a cÅ©: chá»‰ gáº¯n tag khi má»i thá»© xanh). `publish-aot` váº«n khÃ´ng náº±m trong needs.
-- Giá»¯ nguyÃªn Má»ŒI test, Má»ŒI filter (`TEST_FILTER` chuyá»ƒn lÃªn `env` cáº¥p workflow), `--blame-hang-timeout 120s`, `--blame-hang-dump-type none`, trx.
-  BÆ°á»›c safety-net Integration+Slow cháº¡y theo project cá»§a tá»«ng job (7 project cÃ²n láº¡i "No test matches" ~3 s má»—i cÃ¡i; giá»¯ Ä‘á»ƒ filter
-  Ä‘á»•i khÃ´ng lÃ m rÆ¡i test).
-- Artifact test Ä‘á»•i tÃªn: `test-results` thÃ nh `test-results-core|shell|integration` (khÃ´ng cÃ³ consumer; kiá»ƒm báº±ng grep).
-- KhÃ´ng Ä‘á»•i `permissions`, SHA ghim action, `concurrency`.
-- Test kiáº¿n trÃºc (`TestFilterDriftTests`): luáº­t "safety-net covers every project" gom má»i bÆ°á»›c safety-net cá»§a cÃ¡c job; thÃªm luáº­t
-  `CI-PARALLEL` (má»—i project test cÃ³ Ä‘Ãºng 1 job cháº¡y bÆ°á»›c chÃ­nh + bÆ°á»›c safety-net; job tá»•ng há»£p `needs` má»i job build/test vÃ  cÃ³ `if: always()`).
+- `tag-version` giữ `needs: [build-test-publish, repo-checks]` (ngữ nghĩa cũ: chỉ gắn tag khi mọi thứ xanh). `publish-aot` vẫn không nằm trong needs.
+- Giữ nguyên MỌI test, MỌI filter (`TEST_FILTER` chuyển lên `env` cấp workflow), `--blame-hang-timeout 120s`, `--blame-hang-dump-type none`, trx.
+  Bước safety-net Integration+Slow chạy theo project của từng job (7 project còn lại "No test matches" ~3 s mỗi cái; giữ để filter
+  đổi không làm rơi test).
+- Artifact test đổi tên: `test-results` thành `test-results-core|shell|integration` (không có consumer; kiểm bằng grep).
+- Không đổi `permissions`, SHA ghim action, `concurrency`.
+- Test kiến trúc (`TestFilterDriftTests`): luật "safety-net covers every project" gom mọi bước safety-net của các job; thêm luật
+  `CI-PARALLEL` (mỗi project test có đúng 1 job chạy bước chính + bước safety-net; job tổng hợp `needs` mọi job build/test và có `if: always()`).
 
-## 3. Rá»§i ro
+## 3. Rủi ro
 
-- Má»—i job test restore + build láº¡i pháº§n cá»§a nÃ³ (khÃ´ng chia sáº» build output giá»¯a job): tá»•ng phÃºt runner tÄƒng, thá»i gian tÆ°á»ng giáº£m.
-- Cache NuGet: má»i job restore cáº£ solution Ä‘á»ƒ bá»™ package giá»‘ng nhau (job nÃ o lÆ°u cache trÆ°á»›c cÅ©ng lÆ°u báº£n Ä‘áº§y Ä‘á»§).
-- Chá»‰ tÃ­nh `skipped` há»£p lá»‡ khi `changes.code=false`; job bá»‹ skip vÃ¬ lÃ½ do khÃ¡c lÃ m job tá»•ng há»£p Ä‘á».
+- Mỗi job test restore + build lại phần của nó (không chia sẻ build output giữa job): tổng phút runner tăng, thời gian tường giảm.
+- Cache NuGet: mọi job restore cả solution để bộ package giống nhau (job nào lưu cache trước cũng lưu bản đầy đủ).
+- Chỉ tính `skipped` hợp lệ khi `changes.code=false`; job bị skip vì lý do khác làm job tổng hợp đỏ.
 
-## 4. Viá»‡c cho chá»§ repo
+## 4. Việc cho chủ repo
 
-Required checks hiá»‡n lÃ  `build-test-publish` vÃ  `repo-checks`: KHÃ”NG cáº§n Ä‘á»•i gÃ¬ (tÃªn giá»¯ nguyÃªn). Tuá»³ chá»n: thÃªm
-`test-core`, `test-shell`, `test-integration`, `build-publish` vÃ o required checks Ä‘á»ƒ tháº¥y tá»«ng job (khÃ´ng báº¯t buá»™c vÃ¬ job tá»•ng há»£p
-Ä‘Ã£ bao trÃ¹m; lÆ°u Ã½ job bá»‹ skip trÃªn PR chá»‰ docs Ä‘Æ°á»£c GitHub coi lÃ  Ä‘áº¡t).
+Required checks hiện là `build-test-publish` và `repo-checks`: KHÔNG cần đổi gì (tên giữ nguyên). Tuỳ chọn: thêm
+`test-core`, `test-shell`, `test-integration`, `build-publish` vào required checks để thấy từng job (không bắt buộc vì job tổng hợp
+đã bao trùm; lưu ý job bị skip trên PR chỉ docs được GitHub coi là đạt).
 
-## 5. Sá»‘ Ä‘o
+## 5. Số đo
 
-(Äiá»n sau khi CI cá»§a PR cháº¡y; xem mÃ´ táº£ PR.)
+(Điền sau khi CI của PR chạy; xem mô tả PR.)
