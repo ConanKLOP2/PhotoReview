@@ -2,7 +2,7 @@
 id: NOWPF-WP35-G3B-FILES
 order: 1150
 summary: |-
-  WP-35 GĐ3b trang Files (phương án B của spike S3, CHƯA XÁC NHẬN): trang "Files & safety" của Settings Win32 gốc, 11 thuộc tính (so sánh bản trùng, RAW, WebP/HEIC + trạng thái codec, xoá vĩnh viễn opt-in, xác nhận xoá, trình soạn thảo ngoài + Browse, nhật ký thao tác bằng 2 radio, dùng lại thư mục lần trước). Thêm `Radio` vào `SettingsPageBuilder` (nhóm WS_GROUP/WS_TABSTOP, cắt nhóm sau radio, dáng cổ điển như GĐ2) và hook `FocusExternalEditor` (lệnh "Open in external editor" mở Settings ở trang Files, focus ô đường dẫn như bản WPF). Không chuỗi mới; không nạp WPF; __MUT__ đột biến, 0 sống thật.
+  WP-35 GĐ3b trang Files (phương án B của spike S3, CHƯA XÁC NHẬN): trang "Files & safety" của Settings Win32 gốc, 11 thuộc tính (so sánh bản trùng, RAW, WebP/HEIC + trạng thái codec, xoá vĩnh viễn opt-in, xác nhận xoá, trình soạn thảo ngoài + Browse, nhật ký thao tác bằng 2 radio, dùng lại thư mục lần trước). Thêm `Radio` vào `SettingsPageBuilder` (nhóm WS_GROUP/WS_TABSTOP, cắt nhóm sau radio, dáng cổ điển như GĐ2) và hook `FocusExternalEditor` (lệnh "Open in external editor" mở Settings ở trang Files, focus ô đường dẫn như bản WPF). Không chuỗi mới; không nạp WPF; 23 đột biến, 0 sống thật.
 ---
 
 # NOWPF-WP35-G3B-FILES - trang Files của Settings Win32 (2026-10-13)
@@ -46,7 +46,7 @@ mục "Cách thêm một trang"). Presenter/FieldMap KHÔNG đổi ([NOWPF-WP35-
 
 ## 3. Kiểm chứng
 
-`SettingsFilesPageTests` (__TESTS__ ca sau khi nở theory): __RUNS__.
+`SettingsFilesPageTests` (48 ca sau khi nở theory).
 
 | Nhóm | Phủ |
 |---|---|
@@ -61,11 +61,37 @@ mục "Cách thêm một trang"). Presenter/FieldMap KHÔNG đổi ([NOWPF-WP35-
 Ảnh chụp (`PHOTOREVIEW_DIALOG_SNAPSHOTS=<dir>`, `SettingsFilesSnapshotTests`): `settings-files-{en,vi}[-150][-bottom].png` (8 ảnh); đã xem: nhóm hiển thị đủ, ghi chú
 tiếng Việt dài không bị cắt, radio + group box cổ điển đọc được trên nền tối, ô đường dẫn tiếng Việt, 150 % không chồng, thanh cuộn tối bên phải.
 
-__RUNLINE__
+Chạy 2026-10-13 (desktop ẩn `PRSetFiles`, filter CI `Category!=Manual&Category!=Native`, `--blame-hang-timeout 120s`): `Shell.Tests` 1 354, `Shell.Integration.Tests` 150, `Shell.WpfBridge.Tests` 39, `Architecture.Tests` 158 (lần đầu đỏ 1 ca `NoMojibakeInCSharpFiles` do chú thích của file chụp ảnh bị hỏng mã hoá; đã sửa), `App.Tests` 2 594, `Core.Tests` 3 209 - 0 lỗi. Lặp `SettingsFilesPageTests` (48 ca/lượt): 50 lượt, 50 đạt, 0 lỗi, không lượt nào treo. ILC: `tools/check-aot-warnings.ps1 -RequireToolchain` = **0 cảnh báo** (PhotoReview.exe AOT 15,1 MB; thư mục publish tạm đã dọn). Không nạp WPF: `LazyLoadTests` (đã có) vẫn xanh; trang chỉ dùng `Imaging.Decoding.Wic` (không WPF). Số đo thời gian mở KHÔNG làm lại ở PR này (máy bận chạy song song; trang tạo lười chỉ khi mở trang Files).
 
 ## 4. Đột biến (hai bước, `docs/MUTATION-TESTING.md`)
 
-__MUTTABLE__
+| # | Đột biến | Kết quả |
+|---|---|---|
+| M01 | Load: combobox RawFullDecode lấy chỉ số của RawPairMode | chết bước 1 (1 ca) |
+| M02 | Collect: JournalSafe so với chỉ số radio 0 (lệch chỉ số radio) | chết bước 1 (5 ca) |
+| M03 | Load: xoá vĩnh viễn luôn nạp ở trạng thái bật (mất opt-in) | chết bước 1 (10 ca) |
+| M04 | Collect: xoá vĩnh viễn đọc từ ô xác nhận xoá (lệch trường) | chết bước 1 (3 ca) |
+| M05 | Collect: ConfirmBeforeDelete không bao giờ lưu | chết bước 1 (4 ca) |
+| M06 | Collect: ExternalEditorPath bị bỏ | chết bước 1 (7 ca) |
+| M07 | Browse: chọn rỗng ghi đè ô (huỷ không được tôn trọng) | chết bước 1 (1 ca) |
+| M08 | Browse: không có bộ lọc exe | chết bước 1 (1 ca) |
+| M09 | Browse: không bao giờ bắt đầu ở thư mục của trình soạn thảo | chết bước 1 (1 ca) |
+| M10 | Browse: lấy thư mục đầu cả khi tệp không tồn tại | chết bước 1 (1 ca) |
+| M11 | Load: radio nhật ký bị đảo | chết bước 1 (6 ca) |
+| M12 | Collect: MoveCopyReuseLastFolder đọc từ ô so sánh kích thước | chết bước 1 (6 ca) |
+| M13 | Collect: CompareHash đọc từ ô kích thước | chết bước 1 (2 ca) |
+| M14 | Collect: RawPairMode đọc từ combobox RawFullDecode | chết bước 1 (3 ca) |
+| M15 | FocusExternalEditor focus nút Browse thay vì ô | chết bước 1 (2 ca) |
+| M16 | Đổi ngôn ngữ: dòng trạng thái codec không đổi | chết bước 1 (1 ca) |
+| M17 | Dòng trạng thái codec bỏ qua nguồn được tiêm | chết bước 1 (3 ca) |
+| M18 | Dialog Reset trang: nạp giá trị hiện tại thay vì mặc định | chết bước 1 (2 ca) |
+| M19 | Dialog: ExternalEditor không còn đặt hàng đợi focus (focus bị khung lấy lại) | chết bước 1 (1 ca) |
+| M20 | Dialog: nhảy tới Files làm trang được nhớ đổi | chết bước 1 (1 ca) |
+| M21 | Builder: radio đầu không mở nhóm | chết bước 1 (3 ca) |
+| M22 | Builder: không cắt nhóm sau radio | chết bước 1 (3 ca) |
+| M23 | Context: SetRadioIndex không bỏ chọn radio còn lại | chết bước 1 (1 ca) |
+
+Tổng: 23 chạy (build Release + test trên desktop ẩn `PRSetFiles`); bước 1 = `SettingsFilesPageTests`; 23 chết ở bước 1, 0 sống nên không cần bước 2 (toàn `Shell.Tests`). Còn sống thật: 0. Script ở scratchpad; cây làm việc đã hoàn nguyên (`git checkout`) sau từng đột biến.
 
 ## 5. Chưa kiểm được / việc còn lại
 
