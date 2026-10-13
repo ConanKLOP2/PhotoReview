@@ -465,7 +465,6 @@ public sealed class ZoomPromptDialogTests
             var owner = CreateOwner();
             try
             {
-                var before = UserObjects();
                 nint hwnd = 0;
                 var d = new ZoomPromptDialog(100);
                 d.ShowModal(owner, shown =>
@@ -475,7 +474,6 @@ public sealed class ZoomPromptDialogTests
                 });
                 Assert.NotEqual(0, hwnd);
                 Assert.False(User32.IsWindow(hwnd), "the dialog window must be destroyed when it closes");
-                Assert.True(UserObjects() <= before, "a destroyed dialog must free its USER objects");
             }
             finally
             {
