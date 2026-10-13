@@ -80,7 +80,7 @@ Ghi chú theo trang còn lại:
 |---|---|---|
 | Mouse | ClickZoomPercent, ClickToZoomEnabled, ArrowPanStepPercent, KeyboardZoomAnchor, FitWidthAnchor/2, KeepZoomAcrossImages, KeyboardZoomStepPercent, MiddleClickAction (11 mục), ClickZoomKeyTogglesFit, MouseWheelAction, KineticPanEnabled, KineticGlideSmoothing, ArrowKeyNavigatesAtZoomEdge, ImageTransition(+Ms; ô Ms chỉ bật khi Fade), TouchpadSwipe(+Distance), HiddenContextMenuItems (18 ô dựng bằng mã từ `SettingsPresenter.ContextMenuRows()`, ô khoá có tooltip), tóm tắt phím zoom (`ZoomShortcutSummary`, phụ thuộc trang Shortcuts) | ~20 thuộc tính; ô tick con thụt vào; `FocusTarget` cho ArrowPanStep/KeyboardZoomStep/ImageTransitionMs/TouchpadSwipeDistance |
 | Performance | (xong, GĐ3b: [NOWPF-WP35-G3B-PAGE-PERFORMANCE](NOWPF-WP35-G3B-PAGE-PERFORMANCE.md)) - chỉ 4 thuộc tính; RAW/WebP/HEIC/Compare nằm ở trang Files | |
-| Shortcuts | 27 ô bắt phím (`SettingsFieldMap.Shortcuts`), 9 nút xoá cho phím tuỳ chọn, cảnh báo trùng phím trực tiếp (`DuplicateShortcutWarning`), ActionsJson (nút mở ActionProfiles = `port.ShowActionProfiles`, modal lồng) | ô bắt phím: subclass EDIT + `SettingsPresenter.CaptureShortcut`; cần mở rộng khung để bắt WM_KEYDOWN/WM_IME của EDIT (làm ở PR trang này) |
+| Shortcuts | (xong ở GĐ3b: [NOWPF-WP35-G3B-PAGE-SHORTCUTS](NOWPF-WP35-G3B-PAGE-SHORTCUTS.md)) 27 ô bắt phím, 14 nút xoá, cảnh báo trùng trực tiếp, Action profiles lồng | khung được mở rộng CỘNG THÊM: `KeyGrid`/`Warning` của builder, subclass ô bắt phím, `Context.ActionsJson`/`EditActionProfiles` |
 | Files | (xong - [NOWPF-WP35-G3B-PAGE-FILES](NOWPF-WP35-G3B-PAGE-FILES.md)) | `Radio` đã có trong builder; hook `FocusExternalEditor` đã có; ActionsJson KHÔNG ở trang này (thuộc Shortcuts) |
 | Diagnostics | (xong) | |
 

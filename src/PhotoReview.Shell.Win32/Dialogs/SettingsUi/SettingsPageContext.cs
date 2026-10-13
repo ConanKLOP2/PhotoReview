@@ -114,6 +114,47 @@ internal sealed class SettingsPageContext
         }
     }
 
+    /// <summary>Tooltip chữ cố định (hiện khi rê chuột); đặt một lần khi trang <see cref="ISettingsPageView.Attach"/> (không tự đổi theo ngôn ngữ).</summary>
+    public void SetTooltip(int id, string text) => _dialog.SetControlTooltip(id, text);
+
+    /// <summary>
+    /// JSON action đang làm việc, dùng chung giữa các trang (ô JSON của trang Files, trình sửa Action profiles của trang Shortcuts, cảnh
+    /// báo trùng phím). Đã đồng bộ với mọi lần <see cref="CommitActionsJson"/>; sửa tay ô JSON chưa lưu thì xem <see cref="CollectActionsJson"/>.
+    /// </summary>
+    public string ActionsJson => _dialog.ActionsJson;
+
+    /// <summary>JSON action theo các ô hiện có của mọi trang (gồm sửa tay ở ô JSON, chưa lưu); cập nhật <see cref="ActionsJson"/>.</summary>
+    public string CollectActionsJson() => _dialog.RefreshActionsJsonFromPages();
+
+    /// <summary>
+    /// Trang <paramref name="source"/> đổi JSON action (trình sửa Action profiles): ghi vào bản làm việc và nạp lại các trang khác đã tạo
+    /// (giữ nguyên các sửa chưa lưu của chúng).
+    /// </summary>
+    public void CommitActionsJson(string json, ISettingsPageView source) => _dialog.SetActionsJson(json, source);
+
+    /// <summary>
+    /// Mở Action profiles MODAL lồng trên cửa sổ Settings; danh sách đã sửa khi Apply, null khi huỷ. Báo "không mở được trình sửa" và trả
+    /// null khi cổng không cấp (<see cref="SettingsDialogOptions.ShowActionProfiles"/>) hoặc việc mở ném lỗi (như <c>catch</c> của bản WPF).
+    /// </summary>
+    public IReadOnlyList<PhotoReview.Core.Settings.ReviewAction>? EditActionProfiles(IReadOnlyList<PhotoReview.Core.Settings.ReviewAction> actions)
+    {
+        ArgumentNullException.ThrowIfNull(actions);
+        try
+        {
+            if (Options.ShowActionProfiles is { } show)
+            {
+                return show(Owner, actions);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // fall through: the same "could not open the editor" notice as the WPF window's catch-all
+        }
+
+        ShowWarning(PhotoReview.Core.Localization.Tr.DialogOpenEditorFailedTitle, PhotoReview.Core.Localization.Tr.DialogOpenEditorFailedMessage);
+        return null;
+    }
+
     /// <summary>Tên hiển thị phiên bản (chân cột trái; dùng cho kiểm tra cập nhật).</summary>
     public string? Version => _dialog.Options.Version;
 }

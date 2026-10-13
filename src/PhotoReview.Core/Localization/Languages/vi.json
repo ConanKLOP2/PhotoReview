@@ -973,5 +973,6 @@
   "diagnostics.copy": "Sao chép",
   "settings.resetPage": "Đặt lại trang này",
   "settings.pagePending": "Trang này chưa có trong cửa sổ cài đặt mới. Các cài đặt của trang giữ nguyên giá trị hiện tại và được lưu không đổi. Để sửa, hãy dùng cửa sổ cài đặt chuẩn (bỏ biến PHOTOREVIEW_SETTINGS_WIN32).",
-  "status.menuFailed": "Lỗi menu: {message}"
+  "status.menuFailed": "Lỗi menu: {message}",
+  "settings.shortcuts.resetKeys": "Khôi phục phím mặc định"
 }

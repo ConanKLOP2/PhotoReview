@@ -306,6 +306,64 @@ internal sealed class SettingsCheckFlowElement(IReadOnlyList<int> ids, int inden
     }
 }
 
+/// <summary>Một ô "nhãn + ô bắt phím (+ nút xoá)" của <see cref="SettingsPageBuilder.KeyGrid"/> đã khai báo (<see cref="Clear"/> = 0: không có nút xoá).</summary>
+internal readonly record struct SettingsKeyCell(int Label, int Box, int Clear);
+
+/// <summary>Đặc tả một ô của lưới phím: nhãn và có nút xoá (phím tuỳ chọn) hay không.</summary>
+internal readonly record struct SettingsKeyCellSpec(Func<string> Label, bool Clearable);
+
+/// <summary>
+/// WP-35 GĐ3b: lưới các ô "nhãn + ô bắt phím + nút xoá" (trang Shortcuts). Xếp hàng theo hàng, 1-2 cột tuỳ bề rộng (như hai cột của
+/// XAML); các ô bắt phím thẳng cột nhau (kể cả hàng không có nút xoá). Nhãn xuống dòng khi dài (tiếng Việt).
+/// </summary>
+internal sealed class SettingsKeyGridElement(IReadOnlyList<SettingsKeyCell> cells) : SettingsLayoutElement
+{
+    public IReadOnlyList<SettingsKeyCell> Cells => cells;
+
+    public override IEnumerable<int> ControlIds
+        => cells.SelectMany(cell => cell.Clear != 0 ? new[] { cell.Label, cell.Box, cell.Clear } : new[] { cell.Label, cell.Box });
+
+    protected override int PlaceVisible(ISettingsLayoutSurface s, int x, int y, int width)
+    {
+        var cellMin = s.Dx(160);
+        var columnGap = s.Dx(12);
+        var columns = Math.Clamp((width + columnGap) / (cellMin + columnGap), 1, 2);
+        var cellWidth = Math.Max(s.Dx(100), (width - ((columns - 1) * columnGap)) / columns);
+        var gap = s.Dx(4);
+        var boxWidth = Math.Min(s.Dx(64), Math.Max(s.Dx(40), cellWidth / 2));
+        var clearWidth = s.FieldHeight;
+        var labelWidth = Math.Max(s.Dx(30), cellWidth - boxWidth - clearWidth - (2 * gap));
+        var fieldHeight = s.FieldHeight;
+        var cursor = y;
+        for (var start = 0; start < cells.Count; start += columns)
+        {
+            var rowHeight = fieldHeight;
+            for (var column = 0; column < columns && start + column < cells.Count; column++)
+            {
+                rowHeight = Math.Max(rowHeight, s.TextHeight(cells[start + column].Label, labelWidth));
+            }
+
+            for (var column = 0; column < columns && start + column < cells.Count; column++)
+            {
+                var cell = cells[start + column];
+                var left = x + (column * (cellWidth + columnGap));
+                var labelHeight = s.TextHeight(cell.Label, labelWidth);
+                s.Place(cell.Label, left, cursor + ((rowHeight - labelHeight) / 2), labelWidth, labelHeight);
+                var boxLeft = left + labelWidth + gap;
+                s.Place(cell.Box, boxLeft, cursor + ((rowHeight - fieldHeight) / 2), boxWidth, fieldHeight);
+                if (cell.Clear != 0)
+                {
+                    s.Place(cell.Clear, boxLeft + boxWidth + gap, cursor + ((rowHeight - fieldHeight) / 2), clearWidth, fieldHeight);
+                }
+            }
+
+            cursor += rowHeight + s.Dy(5);
+        }
+
+        return cursor - y;
+    }
+}
+
 /// <summary>
 /// WP-35 GĐ3a: "builder" bố cục của một trang Settings. Trang khai báo điều khiển theo thứ tự đọc (= thứ tự Tab) và nhận về id; khung
 /// tạo template, đo và đặt theo dialog-unit (chiều cao chữ nhiều dòng ĐO thật nên chuỗi tiếng Việt dài không bị cắt, kéo giãn/DPI
@@ -318,12 +376,15 @@ internal sealed class SettingsPageBuilder
     private const uint TabStop = DialogConstants.WsTabStop;
     private const uint StaticStyle = DialogStyles.Child | DialogConstants.SsNoPrefix;
     private const uint BsMultiline = 0x2000;
+    private const uint EsReadOnly = 0x0800;
 
     private readonly List<DialogItem> _items = [];
     private readonly Stack<List<SettingsLayoutElement>> _containers = new();
     private readonly List<SettingsLayoutElement> _root = [];
     private readonly Dictionary<int, Func<string>> _texts = [];
     private readonly HashSet<int> _notes = [];
+    private readonly HashSet<int> _keyBoxes = [];
+    private readonly HashSet<int> _warnings = [];
     private readonly Dictionary<int, IReadOnlyList<Func<string>>> _comboItems = [];
     private readonly Dictionary<int, (int Min, int Max)> _sliders = [];
     private int _counter;
@@ -345,6 +406,12 @@ internal sealed class SettingsPageBuilder
     internal IReadOnlyDictionary<int, Func<string>> Texts => _texts;
 
     internal IReadOnlySet<int> Notes => _notes;
+
+    /// <summary>Id các ô bắt phím (<see cref="KeyGrid"/>): khung subclass chúng để bắt WM_KEYDOWN/WM_SYSKEYDOWN và chặn mọi ký tự/IME.</summary>
+    internal IReadOnlySet<int> KeyBoxes => _keyBoxes;
+
+    /// <summary>Id các dòng cảnh báo (<see cref="Warning"/>): tô màu cảnh báo.</summary>
+    internal IReadOnlySet<int> WarningTexts => _warnings;
 
     internal IReadOnlyDictionary<int, IReadOnlyList<Func<string>>> ComboItems => _comboItems;
 
@@ -530,4 +597,46 @@ internal sealed class SettingsPageBuilder
         AddElement(new SettingsCheckFlowElement(ids, indentDlu));
         return ids;
     }
+
+    /// <summary>
+    /// WP-35 GĐ3b: dòng cảnh báo (chữ màu cảnh báo, toàn bề rộng, không chiếm chỗ khi rỗng); trang đặt chữ khi cần
+    /// (<see cref="SettingsPageContext.SetText"/> + <see cref="SettingsPageContext.Relayout"/>).
+    /// </summary>
+    public int Warning(Func<string>? text = null)
+    {
+        var id = Add(DialogControlClass.Static, text, StaticStyle);
+        _warnings.Add(id);
+        AddElement(new SettingsTextElement(id, alignedToControls: false));
+        return id;
+    }
+
+    /// <summary>
+    /// WP-35 GĐ3b: lưới ô bắt phím. Mỗi ô = nhãn (STATIC) + ô bắt phím (EDIT chỉ đọc, subclass bắt phím; <see cref="SettingsKeyCell.Box"/>) +
+    /// nút "✕" xoá nếu <see cref="SettingsKeyCellSpec.Clearable"/>. Thứ tự tạo = thứ tự Tab (nhãn, ô, nút). Trả id theo thứ tự đặc tả.
+    /// </summary>
+    public IReadOnlyList<SettingsKeyCell> KeyGrid(IReadOnlyList<SettingsKeyCellSpec> specs)
+    {
+        ArgumentNullException.ThrowIfNull(specs);
+        var cells = new List<SettingsKeyCell>(specs.Count);
+        foreach (var spec in specs)
+        {
+            var label = Add(DialogControlClass.Static, spec.Label, StaticStyle);
+            var box = Add(DialogControlClass.Edit, null, Child | TabStop | DialogConstants.EsAutoHScroll | EsReadOnly,
+                DialogConstants.WsExClientEdge);
+            _keyBoxes.Add(box);
+            var clear = spec.Clearable
+                ? Add(DialogControlClass.Button, static () => ClearGlyph, Child | TabStop | DialogConstants.BsPushButton)
+                : 0;
+            cells.Add(new SettingsKeyCell(label, box, clear));
+        }
+
+        AddElement(new SettingsKeyGridElement(cells));
+        return cells;
+    }
+
+    /// <summary>
+    /// Chữ của nút xoá phím: dấu nhân "×" (U+00D7, có trong Segoe UI nên không phải rơi font như "✕" của bản WPF - ở 100 % "✕" bị viền màu
+    /// ClearType khi dựng bằng font dự phòng).
+    /// </summary>
+    internal const string ClearGlyph = "×";
 }
