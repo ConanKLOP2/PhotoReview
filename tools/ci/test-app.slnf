@@ -1,0 +1,10 @@
+{
+  "solution": {
+    "path": "../../PhotoReview.slnx",
+    "projects": [
+      "tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj",
+      "tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj",
+      "tests/PhotoReview.Shell.WpfBridge.Tests/PhotoReview.Shell.WpfBridge.Tests.csproj"
+    ]
+  }
+}

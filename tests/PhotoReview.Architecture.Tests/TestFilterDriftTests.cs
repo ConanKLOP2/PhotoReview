@@ -216,7 +216,7 @@ public sealed class TestFilterDriftTests
                 Assert.NotEqual(mains[0].Job, mains[1].Job);
             }
 
-            // The safety net runs exactly once per project, in a job that also runs one of its main steps.
+            // The safety net runs exactly once per project, in a job that builds it (checked against the slnf below).
             var safetyJobs = jobs.Where(j =>
             {
                 var at = j.Value.IndexOf(safetyMarker, StringComparison.Ordinal);
@@ -225,8 +225,7 @@ public sealed class TestFilterDriftTests
                 var step = end < 0 ? j.Value[at..] : j.Value[at..end];
                 return step.Contains($"'{project}'", StringComparison.Ordinal) && step.Contains("Category=Integration&Category=Slow&", StringComparison.Ordinal);
             }).Select(j => j.Key).ToArray();
-            var safetyJob = Assert.Single(safetyJobs);
-            Assert.Contains(mains, m => m.Job == safetyJob);
+            Assert.Single(safetyJobs);
         }
 
         // Each job builds, through its solution filter (tools/ci/<job>.slnf), every project it tests.
@@ -235,9 +234,14 @@ public sealed class TestFilterDriftTests
             var build = Regex.Match(text, @"dotnet build (?<f>tools/ci/[A-Za-z0-9-]+\.slnf) -c Release --no-restore");
             Assert.True(build.Success, $"{id}: no `dotnet build tools/ci/<job>.slnf -c Release --no-restore` step before its tests");
             var filter = ReadRepoFile(build.Groups["f"].Value);
-            foreach (Match tested in Regex.Matches(text, @"dotnet test tests/(?<p>PhotoReview\.[A-Za-z.]+\.Tests)/"))
-                Assert.True(filter.Contains($"tests/{tested.Groups["p"].Value}/{tested.Groups["p"].Value}.csproj", StringComparison.Ordinal),
-                    $"{id}: {tested.Groups["p"].Value} is tested but not built by {build.Groups["f"].Value}");
+            // Projects tested by a main step (dotnet test tests/<p>/...) or listed in the safety-net foreach ('<p>', '<q>').
+            var tested = Regex.Matches(text, @"dotnet test tests/(?<p>PhotoReview\.[A-Za-z.]+\.Tests)/").Select(m => m.Groups["p"].Value)
+                .Concat(Regex.Matches(text, @"foreach \(\$project in (?<l>[^)]+)\)")
+                    .SelectMany(m => Regex.Matches(m.Groups["l"].Value, @"'(?<p>PhotoReview\.[A-Za-z.]+\.Tests)'"))
+                    .Select(m => m.Groups["p"].Value));
+            foreach (var project in tested.Distinct())
+                Assert.True(filter.Contains($"tests/{project}/{project}.csproj", StringComparison.Ordinal),
+                    $"{id}: {project} is tested but not built by {build.Groups["f"].Value}");
         }
 
         // The aggregate job keeps the id the required status check and release.yml look up, and waits for every job that builds or tests.
@@ -246,5 +250,38 @@ public sealed class TestFilterDriftTests
             Assert.Contains(job, aggregate, StringComparison.Ordinal);
         Assert.Contains("if: always()", aggregate, StringComparison.Ordinal);
         Assert.DoesNotContain("publish-aot", aggregate, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "Rule CI-PARALLEL: every project of PhotoReview.slnx is compiled by some CI build (a tools/ci/*.slnf or its ProjectReference closure)")]
+    public void EveryProjectOfTheSolution_IsBuiltBySomeCiBuild()
+    {
+        // build-publish compiles only the published executables' closure and each test job only its own test projects, so a new
+        // project referenced by none of them would silently stop being compiled (and analysed) in CI.
+        var slnx = ReadRepoFile("PhotoReview.slnx");
+        var solutionProjects = Regex.Matches(slnx, @"<Project Path=""(?<p>[^""]+)""")
+            .Select(m => m.Groups["p"].Value.Replace('\\', '/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.NotEmpty(solutionProjects);
+
+        var roots = Directory.GetFiles(Path.Combine(RepoScan.Root, "tools", "ci"), "*.slnf")
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"""(?<p>[^""]+\.csproj)""").Select(m => m.Groups["p"].Value.Replace('\\', '/')))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.NotEmpty(roots);
+
+        var reached = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>(roots);
+        while (queue.Count > 0)
+        {
+            var project = queue.Dequeue();
+            if (!reached.Add(project)) continue;
+            var dir = Path.GetDirectoryName(project)!.Replace('\\', '/');
+            foreach (Match reference in Regex.Matches(ReadRepoFile(project), @"<ProjectReference\s+Include=""(?<p>[^""]+)"""))
+            {
+                var target = Path.GetFullPath(Path.Combine(RepoScan.Root, dir, reference.Groups["p"].Value.Replace('\\', '/')));
+                queue.Enqueue(Path.GetRelativePath(RepoScan.Root, target).Replace('\\', '/'));
+            }
+        }
+
+        var unbuilt = solutionProjects.Where(p => !reached.Contains(p)).ToArray();
+        Assert.True(unbuilt.Length == 0, "Solution projects built by no CI job: " + string.Join(", ", unbuilt));
     }
 }
