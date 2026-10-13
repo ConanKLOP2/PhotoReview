@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-G3B-PERFORMANCE
-order: 1150
+order: 1160
 summary: |-
   WP-35 GĐ3b (CHƯA XÁC NHẬN): trang Performance của Settings Win32 (4 thuộc tính: DecoderBackend, ImageCacheRamPercent, PreloadForwardCount, PreloadBackwardCount) trên khung GĐ3a. Thanh trượt cache RAM đổi khoảng theo cửa sổ preload và RAM máy; mục TurboJpeg thiếu = ghi chú + từ chối chọn. 40 ca test mới, 24 đột biến (0 sống), 0 cảnh báo ILC, không nạp WPF.
 ---
