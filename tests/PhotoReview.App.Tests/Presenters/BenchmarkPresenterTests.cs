@@ -8,6 +8,7 @@ using PhotoReview.Benchmarking;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
+using PhotoReview.TestSupport;
 
 namespace PhotoReview.App.Tests.Presenters;
 
@@ -182,23 +183,56 @@ public sealed class BenchmarkPresenterTests
     public async Task Progress_ZeroTotal_AndProfileIndex()
     {
         var h = new Harness();
+        var firstBar = -1.0;
+        var secondBar = -1.0;
+        string? secondStatus = null;
         h.Behaviors["fast-sequential"] = (s, _) =>
         {
             s.Progress!.Report(new BenchmarkProgress("fast-sequential", BenchmarkWorkload.Sequential, 0, 0, "x"));
+            h.Ui.Pump();
+            firstBar = h.View.Progress;
             return Ok("fast-sequential", [1]);
         };
         h.Behaviors["preview-light"] = (s, _) =>
         {
-            h.Ui.Pump();
-            Assert.Equal(0, h.View.Progress);
             s.Progress!.Report(new BenchmarkProgress("preview-light", BenchmarkWorkload.Sequential, 1, 2, "x"));
             h.Ui.Pump();
-            Assert.Equal(0.5, h.View.Progress);
-            Assert.Equal(Tr.BenchmarkStatusProgress(2, 2, "preview-light", 1, 2, "x"), h.View.Status);
+            secondBar = h.View.Progress;
+            secondStatus = h.View.Status;
             return Ok("preview-light", [1]);
         };
 
-        await Await(h.Presenter.RunSelectedAsync([Harness.P("fast-sequential"), Harness.P("preview-light")], "C:\\bench", null));
+        await Await(h.Presenter.RunSelectedAsync([Harness.P("fast-sequential"), Harness.P("preview-light")], "C:\bench", null));
+
+        // Captured inside the sessions and asserted here: an assertion thrown inside a session would be swallowed as a Fail row.
+        Assert.Equal(0, firstBar);
+        Assert.Equal(0.5, secondBar);
+        Assert.Equal(Tr.BenchmarkStatusProgress(2, 2, "preview-light", 1, 2, "x"), secondStatus);
+    }
+
+    [Fact(DisplayName = "The library's fixed English progress messages are shown as catalog text, others pass through")]
+    public async Task Progress_MessageIsTranslated()
+    {
+        using var _ = TestLocalization.Use(TestLocalization.Vietnamese);
+        var h = new Harness();
+        var entered = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        h.Behaviors["fast-sequential"] = async (s, _) =>
+        {
+            s.Progress!.Report(new BenchmarkProgress("fast-sequential", BenchmarkWorkload.Sequential, 1, 2, BenchmarkEngine.ProgressCorrectnessFailed));
+            entered.SetResult();
+            await release.Task;
+            return Report("fast-sequential", [1]);
+        };
+
+        var run = h.Presenter.RunSelectedAsync([Harness.P("fast-sequential")], "C:\bench", "");
+        await Await(entered.Task);
+        h.Ui.Pump();
+
+        Assert.NotEqual(BenchmarkEngine.ProgressCorrectnessFailed, Tr.BenchmarkProgressCorrectnessFailed);
+        Assert.Equal(Tr.BenchmarkStatusProgress(1, 1, "fast-sequential", 1, 2, Tr.BenchmarkProgressCorrectnessFailed), h.View.Status);
+        release.SetResult();
+        await Await(run);
     }
 
     // ---- Cancel ----
@@ -232,7 +266,7 @@ public sealed class BenchmarkPresenterTests
         h.Scan = (_, _, ct) =>
         {
             scanning.Set();
-            ct.WaitHandle.WaitOne(Bound);
+            SpinWait.SpinUntil(() => ct.IsCancellationRequested, Bound); // IsCancellationRequested stays valid after the run disposed its source (WaitHandle would not)
             ct.ThrowIfCancellationRequested();
             return ["a.jpg"];
         };
@@ -310,7 +344,7 @@ public sealed class BenchmarkPresenterTests
         h.Scan = (_, _, ct) =>
         {
             scanning.Set();
-            ct.WaitHandle.WaitOne(Bound);
+            SpinWait.SpinUntil(() => ct.IsCancellationRequested, Bound); // IsCancellationRequested stays valid after the run disposed its source (WaitHandle would not)
             ct.ThrowIfCancellationRequested();
             return ["a.jpg"];
         };

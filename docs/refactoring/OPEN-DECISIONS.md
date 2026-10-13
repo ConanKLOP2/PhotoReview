@@ -165,4 +165,5 @@ TaskDialogIndirect, chọn thư mục qua seam `IShellFolderDialog`, cửa sổ 
 hiển thị (ImagePresenter dùng chung WPF/shell, PreviewImageService, composer/GpuImageCache/prefetcher/sink của shell Win32). Scheduler và
 decoder giả ép thứ tự hoàn tất đảo ngược; bất biến kiểm trên TOÀN BỘ nhật ký sink, không chỉ trạng thái cuối. Tìm thấy 1 lỗi thật
 (Win32PresentationSink mất FIFO khi UI thread tới sau cập nhật cross-thread còn trong hàng đợi, PR #476, đã sửa). [Detail](decisions/NOWPF-STALEPREVIEW-TESTS.md) |
+| NOWPF-WP35-G2A | WP-35 GĐ0 (PR 3): tách logic cửa sổ Benchmark khỏi WPF (BenchmarkPresenter, BenchmarkProfileSession, BenchmarkReportStore, BenchmarkResultRow/BenchmarkText trong App.Shared); BenchmarkWindow chỉ còn view mỏng. Đóng giữa chừng = huỷ chạy, hai lần Start liên tiếp bị bỏ qua, tiến độ đến muộn bị loại. [Detail](decisions/NOWPF-WP35-G2A-BENCHMARK.md) |
 <!-- END GENERATED DECIDED TABLE -->
