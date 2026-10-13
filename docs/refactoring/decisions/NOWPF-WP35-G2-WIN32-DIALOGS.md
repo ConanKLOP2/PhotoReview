@@ -2,7 +2,7 @@
 id: NOWPF-WP35-G2
 order: 1120
 summary: |-
-  WP-35 GĐ2 (phương án B của spike S3, CHƯA XÁC NHẬN): khung hộp thoại Win32 gốc có thêm combobox, listbox đa chọn owner-draw có huy hiệu, listview report (cột, sắp xếp, header tối), progress, trackbar, edit nhiều dòng/số, checkbox/radio/group box, tooltip theo dòng (dark nhìn được qua ảnh chụp, không kích hoạt điều kiện dừng); cửa sổ Action profiles (modal, lồng được) và Benchmark MODELESS (một cửa sổ duy nhất, Esc huỷ lượt chạy rồi mới đóng) dùng presenter G0/G2a; cổng Win32 ưu tiên cho Benchmark/ActionProfiles, cầu WPF còn cho Settings/Recovery. Đo exe thật: mở {{OPEN_MAX}} ms tệ nhất; 0 cảnh báo ILC (sửa BenchmarkReport.ToJson source-gen); không nạp WPF; {{MUT_TOTAL}} đột biến, {{MUT_ALIVE}} sống thật.
+  WP-35 GĐ2 (phương án B của spike S3, CHƯA XÁC NHẬN): khung hộp thoại Win32 gốc có thêm combobox, listbox đa chọn owner-draw có huy hiệu, listview report (cột, sắp xếp, header tối), progress, trackbar, edit nhiều dòng/số, checkbox/radio/group box, tooltip theo dòng (dark nhìn được qua ảnh chụp, không kích hoạt điều kiện dừng); cửa sổ Action profiles (modal, lồng được) và Benchmark MODELESS (một cửa sổ duy nhất, Esc huỷ lượt chạy rồi mới đóng) dùng presenter G0/G2a; cổng Win32 ưu tiên cho Benchmark/ActionProfiles, cầu WPF còn cho Settings/Recovery. Đo exe thật: mở 66 ms tệ nhất; 0 cảnh báo ILC (sửa BenchmarkReport.ToJson source-gen); không nạp WPF; 32 đột biến, 0 sống thật.
 ---
 
 # NOWPF-WP35-G2 - hộp thoại Win32 gốc, giai đoạn 2: điều khiển mới + ActionProfiles + Benchmark modeless (2026-10-13)
@@ -53,28 +53,88 @@ lộ trình GĐ0-5 của [NOWPF-WP35-SPIKE-S3](NOWPF-WP35-SPIKE-S3.md). Presente
 
 | Test (`tests/`) | Ca | Phủ |
 |---|---:|---|
-| `Shell.Tests/Dialogs/Native/NativeControlsTests` | {{N_CONTROLS}} | tạo đủ lớp điều khiển, cờ dark theo lớp + `DarkDialogChrome(setTheme)` thật (combo, danh sách thả, header, radio/group box cổ điển), combobox chọn/thả/CBN_SELCHANGE, listbox đa chọn + chọn hết/bỏ, vẽ owner-draw vào DC bộ nhớ (màu chọn, huy hiệu), tooltip theo dòng, listview (cột, căn phải, hàng, chọn hàng, bấm cột sắp xếp tăng/giảm, NM_CUSTOMDRAW hàng, header tự vẽ, mũi tên chỉ ở cột đã sắp xếp), progress kẹp 0..1, trackbar + WM_HSCROLL, edit nhiều dòng giữ Enter, edit số, checkbox/radio, bố cục không chồng ở 100/150 %, không rò GDI/USER |
-| `.../ActionProfilesDialogTests` | {{N_AP}} | mở + trường hàng đầu, rỗng, huy hiệu phím tắt, chọn hàng lưu hàng trước + làm mới danh sách, thao tác/xác nhận qua vòng chọn, Add (phím tắt trống kế tiếp, mở hàng mới), Remove (chọn kế, hết thì xoá trường), Apply (hợp lệ = OK giữ sửa; tên trống/phím trùng/đích ra ngoài = cảnh báo + giữ mở), Enter = Apply, 4 đường huỷ, Import (thay danh sách; file sai = cảnh báo; huỷ), Export (ghi bản đang sửa; lỗi ghi = cảnh báo), modal khoá/bật owner, modal-trong-modal, chrome một lần, bố cục 100/150 % en/vi, rò handle |
-| `.../BenchmarkDialogTests` | {{N_BM}} | mở không chặn (owner bật, nút mặc định Run), thư mục mặc định Pictures, tooltip mô tả + huy hiệu từng profile, Run (tiến độ, khoá điều khiển, focus, hàng, trạng thái Done, lưu báo cáo), Quick check cố định, không chọn gì, chọn hết/bỏ, Cancel, Esc đang chạy (cửa sổ ở lại) và rảnh (đóng), đóng giữa chừng bằng nút/WM_CLOSE/API (huỷ, huỷ cửa sổ, tiến độ muộn bị loại, không hàng Fail giả), Tab qua vòng lặp shell thật, thứ tự hàng + đánh dấu tốt nhất, sắp xếp tăng/giảm số, giữ hàng chọn, màu hàng, lượt hai xoá hàng cũ, Browse (owner = cửa sổ) + huỷ, Open report/folder, đổi ngôn ngữ, bố cục + status dài 100/150 %, rò handle, cổng: một cửa sổ, mở lại sau khi đóng, Dispose đóng khi đang chạy, ActionProfiles Apply/huỷ |
+| `Shell.Tests/Dialogs/Native/NativeControlsTests` | 23 phương thức | tạo đủ lớp điều khiển, cờ dark theo lớp + `DarkDialogChrome(setTheme)` thật (combo, danh sách thả, header, radio/group box cổ điển), combobox chọn/thả/CBN_SELCHANGE, listbox đa chọn + chọn hết/bỏ, vẽ owner-draw vào DC bộ nhớ (màu chọn, huy hiệu), tooltip theo dòng, listview (cột, căn phải, hàng, chọn hàng, bấm cột sắp xếp tăng/giảm, NM_CUSTOMDRAW hàng, header tự vẽ, mũi tên chỉ ở cột đã sắp xếp), progress kẹp 0..1, trackbar + WM_HSCROLL, edit nhiều dòng giữ Enter, edit số, checkbox/radio, bố cục không chồng ở 100/150 %, không rò GDI/USER |
+| `.../ActionProfilesDialogTests` | 24 phương thức | mở + trường hàng đầu, rỗng, huy hiệu phím tắt, chọn hàng lưu hàng trước + làm mới danh sách, thao tác/xác nhận qua vòng chọn, Add (phím tắt trống kế tiếp, mở hàng mới), Remove (chọn kế, hết thì xoá trường), Apply (hợp lệ = OK giữ sửa; tên trống/phím trùng/đích ra ngoài = cảnh báo + giữ mở), Enter = Apply, 4 đường huỷ, Import (thay danh sách; file sai = cảnh báo; huỷ), Export (ghi bản đang sửa; lỗi ghi = cảnh báo), modal khoá/bật owner, modal-trong-modal, chrome một lần, bố cục 100/150 % en/vi, rò handle |
+| `.../BenchmarkDialogTests` | 26 phương thức | mở không chặn (owner bật, nút mặc định Run), thư mục mặc định Pictures, tooltip mô tả + huy hiệu từng profile, Run (tiến độ, khoá điều khiển, focus, hàng, trạng thái Done, lưu báo cáo), Quick check cố định, không chọn gì, chọn hết/bỏ, Cancel, Esc đang chạy (cửa sổ ở lại) và rảnh (đóng), đóng giữa chừng bằng nút/WM_CLOSE/API (huỷ, huỷ cửa sổ, tiến độ muộn bị loại, không hàng Fail giả), Tab qua vòng lặp shell thật, thứ tự hàng + đánh dấu tốt nhất, sắp xếp tăng/giảm số, giữ hàng chọn, màu hàng, lượt hai xoá hàng cũ, Browse (owner = cửa sổ) + huỷ, Open report/folder, đổi ngôn ngữ, bố cục + status dài 100/150 %, rò handle, cổng: một cửa sổ, mở lại sau khi đóng, Dispose đóng khi đang chạy, ActionProfiles Apply/huỷ |
 | `.../SecondaryWindowRoutingTests` | (chỉnh) | Benchmark/ActionProfiles do cổng Win32 nhận, cầu chỉ còn Settings/Recovery, AOT: Settings + Recovery báo, Benchmark mở thật |
 | `Shell.WpfBridge.Tests/LazyLoadTests` | (chỉnh) | tiến trình sạch: sáu cửa sổ Win32 (Benchmark modeless + ActionProfiles) mở/đóng, KHÔNG nạp WPF/cầu; `ShellWiringTests`: Tab tới Benchmark Win32 qua bộ lọc shell |
 | `Shell.Integration.Tests/ShellNativeDialogsIntegrationTests` | +1 | shell thật, cầu vắng: Benchmark owner = HWND shell, shell không bị khoá, mở lần hai không tạo cửa sổ, chạy THẬT 32 profile trên JPEG, đóng SHELL khi đang đo: thoát mã 0, không treo |
 | `NativeDialogSnapshotTests` / `...WindowsTests` (Manual) | 3 | `PHOTOREVIEW_DIALOG_SNAPSHOTS=<dir>`: `gallery*.png`, `actionprofiles-*`, `benchmark-*` (en/vi, 100 %/150 %, đã sắp xếp, cửa sổ danh sách thả) |
 
-Chạy 2026-10-13 (desktop ẩn `PRWp35g2`, filter CI `Category!=Manual&Category!=Native`): {{SUITES}}. Lặp bộ mới (`Dialogs.Native`, {{LOOP_CASES}} ca/lượt): {{LOOP_RESULT}}.
+Chạy 2026-10-13 (desktop ẩn `PRWp35g2`, filter CI `Category!=Manual&Category!=Native`): `Shell.Tests` 1 201, `Shell.Integration.Tests` 145, `Shell.WpfBridge.Tests` 39 (+2 thủ công), `Architecture.Tests` 158, `App.Tests` 2 593, `Integration.Tests` 1 410 - 0 lỗi. Lặp bộ mới (`Dialogs.Native`, 170 ca/lượt): 50 lượt, 50 đạt, 0 lỗi (không lượt nào treo).
 
 ## 4. Số đo
 
-{{MEASURE}}
+Đo trên `PhotoReview.exe` THẬT (bản probe tạm KHÔNG commit: biến môi trường `PR_WP35G2_PROBE`, `--smoke` + một JPEG, owner = HWND shell,
+desktop ẩn riêng `PRWp35g2run`, dữ liệu cô lập `PHOTOREVIEW_DATA_ROOT`), 2026-10-13, máy yên (không build/test chạy song song). **Hai bản xen kẽ**
+R2R hybrid (publish mặc định) và Native AOT, 6 lượt mỗi bản (R2R, AOT, R2R, AOT...), mỗi tiến trình mở Action profiles (modal) và Benchmark
+(modeless) x 8 vòng. Đo từ lệnh mở tới khi cửa sổ đã tạo + bố cục + hiện (callback `ready`, trước khung vẽ đầu):
+
+| Cửa sổ (ms) | R2R lần đầu: median / max (n=6) | R2R các lần sau: median / p95 (n=42) | AOT lần đầu: median / max | AOT các lần sau: median / p95 |
+|---|---|---|---|---|
+| ActionProfiles (modal, 3 hàng) | 47,7 / 56,2 | 26,2 / 31,3 | 38,3 / 41,9 | 25,4 / 29,0 |
+| Benchmark (modeless, 32 profile) | 39,5 / 66,3 | 34,2 / 38,8 | 37,4 / 40,7 | 33,3 / 37,5 |
+
+Cổng "mở <= 150 ms": ĐẠT (tệ nhất 66 ms, Benchmark lần đầu R2R). So với WPF: 170-215 ms (nóng), 470-690 ms (lần đầu) theo spike S3. Cổng "không nạp
+WPF": cả `LazyLoadTests.NativeSecondaryWindows_OpenWithoutLoadingWpfOrTheBridge` (tiến trình sạch, DI thật, sáu cửa sổ) và probe (0 assembly
+`Presentation*`/`WindowsBase`/`System.Xaml` ở mọi lượt, cả R2R lẫn AOT). ILC: `tools/check-aot-warnings.ps1 -RequireToolchain` = **0 cảnh báo**,
+`PhotoReview.exe` AOT 11,9 MB (lần đầu có 2 cảnh báo IL2026/IL3050 từ `BenchmarkReport.ToJson`: đã sửa bằng `JsonSerializerContext`; thư mục
+publish tạm đã dọn). Không treo khi đóng shell lúc Benchmark đang đo thật 32 profile: `ShellNativeDialogsIntegrationTests` thoát mã 0.
 
 ## 5. Đột biến (hai bước, `docs/MUTATION-TESTING.md`)
 
-{{MUTATION}}
+32 đột biến thủ công (script ở scratchpad, build Release + test trên desktop ẩn, worktree riêng). Bước 1 = `Shell.Tests` lọc `Dialogs.Native` (170 ca);
+bước 2 (chỉ kẻ sống) = toàn `Shell.Tests` (CI filter); `Shell.Integration.Tests`/`Shell.WpfBridge.Tests` phủ cổng/shell (đã xanh trên mã gốc).
+
+| # | Đột biến | Kết quả |
+|---|---|---|
+| M01 | combobox không có chủ đề dark | chết bước 1 |
+| M02 | không áp chủ đề cho danh sách thả / header listview | chết bước 1 |
+| M03 | radio/group box không dùng dáng cổ điển | chết bước 1 |
+| M04 | progress không dùng chủ đề dark (làm lại trên mã cuối vì đổi từ màu tay sang chủ đề) | chết bước 1 |
+| M05 | modeless vô hiệu hoá owner (như modal) | chết bước 1 |
+| M06 | không đăng ký bộ lọc IsDialogMessage vào vòng lặp shell | chết bước 1 |
+| M07 | Esc lúc đang chạy không huỷ lượt chạy (đóng cửa sổ) | chết bước 1 |
+| M08 | đóng cửa sổ không dispose presenter (không huỷ) | chết bước 1 |
+| M09 | bộ lọc modeless không gọi IsDialogMessage | chết bước 1 |
+| M10 | mở lần hai tạo cửa sổ thứ hai | chết bước 1 |
+| M11 | Dispose cổng không đóng cửa sổ modeless | chết bước 1 |
+| M12 | router bỏ qua cổng Win32 cho ActionProfiles | chết bước 1 |
+| M13 | cổng Win32 không nhận Benchmark (rơi về cầu WPF) | chết bước 1 |
+| M14 | progress không kẹp 0..1 | SỐNG, **tương đương**: `PBM_SETPOS` tự kẹp vào khoảng (chỉ NaN khác, đã đổi thành 0 ở nhánh còn lại); giữ kẹp vì tường minh |
+| M15 | sắp xếp luôn tăng | chết bước 1 |
+| M16 | cột P95 so sánh theo chữ | chết bước 1 |
+| M17 | nút Cancel không bật khi chạy | chết bước 1 |
+| M18 | nút Run không khoá khi chạy | chết bước 1 |
+| M19 | tô hàng tốt nhất bị đảo | chết bước 1 |
+| M20 | đổi chọn hàng không lưu hàng trước | chết bước 1 |
+| M21 | Apply bỏ qua kết quả presenter | chết bước 1 |
+| M22 | thao tác (combo) luôn Move | chết bước 1 |
+| M23 | Run chạy mọi profile thay vì các profile đã chọn | chết bước 1 |
+| M24 | tooltip profile hiện tên thay vì mô tả | chết bước 1 |
+| M25 | bảng không đồng bộ khi presenter xoá/thêm hàng | chết bước 1 (`ASecondRun_ClearsTheOldRows_BeforeItsFirstResult`) |
+| M26 | mũi tên sắp xếp vẽ nhầm cột | chết bước 1 (`ListView_HeaderShowsTheSortArrowOnlyOnTheSortedColumn`) |
+| M27 | không vẽ huy hiệu | chết bước 1 (lần đầu lỗi biên dịch do analyzer; làm lại dạng `&& badge.Length > 100`) |
+| M28 | hàng chọn không tô màu chọn | chết bước 1 |
+| M29 | IDCANCEL: OnCancel đảo ngược | chết bước 1 (25 ca, cả bộ GĐ1) |
+| M30 | lớp ListView không có tên trong template | chết bước 1 (27 ca) |
+| M31 | Import không thay danh sách | chết bước 1 |
+| M32 | Apply hợp lệ bị coi là không hợp lệ | chết bước 1 |
+
+Tổng: 32 chạy; 31 chết ở bước 1; 1 tương đương (M14). Còn sống thật: 0. Đột biến chạy trên commit f084fc96; sau đó chỉ
+đổi progress sang chủ đề (M04 chạy lại trên mã cuối, chết) và bố cục dòng trạng thái (không có đột biến riêng: `Layout_AtTwoScales...` phủ).
 
 ## 6. Nhìn bằng mắt và phần CHƯA kiểm được bằng máy
 
 **Đã nhìn bằng mắt** (ảnh PNG do `NativeDialogSnapshot*` ghi bằng `PrintWindow` trên desktop ẩn, có comctl32 v6 như exe thật):
-{{VISUAL}}
+ảnh `gallery*.png`, `actionprofiles-{en,vi}[-150]`, `benchmark-{en,vi}[-sorted|-150]`, danh sách thả `gallery-combo-list`):
+- ListView: nền `#171717`, hàng xen kẽ `Dark.Panel`/`Dark.RowAlt`, hàng tốt nhất xanh, hàng lỗi đỏ, header `Dark.Surface` chữ sáng + mũi tên sắp xếp; đọc
+  được ở 100 % và 150 %, tiếng Việt không bị cắt (cột chia theo dialog-unit).
+- ComboBox: ô chọn tối viền sáng + mũi tên; danh sách thả tối chữ sáng (dòng chọn màu hệ thống, xem phần chưa kiểm).
+- Listbox đa chọn owner-draw: chọn `Dark.Selection`, huy hiệu viên thuốc, không chồng chữ ở 150 % sau khi đặt chiều cao dòng theo DPI.
+- Progress (vạch trắng trên nền tối), trackbar (đường sáng + núm xanh), edit nhiều dòng có thanh cuộn tối, checkbox xanh, radio/group box chữ sáng.
+- Sửa nhờ ảnh chụp (bốn lần): chữ radio/group box xám gần vô hình -> dáng cổ điển; header listview chữ xám -> tự vẽ; progress cổ điển có khung 3D
+  trắng chói -> chủ đề; hàng huy hiệu chồng chữ ở 150 % -> `LB_SETITEMHEIGHT` theo DPI.
 
 **Chưa kiểm được bằng máy / mắt** (ghi để người dùng kiểm tay):
 - Title bar tối và DPI hai màn hình thật: như GĐ1 (ảnh chụp trên desktop ẩn không có DWM tổng hợp; chỉ mô phỏng `WM_DPICHANGED`).
@@ -91,7 +151,7 @@ Chạy 2026-10-13 (desktop ẩn `PRWp35g2`, filter CI `Category!=Manual&Category
 
 Điều kiện dừng (dark của ListView/ComboBox không chấp nhận được, hoặc công > 1,5 lần ước 28-42 giờ): **chưa kích hoạt**. Ảnh chụp cho thấy listview (header tối,
 hàng tô màu, sắp xếp), combobox (ô + danh sách thả), listbox đa chọn, progress, trackbar, group box/radio đều đọc được; combobox/listview cần thêm mã riêng
-(vẽ header, tô hàng, chủ đề cổ điển cho radio/group box) nhưng trong phạm vi khung. Quy mô: ~{{LOC_SRC}} dòng `src/` mới ({{LOC_TEST}} dòng test).
+(vẽ header, tô hàng, chủ đề cổ điển cho radio/group box) nhưng trong phạm vi khung. Quy mô: ~2 600 dòng `src/` mới (2 900 dòng test).
 
 ## 8. Quyết định (CHƯA XÁC NHẬN) và hoàn tác
 
