@@ -1,6 +1,6 @@
 ﻿---
 id: CI-OPTIMIZE-ROUND2
-order: 1250
+order: 1260
 summary: |-
   CI vÃ²ng 2: 6 job test + compile-gate (build test bá» analyzer, build báº±ng solution filter), tÆ°á»ng ~395 s xuá»‘ng ~200 s (CHÆ¯A XÃC NHáº¬N, 2026-10-14).
 ---
