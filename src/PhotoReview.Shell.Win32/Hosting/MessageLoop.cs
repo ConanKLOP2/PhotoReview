@@ -24,6 +24,9 @@ internal interface IRawMessageFilter : IMessageFilter
     bool PreFilterRawMessage(in Msg message);
 }
 
+/// <summary>WP-35 GĐ1: hộp thoại modal nhận trước một message của vòng lặp lồng (<c>IsDialogMessage</c>); true = đã xử lý.</summary>
+internal delegate bool NestedMessageClaim(ref Msg message);
+
 /// <summary>
 /// Vòng lặp của UI thread shell (NO-WPF-EXEC-PLAN thẻ WP-14). Mỗi lượt, theo thứ tự:
 /// <list type="number">
@@ -161,8 +164,65 @@ internal sealed unsafe class MessageLoop
         }
     }
 
+    /// <summary>
+    /// WP-35 GĐ1: vòng lặp LỒNG cho hộp thoại modal Win32 (cùng cấu trúc lượt như <see cref="Run"/>: việc dispatcher mức cao, đồng
+    /// hồ khung, bộ lọc phím của cửa sổ WPF modeless, việc nền) nên shell vẫn vẽ khung và cửa sổ phụ WPF modeless vẫn nhận phím
+    /// khi hộp thoại Win32 đang mở. <paramref name="claim"/> nhận message trước bộ lọc (IsDialogMessage). Kết thúc khi
+    /// <paramref name="isDone"/> true hoặc gặp WM_QUIT - khi đó WM_QUIT được POST LẠI cho vòng lặp ngoài (bài học #486: vòng lồng
+    /// không được nuốt WM_QUIT) và hàm trả false.
+    /// </summary>
+    /// <returns>True khi kết thúc vì <paramref name="isDone"/>; false khi kết thúc vì WM_QUIT.</returns>
+    public bool RunNested(Func<bool> isDone, NestedMessageClaim? claim = null)
+    {
+        ArgumentNullException.ThrowIfNull(isDone);
+        _dispatcher.VerifyAccess();
+        while (!isDone())
+        {
+            PassCount++;
+            if (_dispatcher.HasHighPriorityWork)
+            {
+                _dispatcher.RunHighPriorityBatch();
+            }
+
+            PollClocks();
+
+            if (PumpMessages(out var exitCode, claim))
+            {
+                Quit(exitCode);
+                return false;
+            }
+
+            if (isDone())
+            {
+                break;
+            }
+
+            if (_dispatcher.HasHighPriorityWork)
+            {
+                continue;
+            }
+
+            if (_dispatcher.HasBackgroundWork)
+            {
+                if (!IsMessagePending())
+                {
+                    _dispatcher.TryRunBackground();
+                }
+
+                continue;
+            }
+
+            if (!IsMessagePending())
+            {
+                Wait();
+            }
+        }
+
+        return true;
+    }
+
     /// <returns>True khi gặp WM_QUIT.</returns>
-    private bool PumpMessages(out int exitCode)
+    private bool PumpMessages(out int exitCode, NestedMessageClaim? claim = null)
     {
         exitCode = 0;
         Msg message;
@@ -179,7 +239,11 @@ internal sealed unsafe class MessageLoop
                 return true;
             }
 
-            if (!Filtered(message))
+            if (claim is not null && claim(ref message))
+            {
+                WndProcThunk.RethrowPending();
+            }
+            else if (!Filtered(message))
             {
                 User32.TranslateMessage(&message);
                 User32.DispatchMessage(&message);

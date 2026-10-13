@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Interop;
@@ -195,15 +195,16 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
         await harness.WaitForNoOwnedWindowAsync("zoom prompt closed");
 
         var accepted = harness.Ui.InvokeAsync(() => wired.Zoom.PromptCustomZoom(100));
-        await harness.WaitForOwnedWindowAsync("zoom prompt shown again");
+        var dialog = await harness.WaitForOwnedWindowAsync("zoom prompt shown again");
         await harness.Ui.InvokeAsync(() =>
         {
-            var window = VisibleWindow();
-            ((System.Windows.Controls.TextBox)window.FindName("PercentText")).Text = "175";
-            Invoke(window, "Ok_Click");
+            // WP-35 GĐ1: the prompt is a native Win32 dialog (edit id 101, Apply = IDOK), not a WPF window.
+            Assert.True(PhotoReview.Shell.Interop.User32.SetWindowText(PhotoReview.Shell.Interop.User32.GetDlgItem(dialog, 101), "175"));
+            PhotoReview.Shell.Interop.User32.PostMessage(dialog, 0x0111 /* WM_COMMAND */, 1 /* IDOK */, 0);
         });
 
         Assert.Equal(175, await accepted);
+        Assert.False(wired.Ports.Port.Value is null);
     }
 
     [Fact]
@@ -254,8 +255,9 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
     {
         await using var harness = await BridgeHarness.StartAsync();
         await using var wired = await Wired.StartAsync(harness);
-        var shown = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowDiagnostics()); // nạp cầu trên UI thread (host gắn thread này)
-        BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("diagnostics shown"));
+        // Recovery (chưa có hộp thoại Win32) nạp cầu WPF trên UI thread (host gắn thread này); Diagnostics không còn nạp cầu.
+        var shown = harness.Ui.InvokeAsync(() => wired.Dialogs.ShowRecovery());
+        BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("recovery shown"));
         await shown;
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => Task.Run(() => wired.Dialogs.ShowRecovery()));
@@ -277,8 +279,13 @@ public sealed class ShellWiringTests(ITestOutputHelper output)
 
         await using var absent = await Wired.StartAsync(harness, s => s.AddSingleton<SecondaryWindowPortLoader>((_, _) => null));
         await harness.Ui.InvokeAsync(() => absent.Dialogs.ShowRecovery()); // cổng tạm: không cửa sổ, không ném
-        Assert.Null(await harness.Ui.InvokeAsync(() => absent.Zoom.PromptCustomZoom(100)));
         Assert.Empty(harness.OwnedVisibleWindows());
+
+        // WP-35 GĐ1: cầu vắng (mô phỏng AOT) nhưng hộp thoại zoom là Win32 gốc nên vẫn mở được; đóng = huỷ = null.
+        var zoom = harness.Ui.InvokeAsync(() => absent.Zoom.PromptCustomZoom(100));
+        BridgeHarness.Close(await harness.WaitForOwnedWindowAsync("native zoom prompt without the bridge"));
+        Assert.Null(await zoom);
+        await harness.WaitForNoOwnedWindowAsync("native zoom prompt closed");
     }
 
     private sealed class NoLauncher : IShellLauncher

@@ -969,5 +969,6 @@
   "status.secondaryUnavailable.recovery": "Cửa sổ Phục hồi không có trong bản này; hãy chạy phục hồi ở bản đầy đủ.",
   "status.secondaryUnavailable.skippedFiles": "Cửa sổ Tệp bị bỏ qua không có trong bản này.",
   "status.secondaryUnavailable.batchReview": "Cửa sổ Duyệt hàng loạt không có trong bản này; không có gì bị thay đổi.",
-  "status.secondaryUnavailable.benchmark": "Cửa sổ Benchmark không có trong bản này."
+  "status.secondaryUnavailable.benchmark": "Cửa sổ Benchmark không có trong bản này.",
+  "diagnostics.copy": "Sao chép"
 }

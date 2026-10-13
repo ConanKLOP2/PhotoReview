@@ -762,5 +762,6 @@
   "status.secondaryUnavailable.recovery": "Status line for the Recovery command in the Native AOT build; no data is changed.",
   "status.secondaryUnavailable.skippedFiles": "Status line for the skipped-files list in the Native AOT build.",
   "status.secondaryUnavailable.batchReview": "Status line for the batch review in the Native AOT build; the batch is not run.",
-  "status.secondaryUnavailable.benchmark": "Status line for the Benchmark command in the Native AOT build."
+  "status.secondaryUnavailable.benchmark": "Status line for the Benchmark command in the Native AOT build.",
+  "diagnostics.copy": "Button under the diagnostics table: copies every label and value to the clipboard (tab-separated lines)."
 }

@@ -34,6 +34,7 @@ Settings/Diagnostics/Recovery... mà không có phản hồi nào.
 - Ghi chú (cập nhật 2026-10-13): việc nối cầu vào exe đã làm ở [NOWPF-SHELL-WIRE-WPF-BRIDGE](NOWPF-SHELL-WIRE-WPF-BRIDGE.md): bản không-AOT nạp cầu
   WPF lười nên các lệnh mở cửa sổ thật; fallback này chỉ còn chạy khi cầu vắng (bản AOT, hoặc thiếu assembly) - test fallback mô phỏng bằng
   `SecondaryWindowPortLoader` trả `null`.
+- Ghi chú (cập nhật 2026-10-13, WP-35 GĐ1): Diagnostics, SkippedFiles, BatchReview và hộp zoom đã có hộp thoại Win32 gốc ([NOWPF-WP35-G1-WIN32-DIALOGS](NOWPF-WP35-G1-WIN32-DIALOGS.md)) nên bản AOT MỞ THẬT các cửa sổ này; `SecondaryWindowRouter` chỉ rơi về lớp này cho Settings, Recovery, Benchmark (và ActionProfiles qua Settings). Các phương thức `Diagnostics()`/`SkippedFiles()`/`BatchReview()` và ba khoá tương ứng chỉ còn dùng khi `Win32DialogService` được dựng không qua router (test).
 
 ## 3. Kiểm chứng
 

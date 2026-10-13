@@ -24,6 +24,24 @@ internal interface ISecondaryWindowPort
 
     /// <summary>WP-19b: zoom tuỳ chọn (<c>IZoomPromptService</c>); null khi huỷ.</summary>
     int? PromptCustomZoom(nint ownerHwnd, int currentPercent);
+
+    /// <summary>
+    /// WP-35: cổng này tự thực thi cửa sổ <paramref name="kind"/>? <see cref="SecondaryWindowRouter"/> hỏi để chọn cổng Win32 hay
+    /// cầu WPF theo từng cửa sổ. Mặc định true (cầu WPF và các cổng giả của test làm được mọi cửa sổ).
+    /// </summary>
+    bool Supports(SecondaryWindowKind kind) => true;
+}
+
+/// <summary>Các cửa sổ phụ mà <see cref="ISecondaryWindowPort"/> có thể thực thi.</summary>
+internal enum SecondaryWindowKind
+{
+    Settings,
+    Recovery,
+    Diagnostics,
+    Benchmark,
+    SkippedFiles,
+    BatchReview,
+    ZoomPrompt,
 }
 
 /// <summary>
