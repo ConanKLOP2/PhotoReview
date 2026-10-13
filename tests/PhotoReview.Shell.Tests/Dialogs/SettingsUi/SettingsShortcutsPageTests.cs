@@ -955,6 +955,25 @@ public sealed class SettingsShortcutsPageTests : IDisposable
 
         var all = ShortcutsSettingsPage.AllRows.Select(r => page.Cell(r.Property)).ToList();
         var labels = all.Select(cell => RectInViewport(d, cell.Label)).ToList();
+        // A row is as tall as its (wrapped) label: the next label of the same column starts below this one with a gap.
+        for (var i = 0; i < all.Count; i++)
+        {
+            var box = RectInViewport(d, all[i].Box);
+            for (var j = i + 1; j < all.Count; j++)
+            {
+                var other = RectInViewport(d, all[j].Box);
+                if (other.Left == box.Left && other.Top > box.Top)
+                {
+                    if (labels[j].Top < labels[i].Bottom + 3)
+                    {
+                        yield return $"{label}: label {j} is closer than 3 px below label {i}";
+                    }
+
+                    break;
+                }
+            }
+        }
+
         for (var i = 0; i < all.Count; i++)
         {
             for (var j = 0; j < all.Count; j++)
