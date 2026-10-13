@@ -146,6 +146,48 @@ public sealed class SettingsShortcutsPageTests : IDisposable
     }
 
     [Fact]
+    public void RowOrder_IsTheDocumentedReadingOrder_OfThe27Commands()
+    {
+        string[] expected =
+        [
+            "Next", "Previous", "FirstImage", "LastImage", "NextFolder", "PreviousFolder", "OpenFolder", "ToggleCaptureMember",
+            "ZoomIn", "ZoomOut", "ZoomActualSize", "ToggleFit", "Fullscreen", "ToggleInfoOverlay", "ClickZoom", "FitWidth", "FitHeight",
+            "FitWidth2", "ToggleKeepZoom", "CustomZoom", "Refresh",
+            "Skip", "Undo", "Compare", "MoveToFolder", "CopyToFolder", "SendToRecycleBin",
+        ];
+        Assert.Equal(expected, ShortcutsSettingsPage.AllRows.Select(row => row.Property).ToArray());
+    }
+
+    [Fact]
+    public void AKeyBox_IsPaintedLikeAnInput_NotLikeALabel()
+    {
+        Show(new AppSettings(), (d, _) =>
+        {
+            var page = PageOf(d);
+            var viewport = H(d, SettingsDialog.ViewportId(d.ActivePageIndex));
+            var box = Box(d, nameof(ShortcutMappings.Next));
+            var label = H(d, page.Cell(nameof(ShortcutMappings.Next)).Label);
+            var hdc = User32.GetDC(box);
+            try
+            {
+                var boxBrush = User32.SendMessage(viewport, 0x0138 /* WM_CTLCOLORSTATIC */, hdc, box);
+                var labelBrush = User32.SendMessage(viewport, 0x0138, hdc, label);
+                Assert.NotEqual(0, boxBrush);
+                Assert.NotEqual(0, labelBrush);
+                Assert.NotEqual(boxBrush, labelBrush);
+                Assert.Equal(boxBrush, User32.SendMessage(viewport, 0x0138, hdc, H(d, page.Cell(nameof(ShortcutMappings.Skip)).Box)));
+                Assert.Equal(Gdi32.GetBkColor(hdc), DialogColors.Input);
+            }
+            finally
+            {
+                _ = User32.ReleaseDC(box, hdc);
+            }
+
+            d.Close();
+        });
+    }
+
+    [Fact]
     public void KeyBoxes_FollowTheirLabel_InZOrderAndTabOrder_AndClearButtonsFollowTheirBox()
     {
         Show(new AppSettings(), (d, _) =>
@@ -258,56 +300,82 @@ public sealed class SettingsShortcutsPageTests : IDisposable
 
     // ---- bắt phím ----------------------------------------------------------------------------------------------------------------
 
-    public static TheoryData<uint, string> CapturedKeys()
+    private static IEnumerable<(uint VirtualKey, string Expected)> CapturedKeys()
     {
-        var data = new TheoryData<uint, string>
+        (uint, string)[] keys =
+        [
+            (0x20, "Space"), (0x25, "Left"), (0x26, "Up"), (0x27, "Right"), (0x28, "Down"), (0x24, "Home"), (0x23, "End"),
+            (0x21, "PageUp"), (0x22, "PageDown"), (0x2D, "Insert"), (0x2E, "Delete"), (0x08, "Back"), (0x0D, "Enter"),
+            (0x41, "A"), (0x5A, "Z"), (0x30, "D0"), (0x31, "D1"), (0x39, "D9"),
+            (0x60, "NumPad0"), (0x69, "NumPad9"), (0x6A, "Multiply"), (0x6B, "Add"), (0x6D, "Subtract"), (0x6E, "Decimal"),
+            (0x6F, "Divide"), (0x14, "CapsLock"), (0x2C, "PrintScreen"), (0x13, "Pause"), (0x90, "NumLock"), (0x91, "Scroll"),
+            (0x5D, "Apps"), (0xBA, "OemSemicolon"), (0xBB, "OemPlus"), (0xBC, "OemComma"), (0xBD, "OemMinus"), (0xBE, "OemPeriod"),
+            (0xBF, "OemQuestion"), (0xC0, "OemTilde"), (0xDB, "OemOpenBrackets"), (0xDC, "OemPipe"), (0xDD, "OemCloseBrackets"),
+            (0xDE, "OemQuotes"), (0xE2, "OemBackslash"),
+        ];
+        foreach (var key in keys)
         {
-            { 0x20, "Space" }, { 0x25, "Left" }, { 0x26, "Up" }, { 0x27, "Right" }, { 0x28, "Down" }, { 0x24, "Home" }, { 0x23, "End" },
-            { 0x21, "PageUp" }, { 0x22, "PageDown" }, { 0x2D, "Insert" }, { 0x2E, "Delete" }, { 0x08, "Back" }, { 0x0D, "Enter" },
-            { 0x41, "A" }, { 0x5A, "Z" }, { 0x30, "D0" }, { 0x31, "D1" }, { 0x39, "D9" },
-            { 0x60, "NumPad0" }, { 0x69, "NumPad9" }, { 0x6A, "Multiply" }, { 0x6B, "Add" }, { 0x6D, "Subtract" }, { 0x6E, "Decimal" },
-            { 0x6F, "Divide" }, { 0x14, "CapsLock" }, { 0x2C, "PrintScreen" }, { 0x13, "Pause" }, { 0x90, "NumLock" }, { 0x91, "Scroll" },
-            { 0x5D, "Apps" }, { 0xBA, "OemSemicolon" }, { 0xBB, "OemPlus" }, { 0xBC, "OemComma" }, { 0xBD, "OemMinus" }, { 0xBE, "OemPeriod" },
-            { 0xBF, "OemQuestion" }, { 0xC0, "OemTilde" }, { 0xDB, "OemOpenBrackets" }, { 0xDC, "OemPipe" }, { 0xDD, "OemCloseBrackets" },
-            { 0xDE, "OemQuotes" }, { 0xE2, "OemBackslash" },
-        };
-        for (uint f = 1; f <= 24; f++)
-        {
-            data.Add(0x6F + f, "F" + f);
+            yield return key;
         }
 
-        return data;
+        for (uint f = 1; f <= 24; f++)
+        {
+            yield return (0x6F + f, "F" + f);
+        }
     }
 
-    [Theory]
-    [MemberData(nameof(CapturedKeys))]
-    public void APressedKey_IsWrittenAsItsCanonicalName_ThroughTheBoxSubclass(uint virtualKey, string expected)
+    [Fact]
+    public void APressedKey_IsWrittenAsItsCanonicalName_ThroughTheBoxSubclass()
     {
+        var wrong = new List<string>();
         Show(new AppSettings(), (d, _) =>
         {
             var box = Box(d, nameof(ShortcutMappings.Next));
-            Press(box, virtualKey);
-            Assert.Equal(expected, BoxText(d, nameof(ShortcutMappings.Next)));
+            foreach (var (virtualKey, expected) in CapturedKeys())
+            {
+                SetText(d, PageOf(d).Cell(nameof(ShortcutMappings.Next)).Box, string.Empty);
+                Press(box, virtualKey);
+                var actual = BoxText(d, nameof(ShortcutMappings.Next));
+                if (actual != expected)
+                {
+                    wrong.Add($"0x{virtualKey:X2}: expected \"{expected}\", got \"{actual}\"");
+                }
+            }
+
             d.Close();
         });
+        Assert.Empty(wrong);
     }
 
-    [Theory]
-    [MemberData(nameof(CapturedKeys))]
-    public void APressedKey_IsWrittenAsItsCanonicalName_ThroughTheDialogLoopFilter(uint virtualKey, string expected)
+    [Fact]
+    public void APressedKey_IsWrittenAsItsCanonicalName_ThroughTheDialogLoopFilter()
     {
+        var wrong = new List<string>();
         Show(new AppSettings(), (d, _) =>
         {
             var box = Box(d, nameof(ShortcutMappings.Previous));
             User32.SetFocus(box);
-            Assert.True(FilterKey(d, box, virtualKey), "the filter takes the key before IsDialogMessage sees it");
-            Assert.Equal(expected, BoxText(d, nameof(ShortcutMappings.Previous)));
+            foreach (var (virtualKey, expected) in CapturedKeys())
+            {
+                SetText(d, PageOf(d).Cell(nameof(ShortcutMappings.Previous)).Box, string.Empty);
+                if (!FilterKey(d, box, virtualKey))
+                {
+                    wrong.Add($"0x{virtualKey:X2}: the filter must take the key before IsDialogMessage sees it");
+                }
+
+                var actual = BoxText(d, nameof(ShortcutMappings.Previous));
+                if (actual != expected)
+                {
+                    wrong.Add($"0x{virtualKey:X2}: expected \"{expected}\", got \"{actual}\"");
+                }
+            }
+
             Assert.False(d.IsClosed, "Enter/Space/arrows never reach the dialog manager from a key box");
             Assert.False(d.Saved);
             d.Close();
         });
+        Assert.Empty(wrong);
     }
-
     [Fact]
     public void EveryCapturedKey_RoundTripsThroughTheShortcutParser_ToTheSameKey()
     {
@@ -623,9 +691,12 @@ public sealed class SettingsShortcutsPageTests : IDisposable
             [nameof(ShortcutMappings.FirstImage)] = "PageUp",
             [nameof(ShortcutMappings.NextFolder)] = "Prior",
             [nameof(ShortcutMappings.Skip)] = "Space",
+            [nameof(ShortcutMappings.Compare)] = "c",
+            [nameof(ShortcutMappings.Undo)] = "C",
         });
         Assert.Equal(new[] { nameof(ShortcutMappings.FirstImage), nameof(ShortcutMappings.NextFolder), nameof(ShortcutMappings.Next),
-            nameof(ShortcutMappings.Previous) }.Order(StringComparer.Ordinal), problems.Order(StringComparer.Ordinal));
+            nameof(ShortcutMappings.Previous), nameof(ShortcutMappings.Compare), nameof(ShortcutMappings.Undo) }.Order(StringComparer.Ordinal),
+            problems.Order(StringComparer.Ordinal));
     }
 
     [Fact]
