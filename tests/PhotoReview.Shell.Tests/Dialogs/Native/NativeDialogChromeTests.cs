@@ -344,17 +344,22 @@ public sealed class NativeDialogChromeTests
         Assert.True(findings.Count == 0, string.Join("; ", findings.Select(f => $"{f.Class} {f.Control}: {f.Problem}")));
     }
 
+    /// <summary>
+    /// Cửa sổ Benchmark (modeless, UI thread thật của shell). Activation context của comctl32 v6 PHẢI được bật VÀ tắt trong CÙNG
+    /// MỘT việc của dispatcher: user32 khôi phục ngăn xếp activation khi một WndProc trả về, nên nếu việc bật chạy trong
+    /// WM_APP+1 (loop đang chờ) rồi việc tắt chạy ở lượt khác thì DeactivateActCtx ném SEHException (đo: 15/60 lượt khi tách hai
+    /// việc; CI đỏ ngẫu nhiên ở ca visualStyles: True). Gộp một việc làm lượt bật/tắt lồng nhau đúng thứ tự như ở OnSta.
+    /// </summary>
     private static T RunBenchmark<T>(bool visualStyles, Func<BenchmarkDialog, T> body)
     {
         return Task.Run(async () =>
         {
             await using var ui = await UiThread.StartAsync();
-            IDisposable? styles = null;
-            await ui.InvokeAsync(() => styles = visualStyles ? ActivateVisualStyles() : null);
-            var owner = await ui.InvokeAsync(() => CreateOwner());
-            try
+            return await ui.InvokeAsync(() =>
             {
-                return await ui.InvokeAsync(() =>
+                using var styles = visualStyles ? ActivateVisualStyles() : null;
+                var owner = CreateOwner();
+                try
                 {
                     var dialog = new BenchmarkDialog(@"C:\Photos\trip", ui.Dispatcher,
                         (profile, _) => new IdleSession(), (_, _, _) => null, _ => { }, (_, _, _) => ["a.jpg"],
@@ -369,16 +374,12 @@ public sealed class NativeDialogChromeTests
                     {
                         dialog.Close();
                     }
-                });
-            }
-            finally
-            {
-                await ui.InvokeAsync(() =>
+                }
+                finally
                 {
                     DestroyOwner(owner);
-                    styles?.Dispose();
-                });
-            }
+                }
+            });
         }).GetAwaiter().GetResult();
     }
 
