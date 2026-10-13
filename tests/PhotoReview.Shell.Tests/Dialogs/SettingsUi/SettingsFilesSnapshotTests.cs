@@ -1,4 +1,4 @@
-﻿using PhotoReview.App.Presenters;
+using PhotoReview.App.Presenters;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 using PhotoReview.Shell.Tests.Dialogs.Native;
@@ -10,9 +10,9 @@ using static PhotoReview.Shell.Tests.Dialogs.SettingsUi.SettingsDialogKit;
 namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 
 /// <summary>
-/// WP-35 GÄ3b (thá»§ cÃ´ng): áº£nh chá»¥p trang Files cá»§a Settings Win32, en + vi, 100 % vÃ  150 % (Ä‘áº§u trang vÃ  cuá»‘i trang, cÃ³ Ä‘Æ°á»ng dáº«n trÃ¬nh soáº¡n
-/// tháº£o tiáº¿ng Viá»‡t + radio "an toÃ n khi máº¥t Ä‘iá»‡n" Ä‘Ã£ chá»n). <c>PHOTOREVIEW_DIALOG_SNAPSHOTS=&lt;thÆ° má»¥c&gt; dotnet test --filter
-/// FullyQualifiedName~SettingsFilesSnapshotTests</c>; khÃ´ng cÃ³ biáº¿n thÃ¬ bá» qua.
+/// WP-35 GĐ3b (thủ công): ảnh chụp trang Files của Settings Win32, en + vi, 100 % và 150 % (đầu trang và cuối trang, có đường dẫn trình soạn
+/// thảo tiếng Việt + radio "an toàn khi mất điện" đã chọn). <c>PHOTOREVIEW_DIALOG_SNAPSHOTS=&lt;thư mục&gt; dotnet test --filter
+/// FullyQualifiedName~SettingsFilesSnapshotTests</c>; không có biến thì bỏ qua.
 /// </summary>
 [Collection("GlobalState")]
 [Trait("Category", "Manual")]
