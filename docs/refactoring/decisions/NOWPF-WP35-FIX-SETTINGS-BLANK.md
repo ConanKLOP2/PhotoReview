@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-FIX-SETTINGS-BLANK
-order: 1270
+order: 1280
 summary: |-
   WP-35 hotfix (CHƯA XÁC NHẬN): #503 làm mọi trang Settings Win32 TRỐNG (chỉ còn khung nhóm). Nguyên nhân: WS_CLIPSIBLINGS trên mọi điều khiển + khung nhóm (tạo trước) nằm TRÊN các điều khiển con trong thứ tự Z, nên mỗi con bị trừ vùng của khung. Sửa: đưa BS_GROUPBOX xuống đáy Z (HWND_BOTTOM) khi tạo trang, giữ WS_CLIPSIBLINGS; WS_GROUP của radio chuyển sang điều khiển thật đầu tiên sau khung. Combobox tự thu về chiều cao đóng ngay trong SetWindowPos nên mất lần vẽ đầu: InvalidateRect sau khi đặt chỗ. Test điểm ảnh mới: điều khiển hiện không được toàn màu nền (14/14 đỏ trên master, xanh sau sửa).
 ---

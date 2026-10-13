@@ -1,0 +1,8 @@
+{
+  "solution": {
+    "path": "../../PhotoReview.slnx",
+    "projects": [
+      "tests/PhotoReview.Shell.Tests/PhotoReview.Shell.Tests.csproj"
+    ]
+  }
+}
