@@ -115,7 +115,14 @@ internal sealed unsafe class TimerFrameClock : FrameClockBase
         }
 
         long next;
-        if (_fixedPeriod is null && timing is { RefreshPeriod: > 0 } grid)
+        if (_fixedPeriod is null && (!_hasLastFrame || now - _lastFrame >= _period) && timing is { RefreshPeriod: > 0 })
+        {
+            // perf(gate 3): màn hình đang rỗi (không khung nào trong chu kỳ vừa qua) thì vẽ NGAY thay vì chờ điểm lưới vblank kế:
+            // flip-model Present vẫn được DWM lấy ở vblank kế, nên hình hiện ra cùng lúc hoặc sớm hơn một chu kỳ, còn key->frame
+            // bớt trung bình nửa chu kỳ chờ. Từ khung thứ hai trở đi (hoạt ảnh liên tục) vẫn neo lưới như cũ.
+            next = now;
+        }
+        else if (_fixedPeriod is null && timing is { RefreshPeriod: > 0 } grid)
         {
             var earliest = !_hasLastFrame ? now : Math.Max(now, _lastFrame + (_period / 2));
             next = NextGridPoint(grid, earliest);

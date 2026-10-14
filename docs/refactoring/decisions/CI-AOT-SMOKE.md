@@ -1,6 +1,6 @@
 ---
 id: CI-AOT-SMOKE
-order: 1350
+order: 1360
 summary: |-
   CI publish-aot chạy thật PhotoReview.exe AOT hai lần (--smoke và --smoke <jpg> sinh tại chỗ) để bắt lỗi cắt gọt/ILC; thêm <1 s (CHƯA XÁC NHẬN, 2026-10-14).
 ---
