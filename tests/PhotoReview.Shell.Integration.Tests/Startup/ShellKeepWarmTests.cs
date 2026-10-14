@@ -79,6 +79,7 @@ public sealed class ShellKeepWarmTests
             KeepWarm = new KeepWarmOptions(Enabled: true, WindowMs: 400, IntervalMs: 5),
             KeepWarmWork = () => work,
             KeepWarmTimestamp = clock.Now,
+            Activate = true, // giữ ấm lúc khởi động chỉ áp cho cửa sổ được kích hoạt (như lúc người dùng mở ảnh)
         }, out _);
         var main = run.Main!;
         Assert.NotNull(main.KeepAlive);
