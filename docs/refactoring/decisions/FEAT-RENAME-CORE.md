@@ -123,7 +123,7 @@ Bất biến mới trong `FaultInvariants`: `SourceStillThere` (tên thật), "�
 | M45 | UndoService.Register: bo _moveFingerprints[...] | UndoService.cs:113 | killed buoc 1 | 18 test UndoService (vd 'A failed undo move is journaled Failed and the move stays undoable') |
 
 Tong ket: 45 mutant, tat ca bien dich. Lan chay dau: 32 killed buoc 1, 0 killed chi buoc 2, 13 SONG (M04 M05 M24 M25 M27 M28 M32 M33 M36 M37 M38 M41 M44), 0 tuong duong.
-Sau khi bo sung test mutation trong RenameFileActionTests va sua test M24 (map thieu a.xmp nen bi chan o buoc kiem tra ten truoc, khong toi duoc vong trung dich): ca 13 song deu bi killed o buoc 1; con 0 song that, 0 tuong duong.
+Sau khi bo sung test mutation trong RenameFileActionTests va sua test M24 (map thieu a.xmp nen bi chan o buoc kiem tra ten truoc, khong toi duoc vong trung dich): 12 trong 13 song bi killed o buoc 1; M44 chuyen thanh TUONG DUONG quan sat (test dem mkdir bi bo vi khong on dinh): 0 song that, 1 tuong duong.
 Ghi chu: M05 va M27 tung hien killed buoc 2 mot lan (test flaky ngoai pham vi), chay lai 2 lan deu SONG. Sau khi them test: loc 'Rename' 202 test xanh; ca bo (Category!=Manual&Native&Slow) 3440 test xanh o baseline.
 
 ## 7. Hoàn tác
