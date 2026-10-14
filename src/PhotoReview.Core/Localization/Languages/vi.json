@@ -974,5 +974,6 @@
   "settings.resetPage": "Đặt lại trang này",
   "settings.pagePending": "Trang này chưa có trong cửa sổ cài đặt mới. Các cài đặt của trang giữ nguyên giá trị hiện tại và được lưu không đổi. Để sửa, hãy sửa tệp config.json.",
   "status.menuFailed": "Lỗi menu: {message}",
-  "settings.shortcuts.resetKeys": "Khôi phục phím mặc định"
+  "settings.shortcuts.resetKeys": "Khôi phục phím mặc định",
+  "core.fileAction.renameInvalidName": "Tên tệp mới không hợp lệ: {name}"
 }

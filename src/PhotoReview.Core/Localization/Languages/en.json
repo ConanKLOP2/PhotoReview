@@ -982,5 +982,6 @@
   "settings.resetPage": "Reset this page",
   "settings.pagePending": "This page is not available in the new settings window yet. Its settings keep their current values and are saved unchanged. To edit them, edit config.json.",
   "status.menuFailed": "Menu error: {message}",
-  "settings.shortcuts.resetKeys": "Restore default keys"
+  "settings.shortcuts.resetKeys": "Restore default keys",
+  "core.fileAction.renameInvalidName": "The new file name is not valid: {name}"
 }

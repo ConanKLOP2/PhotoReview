@@ -104,10 +104,11 @@ public sealed class RecoveryFileCheck
             var first = checks[0].Check;
             return new RecoveryCheckResult(entry, first.Source, first.Destination, verdict, checks);
         }
-        var source = CheckPath(entry.Source, entry.Size, entry.LastWriteUtc, compareLastWrite: true);
+        // FEAT-RENAME 2.4: the twin is the other spelling of a case-only rename; only then the stored spelling decides.
+        var source = CheckPath(entry.Source, entry.Size, entry.LastWriteUtc, compareLastWrite: true, entry.Destination);
         var destination = string.IsNullOrWhiteSpace(entry.Destination)
             ? null
-            : CheckPath(entry.Destination, entry.Size, entry.LastWriteUtc, compareLastWrite: false);
+            : CheckPath(entry.Destination, entry.Size, entry.LastWriteUtc, compareLastWrite: false, entry.Source);
         return new RecoveryCheckResult(entry, source, destination, Decide(entry, source, destination));
     }
 
@@ -219,14 +220,14 @@ public sealed class RecoveryFileCheck
         return RecoveryVerdict.Conflict;
     }
 
-    private RecoveryPathCheck CheckPath(string path, long recordedSize, DateTime recordedLastWriteUtc, bool compareLastWrite)
+    private RecoveryPathCheck CheckPath(string path, long recordedSize, DateTime recordedLastWriteUtc, bool compareLastWrite, string? caseTwin)
     {
         var folderExists = false;
         try
         {
             var folder = Path.GetDirectoryName(path);
             folderExists = !string.IsNullOrEmpty(folder) && _fileSystem.DirectoryExists(folder);
-            var stat = _fileSystem.GetFileStat(path);
+            var stat = CaseOnlyRename.StatAs(_fileSystem, path, caseTwin);
             if (stat is null) return new(path, RecoveryPathStatus.Missing, null, null, folderExists);
             var changed = stat.Length != recordedSize || (compareLastWrite && stat.LastWriteUtc != recordedLastWriteUtc);
             return new(path, changed ? RecoveryPathStatus.Changed : RecoveryPathStatus.Exists, stat.Length, stat.LastWriteUtc, folderExists);

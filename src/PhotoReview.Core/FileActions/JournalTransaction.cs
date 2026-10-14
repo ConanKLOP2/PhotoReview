@@ -134,7 +134,8 @@ internal sealed class JournalTransaction : IDisposable
     /// </summary>
     public void VerifyMoved(IFileSystem fileSystem, string source, string destination, string sizeErrorCode)
     {
-        if (fileSystem.FileExists(source))
+        // FEAT-RENAME 2.4: a case-only rename leaves "the source" visible to a case-insensitive FileExists; ask for the spelling.
+        if (CaseOnlyRename.ExistsAs(fileSystem, source, destination))
             throw new JournalCodedException(JournalErrors.MoveSourceNotRemoved);
         VerifyDestination(fileSystem, destination, sizeErrorCode);
     }

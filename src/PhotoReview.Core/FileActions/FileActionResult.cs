@@ -20,4 +20,6 @@ public sealed record FileActionResult(
     // F3: a FAILED Move whose source no longer exists on disk (e.g. the size differed after the move, so the result is
     // unverified). The file is at DestinationPath; the caller must not put Source back into the review catalog.
     // Always computed from the file system after the failure, never assumed; false for Copy/Recycle and successes.
-    bool SourceRemoved = false);
+    bool SourceRemoved = false,
+    // FEAT-RENAME: a rename whose target spelling is the file's current one: nothing was done and nothing was journaled.
+    bool NoChange = false);

@@ -171,13 +171,15 @@ public sealed class UndoService
             var moveReturned = false;
             try
             {
-                if (!_fileSystem.FileExists(move.Destination))
+                // FEAT-RENAME 2.4: undoing a case-only rename: Destination/Source are two spellings of one file; the stored
+                // spelling says where the file is (a plain FileExists would find "the source" and refuse every time).
+                if (!CaseOnlyRename.ExistsAs(_fileSystem, move.Destination, move.Source))
                 {
                     permanentlyBroken = true;
                     throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
                 }
 
-                if (_fileSystem.FileExists(move.Source))
+                if (CaseOnlyRename.ExistsAs(_fileSystem, move.Source, move.Destination))
                 {
                     throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
                 }
@@ -268,7 +270,7 @@ public sealed class UndoService
                 // so the entry can never be undone again. Report the failure once and drop it instead of pushing a dead entry
                 // back for the next Ctrl+Z to trip over.
                 if (moveReturned && !permanentlyBroken
-                    && SafeFileExists(move.Source) && !SafeFileExists(move.Destination))
+                    && SafeFileExistsAs(move.Source, move.Destination) && !SafeFileExistsAs(move.Destination, move.Source))
                 {
                     permanentlyBroken = true;
                 }
@@ -295,9 +297,9 @@ public sealed class UndoService
         }
     }
 
-    private bool SafeFileExists(string path)
+    private bool SafeFileExistsAs(string path, string twin)
     {
-        try { return _fileSystem.FileExists(path); }
+        try { return CaseOnlyRename.ExistsAs(_fileSystem, path, twin); }
         catch (Exception ex) when (IsNonCritical(ex)) { return false; }
     }
 
@@ -405,8 +407,8 @@ public sealed class UndoService
             for (var i = 0; i < undoMembers.Length; i++)
             {
                 var member = undoMembers[i];
-                var sourceStat = _fileSystem.GetFileStat(member.Source);
-                var destinationStat = _fileSystem.GetFileStat(member.Destination!);
+                var sourceStat = CaseOnlyRename.StatAs(_fileSystem, member.Source, member.Destination);
+                var destinationStat = CaseOnlyRename.StatAs(_fileSystem, member.Destination!, member.Source);
                 if (sourceStat is not null && destinationStat is not null)
                     throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
                 // Already back at the original path: only when it is the moved file itself (size AND write time), not any
@@ -462,7 +464,7 @@ public sealed class UndoService
                     if (!string.IsNullOrEmpty(folder)) _fileSystem.CreateDirectory(folder);
                     if (_moveOverride is not null) await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
                     else _fileSystem.Move(member.Source, member.Destination!);
-                    if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
+                    if (CaseOnlyRename.ExistsAs(_fileSystem, member.Source, member.Destination) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
                         throw new JournalCodedException(JournalErrors.VerifySizeChanged);
                     restored.Add(member.Destination!);
                     restoredByThisUndo++;
