@@ -176,13 +176,41 @@ public sealed class FrameClockTests
         using var clock = new TimerFrameClock(new FixedDisplayClock(timing), 0, time.Read, fixedPeriod: null);
         clock.Frame += (_, _) => { };
 
-        var first = clock.ScheduledFrame!.Value;
-        Assert.Equal(timing.LastVBlank + refresh, first); // điểm lưới đầu >= bây giờ
+        // Khung đầu sau khi rỗi: ngay (không chờ lưới); từ khung thứ hai (hoạt ảnh liên tục) neo điểm lưới vblank.
+        Assert.Equal(time.Now, clock.ScheduledFrame!.Value);
         Assert.Equal(refresh, clock.Period);
 
-        time.Now = first;
         Assert.True(clock.OnSignaled());
-        Assert.Equal(first + refresh, clock.ScheduledFrame);
+        var second = clock.ScheduledFrame!.Value;
+        Assert.Equal(timing.LastVBlank + refresh, second); // điểm lưới đầu >= (khung trước + nửa chu kỳ)
+
+        time.Now = second;
+        Assert.True(clock.OnSignaled());
+        Assert.Equal(second + refresh, clock.ScheduledFrame);
+    }
+
+    [Fact]
+    public void TimerClock_WithDisplayTiming_FrameAfterAnIdleGapIsImmediateAgain_ButABurstStaysOnTheGrid()
+    {
+        var refresh = Stopwatch.Frequency / 100;
+        var time = new FakeTime(50_000_000);
+        var timing = new DisplayTiming(LastVBlank: 50_000_000 - (refresh / 3), RefreshPeriod: refresh);
+        using var clock = new TimerFrameClock(new FixedDisplayClock(timing), 0, time.Read, fixedPeriod: null);
+        EventHandler<FrameTickEventArgs> handler = (_, _) => { };
+        clock.Frame += handler;
+        Assert.True(clock.OnSignaled());
+        clock.Frame -= handler;
+
+        // Yêu cầu kế trong cùng chu kỳ (chưa rỗi): vẫn chờ điểm lưới, không vẽ dồn.
+        time.Now += refresh / 10;
+        clock.Frame += handler;
+        Assert.True(clock.ScheduledFrame!.Value > time.Now);
+        clock.Frame -= handler;
+
+        // Rỗi >= một chu kỳ kể từ khung cuối: vẽ ngay tại thời điểm yêu cầu.
+        time.Now += refresh * 3;
+        clock.Frame += handler;
+        Assert.Equal(time.Now, clock.ScheduledFrame);
     }
 
     [Fact]

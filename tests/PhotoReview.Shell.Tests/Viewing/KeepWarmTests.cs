@@ -143,6 +143,35 @@ public sealed class KeepWarmTests
     }
 
     [Fact]
+    public void WarmAtLaunch_ExtendsTheWarmWindowWithoutAnInteraction_AndLeavesTheInteractionCountersAlone()
+    {
+        var h = new Harness(new KeepWarmOptions(true, 3000, 20));
+
+        h.Controller.WarmAtLaunch();
+
+        var until = Assert.Single(h.Activations);
+        Assert.Equal(h.Now + (3000 * Stopwatch.Frequency / 1000), until);
+        Assert.Equal(1, h.Controller.LaunchWarmups);
+        Assert.Equal(0, h.Controller.Activations);
+
+        // Không dùng throttle của tương tác: phím đầu tiên ngay sau đó vẫn kéo dài khoảng giữ ấm bình thường.
+        h.Controller.NoteInteraction();
+        Assert.Equal(2, h.Activations.Count);
+        Assert.Equal(1, h.Controller.Activations);
+    }
+
+    [Fact]
+    public void WarmAtLaunch_WhenDisabled_DoesNothing()
+    {
+        var h = new Harness(new KeepWarmOptions(false, 5000, 20));
+
+        h.Controller.WarmAtLaunch();
+
+        Assert.Empty(h.Activations);
+        Assert.Equal(0, h.Controller.LaunchWarmups);
+    }
+
+    [Fact]
     public void DenseInteractions_AreThrottled_ToOneExtensionPerThrottleWindow()
     {
         var h = new Harness();
