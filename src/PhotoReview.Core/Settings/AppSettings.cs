@@ -6,7 +6,7 @@ namespace PhotoReview.Core.Settings;
 
 public class AppSettings
 {
-    public const int CurrentConfigVersion = 3;
+    public const int CurrentConfigVersion = 4;
     public int ConfigVersion { get; set; } = CurrentConfigVersion;
     public InitialViewMode InitialViewMode { get; set; } = InitialViewMode.Fit;
     [JsonConverter(typeof(SettingsEnumConverter<LoadingMode>))] // RV-S01: unparsable -> undefined -> reset to the default + reported
@@ -256,6 +256,22 @@ public class AppSettings
     /// "Open in External Editor" context-menu entry. Absent in older configs = empty.
     /// </summary>
     public string ExternalEditorPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// FEAT-EXTERNAL-EDITORS (config version 4): the declared external editors, in menu order. Empty (default) = none declared:
+    /// the menu entry then opens Settings. <see cref="ExternalEditorPath"/> is kept equal to the default editor's path for the
+    /// frozen WPF build; configs older than version 4 migrate that path into this list.
+    /// </summary>
+    public List<ExternalEditor> ExternalEditors { get; set; } = [];
+
+    /// <summary>Id of the editor the "Open in default editor" shortcut uses; empty/unknown = the first editor.</summary>
+    public string DefaultExternalEditorId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When true (default), a JPEG that has a RAW companion (the catalog's capture group, else the same name in the same folder
+    /// with a known RAW extension) sends the RAW original to the editor instead of the JPEG.
+    /// </summary>
+    public bool ExternalEditorSendsRawOriginal { get; set; } = true;
 
     /// <summary>How the kinetic glide is timed against the display refresh (smoother on irregular frame delivery).</summary>
     [JsonConverter(typeof(SettingsEnumConverter<KineticGlideSmoothing>))] // RV-S01: unparsable -> undefined -> reset to the default + reported

@@ -87,7 +87,7 @@ public sealed class SecondaryWindowRoutingTests
     private static readonly SecondaryWindowKind[] Win32Kinds =
     [
         SecondaryWindowKind.Diagnostics, SecondaryWindowKind.SkippedFiles, SecondaryWindowKind.BatchReview, SecondaryWindowKind.ZoomPrompt,
-        SecondaryWindowKind.Benchmark, SecondaryWindowKind.ActionProfiles, SecondaryWindowKind.Recovery,
+        SecondaryWindowKind.Benchmark, SecondaryWindowKind.ActionProfiles, SecondaryWindowKind.Recovery, SecondaryWindowKind.ExternalEditors,
     ];
 
     private static (SecondaryWindowRouter Router, Spy Native, List<string> Notices, NoLauncher Launcher) Build(bool nativeSettings = false)

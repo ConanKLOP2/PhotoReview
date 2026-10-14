@@ -34,7 +34,8 @@ public enum ReviewCommandType
     CustomZoom,
     ToggleCaptureMember,
     FitWidth2,
-    Refresh
+    Refresh,
+    OpenInDefaultEditor
 }
 
 /// <summary>Rules about how a resolved command reacts to keyboard auto-repeat.</summary>
@@ -56,7 +57,7 @@ public static class ReviewCommandTypeExtensions
             or ReviewCommandType.MoveToFolder or ReviewCommandType.CopyToFolder or ReviewCommandType.ToggleInfoOverlay
             or ReviewCommandType.Fullscreen or ReviewCommandType.ToggleCompare or ReviewCommandType.ClickZoom
             or ReviewCommandType.ToggleKeepZoom or ReviewCommandType.OpenFolder or ReviewCommandType.CustomZoom
-            or ReviewCommandType.ToggleCaptureMember or ReviewCommandType.Refresh;
+            or ReviewCommandType.ToggleCaptureMember or ReviewCommandType.Refresh or ReviewCommandType.OpenInDefaultEditor;
 }
 
 /// <summary>
@@ -95,4 +96,5 @@ public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIn
     public static ReviewCommand ToggleCaptureMember => new(ReviewCommandType.ToggleCaptureMember);
     public static ReviewCommand FitWidth2 => new(ReviewCommandType.FitWidth2);
     public static ReviewCommand Refresh => new(ReviewCommandType.Refresh);
+    public static ReviewCommand OpenInDefaultEditor => new(ReviewCommandType.OpenInDefaultEditor);
 }

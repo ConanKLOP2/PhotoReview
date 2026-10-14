@@ -246,6 +246,7 @@ public sealed class SettingsStore
         }
 
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: always saved canonical
+        ExternalEditors.Reconcile(settings); // FEAT-EXTERNAL-EDITORS: the legacy path always mirrors the default editor
         settings.ConfigVersion = AppSettings.CurrentConfigVersion;
         var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
         _fileSystem.WriteAllTextAtomic(filePath, json, durable: true);
@@ -494,6 +495,11 @@ public sealed class SettingsStore
             // Q-L1 (ADR 0006): the UI was Vietnamese-only before version 3; existing users keep it. A file that names a
             // language itself (hand-written or imported) keeps that language.
             if (!uiLanguageDeclared) settings.UiLanguage = "vi";
+        }
+        if (settings.ConfigVersion < 4)
+        {
+            // FEAT-EXTERNAL-EDITORS: the single ExternalEditorPath becomes the first (default) entry of the editors list.
+            ExternalEditors.Reconcile(settings);
         }
         if (settings.ConfigVersion < AppSettings.CurrentConfigVersion)
         {

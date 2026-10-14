@@ -596,7 +596,8 @@ public sealed class SettingsFilesPageTests : IDisposable
             GoTo(d, FilesIndex);
             var page = FilesPage(d);
             var radios = page.JournalRadios;
-            var browse = H(d, page.Ids.Browse);
+            // The element declared right before the journal group (the editors group ends with the send-RAW tick box).
+            var browse = H(d, page.EditorIds.SendRaw);
             User32.SetFocus(browse);
             Assert.True(Key(d, browse, VkTab));
             Drain(d);

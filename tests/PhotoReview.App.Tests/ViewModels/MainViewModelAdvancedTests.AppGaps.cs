@@ -23,9 +23,9 @@ public sealed partial class MainViewModelAdvancedTests
         var (vm, _) = CreateViewModel();
         await vm.Presenter.PresentAsync(0);
         _catalog.SetCurrent(1); // the catalog moved, the presenter still shows a
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        _settings.ExternalEditorPath = FakeEditorExe();
         string? launched = null;
-        vm.StartExternalEditor = (_, filePath) => launched = filePath;
+        vm.StartExternalEditor = (_, filePath, _) => launched = filePath;
 
         vm.OpenInExternalEditor();
 
@@ -39,9 +39,9 @@ public sealed partial class MainViewModelAdvancedTests
         _catalog.Reset([a]);
         var (vm, _) = CreateViewModel();
         _catalog.SetCurrent(0);
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        _settings.ExternalEditorPath = FakeEditorExe();
         string? launched = null;
-        vm.StartExternalEditor = (_, filePath) => launched = filePath;
+        vm.StartExternalEditor = (_, filePath, _) => launched = filePath;
 
         vm.OpenInExternalEditor();
 

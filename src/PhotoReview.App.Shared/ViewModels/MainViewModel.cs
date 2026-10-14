@@ -716,42 +716,115 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         return new ViewRefreshOutcome(scalingChanged, resolution);
     }
 
-    /// <summary>Test seam: launches the external editor; default starts the real process (Q-R48).</summary>
-    internal Action<string, string> StartExternalEditor { get; set; } = static (exePath, filePath) =>
+    /// <summary>
+    /// Test seam: launches an external editor (Q-R48); arguments are (exePath, filePath, commandLine). The default starts the real
+    /// process: no shell (UseShellExecute=false), the already-built command line as the argument string.
+    /// </summary>
+    internal Action<string, string, string> StartExternalEditor { get; set; } = static (exePath, _, commandLine) =>
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exePath)
         {
             UseShellExecute = false,
-            ArgumentList = { filePath },
+            Arguments = commandLine,
+            WorkingDirectory = System.IO.Path.GetDirectoryName(exePath) ?? string.Empty,
         });
     };
 
-    /// <summary>Q-R48: true when an editor is configured and a photo is open. The menu item itself is always shown (discoverability); without an editor it opens Settings instead.</summary>
-    public bool CanOpenInExternalEditor => !string.IsNullOrWhiteSpace(Settings.ExternalEditorPath) && HasImages;
+    /// <summary>Q-R48: true when an editor is declared and a photo is open. The menu entry itself is always shown (discoverability); without an editor it opens Settings instead.</summary>
+    public bool CanOpenInExternalEditor => ExternalEditors.EffectiveDefault(Settings) is not null && HasImages;
 
-    /// <summary>Q-R48: launches the configured external editor with the currently-viewed (or compare-selected) photo's path.</summary>
+    /// <summary>Q-R48 / FEAT-EXTERNAL-EDITORS: sends the photo to the DEFAULT editor; with none declared, takes the user to Settings.</summary>
     public void OpenInExternalEditor()
     {
-        var editorPath = Settings.ExternalEditorPath;
-        if (string.IsNullOrWhiteSpace(editorPath))
+        if (ExternalEditors.EffectiveDefault(Settings) is not { } editor)
         {
-            ShowSettings(SettingsTarget.ExternalEditor); // not configured yet: take the user to the field that sets it
+            ShowSettings(SettingsTarget.ExternalEditor); // none declared yet: take the user to the field that sets it
             return;
         }
-        var path = _compare.SelectedPath ?? _presenter.CurrentPresentedPath ?? _catalog.Current?.Path;
-        if (string.IsNullOrEmpty(path)) return;
-        if (!_fileSystem.FileExists(path))
+        LaunchExternalEditor(editor);
+    }
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: sends the photo to the declared editor <paramref name="editorId"/> (an unknown id does nothing).</summary>
+    public void OpenInExternalEditor(string editorId)
+    {
+        if (ExternalEditors.Effective(Settings).FirstOrDefault(e => string.Equals(e.Id, editorId, StringComparison.Ordinal)) is { } editor)
+            LaunchExternalEditor(editor);
+    }
+
+    private void LaunchExternalEditor(ExternalEditor editor)
+    {
+        var shown = _compare.SelectedPath ?? _presenter.CurrentPresentedPath ?? _catalog.Current?.Path;
+        if (string.IsNullOrEmpty(shown)) return;
+        if (!_fileSystem.FileExists(shown))
         {
-            _dialogService?.ShowError(Tr.DialogExternalEditorFailedTitle, Tr.DialogExternalEditorFileMissing(Path.GetFileName(path)));
+            _dialogService?.ShowError(Tr.DialogExternalEditorFailedTitle, Tr.DialogExternalEditorFileMissing(Path.GetFileName(shown)));
+            return;
+        }
+        var path = ExternalEditors.ResolveFileToSend(shown, _catalog.Find(shown)?.CaptureGroup?.RawPath,
+            Settings.ExternalEditorSendsRawOriginal, _fileSystem.FileExists);
+        if (string.IsNullOrWhiteSpace(editor.Path) || !_fileSystem.FileExists(editor.Path))
+        {
+            _dialogService?.ShowError(Tr.DialogExternalEditorFailedTitle, Tr.DialogExternalEditorExeMissing(editor.Path ?? string.Empty));
             return;
         }
         try
         {
-            StartExternalEditor(editorPath, path);
+            StartExternalEditor(editor.Path, path, ExternalEditors.BuildArguments(editor.Arguments, path));
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or System.IO.FileNotFoundException)
         {
             _dialogService?.ShowError(Tr.DialogExternalEditorFailedTitle, ex.Message);
+        }
+    }
+
+    /// <summary>FEAT-EXTERNAL-EDITORS ("Add more editors..."): asks for a program + name and appends it; the first one becomes the default.</summary>
+    public void AddExternalEditor()
+    {
+        if (_dialogService is null) return;
+        var settings = Settings;
+        var initial = ExternalEditors.EffectiveDefault(settings)?.Path;
+        var added = _dialogService.PromptAddExternalEditor(string.IsNullOrWhiteSpace(initial) ? null : Path.GetDirectoryName(initial));
+        if (added is null || string.IsNullOrWhiteSpace(added.Path)) return;
+        // A list that only exists as the legacy single path becomes a real list first (the legacy editor keeps its place and default).
+        MaterializeLegacyEditor(settings);
+        if (settings.ExternalEditors.Count >= ExternalEditors.MaxEditors) return;
+        added.Id = ExternalEditor.NewId();
+        settings.ExternalEditors.Add(added);
+        ExternalEditors.Reconcile(settings);
+        SaveExternalEditorSettings(settings);
+    }
+
+    /// <summary>FEAT-EXTERNAL-EDITORS ("Set default editor..."): list dialog; stores the chosen editor as the default.</summary>
+    public void ChooseDefaultExternalEditor()
+    {
+        if (_dialogService is null) return;
+        var settings = Settings;
+        MaterializeLegacyEditor(settings);
+        if (settings.ExternalEditors.Count == 0) return;
+        var chosen = _dialogService.PromptDefaultExternalEditor(settings.ExternalEditors.ToList(),
+            ExternalEditors.Default(settings)?.Id);
+        if (chosen is null || ExternalEditors.Find(settings, chosen) is null) return;
+        settings.DefaultExternalEditorId = chosen;
+        ExternalEditors.Reconcile(settings);
+        SaveExternalEditorSettings(settings);
+    }
+
+    private static void MaterializeLegacyEditor(AppSettings settings)
+    {
+        if (settings.ExternalEditors is { Count: > 0 } || string.IsNullOrWhiteSpace(settings.ExternalEditorPath)) return;
+        ExternalEditors.Reconcile(settings);
+    }
+
+    private void SaveExternalEditorSettings(AppSettings settings)
+    {
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            // Still in effect for this session; only persisting failed.
+            AppLog.Error("Could not save the external editors setting", ex);
         }
     }
 

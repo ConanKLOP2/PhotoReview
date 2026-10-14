@@ -1,5 +1,6 @@
 using PhotoReview.App.Presenters;
 using PhotoReview.Core.Localization;
+using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Shell.Interop;
 using PhotoReview.Shell.Win32.Dialogs.Native;
@@ -29,6 +30,11 @@ internal sealed class FilesSettingsPage : SettingsPageBase
     private int _confirmBeforeDelete;
     private int _editorPath;
     private int _browse;
+    private int _manage;
+    private int _sendRaw;
+    private int _editorSummary;
+    private List<ExternalEditor> _editors = [];
+    private string _defaultEditorId = string.Empty;
     private int _journal;
     private IReadOnlyList<int> _journalRadios = [];
     private int _reuseLastFolder;
@@ -43,6 +49,9 @@ internal sealed class FilesSettingsPage : SettingsPageBase
         int AllowPermanentDelete, int ConfirmBeforeDelete, int EditorPath, int Browse, int Journal, int ReuseLastFolder) Ids
         => (_compareHash, _compareSize, _rawSupport, _rawFullDecode, _rawPairMode, _webpHeic, _codecStatus, _allowPermanentDelete,
             _confirmBeforeDelete, _editorPath, _browse, _journal, _reuseLastFolder);
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: id của nút "Manage editors...", ô "send RAW" và dòng tóm tắt (test).</summary>
+    internal (int Manage, int SendRaw, int Summary) EditorIds => (_manage, _sendRaw, _editorSummary);
 
     /// <summary>Hai radio của nhật ký thao tác: chỉ số 0 = Fast (mặc định), 1 = Power-loss safe (test).</summary>
     internal IReadOnlyList<int> JournalRadios => _journalRadios;
@@ -94,6 +103,11 @@ internal sealed class FilesSettingsPage : SettingsPageBase
             _editorPath = g.Edit(() => Tr.SettingsExternalEditorPathLabel, widthDlu: 260).Control;
             _browse = g.Buttons(true, () => Tr.SettingsExternalEditorPathBrowse)[0];
             g.Note(() => Tr.SettingsExternalEditorPathHint, aligned: false);
+            // FEAT-EXTERNAL-EDITORS: the list of editors (right-click submenu) is managed in a nested dialog; the path above is the default one.
+            _manage = g.Buttons(true, () => Tr.SettingsExternalEditorsManage)[0];
+            _editorSummary = g.Note(null, aligned: false);
+            _sendRaw = g.Check(() => Tr.SettingsExternalEditorsSendRaw);
+            g.Note(() => Tr.SettingsExternalEditorsSendRawHint, aligned: false);
         });
 
         page.Group(() => Tr.SettingsGroupJournalDurability, g =>
@@ -131,6 +145,10 @@ internal sealed class FilesSettingsPage : SettingsPageBase
         Context.SetChecked(_allowPermanentDelete, state.AllowPermanentDelete);
         Context.SetChecked(_confirmBeforeDelete, state.ConfirmBeforeDelete);
         Context.SetText(_editorPath, state.ExternalEditorPath);
+        _editors = [.. state.ExternalEditors.Select(editor => editor.Clone())];
+        _defaultEditorId = state.DefaultExternalEditorId;
+        Context.SetChecked(_sendRaw, state.ExternalEditorSendsRawOriginal);
+        ShowEditorSummary();
         Context.SetRadioIndex(_journalRadios, state.JournalSafe ? 1 : 0);
         Context.SetChecked(_reuseLastFolder, state.MoveCopyReuseLastFolder);
     }
@@ -146,6 +164,10 @@ internal sealed class FilesSettingsPage : SettingsPageBase
         state.AllowPermanentDelete = Context.IsChecked(_allowPermanentDelete);
         state.ConfirmBeforeDelete = Context.IsChecked(_confirmBeforeDelete);
         state.ExternalEditorPath = Context.Text(_editorPath);
+        // The path box edits the DEFAULT editor: the list carries the same path so a typed change is never read as a second editor.
+        state.ExternalEditors = [.. _editors.Select(editor => editor.Clone())];
+        state.DefaultExternalEditorId = _defaultEditorId;
+        state.ExternalEditorSendsRawOriginal = Context.IsChecked(_sendRaw);
         state.JournalSafe = Context.RadioIndex(_journalRadios) == 1;
         state.MoveCopyReuseLastFolder = Context.IsChecked(_reuseLastFolder);
     }
@@ -154,13 +176,52 @@ internal sealed class FilesSettingsPage : SettingsPageBase
 
     public override bool OnCommand(int id, int notification)
     {
-        if (id != _browse || notification != DialogConstants.BnClicked)
+        if (notification != DialogConstants.BnClicked)
+        {
+            return false;
+        }
+
+        if (id == _manage)
+        {
+            ManageEditors();
+            return true;
+        }
+
+        if (id != _browse)
         {
             return false;
         }
 
         BrowseForEditor();
         return true;
+    }
+
+    /// <summary>"Manage editors...": the nested list dialog; on Apply the list, the default and the default-path box follow it (Save persists).</summary>
+    private void ManageEditors()
+    {
+        // The path box is the default editor's path: fold a typed value into the list first, so the dialog shows what is on screen.
+        var working = new AppSettings { ExternalEditors = [.. _editors.Select(editor => editor.Clone())], DefaultExternalEditorId = _defaultEditorId };
+        ExternalEditors.ApplyLegacyPath(working, Context.Text(_editorPath));
+        var edit = Context.EditExternalEditors(working.ExternalEditors, working.DefaultExternalEditorId);
+        if (edit is null)
+        {
+            return;
+        }
+
+        _editors = [.. edit.Editors.Select(editor => editor.Clone())];
+        _defaultEditorId = edit.DefaultId;
+        var current = _editors.FirstOrDefault(editor => string.Equals(editor.Id, _defaultEditorId, StringComparison.Ordinal)) ?? _editors.FirstOrDefault();
+        Context.SetText(_editorPath, current?.Path ?? string.Empty);
+        ShowEditorSummary();
+    }
+
+    private void ShowEditorSummary()
+    {
+        var current = _editors.FirstOrDefault(editor => string.Equals(editor.Id, _defaultEditorId, StringComparison.Ordinal)) ?? _editors.FirstOrDefault();
+        Context.SetText(_editorSummary, _editors.Count == 0
+            ? Tr.SettingsExternalEditorsSummaryNone
+            : Tr.SettingsExternalEditorsSummary(_editors.Count, current?.DisplayName ?? string.Empty));
+        Context.Relayout();
     }
 
     /// <summary>"Browse...": chọn một .exe/tất cả tệp; huỷ giữ nguyên đường dẫn; chọn xong thì ghi vào ô (Save mới lưu).</summary>
@@ -213,7 +274,11 @@ internal sealed class FilesSettingsPage : SettingsPageBase
         return true;
     }
 
-    public override void OnLanguageChanged() => ShowCodecStatus(); // the status line is composed from translated parts
+    public override void OnLanguageChanged()
+    {
+        ShowCodecStatus(); // the status line is composed from translated parts
+        ShowEditorSummary();
+    }
 
     private void ShowCodecStatus()
     {

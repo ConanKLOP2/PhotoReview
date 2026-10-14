@@ -46,6 +46,18 @@ public interface IDialogService
 
     /// <summary>Hiển thị danh sách tệp bị bỏ qua khi nạp thư mục (AR19).</summary>
     void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries);
+
+    /// <summary>
+    /// FEAT-EXTERNAL-EDITORS ("Add more editors..."): asks the user for an editor program (file picker) and the name shown in the
+    /// menu. Null when cancelled. The default (the frozen WPF shell) offers nothing: returns null.
+    /// </summary>
+    PhotoReview.Core.Settings.ExternalEditor? PromptAddExternalEditor(string? initialFolder = null) => null;
+
+    /// <summary>
+    /// FEAT-EXTERNAL-EDITORS ("Set default editor..."): a list dialog; returns the chosen editor's id, or null when cancelled.
+    /// The default offers nothing: returns null.
+    /// </summary>
+    string? PromptDefaultExternalEditor(IReadOnlyList<PhotoReview.Core.Settings.ExternalEditor> editors, string? currentId) => null;
 }
 
 /// <summary>Which part of the Settings dialog to open on.</summary>

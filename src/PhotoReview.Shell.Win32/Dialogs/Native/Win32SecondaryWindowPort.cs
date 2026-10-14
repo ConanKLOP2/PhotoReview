@@ -81,7 +81,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     public bool Supports(SecondaryWindowKind kind)
         => kind is SecondaryWindowKind.Diagnostics or SecondaryWindowKind.SkippedFiles or SecondaryWindowKind.BatchReview
             or SecondaryWindowKind.ZoomPrompt or SecondaryWindowKind.Benchmark or SecondaryWindowKind.ActionProfiles
-            or SecondaryWindowKind.Recovery
+            or SecondaryWindowKind.Recovery or SecondaryWindowKind.ExternalEditors
             || (kind == SecondaryWindowKind.Settings && SettingsEnabled);
 
     /// <summary>
@@ -107,6 +107,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
             Files = baseOptions.Files ?? _services.GetService<IShellFileDialog>(),
             Warnings = baseOptions.Warnings ?? _warnings,
             ShowActionProfiles = baseOptions.ShowActionProfiles ?? ShowActionProfiles,
+            ShowExternalEditors = baseOptions.ShowExternalEditors ?? ShowExternalEditors,
         };
         var dialog = new SettingsDialog(store.Current, store, _services.GetService<IImageDecoderFactory>(),
             _services.GetService<LocalizationService>(), _services.GetService<IUpdateChecker>(), options, _chrome);
@@ -238,6 +239,56 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
         return Run(dialog, ownerHwnd) == NativeDialog.IdOk ? dialog.Actions : null;
     }
 
+    /// <summary>FEAT-EXTERNAL-EDITORS: danh sách trình chỉnh sửa MODAL; kết quả khi Apply, null khi huỷ.</summary>
+    public ExternalEditorsEdit? ShowExternalEditors(nint ownerHwnd, IReadOnlyList<ExternalEditor> editors, string? defaultId)
+    {
+        ArgumentNullException.ThrowIfNull(editors);
+        var dialog = new ExternalEditorsDialog(editors, defaultId, _services.GetService<IShellFileDialog>(), _warnings,
+            ExternalEditorProductName.Suggest, _chrome);
+        return Run(dialog, ownerHwnd) == NativeDialog.IdOk ? dialog.Outcome : null;
+    }
+
+    /// <summary>FEAT-EXTERNAL-EDITORS ("Add more editors..."): chọn .exe rồi nhập tên hiển thị (gợi ý = ProductName); null khi huỷ.</summary>
+    public ExternalEditor? PromptAddExternalEditor(nint ownerHwnd, string? initialFolder)
+    {
+        var files = _services.GetService<IShellFileDialog>();
+        if (files is null)
+        {
+            return null;
+        }
+
+        var picked = files.PickOpenFile(ownerHwnd, Tr.DialogExternalEditorAddTitle, FileFilterText.Parse(Tr.DialogFileFilterExecutable),
+            initialFolder);
+        if (string.IsNullOrWhiteSpace(picked))
+        {
+            return null;
+        }
+
+        var prompt = new TextPromptDialog(Tr.DialogExternalEditorNameTitle, Tr.DialogExternalEditorNameLabel,
+            ExternalEditorProductName.Suggest(picked) ?? ExternalEditors.NameFromPath(picked), _chrome);
+        return Run(prompt, ownerHwnd) == NativeDialog.IdOk && prompt.Value is { } name
+            ? new ExternalEditor { Name = name, Path = picked }
+            : null;
+    }
+
+    /// <summary>FEAT-EXTERNAL-EDITORS ("Set default editor..."): danh sách chọn một; id được chọn, null khi huỷ.</summary>
+    public string? PromptDefaultExternalEditor(nint ownerHwnd, IReadOnlyList<ExternalEditor> editors, string? currentId)
+    {
+        ArgumentNullException.ThrowIfNull(editors);
+        if (editors.Count == 0)
+        {
+            return null;
+        }
+
+        var current = editors.ToList().FindIndex(editor => string.Equals(editor.Id, currentId, StringComparison.Ordinal));
+        var content = ListDialogContent.ForChoice(Tr.DialogExternalEditorSetDefaultTitle, Tr.DialogExternalEditorSetDefaultIntro,
+            editors.Select(editor => editor.DisplayName).ToList(), Math.Max(0, current));
+        var dialog = new ListDialog(content, _chrome);
+        return Run(dialog, ownerHwnd) == NativeDialog.IdOk && dialog.SelectedIndex >= 0 && dialog.SelectedIndex < editors.Count
+            ? editors[dialog.SelectedIndex].Id
+            : null;
+    }
+
     public void ShowDiagnostics(nint ownerHwnd)
     {
         if (_disposed)
@@ -366,6 +417,15 @@ internal sealed class SecondaryWindowRouter : ISecondaryWindowPort, IDisposable
 
     public IReadOnlyList<ReviewAction>? ShowActionProfiles(nint ownerHwnd, IReadOnlyList<ReviewAction> actions)
         => Pick(SecondaryWindowKind.ActionProfiles) is { } port ? port.ShowActionProfiles(ownerHwnd, actions) : null;
+
+    public ExternalEditorsEdit? ShowExternalEditors(nint ownerHwnd, IReadOnlyList<ExternalEditor> editors, string? defaultId)
+        => Pick(SecondaryWindowKind.ExternalEditors) is { } port ? port.ShowExternalEditors(ownerHwnd, editors, defaultId) : null;
+
+    public ExternalEditor? PromptAddExternalEditor(nint ownerHwnd, string? initialFolder)
+        => Pick(SecondaryWindowKind.ExternalEditors) is { } port ? port.PromptAddExternalEditor(ownerHwnd, initialFolder) : null;
+
+    public string? PromptDefaultExternalEditor(nint ownerHwnd, IReadOnlyList<ExternalEditor> editors, string? currentId)
+        => Pick(SecondaryWindowKind.ExternalEditors) is { } port ? port.PromptDefaultExternalEditor(ownerHwnd, editors, currentId) : null;
 
     /// <summary>Cổng Win32 nếu nó làm được; ngược lại null (người gọi dùng cổng tạm).</summary>
     private ISecondaryWindowPort? Pick(SecondaryWindowKind kind) => _native.Supports(kind) ? _native : null;

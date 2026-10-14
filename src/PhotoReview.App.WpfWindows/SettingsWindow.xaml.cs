@@ -452,6 +452,13 @@ public partial class SettingsWindow : Window
     {
         var f = new SettingsFormState();
         foreach (var (property, box) in ShortcutBoxes) f.ShortcutTexts[property] = box.Text;
+        // FEAT-EXTERNAL-EDITORS: this (frozen) window has no controls for the editors list, its default, the RAW switch or the
+        // default-editor key; carry the working copy's values so Save never drops what the Win32 dialog or the menu stored.
+        var carried = _presenter.LoadFields();
+        f.ExternalEditors = carried.ExternalEditors;
+        f.DefaultExternalEditorId = carried.DefaultExternalEditorId;
+        f.ExternalEditorSendsRawOriginal = carried.ExternalEditorSendsRawOriginal;
+        f.ShortcutTexts[nameof(ShortcutMappings.OpenInDefaultEditor)] = carried.ShortcutTexts[nameof(ShortcutMappings.OpenInDefaultEditor)];
         f.ActionsJson = ActionsText.Text;
         f.ViewModeIndex = ViewModeCombo.SelectedIndex;
         f.FitWidthAnchorIndex = FitWidthAnchorCombo.SelectedIndex;
