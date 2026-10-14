@@ -98,22 +98,46 @@ function Test-AotRelease {
     }
     if ($RunSmoke) {
         # The AOT exe must not need an installed .NET: strip every DOTNET_* variable and every PATH entry that looks like a dotnet
-        # install, then run --smoke (create + show the window, exit 0) in OUR OWN process only.
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $aotExe.FullName
-        $psi.Arguments = '--smoke'
-        $psi.WorkingDirectory = $aot
-        $psi.UseShellExecute = $false
-        foreach ($name in @($psi.EnvironmentVariables.Keys | Where-Object { $_ -like 'DOTNET_*' })) { $psi.EnvironmentVariables.Remove($name) }
-        $psi.EnvironmentVariables['PATH'] = (($env:PATH -split ';') | Where-Object { $_ -and $_ -notmatch 'dotnet' }) -join ';'
-        $aotProcess = [System.Diagnostics.Process]::Start($psi)
-        if (-not $aotProcess.WaitForExit(60000)) {
-            try { $aotProcess.Kill() } catch { }
-            Write-Error 'AOT PhotoReview.exe --smoke did not exit within 60 s.'
-            exit 1
+        # install. Two runs, each in OUR OWN process only (started here, killed here on timeout):
+        #   1. --smoke              create + show the window, exit 0 after the first frame.
+        #   2. --smoke <image.jpg>  same, but exit 0 only after the first IMAGE frame: forces the AOT-trimmed decode path
+        #                           (TurboJPEG interop, caches, preview pipeline) that a JIT test run cannot prove.
+        $smokeDir = Join-Path ([IO.Path]::GetTempPath()) ('pr-aot-smoke-' + [Guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $smokeDir | Out-Null
+        try {
+            Add-Type -AssemblyName System.Drawing
+            $smokeJpg = Join-Path $smokeDir 'smoke.jpg'
+            $bmp = New-Object System.Drawing.Bitmap 320, 200
+            try {
+                $g = [System.Drawing.Graphics]::FromImage($bmp)
+                try { $g.Clear([System.Drawing.Color]::SteelBlue); $g.FillEllipse([System.Drawing.Brushes]::Orange, 60, 30, 140, 140) } finally { $g.Dispose() }
+                $bmp.Save($smokeJpg, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+            } finally { $bmp.Dispose() }
+            $runs = @(
+                @{ Name = '--smoke'; Arguments = '--smoke' },
+                @{ Name = '--smoke <image.jpg>'; Arguments = ('--smoke "' + $smokeJpg + '"') })
+            foreach ($run in $runs) {
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = $aotExe.FullName
+                $psi.Arguments = $run.Arguments
+                $psi.WorkingDirectory = $aot
+                $psi.UseShellExecute = $false
+                foreach ($name in @($psi.EnvironmentVariables.Keys | Where-Object { $_ -like 'DOTNET_*' })) { $psi.EnvironmentVariables.Remove($name) }
+                $psi.EnvironmentVariables['PATH'] = (($env:PATH -split ';') | Where-Object { $_ -and $_ -notmatch 'dotnet' }) -join ';'
+                $watch = [Diagnostics.Stopwatch]::StartNew()
+                $aotProcess = [System.Diagnostics.Process]::Start($psi)
+                Write-Output "Started AOT $($aotExe.FullName) $($run.Arguments) (pid $($aotProcess.Id))"
+                if (-not $aotProcess.WaitForExit(60000)) {
+                    try { $aotProcess.Kill() } catch { }
+                    Write-Error "AOT PhotoReview.exe $($run.Name) did not exit within 60 s."
+                    exit 1
+                }
+                if ($aotProcess.ExitCode -ne 0) { Write-Error "AOT PhotoReview.exe $($run.Name) exited with code $($aotProcess.ExitCode) (7 = no frame within the smoke timeout)."; exit 1 }
+                Write-Output ('PASS: AOT PhotoReview.exe {0} exited 0 without a .NET runtime in {1} ms' -f $run.Name, $watch.ElapsedMilliseconds)
+            }
+        } finally {
+            Remove-Item -LiteralPath $smokeDir -Recurse -Force -ErrorAction SilentlyContinue
         }
-        if ($aotProcess.ExitCode -ne 0) { Write-Error "AOT PhotoReview.exe --smoke exited with code $($aotProcess.ExitCode)."; exit 1 }
-        Write-Output 'PASS: AOT PhotoReview.exe --smoke exited 0 without a .NET runtime'
     }
     Write-Output ('PASS: AOT folder ok ({0}); PhotoReview.exe {1:N1} MB, folder {2:N1} MB without *.pdb, version {3}' -f $aot, ($aotExe.Length / 1MB), ($folderBytes / 1MB), $aotVersion)
 }
