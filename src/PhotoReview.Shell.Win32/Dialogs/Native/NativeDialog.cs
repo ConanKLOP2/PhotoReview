@@ -998,6 +998,7 @@ internal abstract unsafe class NativeDialog
 
         ApplyFonts();
         _chrome.Apply(hwnd, controls);
+        CenterSingleLineEdits(hwnd);
         User32.SendMessage(hwnd, DialogConstants.DmSetDefId, DefaultButtonId, 0);
         OnInitialized();
 
@@ -1049,6 +1050,27 @@ internal abstract unsafe class NativeDialog
         DeleteIfSet(oldFont);
         DeleteIfSet(oldHeader);
         MeasureUnits();
+    }
+
+    /// <summary>
+    /// A single-line EDIT draws its text at the top of its client area; the boxes of the dialogs are taller than one line, so every
+    /// single-line box (not ES_MULTILINE: those honour EM_SETRECT and are laid out by their dialog) gets its text centred vertically.
+    /// </summary>
+    private void CenterSingleLineEdits(nint hwnd)
+    {
+        foreach (var item in Items)
+        {
+            if (item.Class != DialogControlClass.Edit || (item.Style & DialogConstants.EsMultiline) != 0)
+            {
+                continue;
+            }
+
+            var edit = User32.GetDlgItem(hwnd, item.Id);
+            if (edit != 0)
+            {
+                EditTextCentering.Attach(edit);
+            }
+        }
     }
 
     private static void DeleteIfSet(nint handle)
