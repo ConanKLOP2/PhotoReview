@@ -1,6 +1,6 @@
 ---
 id: NOWPF-WP35-FIX-COMBO-FOCUS
-order: 1370
+order: 1380
 summary: |-
   WP-35 sửa lỗi (CHƯA XÁC NHẬN): combobox của Settings Win32 có HAI kiểu vẽ - ngay sau Tab/chuột (focus, đổi chọn, bật/tắt, thả xuống) hiện nền xanh hệ thống + viền cam, còn sau RedrawWindow ép vẽ lại là kiểu tối của bộ vẽ tay. Gốc: combobox hệ thống tự vẽ vùng "mục đã chọn" bằng GetDC (COLOR_HIGHLIGHT + khung focus) NGOÀI WM_PAINT; bộ vẽ tay chỉ chạy ở WM_PAINT nên bản vẽ hệ thống ở lại tới khi có gì đó làm vô hiệu vùng (tab bàn phím thì UPDATEUISTATE vô tình sửa, focus bằng chuột thì không bao giờ). Sửa ở NativeDialogChromePainter.ControlProc: sau DefSubclassProc của các thông điệp làm hệ thống tự vẽ thì vẽ lại ngay bằng bộ vẽ tay (đồng bộ, GetDC); cùng cơ chế cho nút/checkbox/radio (focus). Test BitBlt mới 4 ca x 9 trạng thái; test Tab của #517 bỏ loại trừ điều khiển focus (trừ ô nhập: caret).
 ---

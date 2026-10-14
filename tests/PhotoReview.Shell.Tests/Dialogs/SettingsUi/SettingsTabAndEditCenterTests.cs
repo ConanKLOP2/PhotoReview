@@ -277,13 +277,13 @@ public sealed unsafe class SettingsTabAndEditCenterTests(ITestOutputHelper outpu
         return new string(name, 0, Math.Max(0, length));
     }
 
-    private static int PixelAt(byte[] bgra, int width, int x, int y)
+    internal static int PixelAt(byte[] bgra, int width, int x, int y)
     {
         var i = ((y * width) + x) * 4;
         return (bgra[i + 2] << 16) | (bgra[i + 1] << 8) | bgra[i];
     }
 
-    private static bool Far(int a, int b)
+    internal static bool Far(int a, int b)
     {
         var dr = Math.Abs(((a >> 16) & 0xFF) - ((b >> 16) & 0xFF));
         var dg = Math.Abs(((a >> 8) & 0xFF) - ((b >> 8) & 0xFF));
@@ -394,7 +394,7 @@ public sealed unsafe class SettingsTabAndEditCenterTests(ITestOutputHelper outpu
         }
     }
 
-    private static byte[] Capture(nint hwnd, out int width, out int height)
+    internal static byte[] Capture(nint hwnd, out int width, out int height)
     {
         Rect rect = default;
         User32.GetWindowRect(hwnd, &rect);
