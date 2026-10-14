@@ -58,6 +58,13 @@ voi `--filter FullyQualifiedName~PixelExtGoldenRecordTests`. Ngan sach dung luon
    nen test cua so that dua cua so len man hinh gia 720x480 bang `WM_DISPLAYCHANGE` (doi do phan giai luc dang F11), khong phai luc nhan F11.
 4. **RAW:** repo khong co file RAW (khong co corpus), nen "RAW" o day la anh tong hop `photo` o hai kich thuoc bitmap qua duong "bitmap keo gian ra layout cua
    ban goc"; **CHUA kiem giai ma RAW that (LibRaw)** va chua kiem preview nhung co ti le/khung khac ban goc.
+5. **WP28B-WARP-EDGE (2026-10-12, sua do ngau nhien tren CI):** `RawPreviewToFullDecode_...(rawsize-fit-*)` do ngau nhien (55 px lech 1 muc) vi so
+   sanh "khung sau khi doi bitmap" voi "cua so moi" theo tung byte. Do bang 15 lich su tien trinh (cac khung ve truoc trong cung process): lech 0 / 55 / 64 /
+   71 / 163 / 292 px (toi da 0,12 % cua 600x400), delta toi da 1, chi o cot 299 va 599 (giua va cuoi khung); moi khung ve LAI sau do giong tung byte.
+   Khong phai san pham (cung dau vao, khong dong ho/trang thai chung; `Degraded` = false, khung la HQ) ma la WARP: lan ve DAU cua mot hinh hoc thu nho HQ
+   (HighQualityCubic, hieu ung scale nhieu pass cua D2D) sau khi tien trinh da ve hinh hoc thu nho khac. Nguong moi chi cho ca thu nho HQ (Fit: RAW,
+   F11/DPI Fit, thoat F11): delta <= 1 va <= hai cot day du (2 x chieu cao = 0,33 % cua 600x400); ca 100 % (NearestNeighbor) van giong tung byte.
+   Loi that (Linear thay HQ, lech hop, anh khac) vuot ca hai con so rat xa; dot bien (khung Linear sau doi bitmap, hop lech 0,25 px, orientation, blend) van bi bat.
 
 ## 4. Kiem chung
 
