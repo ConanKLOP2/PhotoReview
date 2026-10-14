@@ -559,7 +559,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
 
         Assert.False(vm.CanOpenInExternalEditor); // no editor path, no image
 
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        _settings.ExternalEditorPath = FakeEditorExe();
         Assert.False(vm.CanOpenInExternalEditor); // editor path set, but no image open yet
 
         await vm.OpenFolderAsync(folder);
@@ -577,16 +577,16 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         Directory.CreateDirectory(folder);
         var photo = CreateImageFile(folder, "photo.png");
         var (vm, _) = CreateViewModel();
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        _settings.ExternalEditorPath = FakeEditorExe();
         await vm.OpenFolderAsync(folder);
 
         (string ExePath, string FilePath)? launched = null;
-        vm.StartExternalEditor = (exePath, filePath) => launched = (exePath, filePath);
+        vm.StartExternalEditor = (exePath, filePath, _) => launched = (exePath, filePath);
 
         vm.OpenInExternalEditor();
 
         Assert.NotNull(launched);
-        Assert.Equal(@"C:\Tools\editor.exe", launched!.Value.ExePath);
+        Assert.Equal(FakeEditorExe(), launched!.Value.ExePath);
         Assert.Equal(photo, launched.Value.FilePath);
         Assert.Empty(_dialogService.Errors);
     }
@@ -598,12 +598,12 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         Directory.CreateDirectory(folder);
         var photo = CreateImageFile(folder, "photo.png");
         var (vm, _) = CreateViewModel();
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        _settings.ExternalEditorPath = FakeEditorExe();
         await vm.OpenFolderAsync(folder);
         File.Delete(photo); // now missing on disk, but still the catalog's current entry
 
         var launched = false;
-        vm.StartExternalEditor = (_, _) => launched = true;
+        vm.StartExternalEditor = (_, _, _) => launched = true;
 
         vm.OpenInExternalEditor();
 
@@ -622,7 +622,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         await vm.OpenFolderAsync(folder);
 
         var launched = false;
-        vm.StartExternalEditor = (_, _) => launched = true;
+        vm.StartExternalEditor = (_, _, _) => launched = true;
 
         vm.OpenInExternalEditor();
 
@@ -638,13 +638,21 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         Directory.CreateDirectory(folder);
         CreateImageFile(folder, "photo.png");
         var (vm, _) = CreateViewModel();
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        _settings.ExternalEditorPath = FakeEditorExe();
         await vm.OpenFolderAsync(folder);
-        vm.StartExternalEditor = (_, _) => { };
+        vm.StartExternalEditor = (_, _, _) => { };
 
         vm.OpenInExternalEditor();
 
         Assert.Empty(_dialogService.SettingsTargets);
+    }
+
+    /// <summary>A real (empty) editor program file: the launch refuses an editor path that does not exist.</summary>
+    private string FakeEditorExe()
+    {
+        var path = Path.Combine(_tempDir, "editor.exe");
+        if (!File.Exists(path)) File.WriteAllBytes(path, [0]);
+        return path;
     }
 
     // --- Test Doubles ---
@@ -736,6 +744,22 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         }
         public void ShowBenchmark(string? folder = null) => LastBenchmarkFolder = folder;
         public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
+
+        public ExternalEditor? AddEditorResponse { get; set; }
+        public int AddEditorPrompts { get; private set; }
+        public ExternalEditor? PromptAddExternalEditor(string? initialFolder = null)
+        {
+            AddEditorPrompts++;
+            return AddEditorResponse;
+        }
+
+        public string? DefaultEditorResponse { get; set; }
+        public List<string> DefaultEditorChoices { get; } = [];
+        public string? PromptDefaultExternalEditor(IReadOnlyList<ExternalEditor> editors, string? currentId)
+        {
+            DefaultEditorChoices.AddRange(editors.Select(editor => editor.Id));
+            return DefaultEditorResponse;
+        }
     }
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider

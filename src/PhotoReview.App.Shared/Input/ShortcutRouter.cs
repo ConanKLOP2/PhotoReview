@@ -35,6 +35,7 @@ public sealed class ShortcutRouter
     private KeyId? _customZoomKey;
     private KeyId? _toggleCaptureMemberKey;
     private KeyId? _refreshKey;
+    private KeyId? _openInDefaultEditorKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -79,6 +80,7 @@ public sealed class ShortcutRouter
         _customZoomKey = ParseKey(settings.Shortcuts.CustomZoom);
         _toggleCaptureMemberKey = ParseKey(settings.Shortcuts.ToggleCaptureMember);
         _refreshKey = ParseKey(settings.Shortcuts.Refresh);
+        _openInDefaultEditorKey = ParseKey(settings.Shortcuts.OpenInDefaultEditor);
 
         _actionKeys.Clear();
         for (var i = 0; i < settings.Actions.Count; i++)
@@ -263,6 +265,12 @@ public sealed class ShortcutRouter
         if (_refreshKey.HasValue && key == _refreshKey.Value)
         {
             return ReviewCommand.Refresh;
+        }
+
+        // 12f. FEAT-EXTERNAL-EDITORS: send the photo to the default external editor (no default key).
+        if (_openInDefaultEditorKey.HasValue && key == _openInDefaultEditorKey.Value)
+        {
+            return ReviewCommand.OpenInDefaultEditor;
         }
 
         // 13. Next / Previous

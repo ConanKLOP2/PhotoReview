@@ -64,6 +64,12 @@ internal sealed class FakeContextMenuActions : IContextMenuActions
 
     public void OpenInExternalEditor() => RecordSync("ExternalEditor");
 
+    public void OpenInExternalEditor(string editorId) => RecordSync("ExternalEditor:" + editorId);
+
+    public void AddExternalEditor() => RecordSync("AddEditor");
+
+    public void ChooseDefaultExternalEditor() => RecordSync("SetDefaultEditor");
+
     public void CopyFileName() => RecordSync("CopyFileName");
 
     public void CopyFullPathname() => RecordSync("CopyFullPathname");

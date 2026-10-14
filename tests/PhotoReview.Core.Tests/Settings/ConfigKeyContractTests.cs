@@ -84,6 +84,9 @@ public sealed class ConfigKeyContractTests
         "WebpHeicSupportEnabled",
         "TouchpadSwipeEnabled",
         "TouchpadSwipeDistancePerImage",
+        "ExternalEditors",
+        "DefaultExternalEditorId",
+        "ExternalEditorSendsRawOriginal",
     ];
 
     private static string[] CurrentKeys()

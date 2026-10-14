@@ -68,6 +68,12 @@ internal sealed partial class ShellMainWindow : IContextMenuActions
 
     void IContextMenuActions.OpenInExternalEditor() => _viewModel.OpenInExternalEditor();
 
+    void IContextMenuActions.OpenInExternalEditor(string editorId) => _viewModel.OpenInExternalEditor(editorId);
+
+    void IContextMenuActions.AddExternalEditor() => _viewModel.AddExternalEditor();
+
+    void IContextMenuActions.ChooseDefaultExternalEditor() => _viewModel.ChooseDefaultExternalEditor();
+
     void IContextMenuActions.CopyFileName() => _viewModel.CopyFileName();
 
     void IContextMenuActions.CopyFullPathname() => _viewModel.CopyFullPathname();

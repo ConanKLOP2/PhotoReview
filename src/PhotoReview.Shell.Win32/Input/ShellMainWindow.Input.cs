@@ -208,6 +208,9 @@ internal sealed partial class ShellMainWindow : IShellInputHost
             case ReviewCommandType.Refresh:
                 RefreshView();
                 break;
+            case ReviewCommandType.OpenInDefaultEditor:
+                _viewModel.OpenInExternalEditor(); // the default editor; opens Settings when none is declared
+                break;
         }
     }
 

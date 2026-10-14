@@ -161,7 +161,7 @@ public sealed class JsonFormatCompatTests
         var written = fs.ReadAllText(paths.ConfigFile).Replace(Environment.NewLine, "\n", StringComparison.Ordinal);
 
         Assert.StartsWith("{\n  \"", written, StringComparison.Ordinal);
-        Assert.Contains("\n  \"ConfigVersion\": 3,", written, StringComparison.Ordinal);
+        Assert.Contains("\n  \"ConfigVersion\": 4,", written, StringComparison.Ordinal);
         Assert.Contains("\n  \"UiLanguage\": \"en\"", written, StringComparison.Ordinal);
         var reread = SettingsStore.ParseText(written).Settings;
         Assert.Equal("en", reread.UiLanguage);

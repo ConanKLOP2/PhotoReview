@@ -37,7 +37,7 @@ public sealed class SettingsStoreTests
         Assert.Equal(LoadingMode.Preview, loaded.LoadingMode);
         Assert.True(_fileSystem.FileExists(_appPaths.ConfigFile));
         var savedJson = _fileSystem.ReadAllText(_appPaths.ConfigFile);
-        Assert.Contains("\"ConfigVersion\": 3", savedJson);
+        Assert.Contains("\"ConfigVersion\": 4", savedJson);
     }
 
     [Fact(DisplayName = "An action saved with the legacy operation \"Delete\" loads as Recycle with the rest of the config kept")]

@@ -67,6 +67,8 @@ internal sealed class ShortcutsSettingsPage : SettingsPageBase
         Optional(nameof(ShortcutMappings.MoveToFolder), () => Tr.SettingsShortcutMoveToFolder, () => Tr.SettingsShortcutMoveToFolderClearAutomationName),
         Optional(nameof(ShortcutMappings.CopyToFolder), () => Tr.SettingsShortcutCopyToFolder, () => Tr.SettingsShortcutCopyToFolderClearAutomationName),
         Required(nameof(ShortcutMappings.SendToRecycleBin), () => Tr.SettingsShortcutRecycle),
+        Optional(nameof(ShortcutMappings.OpenInDefaultEditor), () => Tr.SettingsShortcutOpenInDefaultEditor,
+            () => Tr.SettingsShortcutOpenInDefaultEditorClearAutomationName),
     ];
 
     /// <summary>Mọi hàng của trang theo thứ tự hiển thị.</summary>

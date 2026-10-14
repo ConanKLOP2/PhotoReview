@@ -144,6 +144,7 @@ public static class SettingsNormalizer
             shortcuts.FitHeight = shortcuts.FitHeight?.Trim() ?? "";
             shortcuts.ToggleKeepZoom = shortcuts.ToggleKeepZoom?.Trim() ?? "";
             shortcuts.Refresh = shortcuts.Refresh?.Trim() ?? "";
+            shortcuts.OpenInDefaultEditor = shortcuts.OpenInDefaultEditor?.Trim() ?? "";
         }
 
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: Return/Enter, Prior/PageUp ... are one key
@@ -246,6 +247,9 @@ public static class SettingsNormalizer
                 fixedNames.Add(nameof(AppSettings.HiddenContextMenuItems));
             }
         }
+
+        // FEAT-EXTERNAL-EDITORS: blank/duplicate entries, an unknown default id, the legacy single path kept in step.
+        if (ExternalEditors.Reconcile(settings)) fixedNames.Add(nameof(AppSettings.ExternalEditors));
 
         return fixedNames;
     }

@@ -72,12 +72,52 @@ public static class ContextMenuModelBuilder
             ContextMenuItemId.OpenFolder => Command(id, Tr.MainMenuOpenFolder, null, Tr.MainMenuOpenFolderAutomationName),
             ContextMenuItemId.NextFolder => Command(id, Tr.MainMenuNextFolder, shortcuts.NextFolder, Tr.MainMenuNextFolderAutomationName),
             ContextMenuItemId.PreviousFolder => Command(id, Tr.MainMenuPreviousFolder, shortcuts.PreviousFolder, Tr.MainMenuPreviousFolderAutomationName),
-            ContextMenuItemId.ExternalEditor => Command(id, Tr.MainMenuOpenInExternalEditor, null, Tr.MainMenuOpenInExternalEditorAutomationName),
+            ContextMenuItemId.ExternalEditor => ExternalEditorItem(context),
             ContextMenuItemId.CopyFileName => Command(id, Tr.MainMenuCopyFileName, null, Tr.MainMenuCopyFileNameAutomationName),
             ContextMenuItemId.CopyFullPath => Command(id, Tr.MainMenuCopyFullPath, null, Tr.MainMenuCopyFullPathAutomationName),
             ContextMenuItemId.Settings => Command(id, Tr.MainMenuSettings, null, Tr.MainMenuSettingsAutomationName),
             _ => throw new InvalidOperationException($"Context menu item {id} is not a top-level item."),
         };
+    }
+
+    /// <summary>Id prefix of one editor entry: <c>ExternalEditor.Open.&lt;editor id&gt;</c>.</summary>
+    private const string ExternalEditorOpenPrefix = "ExternalEditor.Open."; // the controller (Shell.Win32) parses the same ids
+
+    /// <summary>Id of the "Add more editors..." entry.</summary>
+    private const string ExternalEditorAddId = "ExternalEditor.Add";
+
+    /// <summary>Id of the "Set default editor..." entry.</summary>
+    private const string ExternalEditorSetDefaultId = "ExternalEditor.SetDefault";
+
+    /// <summary>
+    /// FEAT-EXTERNAL-EDITORS: with no editor declared the entry stays the single command it always was (it opens Settings). With
+    /// one or more it is a submenu like Zoom: one entry per editor (the default is checked and carries the default-editor key),
+    /// a separator, "Add more editors..." and "Set default editor...". The number of entries follows the declaration.
+    /// </summary>
+    private static MenuItemModel ExternalEditorItem(ContextMenuBuildContext context)
+    {
+        var settings = context.Settings;
+        var editors = ExternalEditors.Effective(settings);
+        var id = ContextMenuItemId.ExternalEditor;
+        if (editors.Count == 0)
+            return Command(id, Tr.MainMenuOpenInExternalEditor, null, Tr.MainMenuOpenInExternalEditorAutomationName);
+
+        var defaultId = ExternalEditors.EffectiveDefault(settings)?.Id;
+        var children = new List<MenuItemModel>(editors.Count + 3);
+        foreach (var editor in editors)
+        {
+            var isDefault = string.Equals(editor.Id, defaultId, StringComparison.Ordinal);
+            var name = editor.DisplayName;
+            children.Add(new MenuItemModel(ExternalEditorOpenPrefix + editor.Id, MenuItemKind.Toggle, name,
+                isDefault && !string.IsNullOrWhiteSpace(settings.Shortcuts.OpenInDefaultEditor) ? settings.Shortcuts.OpenInDefaultEditor : null,
+                context.HasImage, isDefault, NoChildren, Tr.MainMenuExternalEditorItemAutomationName(name)));
+        }
+        children.Add(Separator("Separator.ExternalEditor"));
+        children.Add(Command(ExternalEditorAddId, Tr.MainMenuExternalEditorAdd, null, Tr.MainMenuExternalEditorAddAutomationName));
+        children.Add(Command(ExternalEditorSetDefaultId, Tr.MainMenuExternalEditorSetDefault, null,
+            Tr.MainMenuExternalEditorSetDefaultAutomationName));
+        return new MenuItemModel(id.ToString(), MenuItemKind.Submenu, Tr.MainMenuOpenInExternalEditor, null, true, false, children,
+            Tr.MainMenuOpenInExternalEditorAutomationName);
     }
 
     private static List<MenuItemModel> ZoomChildren(ContextMenuBuildContext context, IReadOnlySet<ContextMenuItemId> hidden,

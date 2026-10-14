@@ -50,6 +50,12 @@ internal sealed record SettingsDialogOptions
     /// (cổng Win32 gắn <c>ShowActionProfiles</c> của nó; null = trang Shortcuts báo "không mở được trình sửa").
     /// </summary>
     public Func<nint, IReadOnlyList<ReviewAction>, IReadOnlyList<ReviewAction>?>? ShowActionProfiles { get; init; }
+
+    /// <summary>
+    /// FEAT-EXTERNAL-EDITORS: mở danh sách trình chỉnh sửa ngoài MODAL lồng trên Settings (owner, danh sách hiện tại, id mặc định) -&gt;
+    /// kết quả hoặc null khi huỷ (cổng Win32 gắn <c>ShowExternalEditors</c> của nó; null = trang Files báo "không mở được trình sửa").
+    /// </summary>
+    public Func<nint, IReadOnlyList<ExternalEditor>, string?, ExternalEditorsEdit?>? ShowExternalEditors { get; init; }
 }
 
 /// <summary>

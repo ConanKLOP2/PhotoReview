@@ -94,7 +94,7 @@ public sealed class SettingsWindowRedesignTests
                     window.Loaded += (_, _) => InvokeSave(window);
                     Assert.True(window.ShowDialog(), $"{property.Name}: Save was rejected");
                     var actual = property.GetValue(window.Settings);
-                    if (!Equals(actual, mutated))
+                    if (!Equals(actual, mutated) && !SameEditors(actual, mutated))
                         failures.Add($"{property.Name}: expected {mutated}, got {actual}");
                 }
                 finally { if (window.IsLoaded) window.Close(); }
@@ -113,8 +113,19 @@ public sealed class SettingsWindowRedesignTests
         string s => "probe-" + propertyName + "-" + s,
         Enum e => MutateEnum(e),
         null => "probe-" + propertyName, // nullable string, currently null
+        // FEAT-EXTERNAL-EDITORS: the declared editors are not shown by the frozen WPF window; they must still survive open + Save.
+        List<PhotoReview.Core.Settings.ExternalEditor> list =>
+            new List<PhotoReview.Core.Settings.ExternalEditor>(list.Select(e => e.Clone()))
+            {
+                new() { Id = "probe-id", Name = "Probe", Path = @"C:\Probe\probe.exe", Arguments = "--x {file}" },
+            },
         _ => null,
     };
+
+    /// <summary>List of editors compared by value (the list type has no value equality).</summary>
+    private static bool SameEditors(object? actual, object? expected) =>
+        actual is List<PhotoReview.Core.Settings.ExternalEditor> a && expected is List<PhotoReview.Core.Settings.ExternalEditor> e
+        && a.Select(x => (x.Id, x.Name, x.Path, x.Arguments)).SequenceEqual(e.Select(x => (x.Id, x.Name, x.Path, x.Arguments)));
 
     /// <summary>Picks a defined value distinct from <paramref name="current"/> (a flags combination for [Flags] enums).</summary>
     private static object MutateEnum(Enum current)

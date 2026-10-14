@@ -54,6 +54,19 @@ internal interface IContextMenuActions
 
     void OpenInExternalEditor();
 
+    /// <summary>FEAT-EXTERNAL-EDITORS: một mục của submenu editor (<c>ExternalEditor.Open.&lt;id&gt;</c>).</summary>
+    void OpenInExternalEditor(string editorId) => OpenInExternalEditor();
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: "Add more editors...".</summary>
+    void AddExternalEditor()
+    {
+    }
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: "Set default editor...".</summary>
+    void ChooseDefaultExternalEditor()
+    {
+    }
+
     void CopyFileName();
 
     void CopyFullPathname();
@@ -75,6 +88,11 @@ internal interface IContextMenuActions
 internal sealed class ContextMenuController
 {
     internal const string ZoomPresetPrefix = "Zoom.Preset.";
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: ids của submenu editor (cùng chuỗi với <c>ContextMenuModelBuilder</c>; test so khớp hai bên).</summary>
+    internal const string ExternalEditorOpenPrefix = "ExternalEditor.Open.";
+    internal const string ExternalEditorAddId = "ExternalEditor.Add";
+    internal const string ExternalEditorSetDefaultId = "ExternalEditor.SetDefault";
 
     private readonly IContextMenuActions _actions;
     private readonly ILog? _log;
@@ -157,6 +175,10 @@ internal sealed class ContextMenuController
             nameof(ContextMenuItemId.CopyFileName) => Run(_actions.CopyFileName),
             nameof(ContextMenuItemId.CopyFullPath) => Run(_actions.CopyFullPathname),
             nameof(ContextMenuItemId.Settings) => Run(_actions.ShowSettings),
+            ExternalEditorAddId => Run(_actions.AddExternalEditor),
+            ExternalEditorSetDefaultId => Run(_actions.ChooseDefaultExternalEditor),
+            _ when id.StartsWith(ExternalEditorOpenPrefix, StringComparison.Ordinal) =>
+                Run(() => _actions.OpenInExternalEditor(id[ExternalEditorOpenPrefix.Length..])),
             "Zoom.Custom" => GuardedAsync(Tr.MainMenuZoom, _actions.CustomZoomAsync),
             "Zoom.AlsoSetClickLevel" => Run(() => _actions.SetZoomAlsoSetsClickLevel(!_actions.Settings.SetZoomAlsoSetsClickLevel)),
             "Zoom.SetCurrentAsClickLevel" => Run(SetCurrentZoomAsClickLevel),

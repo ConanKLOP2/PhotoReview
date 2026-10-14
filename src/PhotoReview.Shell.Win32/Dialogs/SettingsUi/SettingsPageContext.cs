@@ -161,6 +161,30 @@ internal sealed class SettingsPageContext
         return null;
     }
 
+    /// <summary>
+    /// FEAT-EXTERNAL-EDITORS: mở danh sách trình chỉnh sửa MODAL lồng; kết quả khi Apply, null khi huỷ. Báo "không mở được trình sửa" và
+    /// trả null khi cổng không cấp hoặc việc mở ném lỗi.
+    /// </summary>
+    public PhotoReview.Shell.Win32.Dialogs.Native.ExternalEditorsEdit? EditExternalEditors(
+        IReadOnlyList<PhotoReview.Core.Settings.ExternalEditor> editors, string? defaultId)
+    {
+        ArgumentNullException.ThrowIfNull(editors);
+        try
+        {
+            if (Options.ShowExternalEditors is { } show)
+            {
+                return show(Owner, editors, defaultId);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // fall through: the same "could not open the editor" notice as the Action profiles button
+        }
+
+        ShowWarning(PhotoReview.Core.Localization.Tr.DialogOpenEditorFailedTitle, PhotoReview.Core.Localization.Tr.DialogOpenEditorFailedMessage);
+        return null;
+    }
+
     /// <summary>Tên hiển thị phiên bản (chân cột trái; dùng cho kiểm tra cập nhật).</summary>
     public string? Version => _dialog.Options.Version;
 }
