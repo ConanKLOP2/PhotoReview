@@ -67,8 +67,10 @@ Quét 360 file / 1487 chỗ gọi API chờ trong `tests/**`; sau khi loại `st
 
 ## Kiểm chứng
 
-Chạy lại các lớp đã đụng bằng `tools/run-tests-hidden.ps1` (`--no-build`, `--blame-hang-timeout 5m`), 10 lượt dưới tải <= 4 burner;
-chạy Architecture.Tests (filter CI). Kết quả ghi trong mô tả PR.
+Chạy lại các lớp đã đụng bằng `tools/run-tests-hidden.ps1` (`--no-build`, `--blame-hang-timeout 5m`), 10 lượt x 5 dự án dưới 4 burner CPU:
+50/50 xanh; lượt toàn bộ CI-filter App/Integration/WpfBridge/Shell.Integration/Shell.Tests xanh; Architecture.Tests 160/160.
+Đột biến: probe tạm (đã xoá) cho `Wait.JoinOrFail` với thread không bao giờ kết thúc + bound 1 s -> ném `TimeoutException` kèm
+"thread state": test vẫn đỏ khi treo thật.
 
 ## Rollback
 
