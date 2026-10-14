@@ -46,6 +46,9 @@ public sealed class SettingsWindowFieldMapTests
         // is a JSON editor; both have their own dedicated coverage (SettingsWindowRedesignTests /
         // SettingsWindowUserFeedbackBatchTests), and a generic single-property mutation doesn't apply to them.
         nameof(AppSettings.Shortcuts), nameof(AppSettings.Actions),
+        // FEAT-EXTERNAL-EDITORS: no control in the frozen WPF window; ReadFields carries them from the working copy
+        // (SettingsWindowRedesignTests.PropertiesNotShownInUi_SurviveOpenAndSave proves they survive open + Save).
+        nameof(AppSettings.ExternalEditors), nameof(AppSettings.DefaultExternalEditorId), nameof(AppSettings.ExternalEditorSendsRawOriginal),
         // Needs a LocalizationService, which the plain-AppSettings SettingsWindow constructor used by this test
         // does not provide (LanguageGroup collapses without one -- see LoadLanguages). Covered instead by
         // SettingsWindowLanguageRefreshTests.
@@ -205,13 +208,14 @@ public sealed class SettingsWindowFieldMapTests
         nameof(ShortcutMappings.ClickZoom),
         nameof(ShortcutMappings.FitWidth), nameof(ShortcutMappings.FitHeight), nameof(ShortcutMappings.ToggleKeepZoom),
         nameof(ShortcutMappings.OpenFolder), nameof(ShortcutMappings.CustomZoom), nameof(ShortcutMappings.ToggleCaptureMember),
-        nameof(ShortcutMappings.FitWidth2), nameof(ShortcutMappings.Refresh), nameof(ShortcutMappings.OpenInDefaultEditor),
+        nameof(ShortcutMappings.FitWidth2), nameof(ShortcutMappings.Refresh),
     };
 
     /// <summary>ShortcutMappings properties with no UI control, that CanonicalizeShortcuts must carry over from the pre-Save value instead of dropping.</summary>
     private static readonly HashSet<string> ShortcutPropertiesCarriedOver = new(StringComparer.Ordinal)
     {
         nameof(ShortcutMappings.MoveToFolder2),
+        nameof(ShortcutMappings.OpenInDefaultEditor), // FEAT-EXTERNAL-EDITORS: no WPF box; ReadFields carries the working copy's key
     };
 
     [Fact(DisplayName = "Tripwire: every ShortcutMappings property is either read from a shortcut text box or explicitly carried over on Save (catches the MoveToFolder2 regression)")]
