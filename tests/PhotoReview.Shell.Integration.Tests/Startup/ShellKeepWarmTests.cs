@@ -82,14 +82,22 @@ public sealed class ShellKeepWarmTests
         }, out _);
         var main = run.Main!;
         Assert.NotNull(main.KeepAlive);
-        Assert.Equal(0, work.Touches); // chưa tương tác = chưa mở thiết bị, chưa chạy gì
+        var keepAlive = main.KeepAlive!;
+
+        // perf(gate 3): ảnh đầu đã Present thì giữ ấm chạy NGAY, chưa cần tương tác (phím đầu tiên không còn là lần nộp việc đầu
+        // cho GPU rỗi); chưa có tương tác nào nên Activations vẫn 0.
+        Assert.True(SpinWait.SpinUntil(() => main.KeepWarm!.LaunchWarmups >= 1 && work.Touches >= 3, Bound),
+            "ảnh đầu đã vẽ mà giữ ấm lúc khởi động không chạy");
+        Assert.Equal(0, main.KeepWarm!.Activations);
+        clock.AdvanceMs(401); // hết khoảng giữ ấm lúc khởi động: im lặng cho tới tương tác đầu tiên
+        Assert.True(SpinWait.SpinUntil(() => keepAlive.IdleWaits >= 1 && keepAlive.IsBlocked, Bound), "hết khoảng giữ ấm lúc khởi động mà luồng nền vẫn chạm");
+        var afterLaunch = work.Touches;
 
         Send(run, WmActivate, 1);  // cửa sổ active (desktop ẩn không tự cấp focus)
         Send(run, WmKeyDown, 0x41); // 'A': phím không có lệnh
 
-        Assert.True(SpinWait.SpinUntil(() => work.Touches >= 3, Bound), "tương tác của cửa sổ active không kích hoạt giữ ấm");
+        Assert.True(SpinWait.SpinUntil(() => work.Touches >= afterLaunch + 3, Bound), "tương tác của cửa sổ active không kích hoạt giữ ấm");
         Assert.True(SpinWait.SpinUntil(() => main.KeepWarm!.Activations >= 1, Bound));
-        var keepAlive = main.KeepAlive!;
         clock.AdvanceMs(401); // > WindowMs (400): hạn chót đã qua theo đồng hồ tiêm
         // Luồng nền thoát vòng chạm và quay lại ngủ trên event (điều kiện, không phải thời gian cố định); từ đó không còn gì chạy.
         Assert.True(SpinWait.SpinUntil(() => keepAlive.IdleWaits >= 2 && keepAlive.IsBlocked, Bound), "hết khoảng giữ ấm mà luồng nền vẫn chạm");

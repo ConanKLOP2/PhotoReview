@@ -75,6 +75,9 @@ internal sealed class KeepWarmController : IWindowMessageHandler
     /// <summary>Số lần đã kéo dài khoảng giữ ấm (chẩn đoán/test).</summary>
     internal long Activations { get; private set; }
 
+    /// <summary>Số lần giữ ấm lúc khởi động (<see cref="WarmAtLaunch"/>; chẩn đoán/test). Không tính vào <see cref="Activations"/>.</summary>
+    internal long LaunchWarmups { get; private set; }
+
     /// <summary>Thông điệp nào là "người dùng đang tương tác" (kể cả kích hoạt cửa sổ: bấm vào cửa sổ để lấy focus).</summary>
     internal static bool IsInteraction(uint message) => message is
         WindowMessages.WmKeyDown or WindowMessages.WmSysKeyDown or WindowMessages.WmMouseMove or WindowMessages.WmLButtonDown
@@ -94,6 +97,23 @@ internal sealed class KeepWarmController : IWindowMessageHandler
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// perf(gate 3): giữ ấm NGAY khi ảnh đầu đã Present, không chờ tương tác đầu tiên. Lần nộp việc đầu cho GPU sau khi nó rỗi bị
+    /// chặn ~0,3-0,5 s; trước đây phím điều hướng ĐẦU TIÊN (thường vài giây sau khi mở) chính là lần nộp đó nên bị chặn ở
+    /// 25-50 % số lần, vì giữ ấm chỉ bắt đầu từ tương tác. Chỉ kéo dài thêm <see cref="KeepWarmOptions.WindowMs"/> một lần (cùng
+    /// cơ chế hạn chót, không bao giờ rút ngắn); không đổi <see cref="Activations"/> hay throttle của tương tác.
+    /// </summary>
+    internal void WarmAtLaunch()
+    {
+        if (!_options.Enabled)
+        {
+            return;
+        }
+
+        LaunchWarmups++;
+        _activate(_timestamp() + (_options.WindowMs * Stopwatch.Frequency / 1000));
     }
 
     /// <summary>Có tương tác: kéo dài khoảng giữ ấm nếu cửa sổ đang active và đã qua <see cref="ThrottleMs"/> kể từ lần trước.</summary>
