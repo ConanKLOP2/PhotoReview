@@ -149,6 +149,11 @@ internal sealed partial class ShellMainWindow
 
         if (firstImage)
         {
+            if (_options.Activate)
+            {
+                _keepWarm?.WarmAtLaunch(); // perf(gate 3): phím đầu tiên không còn là lần nộp việc đầu cho GPU rỗi
+            }
+
             FirstImagePresentedEvent?.Invoke(this, EventArgs.Empty);
         }
     }
