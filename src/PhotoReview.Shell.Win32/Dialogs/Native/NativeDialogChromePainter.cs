@@ -269,6 +269,16 @@ internal static unsafe class NativeDialogChromePainter
                     return result;
                 }
 
+                case var m when RepaintsAfterSystemPaint(kind, m):
+                {
+                    // The system combobox repaints its closed "selected item" area itself (GetDC, COLOR_HIGHLIGHT + focus rect) and a button its focus /
+                    // pressed rectangle directly on focus /
+                    // enable / selection / drop-down changes, bypassing WM_PAINT: paint our look over it before returning so the
+                    // combobox has one look at every moment (not only after a later forced repaint).
+                    var result = CommonControls.DefSubclassProc(hwnd, message, wParam, lParam);
+                    RepaintNow(hwnd, state);
+                    return result;
+                }
                 case N.WmNcDestroy:
                     CommonControls.RemoveWindowSubclass(hwnd, &ControlProc, id);
                     N.RemoveProp(hwnd, ControlProp);
@@ -356,6 +366,53 @@ internal static unsafe class NativeDialogChromePainter
     }
 
     // ---- vẽ --------------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Messages after which the system control has painted (GetDC, outside WM_PAINT) behind the hand painter's back: the closed
+    /// "selected item" area of a combobox, the focus / pressed look of a button. Without a repaint the system look stays until some
+    /// later invalidation.
+    /// </summary>
+    private static bool RepaintsAfterSystemPaint(int kind, uint message)
+    {
+        switch ((ChromePaintKind)kind)
+        {
+            case ChromePaintKind.ComboBox:
+                return message is N.WmSetFocus or N.WmKillFocus or 0x000A /* WM_ENABLE */ or 0x0030 /* WM_SETFONT */
+                    or 0x001F /* WM_CANCELMODE */ or 0x0100 /* WM_KEYDOWN */ or 0x0102 /* WM_CHAR */ or 0x0201 /* WM_LBUTTONDOWN */
+                    or 0x0202 /* WM_LBUTTONUP */ or 0x0203 /* WM_LBUTTONDBLCLK */ or 0x020A /* WM_MOUSEWHEEL */
+                    or 0x014B /* CB_RESETCONTENT */ or 0x014D /* CB_SELECTSTRING */ or 0x014E /* CB_SETCURSEL */
+                    or 0x014F /* CB_SHOWDROPDOWN */;
+            case ChromePaintKind.PushButton:
+            case ChromePaintKind.CheckBox:
+            case ChromePaintKind.RadioButton:
+                return message is N.WmSetFocus or N.WmKillFocus or 0x000A /* WM_ENABLE */ or 0x00F1 /* BM_SETCHECK */
+                    or 0x00F3 /* BM_SETSTATE */ or 0x00F4 /* BM_SETSTYLE */;
+            default:
+                return false;
+        }
+    }
+    private static void RepaintNow(nint hwnd, PaintState* state)
+    {
+        if (!User32.IsWindow(hwnd) || !User32.IsWindowVisible(hwnd))
+        {
+            return;
+        }
+
+        var hdc = User32.GetDC(hwnd);
+        if (hdc == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            PaintTo(hwnd, hdc, state);
+        }
+        finally
+        {
+            _ = User32.ReleaseDC(hwnd, hdc);
+        }
+    }
 
     private static void PaintWindow(nint hwnd, PaintState* state)
     {
