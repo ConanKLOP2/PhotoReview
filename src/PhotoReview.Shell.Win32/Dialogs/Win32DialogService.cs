@@ -37,6 +37,17 @@ internal interface ISecondaryWindowPort
     /// </summary>
     IReadOnlyList<PhotoReview.Core.Settings.ReviewAction>? ShowActionProfiles(nint ownerHwnd,
         IReadOnlyList<PhotoReview.Core.Settings.ReviewAction> actions) => null;
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: danh sách trình chỉnh sửa (modal, mở từ Settings); null khi huỷ hoặc cổng không có.</summary>
+    Native.ExternalEditorsEdit? ShowExternalEditors(nint ownerHwnd, IReadOnlyList<PhotoReview.Core.Settings.ExternalEditor> editors,
+        string? defaultId) => null;
+
+    /// <summary>FEAT-EXTERNAL-EDITORS ("Add more editors..."): chọn .exe + nhập tên; null khi huỷ hoặc cổng không có.</summary>
+    PhotoReview.Core.Settings.ExternalEditor? PromptAddExternalEditor(nint ownerHwnd, string? initialFolder) => null;
+
+    /// <summary>FEAT-EXTERNAL-EDITORS ("Set default editor..."): danh sách chọn một; id hoặc null.</summary>
+    string? PromptDefaultExternalEditor(nint ownerHwnd, IReadOnlyList<PhotoReview.Core.Settings.ExternalEditor> editors,
+        string? currentId) => null;
 }
 
 /// <summary>Các cửa sổ phụ mà <see cref="ISecondaryWindowPort"/> có thể thực thi.</summary>
@@ -52,6 +63,9 @@ internal enum SecondaryWindowKind
 
     /// <summary>WP-35 GĐ2: editor Action profiles (modal).</summary>
     ActionProfiles,
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: danh sách trình chỉnh sửa + hai hộp thoại nhỏ của menu chuột phải.</summary>
+    ExternalEditors,
 }
 
 /// <summary>
@@ -141,4 +155,10 @@ internal sealed class Win32DialogService : IDialogService
         if (Port() is { } port) port.ShowSkippedFiles(_ownerProvider(), entries);
         else _fallback?.SkippedFiles();
     }
+
+    public PhotoReview.Core.Settings.ExternalEditor? PromptAddExternalEditor(string? initialFolder = null)
+        => Port()?.PromptAddExternalEditor(_ownerProvider(), initialFolder);
+
+    public string? PromptDefaultExternalEditor(IReadOnlyList<PhotoReview.Core.Settings.ExternalEditor> editors, string? currentId)
+        => Port()?.PromptDefaultExternalEditor(_ownerProvider(), editors, currentId);
 }

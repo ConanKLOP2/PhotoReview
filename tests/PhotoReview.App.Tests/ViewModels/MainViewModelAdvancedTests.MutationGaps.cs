@@ -111,10 +111,10 @@ public sealed partial class MainViewModelAdvancedTests
     {
         var (vm, folder) = await OpenSingleImageFolderAsync("editor_compare");
         var other = CreateImageFile(folder, "2.png");
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        _settings.ExternalEditorPath = FakeEditorExe();
         vm.Compare.SelectedPath = other;
         string? launched = null;
-        vm.StartExternalEditor = (_, filePath) => launched = filePath;
+        vm.StartExternalEditor = (_, filePath, _) => launched = filePath;
 
         vm.OpenInExternalEditor();
 
@@ -128,8 +128,8 @@ public sealed partial class MainViewModelAdvancedTests
     public async Task OpenInExternalEditor_WhenTheLaunchFails_ShowsTheReasonInsteadOfThrowing(Type exceptionType)
     {
         var (vm, _) = await OpenSingleImageFolderAsync("editor_launch_fails_" + exceptionType.Name);
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
-        vm.StartExternalEditor = (_, _) => throw (Exception)Activator.CreateInstance(exceptionType, "no such editor")!;
+        _settings.ExternalEditorPath = FakeEditorExe();
+        vm.StartExternalEditor = (_, _, _) => throw (Exception)Activator.CreateInstance(exceptionType, "no such editor")!;
 
         vm.OpenInExternalEditor();
 
@@ -142,8 +142,8 @@ public sealed partial class MainViewModelAdvancedTests
     public async Task OpenInExternalEditor_WhenTheLaunchThrowsSomethingUnexpected_DoesNotHideIt()
     {
         var (vm, _) = await OpenSingleImageFolderAsync("editor_launch_unexpected");
-        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
-        vm.StartExternalEditor = (_, _) => throw new ArgumentException("bug");
+        _settings.ExternalEditorPath = FakeEditorExe();
+        vm.StartExternalEditor = (_, _, _) => throw new ArgumentException("bug");
 
         Assert.Throws<ArgumentException>(vm.OpenInExternalEditor);
         Assert.Empty(_dialogService.Errors);

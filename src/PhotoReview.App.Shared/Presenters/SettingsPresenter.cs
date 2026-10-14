@@ -296,6 +296,9 @@ internal sealed class SettingsPresenter
         s.ConfirmBeforeDelete = false;
         s.ShowZoomIndicator = false;
         s.ExternalEditorPath = string.Empty;
+        s.ExternalEditors = [];
+        s.DefaultExternalEditorId = string.Empty;
+        s.ExternalEditorSendsRawOriginal = new AppSettings().ExternalEditorSendsRawOriginal;
         s.ImageCacheCapacityBytes = PerformanceOptions.ImageCacheCapacityBytes;
         s.ImageCacheRamPercent = PerformanceOptions.ImageCacheRamPercent;
         s.MemoryReserveBytes = PerformanceOptions.MemoryReserveBytes;

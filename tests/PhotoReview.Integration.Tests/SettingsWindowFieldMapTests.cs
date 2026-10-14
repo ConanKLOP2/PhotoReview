@@ -205,7 +205,7 @@ public sealed class SettingsWindowFieldMapTests
         nameof(ShortcutMappings.ClickZoom),
         nameof(ShortcutMappings.FitWidth), nameof(ShortcutMappings.FitHeight), nameof(ShortcutMappings.ToggleKeepZoom),
         nameof(ShortcutMappings.OpenFolder), nameof(ShortcutMappings.CustomZoom), nameof(ShortcutMappings.ToggleCaptureMember),
-        nameof(ShortcutMappings.FitWidth2), nameof(ShortcutMappings.Refresh),
+        nameof(ShortcutMappings.FitWidth2), nameof(ShortcutMappings.Refresh), nameof(ShortcutMappings.OpenInDefaultEditor),
     };
 
     /// <summary>ShortcutMappings properties with no UI control, that CanonicalizeShortcuts must carry over from the pre-Save value instead of dropping.</summary>

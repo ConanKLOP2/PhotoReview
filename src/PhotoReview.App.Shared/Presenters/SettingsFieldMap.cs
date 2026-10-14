@@ -58,6 +58,7 @@ internal static class SettingsFieldMap
         new(nameof(ShortcutMappings.ToggleCaptureMember), m => m.ToggleCaptureMember, (m, v) => m.ToggleCaptureMember = v),
         new(nameof(ShortcutMappings.FitWidth2), m => m.FitWidth2, (m, v) => m.FitWidth2 = v),
         new(nameof(ShortcutMappings.Refresh), m => m.Refresh, (m, v) => m.Refresh = v),
+        new(nameof(ShortcutMappings.OpenInDefaultEditor), m => m.OpenInDefaultEditor, (m, v) => m.OpenInDefaultEditor = v),
     ];
 
     /// <summary>Settings -> text boxes.</summary>
@@ -181,9 +182,27 @@ internal static class SettingsFieldMap
         Row(nameof(AppSettings.ConfirmBeforeDelete),
             (s, f) => f.ConfirmBeforeDelete = s.ConfirmBeforeDelete,
             (f, s) => s.ConfirmBeforeDelete = f.ConfirmBeforeDelete),
-        Row(nameof(AppSettings.ExternalEditorPath),
-            (s, f) => f.ExternalEditorPath = s.ExternalEditorPath,
-            (f, s) => s.ExternalEditorPath = f.ExternalEditorPath.Trim()),
+        // FEAT-EXTERNAL-EDITORS: the list, its default and the RAW switch are written first; the single "default editor path" field
+        // (the only field the frozen WPF window has) then lands on the default editor, so a path typed there is never lost.
+        Row([nameof(AppSettings.ExternalEditors), nameof(AppSettings.DefaultExternalEditorId),
+                nameof(AppSettings.ExternalEditorSendsRawOriginal), nameof(AppSettings.ExternalEditorPath)],
+            (s, f) =>
+            {
+                f.ExternalEditors = [.. (s.ExternalEditors ?? []).Select(e => e.Clone())];
+                f.DefaultExternalEditorId = s.DefaultExternalEditorId ?? string.Empty;
+                f.ExternalEditorSendsRawOriginal = s.ExternalEditorSendsRawOriginal;
+                // The legacy path stays the shown value when no list exists yet (settings built by code, not loaded from the store).
+                f.ExternalEditorPath = ExternalEditors.Default(s)?.Path ?? s.ExternalEditorPath;
+            },
+            (f, s) =>
+            {
+                s.ExternalEditors = [.. f.ExternalEditors.Select(e => e.Clone())];
+                s.DefaultExternalEditorId = f.DefaultExternalEditorId;
+                s.ExternalEditorSendsRawOriginal = f.ExternalEditorSendsRawOriginal;
+                s.ExternalEditorPath = ExternalEditors.Default(s)?.Path ?? string.Empty;
+                ExternalEditors.ApplyLegacyPath(s, f.ExternalEditorPath);
+                return null;
+            }),
         Row(nameof(AppSettings.JournalDurability),
             (s, f) => f.JournalSafe = s.JournalDurability == JournalDurability.PowerLossSafe,
             (f, s) => s.JournalDurability = f.JournalSafe ? JournalDurability.PowerLossSafe : JournalDurability.Fast),

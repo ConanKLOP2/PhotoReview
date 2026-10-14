@@ -21,7 +21,8 @@ internal sealed record ListDialogContent(
     string? ConfirmText,
     string CancelText,
     int InitialWidthDlu,
-    int InitialHeightDlu)
+    int InitialHeightDlu,
+    int InitialSelectedIndex = -1)
 {
     /// <summary>Tệp bị bỏ qua (WPF: <c>SkippedFilesWindow</c>, 720 x 420, chỉ nút Đóng).</summary>
     public static ListDialogContent ForSkippedFiles(IReadOnlyList<SkippedEntry> entries) => new(
@@ -34,6 +35,19 @@ internal sealed record ListDialogContent(
         SkippedFilesPresenter.CloseText,
         InitialWidthDlu: 470,
         InitialHeightDlu: 205);
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: chọn một dòng (trình chỉnh sửa mặc định); <see cref="ListDialog.SelectedIndex"/> sau khi xác nhận.</summary>
+    public static ListDialogContent ForChoice(string title, string intro, IReadOnlyList<string> lines, int selected) => new(
+        title,
+        Heading: null,
+        intro,
+        "Dark.TextSecondary",
+        lines,
+        Tr.DialogExternalEditorSetDefaultConfirm,
+        Tr.CommonCancel,
+        InitialWidthDlu: 260,
+        InitialHeightDlu: 150,
+        InitialSelectedIndex: selected);
 
     /// <summary>Xác nhận hàng loạt (WPF: <c>BatchReviewWindow</c>, 720 x 560, Huỷ + xác nhận).</summary>
     public static ListDialogContent ForBatchReview(IReadOnlyList<BatchReviewItem> items) => new(
@@ -61,6 +75,9 @@ internal sealed class ListDialog : NativeDialog
     internal const int CancelId = IdCancel;
 
     private readonly ListDialogContent _content;
+
+    /// <summary>Chỉ số dòng đang chọn lúc bấm xác nhận (-1 khi không chọn); dùng cho <see cref="ListDialogContent.ForChoice"/>.</summary>
+    public int SelectedIndex { get; private set; } = -1;
 
     public ListDialog(ListDialogContent content, INativeDialogChrome? chrome = null)
         : base(chrome)
@@ -134,6 +151,17 @@ internal sealed class ListDialog : NativeDialog
         }
 
         User32.SendMessage(list, DialogConstants.LbSetHorizontalExtent, widest + Dx(8), 0);
+        if (_content.InitialSelectedIndex >= 0 && _content.InitialSelectedIndex < _content.Lines.Count)
+        {
+            ListBoxControl.SelectSingle(list, _content.InitialSelectedIndex);
+        }
+    }
+
+    protected override bool OnOk()
+    {
+        var list = Item(ListId);
+        SelectedIndex = list == 0 ? -1 : ListBoxControl.SelectedIndex(list);
+        return _content.InitialSelectedIndex < 0 || SelectedIndex >= 0; // a choice list needs a selection to confirm
     }
 
     private int MarginX => Dx(10);

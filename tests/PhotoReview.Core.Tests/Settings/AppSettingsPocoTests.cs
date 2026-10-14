@@ -10,7 +10,7 @@ public sealed class AppSettingsPocoTests
     public void AppSettingsDefaults()
     {
         var s = new AppSettings();
-        Assert.Equal(3, s.ConfigVersion);
+        Assert.Equal(4, s.ConfigVersion);
         Assert.Equal("auto", s.UiLanguage);
         Assert.Equal(InitialViewMode.Fit, s.InitialViewMode);
         Assert.Equal(LoadingMode.Preview, s.LoadingMode);

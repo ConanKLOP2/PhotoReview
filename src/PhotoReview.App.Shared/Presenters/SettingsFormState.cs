@@ -45,7 +45,17 @@ internal sealed class SettingsFormState
     public bool LoggingEnabled { get; set; }
     public bool AllowPermanentDelete { get; set; }
     public bool ConfirmBeforeDelete { get; set; }
+    /// <summary>The default editor's path (the field the WPF window and the Win32 Files page edit); see <see cref="ExternalEditors"/>.</summary>
     public string ExternalEditorPath { get; set; } = string.Empty;
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: working copy of <see cref="AppSettings.ExternalEditors"/> (the editors dialog edits it).</summary>
+    public List<ExternalEditor> ExternalEditors { get; set; } = [];
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: id of the default editor in <see cref="ExternalEditors"/>.</summary>
+    public string DefaultExternalEditorId { get; set; } = string.Empty;
+
+    /// <summary>FEAT-EXTERNAL-EDITORS: send the paired RAW original instead of the JPEG.</summary>
+    public bool ExternalEditorSendsRawOriginal { get; set; } = true;
     public bool JournalSafe { get; set; }
     public bool MoveCopyReuseLastFolder { get; set; }
 
