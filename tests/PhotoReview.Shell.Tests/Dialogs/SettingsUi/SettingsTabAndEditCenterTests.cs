@@ -91,7 +91,8 @@ public sealed unsafe class SettingsTabAndEditCenterTests(ITestOutputHelper outpu
                 Drain(dlg);
                 var expected = Capture(dlg.Hwnd, out int _, out int _);
 
-                // Compared region: the page viewport minus the control that took focus (its focus cue legitimately changes) inflated.
+                // Compared region: the page viewport; against the forced redraw the whole page is compared (no exclusion), against the state before the Tab
+                // the control that took focus (its focus cue legitimately changes) is left out, inflated.
                 // Buttons below the page (default-button highlight follows the focus) are not part of this check.
                 var origin = WindowRect(dlg.Hwnd);
                 var viewport = WindowRect(H(dlg, SettingsDialog.ViewportId(page)));
@@ -102,9 +103,12 @@ public sealed unsafe class SettingsTabAndEditCenterTests(ITestOutputHelper outpu
                     new() { Left = focusRect.Left - origin.Left - 8, Top = focusRect.Top - origin.Top - 8, Right = focusRect.Right - origin.Left + 8, Bottom = focusRect.Bottom - origin.Top + 8 },
                 };
 
+                var isEdit = ClassOf(User32.GetFocus()).Equals("Edit", StringComparison.OrdinalIgnoreCase);
                 foreach (var (name, pixels) in steps)
                 {
-                    var vsRedraw = Diff(pixels, expected, width, height, roi, allowed, out var box1);
+                    // No exclusion for combobox/button focus: the focused control must match the forced redraw too (WP-35 combo focus paint). Only an edit box
+                    // keeps it: its caret is an overlay that a repaint legitimately hides/shows.
+                    var vsRedraw = Diff(pixels, expected, width, height, roi, isEdit ? allowed : [], out var box1);
                     var vsBefore = Diff(pixels, before, width, height, roi, allowed, out var box2);
                     if (dump is { Length: > 0 })
                     {
@@ -114,7 +118,7 @@ public sealed unsafe class SettingsTabAndEditCenterTests(ITestOutputHelper outpu
 
                     if (vsRedraw > 0)
                     {
-                        failures.Add($"{name}: {vsRedraw} pixels differ from the forced redraw, box {box1}");
+                        failures.Add($"{name}: {vsRedraw} pixels differ from the forced redraw, box {box1}, focus control {ClassOf(User32.GetFocus())} {focusRect.Left - origin.Left},{focusRect.Top - origin.Top}-{focusRect.Right - origin.Left},{focusRect.Bottom - origin.Top}");
                     }
 
                     if (vsBefore > 0)
@@ -265,6 +269,13 @@ public sealed unsafe class SettingsTabAndEditCenterTests(ITestOutputHelper outpu
     }
 
     // ---- helpers --------------------------------------------------------------------------------------------------------------
+
+    private static string ClassOf(nint hwnd)
+    {
+        char* name = stackalloc char[64];
+        var length = User32.GetClassName(hwnd, name, 64);
+        return new string(name, 0, Math.Max(0, length));
+    }
 
     private static int PixelAt(byte[] bgra, int width, int x, int y)
     {
