@@ -25,8 +25,9 @@ public sealed class ConvertersTests
             catch (Exception ex) { failure = ex; }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "The converter test thread did not finish.");
+        Wait.JoinOrFail(thread, "The converter test thread");
         if (failure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
     }
 

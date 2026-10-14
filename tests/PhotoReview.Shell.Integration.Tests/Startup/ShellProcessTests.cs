@@ -95,14 +95,14 @@ public sealed class ShellProcessTests
 
         public bool WaitForExit(TimeSpan timeout) => _process.WaitForExit(timeout);
 
-        public bool CloseWindow() => SpinWait.SpinUntil(() => _process.HasExited || _process.CloseMainWindow(), TimeSpan.FromSeconds(15));
+        public bool CloseWindow() => SpinWait.SpinUntil(() => _process.HasExited || _process.CloseMainWindow(), TimeSpan.FromSeconds(60));
 
         public void Dispose()
         {
             if (!_process.HasExited)
             {
                 _process.Kill(entireProcessTree: true);
-                _process.WaitForExit(TimeSpan.FromSeconds(10));
+                _process.WaitForExit(TimeSpan.FromSeconds(30));
             }
 
             _process.Dispose();

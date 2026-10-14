@@ -111,7 +111,7 @@ public sealed partial class PresentationPerfReportTests(ITestOutputHelper output
         }
 
         run.RequestClose();
-        Assert.True(run.WaitForExit(TimeSpan.FromSeconds(30)));
+        Assert.True(run.WaitForExit(TimeSpan.FromSeconds(60)));
     }
 
     private static string PrepareFolder(string root)

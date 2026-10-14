@@ -10,7 +10,8 @@ namespace PhotoReview.Shell.Tests.Hosting;
 /// </summary>
 internal sealed class UiThread : IAsyncDisposable
 {
-    public static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    // Giới hạn chống treo, không phải ngân sách tốc độ: lần dựng UI thread đầu tiên của tiến trình lạnh trên runner 2 vCPU bận có thể rất chậm.
+    public static readonly TimeSpan Bound = TimeSpan.FromSeconds(120);
 
     private readonly TaskCompletionSource<int> _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Thread _thread;

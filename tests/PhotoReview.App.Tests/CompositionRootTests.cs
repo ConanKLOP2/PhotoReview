@@ -299,8 +299,10 @@ public class CompositionRootTests
         });
 
         thread.SetApartmentState(ApartmentState.STA);
+
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "STA MainWindow resolution timed out.");
+        Wait.JoinOrFail(thread, "STA MainWindow resolution");
         Assert.Null(threadException);
     }
 
@@ -559,8 +561,10 @@ public class CompositionRootTests
         });
 
         thread.SetApartmentState(ApartmentState.STA);
+
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "STA window-close test timed out.");
+        Wait.JoinOrFail(thread, "STA window-close test");
         Assert.Null(threadException);
     }
 
@@ -616,8 +620,10 @@ public class CompositionRootTests
         });
 
         thread.SetApartmentState(ApartmentState.STA);
+
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "STA MainWindow resolution timed out.");
+        Wait.JoinOrFail(thread, "STA MainWindow resolution");
         Assert.Null(threadException);
         Assert.Equal(paths.WindowPlacementFile, placementFile);
         Assert.StartsWith(root, placementFile, StringComparison.OrdinalIgnoreCase);
@@ -664,8 +670,10 @@ public class CompositionRootTests
         });
 
         thread.SetApartmentState(ApartmentState.STA);
+
+        thread.IsBackground = true; // a real hang must fail the test, not keep the test host alive
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "The STA thread did not finish (hang).");
+        Wait.JoinOrFail(thread, "The STA MainWindow resolution thread");
 
         Assert.Null(threadException);
     }

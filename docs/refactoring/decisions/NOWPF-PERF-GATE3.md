@@ -1,6 +1,6 @@
 ---
 id: NOWPF-PERF-GATE3
-order: 1340
+order: 1350
 summary: |-
   Gate hiệu năng đợt 3 đo lại trên máy yên (2026-10-14, R2R và AOT cùng commit, 10-12 vòng xen kẽ): G1 cửa sổ thấy được AOT 112 ms ĐẠT / R2R 321 ms HỤT; NW-5 AOT ảnh đầu 206 ms ĐẠT; G3 Settings lần sau 48 ms ĐẠT (nay là hộp thoại Win32, số 289 ms cũ là cầu WPF); G2 key->frame P95 AOT 8,8 -> 4,8 ms (P50 4,4) vẫn HỤT <= 3 ms (sàn = một khung 2,7-3,7 ms). Hai tối ưu: giữ GPU ấm ngay sau ảnh đầu (phím đầu 36-507 -> 5-7 ms) và khung rỗi vẽ ngay không chờ lưới vblank. Cú đứng 300-500 ms là của desktop ẩn (0/20 trên desktop thật). CHƯA XÁC NHẬN.
 ---
