@@ -187,9 +187,12 @@ public static class StaTestHost
     public static async Task DrainAsync(TimeSpan duration)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        while (sw.Elapsed < duration)
+        while (true)
         {
+            // One read of the clock: re-reading Elapsed between the loop test and the subtraction let `remaining` go
+            // negative on a busy runner, and DispatcherTimer.Interval rejects a negative TimeSpan.
             var remaining = duration - sw.Elapsed;
+            if (remaining <= TimeSpan.Zero) break;
             var fired = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var timer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = remaining };
             timer.Tick += (_, _) => { timer.Stop(); fired.TrySetResult(null); };
