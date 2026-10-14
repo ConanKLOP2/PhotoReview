@@ -1,79 +1,79 @@
-﻿---
+---
 id: NOWPF-THREADAUDIT-TESTS
 order: 1000
 summary: |-
-  RÃ  soÃ¡t thread-id/thá»i gian test: sá»­a 5, luáº­t má»›i.
+  Rà soát thread-id/thời gian test: sửa 5, luật mới.
 ---
 
-# NOWPF-THREADAUDIT-TESTS - rÃ  soÃ¡t danh tÃ­nh luá»“ng vÃ  thá»i gian trong test (2026-10-12)
+# NOWPF-THREADAUDIT-TESTS - rà soát danh tính luồng và thời gian trong test (2026-10-12)
 
-Bá»‘i cáº£nh: CI Ä‘á» ngáº«u nhiÃªn ba láº§n trong 24 giá» cÃ¹ng má»™t lá»›p lá»—i - (a) so `ManagedThreadId` cá»§a luá»“ng Ä‘Ã£ cháº¿t (id bá»‹ tÃ¡i dÃ¹ng:
-`WicGeneratedComTests`, Imaging `DecodeOriginal...`), (b) láº¥y luá»“ng thread-pool lÃ m "luá»“ng gá»i" rá»“i kháº³ng Ä‘á»‹nh viá»‡c KHÃ”NG cháº¡y á»Ÿ
-luá»“ng Ä‘Ã³ (Ä‘Ã£ sá»­a á»Ÿ `PreloadSchedulerMutationTests`), (c) Ä‘o thá»i gian thá»±c/CPU/Æ°u tiÃªn luá»“ng dÆ°á»›i táº£i (`GpuKeepAliveTests`, má»™t
-test Ä‘Ã£ sá»­a báº±ng seam Ä‘á»“ng há»“ á»Ÿ #463). Quy táº¯c rÃºt ra náº±m á»Ÿ [TESTING.md](../../TESTING.md) má»¥c "Thread identity and timing under load".
+Bối cảnh: CI đỏ ngẫu nhiên ba lần trong 24 giờ cùng một lớp lỗi - (a) so `ManagedThreadId` của luồng đã chết (id bị tái dùng:
+`WicGeneratedComTests`, Imaging `DecodeOriginal...`), (b) lấy luồng thread-pool làm "luồng gọi" rồi khẳng định việc KHÔNG chạy ở
+luồng đó (đã sửa ở `PreloadSchedulerMutationTests`), (c) đo thời gian thực/CPU/ưu tiên luồng dưới tải (`GpuKeepAliveTests`, một
+test đã sửa bằng seam đồng hồ ở #463). Quy tắc rút ra nằm ở [TESTING.md](../../TESTING.md) mục "Thread identity and timing under load".
 
-## 1. PhÆ°Æ¡ng phÃ¡p
+## 1. Phương pháp
 
-- QuÃ©t `tests/` (Core, Imaging, App, Shell, Shell.Integration, Integration, Platform, TestSupport): `ManagedThreadId`,
-  `CurrentManagedThreadId`, `Thread.CurrentThread`, `IsThreadPoolThread`, `Stopwatch`/`Elapsed`/`GetThreadTimes`/`Priority`, vÃ  cÃ¡c
-  tÃªn/chÃº thÃ­ch "off the caller / same thread".
-- TiÃªu chÃ­ AN TOÃ€N: id (hoáº·c Ä‘á»‘i tÆ°á»£ng) Ä‘Æ°á»£c so vá»›i má»™t luá»“ng Sá»NG suá»‘t phÃ©p so sÃ¡nh (UI/dispatcher thread chuyÃªn dá»¥ng cá»§a test, luá»“ng
-  gá»i `new Thread` Ä‘ang cháº·n, worker khÃ´ng bao giá» thoÃ¡t) hoáº·c so trong thÃ¢n Ä‘á»“ng bá»™ khÃ´ng cÃ³ `await`. Rá»¦I RO: luá»“ng pool lÃ m "luá»“ng
-  gá»i" qua `await`, so vá»›i luá»“ng Ä‘Ã£ cháº¿t, hoáº·c cá»­a sá»•/khoáº£ng thá»i gian thá»±c cho má»™t kháº³ng Ä‘á»‹nh "cÃ³ Ä‘á»§ N sá»± kiá»‡n".
-- TÃ¡i hiá»‡n: vÃ²ng láº·p 300-400 láº§n trong má»™t tiáº¿n trÃ¬nh (xUnit, Release) vá»›i 12 luá»“ng Ä‘á»‘t CPU ná»n; trÆ°á»›c vÃ  sau khi sá»­a.
+- Quét `tests/` (Core, Imaging, App, Shell, Shell.Integration, Integration, Platform, TestSupport): `ManagedThreadId`,
+  `CurrentManagedThreadId`, `Thread.CurrentThread`, `IsThreadPoolThread`, `Stopwatch`/`Elapsed`/`GetThreadTimes`/`Priority`, và các
+  tên/chú thích "off the caller / same thread".
+- Tiêu chí AN TOÀN: id (hoặc đối tượng) được so với một luồng SỐNG suốt phép so sánh (UI/dispatcher thread chuyên dụng của test, luồng
+  gọi `new Thread` đang chặn, worker không bao giờ thoát) hoặc so trong thân đồng bộ không có `await`. RỦI RO: luồng pool làm "luồng
+  gọi" qua `await`, so với luồng đã chết, hoặc cửa sổ/khoảng thời gian thực cho một khẳng định "có đủ N sự kiện".
+- Tái hiện: vòng lặp 300-400 lần trong một tiến trình (xUnit, Release) với 12 luồng đốt CPU nền; trước và sau khi sửa.
 
-## 2. Báº£ng phÃ¢n loáº¡i (70 láº§n dÃ¹ng ManagedThreadId / 22 file + test thá»i gian)
+## 2. Bảng phân loại (70 lần dùng ManagedThreadId / 22 file + test thời gian)
 
-| Test / vá»‹ trÃ­ | CÆ¡ cháº¿ | PhÃ¢n loáº¡i | LÃ½ do / xá»­ lÃ½ |
+| Test / vị trí | Cơ chế | Phân loại | Lý do / xử lý |
 |---|---|---|---|
-| `JournalDurabilityTests.SafeMode_PreparedAndMutationRunOffCallerThread_FastModeKeepsPreparedInline` | so id cá»§a luá»“ng test (pool) vá»›i luá»“ng ghi sá»± kiá»‡n sau `await` | **Rá»¦I RO - Ä‘Ã£ sá»­a** | luá»“ng pool gá»i bá»‹ tráº£ vá» pool á»Ÿ `await`, rá»“i tá»± cháº¡y viá»‡c: 299/300 Ä‘á» dÆ°á»›i táº£i. Nay: `new Thread` cháº·n `GetResult()`, so `Thread` (NotSame/Same) qua `FsEvent.Thread` |
-| `GpuKeepAliveTests.ReactivationAfterTheDeadline_ResumesOnTheSameDevice` | cá»­a sá»• 60 ms thá»i gian thá»±c, cáº§n >= 3 láº§n cháº¡m | **Rá»¦I RO - Ä‘Ã£ sá»­a** | 29/30 Ä‘á» dÆ°á»›i táº£i; nay Ä‘á»“ng há»“ giáº£ + chá» tráº¡ng thÃ¡i ngá»§ (`IdleWaits`/`IsBlocked`) |
-| `GpuKeepAliveTests.NonPositiveInterval_...` | Ä‘áº¿m sá»‘ láº§n cháº¡m trong 300 ms thá»i gian thá»±c (cáº­n dÆ°á»›i 2) | **Rá»¦I RO - Ä‘Ã£ sá»­a** | 2/30 Ä‘á»; nay cáº­n TRÃŠN theo thá»i gian trÃ´i (táº£i chá»‰ lÃ m cháº­m hÆ¡n) + chá» sá»‘ng >= 40 láº§n |
-| `GpuKeepAliveTests.ActivationNeverShortensAnEarlierDeadline` | háº¡n chÃ³t 1500 ms thá»i gian thá»±c, chá» 3 láº§n cháº¡m | **Rá»¦I RO - Ä‘Ã£ sá»­a** | 1/30 Ä‘á»; Ä‘á»“ng há»“ giáº£ |
-| `GpuKeepAliveTests.Activation_...ThenStopsAtTheDeadline` | cá»­a sá»• 150 ms thá»i gian thá»±c | Rá»¦I RO (láº­p luáº­n; 30/30 xanh) - Ä‘Ã£ sá»­a | cÃ¹ng lá»›p vá»›i Reactivation; Ä‘á»“ng há»“ giáº£, quan sÃ¡t tráº¡ng thÃ¡i |
-| `GpuKeepAliveTests.IntervalIsRespected_NotABusyLoop`, `HugeInterval_...` | Ä‘áº¿m cháº¡m trong cá»­a sá»• thá»±c | Rá»¦I RO (láº­p luáº­n) - Ä‘Ã£ sá»­a | Interval: cáº­n trÃªn theo thá»i gian trÃ´i; Huge: chá» cÃ³ giá»›i háº¡n (káº¹p 1 s so vá»›i 60 s) |
-| `GpuKeepAliveTests` (FakeWork) | `OpenThreadId`/`TouchThreads`/`DisposeThreadId` kiá»ƒu int | AN TOÃ€N, siáº¿t láº¡i | Ä‘á»•i sang Ä‘á»‘i tÆ°á»£ng `Thread` (khÃ´ng phá»¥ thuá»™c id tÃ¡i dÃ¹ng) |
-| `ExplorerOrderServiceSeamTests.QueriesAreSerializedOnOneStaThread` | `HashSet<int>` id luá»“ng, `Assert.Single` | AN TOÃ€N, siáº¿t láº¡i | id tÃ¡i dÃ¹ng cÃ³ thá»ƒ che luá»“ng thá»© hai: Ä‘á»•i sang `HashSet<Thread>` |
-| `ImmediateUiSchedulerTests.Post_RunsTheActionInline...` | so id luá»“ng hiá»‡n táº¡i, thÃ¢n Ä‘á»“ng bá»™ | AN TOÃ€N | khÃ´ng `await`, cÃ¹ng luá»“ng sá»‘ng |
-| `FileLogTimingAndHandleTests.Flush_DrainedEventDisposed...` | id luá»“ng hiá»‡n táº¡i trong `FirstChanceException` | AN TOÃ€N | thÃ¢n Ä‘á»“ng bá»™; 40/40 xanh dÆ°á»›i táº£i; ngÆ°á»¡ng `< 1000 ms` rá»™ng so vá»›i 0 ms |
-| `FileLogTimingAndHandleTests.Shutdown_StuckWriter...` | `InRange(1500, 3900)` ms | AN TOÃ€N (cáº­n rá»™ng) | ngÃ¢n sÃ¡ch chung ~2 s, biÃªn 1,9 s; 40/40 xanh dÆ°á»›i táº£i |
-| `RecoveryRecycleGroupTests.Retry_GroupRecycle_RunsTheBinCallsOffTheCallerThread` | luá»“ng gá»i `new Thread` cháº·n | AN TOÃ€N | id luá»“ng gá»i sá»‘ng vÃ  cháº·n trong khi viá»‡c cháº¡y |
-| `RecoveryRetryServiceTests.RetryMoveOrCopyAsync_RunsMutationOffCallerThread` | luá»“ng gá»i riÃªng + SynchronizationContext | AN TOÃ€N | hai id láº¥y khi cáº£ hai luá»“ng cÃ²n sá»‘ng |
-| `UndoServiceGroupTests` (RunOnDedicatedThread, 3 chá»—) | luá»“ng gá»i `new Thread` cháº·n | AN TOÃ€N | nhÆ° trÃªn |
-| `NavigationStatWorkerTests` (2 test) | worker chuyÃªn dá»¥ng (khÃ´ng thoÃ¡t) vs luá»“ng test/continuation | AN TOÃ€N | worker sá»‘ng suá»‘t tiáº¿n trÃ¬nh |
-| `SourceBytesCacheTests.GetOrRead_ReadsOnCallingThread` | luá»“ng `new Thread`, so id vá»›i `LastReadManagedThreadId` | AN TOÃ€N | cÃ¹ng má»™t luá»“ng, Ä‘á»c trong khi luá»“ng sá»‘ng |
-| `SourceBytesCacheRobustnessTests.LateReaderAfterPublish...` | id luá»“ng LongRunning Ä‘ang Ä‘á»— vs luá»“ng tháº¯ng | AN TOÃ€N | luá»“ng "muá»™n" sá»‘ng Ä‘áº¿n khi `winnerDone` |
-| `PreloadKickOffCallerTests` (3) | id luá»“ng test giá»¯a `TrackCaller` vÃ  `StopTracking` | AN TOÃ€N | khoáº£ng Ä‘á»“ng bá»™, khÃ´ng `await` |
-| `PreviewImageServiceMutationTests`, `PreloadSchedulerMutationTests`, `ViewerDecodePriorityTests` | Ä‘á»‘i tÆ°á»£ng `Thread`/cá» pool/priority | AN TOÃ€N | Ä‘Ã£ so Ä‘á»‘i tÆ°á»£ng Thread (#463/#464) |
-| `ImagePresenterTests.StatOffUiThread` | id luá»“ng test; má»i stat cháº¡y trÃªn `NavigationStatWorker` riÃªng | AN TOÃ€N (láº­p luáº­n) | worker Ä‘Æ°á»£c táº¡o sau khi láº¥y id vÃ  sá»‘ng suá»‘t; chÆ°a Ä‘á»•i vÃ¬ khÃ´ng cÃ³ Ä‘Æ°á»ng stat nÃ o khÃ¡c ngoÃ i `StatNow` |
-| `AppRound3GapTests`, `DispatcherUiSchedulerTests`, `WpfPresentationSinkTests` | so id vá»›i `Dispatcher` thread cá»§a test | AN TOÃ€N | thread sá»‘ng Ä‘áº¿n `Dispose`; so trÆ°á»›c khi táº¯t |
-| `Win32UiDispatcherTests` (7), `MessageLoopFrameClockTests` | so vá»›i `UiThread.ManagedThreadId` | AN TOÃ€N | UI thread chuyÃªn dá»¥ng sá»‘ng Ä‘áº¿n `await using` |
-| `ReviewCatalogThreadGuardTests` | luá»“ng khÃ¡c vá»›i luá»“ng Ä‘Ã£ gáº¯n | AN TOÃ€N | chá»§ sá»Ÿ há»¯u cÃ²n sá»‘ng khi luá»“ng thá»© hai cháº¡y |
-| `FileHashServiceTests` | `Assert.Null(LastReadManagedThreadId)` | AN TOÃ€N | khÃ´ng so id |
-| `ImagePresenterTests.CompareBusyAndDimensions`, `ViewerDecodePriorityTests` | ghi `Thread.Priority` do code dÆ°á»›i test Ä‘áº·t | AN TOÃ€N | giÃ¡ trá»‹, khÃ´ng pháº£i thá»i gian |
-| `FixturePerfTest.FixtureGenerationCpuBudget` (Slow) | CPU time cá»§a luá»“ng gá»i <= 10 s | AN TOÃ€N (cáº­n rá»™ng) | CPU time, Ä‘o 1-2 s |
-| `ShellIdleCpuReportTests`, `KineticPanFrameMeasurementTests`, `SessionStoreSweepPerfTests` | CPU/Æ°u tiÃªn/thá»i gian thá»±c | KhÃ´ng cháº¡y trong CI | `Category=Manual` hoáº·c `Native` (lá»c `!Manual&!Native`) |
-| Fuzz/hang-guard: `ParserMutationFuzzTests` (worst < 500 ms), `RawContainerFuzzTests` (p95), `PreviewCacheFileMutationTests`, `PreloadSafetyTests`, `SessionStoreTests`... | ngÃ¢n sÃ¡ch thá»i gian chá»‘ng treo | AN TOÃ€N (cáº­n rá»™ng, ghi nháº­n) | ParserFuzz 60/60 xanh dÆ°á»›i táº£i (2,4 triá»‡u láº§n parse); ngÃ¢n sÃ¡ch >= 1000 láº§n thÆ°á»ng lá»‡; khÃ´ng Ä‘á»•i |
-| Test dÃ¹ng `Stopwatch` lÃ m Ä‘á»“ng há»“ giáº£ (`BurstPreloadTests`, `KeepWarmTests`, `FrameStatsTests`, `Animator`...) | `Stopwatch.Frequency` lÃ m Ä‘Æ¡n vá»‹ | AN TOÃ€N | Ä‘á»“ng há»“ do test Ä‘iá»u khiá»ƒn |
+| `JournalDurabilityTests.SafeMode_PreparedAndMutationRunOffCallerThread_FastModeKeepsPreparedInline` | so id của luồng test (pool) với luồng ghi sự kiện sau `await` | **RỦI RO - đã sửa** | luồng pool gọi bị trả về pool ở `await`, rồi tự chạy việc: 299/300 đỏ dưới tải. Nay: `new Thread` chặn `GetResult()`, so `Thread` (NotSame/Same) qua `FsEvent.Thread` |
+| `GpuKeepAliveTests.ReactivationAfterTheDeadline_ResumesOnTheSameDevice` | cửa sổ 60 ms thời gian thực, cần >= 3 lần chạm | **RỦI RO - đã sửa** | 29/30 đỏ dưới tải; nay đồng hồ giả + chờ trạng thái ngủ (`IdleWaits`/`IsBlocked`) |
+| `GpuKeepAliveTests.NonPositiveInterval_...` | đếm số lần chạm trong 300 ms thời gian thực (cận dưới 2) | **RỦI RO - đã sửa** | 2/30 đỏ; nay cận TRÊN theo thời gian trôi (tải chỉ làm chậm hơn) + chờ sống >= 40 lần |
+| `GpuKeepAliveTests.ActivationNeverShortensAnEarlierDeadline` | hạn chót 1500 ms thời gian thực, chờ 3 lần chạm | **RỦI RO - đã sửa** | 1/30 đỏ; đồng hồ giả |
+| `GpuKeepAliveTests.Activation_...ThenStopsAtTheDeadline` | cửa sổ 150 ms thời gian thực | RỦI RO (lập luận; 30/30 xanh) - đã sửa | cùng lớp với Reactivation; đồng hồ giả, quan sát trạng thái |
+| `GpuKeepAliveTests.IntervalIsRespected_NotABusyLoop`, `HugeInterval_...` | đếm chạm trong cửa sổ thực | RỦI RO (lập luận) - đã sửa | Interval: cận trên theo thời gian trôi; Huge: chờ có giới hạn (kẹp 1 s so với 60 s) |
+| `GpuKeepAliveTests` (FakeWork) | `OpenThreadId`/`TouchThreads`/`DisposeThreadId` kiểu int | AN TOÀN, siết lại | đổi sang đối tượng `Thread` (không phụ thuộc id tái dùng) |
+| `ExplorerOrderServiceSeamTests.QueriesAreSerializedOnOneStaThread` | `HashSet<int>` id luồng, `Assert.Single` | AN TOÀN, siết lại | id tái dùng có thể che luồng thứ hai: đổi sang `HashSet<Thread>` |
+| `ImmediateUiSchedulerTests.Post_RunsTheActionInline...` | so id luồng hiện tại, thân đồng bộ | AN TOÀN | không `await`, cùng luồng sống |
+| `FileLogTimingAndHandleTests.Flush_DrainedEventDisposed...` | id luồng hiện tại trong `FirstChanceException` | AN TOÀN | thân đồng bộ; 40/40 xanh dưới tải; ngưỡng `< 1000 ms` rộng so với 0 ms |
+| `FileLogTimingAndHandleTests.Shutdown_StuckWriter...` | `InRange(1500, 3900)` ms | AN TOÀN (cận rộng) | ngân sách chung ~2 s, biên 1,9 s; 40/40 xanh dưới tải |
+| `RecoveryRecycleGroupTests.Retry_GroupRecycle_RunsTheBinCallsOffTheCallerThread` | luồng gọi `new Thread` chặn | AN TOÀN | id luồng gọi sống và chặn trong khi việc chạy |
+| `RecoveryRetryServiceTests.RetryMoveOrCopyAsync_RunsMutationOffCallerThread` | luồng gọi riêng + SynchronizationContext | AN TOÀN | hai id lấy khi cả hai luồng còn sống |
+| `UndoServiceGroupTests` (RunOnDedicatedThread, 3 chỗ) | luồng gọi `new Thread` chặn | AN TOÀN | như trên |
+| `NavigationStatWorkerTests` (2 test) | worker chuyên dụng (không thoát) vs luồng test/continuation | AN TOÀN | worker sống suốt tiến trình |
+| `SourceBytesCacheTests.GetOrRead_ReadsOnCallingThread` | luồng `new Thread`, so id với `LastReadManagedThreadId` | AN TOÀN | cùng một luồng, đọc trong khi luồng sống |
+| `SourceBytesCacheRobustnessTests.LateReaderAfterPublish...` | id luồng LongRunning đang đỗ vs luồng thắng | AN TOÀN | luồng "muộn" sống đến khi `winnerDone` |
+| `PreloadKickOffCallerTests` (3) | id luồng test giữa `TrackCaller` và `StopTracking` | AN TOÀN | khoảng đồng bộ, không `await` |
+| `PreviewImageServiceMutationTests`, `PreloadSchedulerMutationTests`, `ViewerDecodePriorityTests` | đối tượng `Thread`/cờ pool/priority | AN TOÀN | đã so đối tượng Thread (#463/#464) |
+| `ImagePresenterTests.StatOffUiThread` | id luồng test; mọi stat chạy trên `NavigationStatWorker` riêng | AN TOÀN (lập luận) | worker được tạo sau khi lấy id và sống suốt; chưa đổi vì không có đường stat nào khác ngoài `StatNow` |
+| `AppRound3GapTests`, `DispatcherUiSchedulerTests`, `WpfPresentationSinkTests` | so id với `Dispatcher` thread của test | AN TOÀN | thread sống đến `Dispose`; so trước khi tắt |
+| `Win32UiDispatcherTests` (7), `MessageLoopFrameClockTests` | so với `UiThread.ManagedThreadId` | AN TOÀN | UI thread chuyên dụng sống đến `await using` |
+| `ReviewCatalogThreadGuardTests` | luồng khác với luồng đã gắn | AN TOÀN | chủ sở hữu còn sống khi luồng thứ hai chạy |
+| `FileHashServiceTests` | `Assert.Null(LastReadManagedThreadId)` | AN TOÀN | không so id |
+| `ImagePresenterTests.CompareBusyAndDimensions`, `ViewerDecodePriorityTests` | ghi `Thread.Priority` do code dưới test đặt | AN TOÀN | giá trị, không phải thời gian |
+| `FixturePerfTest.FixtureGenerationCpuBudget` (Slow) | CPU time của luồng gọi <= 10 s | AN TOÀN (cận rộng) | CPU time, đo 1-2 s |
+| `ShellIdleCpuReportTests`, `KineticPanFrameMeasurementTests`, `SessionStoreSweepPerfTests` | CPU/ưu tiên/thời gian thực | Không chạy trong CI | `Category=Manual` hoặc `Native` (lọc `!Manual&!Native`) |
+| Fuzz/hang-guard: `ParserMutationFuzzTests` (worst < 500 ms), `RawContainerFuzzTests` (p95), `PreviewCacheFileMutationTests`, `PreloadSafetyTests`, `SessionStoreTests`... | ngân sách thời gian chống treo | AN TOÀN (cận rộng, ghi nhận) | ParserFuzz 60/60 xanh dưới tải (2,4 triệu lần parse); ngân sách >= 1000 lần thường lệ; không đổi |
+| Test dùng `Stopwatch` làm đồng hồ giả (`BurstPreloadTests`, `KeepWarmTests`, `FrameStatsTests`, `Animator`...) | `Stopwatch.Frequency` làm đơn vị | AN TOÀN | đồng hồ do test điều khiển |
 
-## 3. Báº±ng chá»©ng
+## 3. Bằng chứng
 
-| Test | TrÆ°á»›c (dÆ°á»›i 12 luá»“ng Ä‘á»‘t CPU) | Sau |
+| Test | Trước (dưới 12 luồng đốt CPU) | Sau |
 |---|---|---|
-| `JournalDurabilityTests.SafeMode_...` | 299/300 Ä‘á» (`Assert.NotEqual`) | 400/400 xanh |
-| `GpuKeepAliveTests` x7 | Reactivation 29/30, NonPositive 2/30, NeverShortens 1/30 Ä‘á» (30 láº§n) | 300/300 xanh má»—i test |
-| Mutation (src táº¡m, Ä‘Ã£ hoÃ n nguyÃªn) | - | Journal: cháº¡y `Move` ngay trÃªn luá»“ng gá»i -> Ä‘á» (NotSame). GpuKeepAlive: bá» háº¡n chÃ³t -> Activation/Reactivation Ä‘á»; cho phÃ©p rÃºt ngáº¯n háº¡n chÃ³t -> NeverShortens Ä‘á»; bá» ngá»§ khoáº£ng -> Interval/NonPositive Ä‘á»; káº¹p trÃªn 1000 -> Huge Ä‘á»; káº¹p dÆ°á»›i 0 -> NonPositive Ä‘á» |
+| `JournalDurabilityTests.SafeMode_...` | 299/300 đỏ (`Assert.NotEqual`) | 400/400 xanh |
+| `GpuKeepAliveTests` x7 | Reactivation 29/30, NonPositive 2/30, NeverShortens 1/30 đỏ (30 lần) | 300/300 xanh mỗi test |
+| Mutation (src tạm, đã hoàn nguyên) | - | Journal: chạy `Move` ngay trên luồng gọi -> đỏ (NotSame). GpuKeepAlive: bỏ hạn chót -> Activation/Reactivation đỏ; cho phép rút ngắn hạn chót -> NeverShortens đỏ; bỏ ngủ khoảng -> Interval/NonPositive đỏ; kẹp trên 1000 -> Huge đỏ; kẹp dưới 0 -> NonPositive đỏ |
 
-Ghi chÃº: Ä‘á»™t biáº¿n "bá» káº¹p dÆ°á»›i" (`Math.Min(intervalMs, 1000)`: khoáº£ng Ã¢m khÃ´ng káº¹p vá» 1) KHÃ”NG lÃ m NonPositive Ä‘á» - vá»›i khoáº£ng Ã¢m
-`SetWaitableTimer` nháº­n má»‘c tuyá»‡t Ä‘á»‘i vÃ  váº«n cháº¡m ~1 láº§n/ms trÃªn mÃ¡y nÃ y (chÆ°a tÃ¬m hiá»ƒu sÃ¢u; hÃ nh vi quan sÃ¡t Ä‘Æ°á»£c tÆ°Æ¡ng Ä‘Æ°Æ¡ng káº¹p 1 ms).
-Äá»™t biáº¿n káº¹p dÆ°á»›i 0 (khoáº£ng 0 = háº¹n giá» tÆ°Æ¡ng Ä‘á»‘i 0) thÃ¬ Ä‘á» (62 láº§n cháº¡m / 52 ms).
+Ghi chú: đột biến "bỏ kẹp dưới" (`Math.Min(intervalMs, 1000)`: khoảng âm không kẹp về 1) KHÔNG làm NonPositive đỏ - với khoảng âm
+`SetWaitableTimer` nhận mốc tuyệt đối và vẫn chạm ~1 lần/ms trên máy này (chưa tìm hiểu sâu; hành vi quan sát được tương đương kẹp 1 ms).
+Đột biến kẹp dưới 0 (khoảng 0 = hẹn giờ tương đối 0) thì đỏ (62 lần chạm / 52 ms).
 
-## 4. Luáº­t kiáº¿n trÃºc
+## 4. Luật kiến trúc
 
-`TestQualityRulesTests.TestsDoNotCompareManagedThreadIds` (rule `threadid`): cáº¥m `Assert.Equal/NotEqual(...)` cÃ³ tham sá»‘ lÃ 
-`...ThreadId` hoáº·c biáº¿n `caller|worker|pool|mutation|continuation|owner|dispatcher|bound...Thread`, ngoÃ i allowlist co dáº§n (11 file
-AN TOÃ€N á»Ÿ báº£ng trÃªn). KhÃ´ng cáº¥m `Assert.All(..., id => Assert.NotEqual(callerThread, id))` ngoÃ i tÃªn biáº¿n Ä‘Ã£ liá»‡t kÃª (regex dá»±a
-tÃªn): giá»›i háº¡n Ä‘Ã£ biáº¿t, Ä‘á»•i láº¥y khÃ´ng dÆ°Æ¡ng tÃ­nh giáº£ á»Ÿ bá»™ Ä‘áº¿m kiá»ƒu `perThread`/`OutstandingOnThisThread` (Ä‘Ã£ loáº¡i).
+`TestQualityRulesTests.TestsDoNotCompareManagedThreadIds` (rule `threadid`): cấm `Assert.Equal/NotEqual(...)` có tham số là
+`...ThreadId` hoặc biến `caller|worker|pool|mutation|continuation|owner|dispatcher|bound...Thread`, ngoài allowlist co dần (11 file
+AN TOÀN ở bảng trên). Không cấm `Assert.All(..., id => Assert.NotEqual(callerThread, id))` ngoài tên biến đã liệt kê (regex dựa
+tên): giới hạn đã biết, đổi lấy không dương tính giả ở bộ đếm kiểu `perThread`/`OutstandingOnThisThread` (đã loại).
 
 ## 5. Ngân sách tài liệu
 

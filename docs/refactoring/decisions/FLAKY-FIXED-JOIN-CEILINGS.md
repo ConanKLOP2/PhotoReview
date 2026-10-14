@@ -1,6 +1,6 @@
 ---
 id: FLAKY-FIXED-JOIN-CEILINGS
-order: 1330
+order: 1340
 summary: |-
   CHƯA XÁC NHẬN: quét tests/** các trần đồng hồ cố định (Join/Wait/WaitAsync/SpinUntil) quanh khởi động WPF lạnh, HWND, STA, pipe; ~45 chỗ rủi ro cao/trung bình đổi thành giới hạn chống treo 60-120 s kèm chẩn đoán (StaTestHost.DefaultTimeout 30->120 s, WaitForAsync sàn 60 s, Wait.JoinOrFail); ca đang có PR khác chỉ ghi bảng.
 ---

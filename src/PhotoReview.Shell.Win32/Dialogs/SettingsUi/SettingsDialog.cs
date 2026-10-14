@@ -370,6 +370,11 @@ internal sealed unsafe class SettingsDialog : NativeDialog
                 _pageCombos.Add(control);
                 Forward(control);
             }
+            else if (item.Class == DialogControlClass.Edit && (item.Style & DialogConstants.EsMultiline) == 0)
+            {
+                // Tall single-line boxes (number / key boxes): the text is centred vertically (it sticks to the top edge otherwise).
+                EditTextCentering.Attach(control);
+            }
         }
 
         // CreateWindowEx puts every new child BELOW its earlier siblings, so a group box (declared before its controls) ends up ABOVE them
