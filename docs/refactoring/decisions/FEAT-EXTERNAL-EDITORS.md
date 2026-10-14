@@ -1,6 +1,6 @@
 ---
 id: FEAT-EXTERNAL-EDITORS
-order: 1390
+order: 1400
 summary: |-
   Q-R48 mở rộng: nhiều trình chỉnh sửa ngoài (Lightroom, Topaz, DxO...) thành submenu động trong menu chuột phải; phím tắt chỉ cho editor mặc định (mặc định trống), tham số mỗi editor, gửi RAW gốc khi có (mặc định bật). CHƯA XÁC NHẬN.
 ---
