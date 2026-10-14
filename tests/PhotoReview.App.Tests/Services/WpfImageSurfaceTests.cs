@@ -20,7 +20,8 @@ namespace PhotoReview.App.Tests.Services;
 [Collection("GlobalState")]
 public sealed class WpfImageSurfaceTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    // Hang bound, not a speed budget: the first WPF/dispatcher work of a cold process on a busy 2-vCPU runner can take a long time.
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(120);
 
     private static (ScrollViewer Scroll, Image Image) LaidOut(bool withSource = false)
     {

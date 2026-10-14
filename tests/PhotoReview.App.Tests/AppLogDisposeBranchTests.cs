@@ -24,7 +24,8 @@ namespace PhotoReview.App.Tests;
 [Trait("Category", "HotPath")]
 public sealed class AppLogDisposeBranchTests : IDisposable
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    // Hang bound, not a speed budget: the first WPF/dispatcher work of a cold process on a busy 2-vCPU runner can take a long time.
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(120);
     private const BindingFlags AnyStatic = BindingFlags.NonPublic | BindingFlags.Static;
     private const BindingFlags AnyInstance = BindingFlags.NonPublic | BindingFlags.Instance;
 

@@ -21,7 +21,7 @@ namespace PhotoReview.Shell.Integration.Tests.Input;
 [Trait("Category", "Integration")]
 public sealed partial class ShellInputEndToEndTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     [LibraryImport("user32.dll", EntryPoint = "ClientToScreen")]
     [return: MarshalAs(UnmanagedType.Bool)]

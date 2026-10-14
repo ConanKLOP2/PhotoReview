@@ -10,7 +10,8 @@ namespace PhotoReview.Shell.Tests.Rendering;
 /// </summary>
 public sealed class GpuKeepAliveTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
+    // Giới hạn chống treo, không phải ngân sách tốc độ (SpinUntil trả về ngay khi điều kiện đúng).
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     private sealed class FakeWork : IGpuKeepAliveWork
     {

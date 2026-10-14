@@ -19,7 +19,7 @@ public sealed class ShellKeepWarmTests
     private const uint WmActivate = 0x0006;
     private const uint WmKeyDown = 0x0100;
     private const uint WmMouseMove = 0x0200;
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Đồng hồ tiêm được của chính sách giữ ấm + luồng nền (ShellStartupOptions.KeepWarmTimestamp): throttle 100 ms và cửa sổ giữ ấm

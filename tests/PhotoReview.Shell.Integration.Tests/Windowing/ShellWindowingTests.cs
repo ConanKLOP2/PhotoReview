@@ -22,7 +22,7 @@ namespace PhotoReview.Shell.Integration.Tests.Windowing;
 [Trait("Category", "Integration")]
 public sealed unsafe class ShellWindowingTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
     private const long WsCaption = 0x00C00000;
     private const long WsThickFrame = 0x00040000;
     private const int GwlStyle = -16;

@@ -16,8 +16,17 @@ namespace PhotoReview.Integration.Tests.Infrastructure;
 /// </summary>
 public static class StaTestHost
 {
-    /// <summary>A hung UI body must fail the test instead of hanging the whole run.</summary>
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+    /// <summary>
+    /// A hung UI body must fail the test instead of hanging the whole run. A hang bound, not a speed budget: a body that
+    /// constructs the first MainWindow of a cold process (theme/font load, JIT) on a busy 2-vCPU runner outlasted the former 30 s.
+    /// </summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// Lower bound of every <see cref="WaitForAsync"/> deadline. The call sites pass short, speed-looking ceilings (5-20 s)
+    /// around work that includes the cold WPF start; they are hang bounds, so a shorter one is raised to this.
+    /// </summary>
+    public static readonly TimeSpan WaitHangFloor = TimeSpan.FromSeconds(60);
 
     private static readonly object Gate = new();
     private static readonly BlockingCollection<Action> Work = new();
@@ -158,7 +167,7 @@ public static class StaTestHost
     /// </summary>
     public static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow + timeout;
+        var deadline = DateTime.UtcNow + (timeout < WaitHangFloor ? WaitHangFloor : timeout);
         while (!condition())
         {
             if (DateTime.UtcNow > deadline) return false;

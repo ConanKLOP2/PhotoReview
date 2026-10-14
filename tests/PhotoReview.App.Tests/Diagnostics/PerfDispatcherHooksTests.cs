@@ -17,7 +17,8 @@ public sealed class PerfDispatcherHooksTests : IDisposable
 {
     private const int DispatcherLongOpId = 22;
     private const int DiagModeId = 24;
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    // Hang bound, not a speed budget: the first WPF/dispatcher work of a cold process on a busy 2-vCPU runner can take a long time.
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(120);
 
     private sealed record Captured(int Id, object?[] Payload);
 

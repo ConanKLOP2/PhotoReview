@@ -116,7 +116,7 @@ internal sealed class HookFileSystem(IFileSystem inner, Action<string> onStat) :
 /// </summary>
 internal sealed class RecoveryRig : IAsyncDisposable
 {
-    public static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
     public static readonly DateTime Stamp = new(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
 
     private readonly List<RecoveryDialog> _dialogs = [];

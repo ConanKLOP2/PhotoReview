@@ -20,7 +20,7 @@ namespace PhotoReview.Shell.Integration.Tests.Startup;
 [Trait("Category", "Integration")]
 public sealed class ShellStartupTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     private static void Order(IReadOnlyList<string> marks, params string[] expected)
     {
@@ -719,7 +719,7 @@ public sealed class ShellStartupTests
         });
 
         Assert.True(recreated, "thiết bị phải được tạo lại");
-        Assert.True(WaitUntil(() => run.OnUi(() => main.ImageCache!.Count) == 1, TimeSpan.FromSeconds(5)),
+        Assert.True(WaitUntil(() => run.OnUi(() => main.ImageCache!.Count) == 1, TimeSpan.FromSeconds(30)),
             "ảnh không được vẽ lại sau khi mất thiết bị (không có yêu cầu khung kế)");
         StopAndAssertClean(run);
     }

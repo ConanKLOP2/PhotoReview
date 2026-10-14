@@ -14,7 +14,8 @@ namespace PhotoReview.Integration.Tests;
 [Trait("Category", "Native")]
 public sealed class InstanceForwardPipeTests : IDisposable
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+    // A hang bound, not a speed budget: every wait here is for a signal/outcome the code under test reaches by itself; a starved pool on a busy runner must not turn into a red test.
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
     private static readonly string[] OversizedReplies = ["ERR", ""];
     private readonly string _root = Path.Combine(Path.GetTempPath(), "PhotoReviewFwd_" + Guid.NewGuid().ToString("N"));
     private readonly string _pipe = "PhotoReview.Test." + Guid.NewGuid().ToString("N");

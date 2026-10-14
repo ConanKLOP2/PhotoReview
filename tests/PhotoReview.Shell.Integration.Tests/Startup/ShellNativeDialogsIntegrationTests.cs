@@ -20,7 +20,7 @@ namespace PhotoReview.Shell.Integration.Tests.Startup;
 [Trait("Category", "Integration")]
 public sealed class ShellNativeDialogsIntegrationTests
 {
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(60);
 
     private sealed class NoLauncher : IShellLauncher
     {
