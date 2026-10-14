@@ -66,6 +66,8 @@ internal static class CaseOnlyRename
     /// </summary>
     public static (bool Conflict, bool AlreadyNamed) ProbeTarget(IFileSystem fileSystem, string source, string destination)
     {
+        // The very same spelling: nothing to rename (the target is the file itself, not another file in the way).
+        if (string.Equals(source, destination, StringComparison.Ordinal)) return (false, true);
         if (!IsCaseOnlyPair(source, destination))
             return (fileSystem.FileExists(destination) || fileSystem.DirectoryExists(destination), false);
         var stored = fileSystem.GetStoredFileNames(destination);

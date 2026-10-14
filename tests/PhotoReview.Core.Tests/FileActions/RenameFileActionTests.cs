@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
 
@@ -13,12 +13,31 @@ public sealed class RenameFileActionTests
 {
     private const string A = @"C:\photos\a.jpg";
 
+    private static readonly string[] s_groupNames = ["a.jpg", "a.cr2", "a.xmp"];
+
     private static FaultRig Rig(params string[] names) =>
         new FaultRig().Seed(FaultRig.Photos, names.Length == 0 ? ["a.jpg", "b.jpg"] : names);
+
+    /// <summary>The complete original content of a.jpg sits at the path (a rename keeps the bytes).</summary>
+    private static bool HasOriginal(FaultRig rig, string path) =>
+        rig.Disk.FileExists(path) && rig.Disk.ReadAllText(path) == rig.ContentOf("a.jpg");
 
     private static string Stored(FaultRig rig, string path) => Assert.Single(rig.Disk.GetStoredFileNames(path));
 
     private static JournalEntry LatestOnly(FaultRig rig) => Assert.Single(rig.Latest().Values);
+
+    /// <summary>The 1-based number of the nth mutating call of <paramref name="kind"/> a healthy run of <paramref name="act"/> makes (the fault plan's injection point).</summary>
+    private static async Task<int> CallNumberAsync(Func<FaultRig> create, Func<FaultRig, Task> act, string kind, int nth = 1)
+    {
+        var probe = create();
+        probe.Fs.Arm(null);
+        await act(probe);
+        var index = -1;
+        for (var i = 0; i < probe.Fs.Kinds.Count && nth > 0; i++)
+            if (probe.Fs.Kinds[i] == kind) { index = i; nth--; }
+        Assert.True(index >= 0 && nth == 0, $"the scenario never made call '{kind}'");
+        return index + 1;
+    }
 
     // ---------------------------------------------------------------- single file
 
@@ -35,7 +54,7 @@ public sealed class RenameFileActionTests
         Assert.Equal(FileOperationType.Move, result.Operation);
         Assert.Equal(@"C:\photos\x.jpg", result.DestinationPath);
         Assert.False(rig.Disk.FileExists(A));
-        Assert.True(rig.HasFull(@"C:\photos\x.jpg"));
+        Assert.True(HasOriginal(rig, @"C:\photos\x.jpg"));
         var after = rig.Disk.GetFileStat(@"C:\photos\x.jpg")!;
         Assert.Equal(before, after); // a rename never changes size or write time
         var entry = LatestOnly(rig);
@@ -180,7 +199,7 @@ public sealed class RenameFileActionTests
     public async Task Rename_OsRefusesTheMove_NothingChangedSoTheLineIsDismissedNotARecoveryItem()
     {
         var rig = Rig();
-        rig.Fs.Arm(new FaultPlan(2, FaultKind.FailOnce)); // call 1 = journal Prepared append, call 2 = the rename
+        rig.Fs.Arm(new FaultPlan(await CallNumberAsync(() => Rig(), r => r.Service.RenameAsync(new RenameRequest(A, "x.jpg")), "rename"), FaultKind.FailOnce));
 
         var result = await rig.Service.RenameAsync(new RenameRequest(A, "x.jpg"));
 
@@ -235,7 +254,7 @@ public sealed class RenameFileActionTests
         var result = await service.RenameAsync(new RenameRequest(A, "x.jpg"));
 
         Assert.False(result.Succeeded);
-        Assert.True(rig.HasFull(@"C:\photos\x.jpg"));
+        Assert.True(HasOriginal(rig, @"C:\photos\x.jpg"));
         Assert.NotEqual(JournalState.Dismissed, LatestOnly(rig).State);
     }
 
@@ -267,7 +286,7 @@ public sealed class RenameFileActionTests
         var undone = await rig.Undo.UndoLastAsync();
 
         Assert.False(undone.Succeeded);
-        Assert.True(rig.HasFull(@"C:\photos\x.jpg"));
+        Assert.True(HasOriginal(rig, @"C:\photos\x.jpg"));
         Assert.Equal("a different photo now living at the old name", rig.Disk.ReadAllText(A));
     }
 
@@ -310,7 +329,7 @@ public sealed class RenameFileActionTests
 
         var undone = await rig.Undo.UndoLastAsync();
 
-        Assert.True(undone.Succeeded, undone.Error);
+        Assert.True(undone.Succeeded, undone.ErrorMessage);
         Assert.Equal("a.jpg", Stored(rig, A));
         Assert.True(rig.HasFull(A));
     }
@@ -338,26 +357,19 @@ public sealed class RenameFileActionTests
         var rig = Rig();
         rig.Disk.AddFile(@"C:\photos\Other\a.jpg", "one");
         rig.Disk.AddFile(@"C:\photos\Other\A.jpg", "two");
-        var fs = new TwoEntryListing(rig.Disk);
-        var service = new FileActionService(rig.Journal, fs, rig.Clock, rig.Bin);
+        rig.Disk.StoredFileNamesOverride = _ => ["a.jpg", "A.jpg"];
 
-        var result = await service.RenameAsync(new RenameRequest(@"C:\photos\Other\a.jpg", "A.jpg"));
+        var result = await rig.Service.RenameAsync(new RenameRequest(@"C:\photos\Other\a.jpg", "A.jpg"));
 
         Assert.False(result.Succeeded);
         Assert.Empty(rig.JournalLines());
-    }
-
-    /// <summary>Lists both spellings as separate entries (what a case-sensitive NTFS folder reports), otherwise the in-memory disk.</summary>
-    private sealed class TwoEntryListing(InMemoryFileSystem inner) : FileSystemForwarder(inner)
-    {
-        public override IReadOnlyList<string> GetStoredFileNames(string path) => ["a.jpg", "A.jpg"];
     }
 
     [Fact]
     public async Task CaseOnlyRename_MoveFails_NothingChangedAndTheLineIsDismissedNotLost()
     {
         var rig = Rig();
-        rig.Fs.Arm(new FaultPlan(2, FaultKind.FailOnce));
+        rig.Fs.Arm(new FaultPlan(await CallNumberAsync(() => Rig(), r => r.Service.RenameAsync(new RenameRequest(A, "A.jpg")), "rename"), FaultKind.FailOnce));
 
         var result = await rig.Service.RenameAsync(new RenameRequest(A, "A.jpg"));
 
@@ -403,8 +415,6 @@ public sealed class RenameFileActionTests
     public async Task CaseOnlyRename_RecoveryRetryOfAFailedLine_FinishesTheRename()
     {
         var rig = Rig();
-        rig.Fs.Arm(new FaultPlan(3, FaultKind.FailOnce)); // Prepared append, rename ok, FailOnce on the Committed append is not a retry case
-        rig.Fs.Arm(null);
         var stat = rig.Disk.GetFileStat(A)!;
         var failed = new JournalEntry("e1", FileOperationType.Move, JournalState.Failed, A, @"C:\photos\A.jpg", stat.Length, stat.LastWriteUtc,
             rig.Clock.UtcNow, Error: "boom");
@@ -422,7 +432,7 @@ public sealed class RenameFileActionTests
     private static FaultRig GroupRig(string xmpName = "a.xmp") =>
         new FaultRig().Seed(FaultRig.Photos, "a.jpg", "a.cr2", xmpName, "b.jpg");
 
-    private static Catalog.CaptureGroup Group(string xmpName = "a.xmp") =>
+    private static PhotoReview.Core.Catalog.CaptureGroup Group(string xmpName = "a.xmp") =>
         new(@"C:\photos\a.jpg", @"C:\photos\a.cr2", Path.Combine(FaultRig.Photos, xmpName));
 
     [Fact]
@@ -471,8 +481,8 @@ public sealed class RenameFileActionTests
     public async Task RenameGroup_AMemberCannotBeRenamed_RollsTheOthersBackAndDismissesTheLine()
     {
         var rig = GroupRig();
-        // calls: 1 Prepared append, 2 jpg rename, 3 cr2 rename (fails), ...
-        rig.Fs.Arm(new FaultPlan(3, FaultKind.FailOnce));
+        // the SECOND member's rename fails: the first one must be put back
+        rig.Fs.Arm(new FaultPlan(await CallNumberAsync(() => GroupRig(), r => r.Service.RenameGroupAsync(Group(), "x"), "rename", nth: 2), FaultKind.FailOnce));
 
         var result = await rig.Service.RenameGroupAsync(Group(), "x");
 
@@ -491,7 +501,7 @@ public sealed class RenameFileActionTests
 
         var undone = await rig.Undo.UndoLastAsync();
 
-        Assert.True(undone.Succeeded, undone.Error);
+        Assert.True(undone.Succeeded, undone.ErrorMessage);
         foreach (var name in new[] { "a.jpg", "a.cr2", "a.xmp" }) Assert.True(rig.HasFull(Path.Combine(FaultRig.Photos, name)), name);
         foreach (var name in new[] { "x.jpg", "x.cr2", "x.xmp" }) Assert.False(rig.Disk.FileExists(Path.Combine(FaultRig.Photos, name)), name);
     }
@@ -504,15 +514,15 @@ public sealed class RenameFileActionTests
         var result = await rig.Service.RenameGroupAsync(Group(), "A");
 
         Assert.True(result.Succeeded, result.Error);
-        Assert.Equal(["A.jpg", "A.cr2", "A.xmp"], new[] { "a.jpg", "a.cr2", "a.xmp" }.Select(n => Stored(rig, Path.Combine(FaultRig.Photos, n))));
+        Assert.Equal(["A.jpg", "A.cr2", "A.xmp"], s_groupNames.Select(n => Stored(rig, Path.Combine(FaultRig.Photos, n))));
         Assert.Empty(rig.NewJournal().ReconcilePendingOperations());
         Assert.Equal(RecoveryVerdict.AlreadyDone, new RecoveryFileCheck(rig.Fs).Check(LatestOnly(rig)).Verdict);
 
         rig.Undo.RegisterGroup(result);
         var undone = await rig.Undo.UndoLastAsync();
 
-        Assert.True(undone.Succeeded, undone.Error);
-        Assert.Equal(["a.jpg", "a.cr2", "a.xmp"], new[] { "a.jpg", "a.cr2", "a.xmp" }.Select(n => Stored(rig, Path.Combine(FaultRig.Photos, n))));
+        Assert.True(undone.Succeeded, undone.ErrorMessage);
+        Assert.Equal(["a.jpg", "a.cr2", "a.xmp"], s_groupNames.Select(n => Stored(rig, Path.Combine(FaultRig.Photos, n))));
     }
 
     [Fact]
@@ -520,7 +530,7 @@ public sealed class RenameFileActionTests
     {
         // The RAW already carries the target spelling (case-only for it); the JPEG and the XMP still need the change.
         var rig = new FaultRig().Seed(FaultRig.Photos, "a.jpg", "A.cr2", "a.xmp");
-        var group = new Catalog.CaptureGroup(@"C:\photos\a.jpg", @"C:\photos\A.cr2", @"C:\photos\a.xmp");
+        var group = new PhotoReview.Core.Catalog.CaptureGroup(@"C:\photos\a.jpg", @"C:\photos\A.cr2", @"C:\photos\a.xmp");
 
         var result = await rig.Service.RenameGroupAsync(group, "A");
 
@@ -535,7 +545,7 @@ public sealed class RenameFileActionTests
     public async Task RenameGroup_EveryMemberAlreadyNamed_IsASuccessWithNoJournalLine()
     {
         var rig = new FaultRig().Seed(FaultRig.Photos, "A.jpg", "A.cr2");
-        var group = new Catalog.CaptureGroup(@"C:\photos\a.jpg", @"C:\photos\a.cr2");
+        var group = new PhotoReview.Core.Catalog.CaptureGroup(@"C:\photos\a.jpg", @"C:\photos\a.cr2");
 
         var result = await rig.Service.RenameGroupAsync(group, "A");
 
@@ -575,7 +585,6 @@ public sealed class RenameFileActionTests
     public void FileOperationType_HasNoRenameMember_SoAnOlderBuildReadsEveryJournalLine()
     {
         // ADR 0003 cross-build compatibility: a rename is a Move; adding an enum value would make older builds drop or mis-map lines.
-        Assert.Equal(["Move", "Copy", "Recycle"], Enum.GetNames<FileOperationType>().Where(n => n is "Move" or "Copy" or "Recycle" or "Rename"));
-        Assert.DoesNotContain("Rename", Enum.GetNames<FileOperationType>());
+        Assert.Equal(["Copy", "Move", "Recycle"], Enum.GetNames<FileOperationType>().Order(StringComparer.Ordinal));
     }
 }

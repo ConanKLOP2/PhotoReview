@@ -95,12 +95,15 @@ public sealed class RenameNamePolicyTests
     }
 
     [Theory]
-    [InlineData("a\uD800b", '\uD800')]
-    [InlineData("a\uDC00b", '\uDC00')]
-    [InlineData("a\uD800", '\uD800')]
-    [InlineData("\uDE00a", '\uDE00')]
-    public void Check_LoneSurrogate_ReturnsInvalidCharacter(string typed, char expected)
+    // Built from code units in the body: xUnit's data serialization would replace a lone surrogate in an argument.
+    [InlineData("a", 0xD800, "b")]
+    [InlineData("a", 0xDC00, "b")]
+    [InlineData("a", 0xD800, "")]
+    [InlineData("", 0xDE00, "a")]
+    public void Check_LoneSurrogate_ReturnsInvalidCharacter(string before, int unit, string after)
     {
+        var expected = (char)unit;
+        var typed = before + expected + after;
         var check = RenameNamePolicy.Check(typed, Current);
 
         Assert.Equal(RenameNameProblem.InvalidCharacter, check.Problem);
@@ -202,7 +205,8 @@ public sealed class RenameNamePolicyTests
     {
         var stem = new string('x', 255 - ".jpg".Length);
 
-        var check = RenameNamePolicy.Check(stem, Current);
+        // longPathAware: 255 is the NTFS component limit; the MAX_PATH budget is a different rule.
+        var check = RenameNamePolicy.Check(stem, Current, longPathAware: true);
 
         Assert.True(check.IsValid);
         Assert.Equal(255, check.NewFileName.Length);
