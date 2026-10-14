@@ -565,6 +565,123 @@ public sealed class RenameFileActionTests
         foreach (var name in new[] { "a.jpg", "a.cr2", "a.xmp" }) Assert.True(rig.HasFull(Path.Combine(FaultRig.Photos, name)), name);
     }
 
+    // ---------------------------------------------------------------- mutation-driven additions
+
+    private static JournalEntry PreparedCaseOnly(FaultRig rig) =>
+        new("e1", FileOperationType.Move, JournalState.Prepared, A, @"C:\photos\A.jpg",
+            rig.Disk.GetFileStat(A)!.Length, rig.Disk.GetFileStat(A)!.LastWriteUtc, rig.Clock.UtcNow);
+
+    [Fact]
+    public void CaseOnlyRename_FileStoredUnderAThirdSpelling_IsNeverLostOrDone()
+    {
+        var rig = Rig();
+        var entry = PreparedCaseOnly(rig);
+        rig.Disk.StoredFileNamesOverride = _ => ["a.JPG"]; // neither the source nor the destination spelling
+
+        var verdict = new RecoveryFileCheck(rig.Fs).Check(entry).Verdict;
+
+        Assert.Equal(RecoveryVerdict.Conflict, verdict); // fail closed: present under both, never Lost / AlreadyDone
+    }
+
+    [Fact]
+    public void CaseOnlyRename_TwoEntriesDifferingByCase_AreTwoFiles_Conflict()
+    {
+        var rig = Rig();
+        var entry = PreparedCaseOnly(rig);
+        rig.Disk.StoredFileNamesOverride = _ => ["a.jpg", "A.jpg"];
+
+        var verdict = new RecoveryFileCheck(rig.Fs).Check(entry).Verdict;
+
+        Assert.Equal(RecoveryVerdict.Conflict, verdict);
+    }
+
+    [Fact]
+    public async Task RenameGroup_TwoMembersToTheSameTarget_IsRefusedBeforeAnythingIsJournaled()
+    {
+        var rig = GroupRig();
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [@"C:\photos\a.jpg"] = "x.dat",
+            [@"C:\photos\a.cr2"] = "X.DAT",
+            [@"C:\photos\a.xmp"] = "y.xmp", // every member has a valid target: only the collision is wrong
+        };
+
+        var result = await rig.Service.ExecuteGroupAsync(
+            new CaptureGroupActionRequest(Group(), FileOperationType.Move, null, false, names));
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(rig.JournalLines());
+        foreach (var name in s_groupNames) Assert.True(rig.HasFull(Path.Combine(FaultRig.Photos, name)), name);
+    }
+
+    [Fact]
+    public async Task RenameGroup_CaseOnly_SecondMemberFails_FirstIsPutBackAndTheLineIsDismissed()
+    {
+        var rig = GroupRig();
+        rig.Fs.Arm(new FaultPlan(await CallNumberAsync(() => GroupRig(), r => r.Service.RenameGroupAsync(Group(), "A"), "rename", nth: 2), FaultKind.FailOnce));
+
+        var result = await rig.Service.RenameGroupAsync(Group(), "A");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(s_groupNames, s_groupNames.Select(n => Stored(rig, Path.Combine(FaultRig.Photos, n))));
+        Assert.Equal(JournalState.Dismissed, LatestOnly(rig).State); // fully rolled back = nothing for Recovery
+        Assert.All(result.Members, member => Assert.False(member.Conflict));
+    }
+
+    [Fact]
+    public async Task RenameGroup_CaseOnly_RecoveryRetryOfAFailedGroupLine_FinishesEveryMember()
+    {
+        var rig = GroupRig();
+        string[] targets = ["A.jpg", "A.cr2", "A.xmp"];
+        var members = s_groupNames.Select((n, i) => new JournalGroupMember(Path.Combine(FaultRig.Photos, n),
+                Path.Combine(FaultRig.Photos, targets[i]),
+                rig.Disk.GetFileStat(Path.Combine(FaultRig.Photos, n))!.Length,
+                rig.Disk.GetFileStat(Path.Combine(FaultRig.Photos, n))!.LastWriteUtc)).ToArray();
+        var failed = new JournalEntry("g1", FileOperationType.Move, JournalState.Failed, members[0].Source, members[0].Destination,
+            members[0].Size, members[0].LastWriteUtc, rig.Clock.UtcNow, Error: "boom", GroupId: "gid", GroupMembers: members);
+        rig.Journal.Append(failed);
+        var retry = new RecoveryRetryService(rig.Journal, rig.Fs, rig.Clock, rig.Bin);
+
+        var result = await retry.RetryMoveOrCopyAsync(failed);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal(["A.jpg", "A.cr2", "A.xmp"], s_groupNames.Select(n => Stored(rig, Path.Combine(FaultRig.Photos, n))));
+    }
+
+    [Fact]
+    public async Task CaseOnlyRename_UndoWhenTheFileWasRenamedBackByHand_DropsTheDeadHistoryEntry()
+    {
+        var rig = Rig();
+        var renamed = await rig.Service.RenameAsync(new RenameRequest(A, "A.jpg"));
+        rig.Undo.Register(renamed);
+        rig.Disk.Move(@"C:\photos\A.jpg", @"C:\photos\a.jpg");
+
+        var undone = await rig.Undo.UndoLastAsync();
+
+        Assert.False(undone.Succeeded);
+        Assert.Empty(rig.Undo.MoveHistory); // reported once and dropped, not pushed back for every later Ctrl+Z
+    }
+
+    [Fact]
+    public async Task CaseOnlyRename_UndoMovedTheFileButTheCheckFailed_DropsTheEntryByTheStoredSpelling()
+    {
+        var rig = Rig();
+        var renamed = await rig.Service.RenameAsync(new RenameRequest(A, "A.jpg"));
+        var undo = new UndoService(rig.Journal, rig.Fs, rig.Bin, rig.Service, clock: rig.Clock, moveOverride: (from, to) =>
+        {
+            rig.Disk.Move(from, to);
+            rig.Disk.AddFile(to, "changed after the move: another size"); // the post-move size check will fail
+            return Task.CompletedTask;
+        });
+        undo.Register(renamed);
+
+        var undone = await undo.UndoLastAsync();
+
+        Assert.False(undone.Succeeded);
+        Assert.Equal("a.jpg", Stored(rig, A));
+        Assert.Empty(undo.MoveHistory); // the file is back under the old spelling: nothing left to undo
+    }
+
     // ---------------------------------------------------------------- existing Move/Copy contract is unchanged
 
     [Theory]
