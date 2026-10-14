@@ -117,9 +117,18 @@ internal static class FaultInvariants
                     FaultRig.MembersOf(entry).Any(em => Same(um.Source, entry.Type == FileOperationType.Move ? em.Destination : em.Source))));
             foreach (var member in FaultRig.MembersOf(entry))
             {
+                // FEAT-RENAME: a Move line whose destination was moved/renamed on by a LATER line of the journal (rename twice, or
+                // the same rename re-done by a Recovery retry after its Undo) no longer describes the disk; the later line does.
+                var movedOn = entry.Type == FileOperationType.Move && member.Destination is not null
+                    && lines.FindLastIndex(l => l.Id == entry.Id) is var entryAt
+                    && latest.Values.Any(other => other.Id != entry.Id && other.Type == FileOperationType.Move
+                        && other.State is JournalState.Committed or JournalState.Prepared or JournalState.Failed
+                        && lines.FindLastIndex(l => l.Id == other.Id) > entryAt
+                        && FaultRig.MembersOf(other).Any(om => Same(om.Source, member.Destination) && !string.Equals(om.Source, om.Destination, StringComparison.Ordinal))
+                        && (other.State == JournalState.Committed || !rig.Disk.FileExists(member.Destination)));
                 switch (entry.Type)
                 {
-                    case FileOperationType.Move when entry.State == JournalState.Committed && !supersededByUndo:
+                    case FileOperationType.Move when entry.State == JournalState.Committed && !supersededByUndo && !movedOn:
                         if (SourceStillThere(rig, member.Source, member.Destination)) violations.Add($"{ctx}: Move {member.Source} is Committed but the source is still there");
                         if (member.Destination is null || !rig.HasFull(member.Destination)) violations.Add($"{ctx}: Move {member.Source} is Committed but {member.Destination} is not the complete file");
                         break;

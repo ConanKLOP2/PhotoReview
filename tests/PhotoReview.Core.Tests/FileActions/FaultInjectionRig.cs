@@ -124,6 +124,13 @@ internal sealed class FaultRig
 
     public IEnumerable<string> Names => _contentByName.Keys;
 
+    /// <summary>FEAT-RENAME: <paramref name="newName"/> is the name a seeded photo will carry after a rename; its content is the original's.</summary>
+    public FaultRig Alias(string newName, string original)
+    {
+        _contentByName[newName] = _contentByName[original];
+        return this;
+    }
+
     public string ContentOf(string pathOrName) => _contentByName[Path.GetFileName(pathOrName)];
 
     public bool KnownName(string path) => _contentByName.ContainsKey(Path.GetFileName(path));
