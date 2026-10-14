@@ -441,6 +441,19 @@ public sealed class InMemoryFileSystem : IFileSystem
         }
     }
 
+    /// <summary>FEAT-RENAME: replaces the stored-spelling listing (e.g. two entries that differ only by case, as a case-sensitive folder reports).</summary>
+    public Func<string, IReadOnlyList<string>?>? StoredFileNamesOverride { get; set; }
+
+    public IReadOnlyList<string> GetStoredFileNames(string path)
+    {
+        if (StoredFileNamesOverride?.Invoke(path) is { } forced) return forced;
+        var directory = Path.GetDirectoryName(path);
+        var name = Path.GetFileName(path);
+        if (string.IsNullOrEmpty(directory) || name.Length == 0) return [];
+        return EnumerateFiles(directory, name).Select(Path.GetFileName).OfType<string>()
+            .Where(stored => string.Equals(stored, name, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
     public IEnumerable<string> EnumerateDirectories(string directory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
