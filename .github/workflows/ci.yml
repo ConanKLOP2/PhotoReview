@@ -905,7 +905,9 @@ jobs:
 
       - name: Verify Native AOT variant
         shell: powershell
-        # -Smoke runs the AOT PhotoReview.exe --smoke with every DOTNET_* variable and dotnet PATH entry removed (no runtime needed).
+        # -Smoke RUNS the native AOT PhotoReview.exe twice with every DOTNET_* variable and dotnet PATH entry removed (no
+        # runtime needed): `--smoke` (window + first frame, exit 0) and `--smoke <generated.jpg>` (exit 0 only after the first
+        # IMAGE frame, so the trimmed/ILC-compiled decode path really ran). Both log "PASS: AOT PhotoReview.exe ... exited 0".
         run: ./tools/verify-release.ps1 -AotOnly -Smoke -AotDirectory 'aot-publish'
 
       - name: Upload AOT artifact
