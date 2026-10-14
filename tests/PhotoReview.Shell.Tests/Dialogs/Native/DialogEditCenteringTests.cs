@@ -47,6 +47,7 @@ public sealed unsafe class DialogEditCenteringTests(ITestOutputHelper output)
         using var lang = TestLocalization.Use(language == "vi" ? TestLocalization.Vietnamese : TestLocalization.English);
         var failures = new List<string>();
         var measured = 0;
+        var dump = Environment.GetEnvironmentVariable("PHOTOREVIEW_EDITCENTER_DUMP");
 
         void Measure(NativeDialog d)
         {
@@ -88,6 +89,12 @@ public sealed unsafe class DialogEditCenteringTests(ITestOutputHelper output)
             }
 
             Drain(d);
+            // A window DC BitBlt returns BLACK for the parts outside the screen (small CI screen at 144 DPI: the right part of the wide
+            // boxes was off-screen and looked like "ink" in every row). Put the dialog at the screen origin and measure only the left
+            // part of each box, where the text is.
+            User32.SetWindowPos(d.Hwnd, 0, 0, 0, 0, 0,
+                WindowMessages.SwpNoSize | WindowMessages.SwpNoZOrder | WindowMessages.SwpNoActivate);
+            Drain(d);
             RedrawWindow(d.Hwnd, null, 0, RdwAll);
             Drain(d);
             var pixels = SettingsTabAndEditCenterTests.Capture(d.Hwnd, out var width, out _);
@@ -103,12 +110,15 @@ public sealed unsafe class DialogEditCenteringTests(ITestOutputHelper output)
                 var cw = window.Right - window.Left - (2 * edge);
                 var ch = window.Bottom - window.Top - (2 * edge);
                 measured++;
-                var back = SettingsTabAndEditCenterTests.PixelAt(pixels, width, left + 1, top + (ch / 2));
+                var line0 = LineHeightOf(hwnd);
+                var textWidth = Math.Min(cw, 6 * line0); // "HE08" is ~3 em wide; nothing else is measured
+                // Background = the box's own colour: top-left corner of the inner area (left of the text, never ink, never selection; on screen whenever the box is).
+                var back = SettingsTabAndEditCenterTests.PixelAt(pixels, width, left, top);
                 int first = -1, last = -1;
                 var nonBack = 0;
                 for (var y = 0; y < ch; y++)
                 {
-                    for (var x = 0; x < cw; x++)
+                    for (var x = 0; x < textWidth; x++)
                     {
                         if (SettingsTabAndEditCenterTests.Far(SettingsTabAndEditCenterTests.PixelAt(pixels, width, left + x, top + y), back))
                         {
@@ -124,6 +134,12 @@ public sealed unsafe class DialogEditCenteringTests(ITestOutputHelper output)
                 }
 
                 var label = $"{which} {language} {dpi} edit {id}";
+                if (dump is { Length: > 0 })
+                {
+                    Directory.CreateDirectory(dump);
+                    File.WriteAllBytes(Path.Combine(dump, $"{which}-{language}-{dpi}-{id}.raw"), pixels);
+                }
+
                 if (first < 0 || nonBack < 8)
                 {
                     failures.Add($"{label}: no text pixels (box is uniform), client {cw}x{ch}");
@@ -132,6 +148,7 @@ public sealed unsafe class DialogEditCenteringTests(ITestOutputHelper output)
 
                 var gapTop = first;
                 var gapBottom = ch - 1 - last;
+                output.WriteLine($"{label}: window {window.Left},{window.Top}-{window.Right},{window.Bottom} dialog {origin.Left},{origin.Top}-{origin.Right},{origin.Bottom} screen {GetSystemMetrics(0)}x{GetSystemMetrics(1)}, back {back:X6}");
                 output.WriteLine($"{label}: client {cw}x{ch}, ink {first}..{last}, gap top {gapTop} bottom {gapBottom}");
                 if (Math.Abs(gapTop - gapBottom) > 1 || gapTop < 1 || gapBottom < 1)
                 {
@@ -221,6 +238,9 @@ public sealed unsafe class DialogEditCenteringTests(ITestOutputHelper output)
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCaretPos(out Pt point);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll")]
     private static extern nint GetDC(nint hwnd);
