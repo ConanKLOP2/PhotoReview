@@ -86,14 +86,15 @@ public sealed class RecoveryRetryService
         try
         {
             // Same guard as the group path: a path the file system rejects (or an unreachable share) is a failed retry, not a crash.
-            if (!_fileSystem.FileExists(failed.Source))
+            // FEAT-RENAME 2.4: case-only pairs are judged by the stored spelling (CaseOnlyRename).
+            if (!CaseOnlyRename.ExistsAs(_fileSystem, failed.Source, failed.Destination))
                 return new(false, Tr.CoreRecoverySourceMissing, null);
 
-            var stat = _fileSystem.GetFileStat(failed.Source);
+            var stat = CaseOnlyRename.StatAs(_fileSystem, failed.Source, failed.Destination);
             if (stat is null || stat.Length != failed.Size || stat.LastWriteUtc != failed.LastWriteUtc)
                 return new(false, Tr.CoreRecoverySourceChanged, null);
             sourceStat = stat;
-            if (_fileSystem.FileExists(failed.Destination))
+            if (CaseOnlyRename.ExistsAs(_fileSystem, failed.Destination, failed.Source))
                 return new(false, Tr.CoreRecoveryDestinationExists, null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -171,9 +172,9 @@ public sealed class RecoveryRetryService
                 {
                     var sourcePath = member.Source;
                     var destinationPath = member.Destination;
-                    var stat = _fileSystem.GetFileStat(sourcePath);
+                    var stat = CaseOnlyRename.StatAs(_fileSystem, sourcePath, destinationPath);
                     if (stat is null || stat.Length != member.Size || stat.LastWriteUtc != member.LastWriteUtc
-                        || string.IsNullOrWhiteSpace(destinationPath) || _fileSystem.FileExists(destinationPath))
+                        || string.IsNullOrWhiteSpace(destinationPath) || CaseOnlyRename.ExistsAs(_fileSystem, destinationPath, sourcePath))
                         return new(false, Tr.CoreRecoverySourceChanged, null);
                 }
             }
@@ -232,10 +233,10 @@ public sealed class RecoveryRetryService
                 {
                     var sourcePath = member.Source;
                     var destinationPath = member.Destination;
-                    var sourceStat = _fileSystem.GetFileStat(sourcePath);
+                    var sourceStat = CaseOnlyRename.StatAs(_fileSystem, sourcePath, destinationPath);
                     if (sourceStat is null || sourceStat.Length != member.Size || sourceStat.LastWriteUtc != member.LastWriteUtc)
                         throw new IOException(Tr.CoreRecoverySourceChanged);
-                    if (string.IsNullOrWhiteSpace(destinationPath) || _fileSystem.FileExists(destinationPath))
+                    if (string.IsNullOrWhiteSpace(destinationPath) || CaseOnlyRename.ExistsAs(_fileSystem, destinationPath, sourcePath))
                         throw new IOException(Tr.CoreRecoveryDestinationExists);
                     var folder = Path.GetDirectoryName(destinationPath);
                     if (!string.IsNullOrWhiteSpace(folder)) _fileSystem.CreateDirectory(folder);
@@ -248,7 +249,7 @@ public sealed class RecoveryRetryService
                     else
                     {
                         _fileSystem.Move(sourcePath, destinationPath);
-                        if (_fileSystem.FileExists(sourcePath) || _fileSystem.GetFileStat(destinationPath)?.Length != member.Size)
+                        if (CaseOnlyRename.ExistsAs(_fileSystem, sourcePath, destinationPath) || _fileSystem.GetFileStat(destinationPath)?.Length != member.Size)
                             throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
                     }
                 }
@@ -303,7 +304,7 @@ public sealed class RecoveryRetryService
             // R17: the pre-checks ran before Prepared was journaled; a different file may have taken the source path since. Same
             // identity re-proof the group retry does right before each mutation. The journaled fingerprint is the verified one
             // (`prepared` carries the stat the pre-check read), so a replacement is never moved/copied under the old operation.
-            var sourceNow = _fileSystem.GetFileStat(failed.Source);
+            var sourceNow = CaseOnlyRename.StatAs(_fileSystem, failed.Source, failed.Destination);
             if (sourceNow is null || sourceNow.Length != prepared.Size || sourceNow.LastWriteUtc != prepared.LastWriteUtc)
                 throw new IOException(Tr.CoreRecoverySourceChanged);
             var destDir = Path.GetDirectoryName(destination);

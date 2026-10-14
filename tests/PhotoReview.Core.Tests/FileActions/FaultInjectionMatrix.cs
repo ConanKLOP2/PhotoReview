@@ -175,12 +175,16 @@ internal static class FaultInjectionMatrix
         {
             switch (outcome)
             {
+                case FileActionResult { NoChange: true }:
+                    break; // a rename to the spelling the file already has: nothing happened, nothing to verify
                 case FileActionResult { Succeeded: true, Rejected: false } result:
                     FaultInvariants.CheckSucceededEffect(rig, result.Operation, result.Source, result.DestinationPath, ctx + " (reported success)", violations, result.PermanentlyDeleted);
                     break;
                 case FileActionResult { Succeeded: false, Operation: FileOperationType.Move } failed when !rig.Fs.Dead:
-                    if (failed.SourceRemoved == rig.Disk.FileExists(failed.Source))
-                        violations.Add($"{ctx}: failed Move reports SourceRemoved={failed.SourceRemoved} but the source {(rig.Disk.FileExists(failed.Source) ? "is" : "is not")} on disk");
+                    // Spelling-aware (a case-only rename): "the source" is the entry stored under the SOURCE spelling.
+                    var stillThere = FaultInvariants.SourceStillThere(rig, failed.Source, failed.DestinationPath);
+                    if (failed.SourceRemoved == stillThere)
+                        violations.Add($"{ctx}: failed Move reports SourceRemoved={failed.SourceRemoved} but the source {(stillThere ? "is" : "is not")} on disk");
                     break;
                 case UndoResult undo:
                     // Whatever an undo reports as back in place (success, or the members a failed one did restore) must really be complete there.

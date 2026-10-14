@@ -768,6 +768,7 @@
   "settings.pagePending": "Placeholder text on a Settings page that the new native settings window does not implement yet (temporary, removed when every page exists).",
   "status.menuFailed": "Status line shown when building or showing a popup menu (context menu, Tools menu) throws; the same error is appended to shell-errors.log.",
   "settings.shortcuts.resetKeys": "Button on the Shortcuts page of the native settings window: puts every key box back to its built-in default (the action profiles and other pages are untouched; not saved until Save/Apply).",
+  "core.fileAction.renameInvalidName": "IOException message -> result.Error (FileActionService.RenameAsync / group rename). Thrown before Prepared, so not journaled. The UI normally prevents it with RenameNamePolicy; this is the service-level re-check.",
   "main.menu.externalEditor.add": "Last-but-one entry of the Open in External Editor submenu: picks another editor program and adds it to the list.",
   "main.menu.externalEditor.add.automationName": "Screen-reader name of the Add more editors menu entry.",
   "main.menu.externalEditor.setDefault": "Last entry of the Open in External Editor submenu: opens a list to choose the default editor.",

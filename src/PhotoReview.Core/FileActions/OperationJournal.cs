@@ -505,8 +505,9 @@ public sealed class OperationJournal
         }
         else if (pending.Type is FileOperationType.Move or FileOperationType.Copy)
         {
-            var sourceExists = _fileSystem.FileExists(pending.Source);
-            var destinationStat = pending.Destination is not null ? _fileSystem.GetFileStat(pending.Destination) : null;
+            // FEAT-RENAME 2.4: a same-folder pair that differs only by case is judged by the spelling stored on disk.
+            var sourceExists = CaseOnlyRename.ExistsAs(_fileSystem, pending.Source, pending.Destination);
+            var destinationStat = pending.Destination is not null ? CaseOnlyRename.StatAs(_fileSystem, pending.Destination, pending.Source) : null;
             var destinationMatches = IsRecordedDestination(destinationStat, pending.Size, pending.LastWriteUtc);
             // Move must have removed the source to count as done; Copy is expected
             // to leave the source in place, so requiring its absence would reconcile
@@ -635,9 +636,9 @@ public sealed class OperationJournal
         // An undo group is journaled already in undo direction (UndoService: Source = the original destination, Destination =
         // the original source), like the single-entry reconcile and RecoveryFileCheck read it: no Undo-specific swap here.
         // Undo is only ever journaled for Move and Recycle (handled above); Copy is never undone.
-        var destination = !string.IsNullOrWhiteSpace(member.Destination) ? _fileSystem.GetFileStat(member.Destination) : null;
+        var destination = !string.IsNullOrWhiteSpace(member.Destination) ? CaseOnlyRename.StatAs(_fileSystem, member.Destination, member.Source) : null;
         var destinationMatches = IsRecordedDestination(destination, member.Size, member.LastWriteUtc);
-        var sourceExists = _fileSystem.FileExists(member.Source);
+        var sourceExists = CaseOnlyRename.ExistsAs(_fileSystem, member.Source, member.Destination);
         return group.Type switch
         {
             FileOperationType.Move => !sourceExists && destinationMatches,

@@ -975,6 +975,7 @@
   "settings.pagePending": "Trang này chưa có trong cửa sổ cài đặt mới. Các cài đặt của trang giữ nguyên giá trị hiện tại và được lưu không đổi. Để sửa, hãy sửa tệp config.json.",
   "status.menuFailed": "Lỗi menu: {message}",
   "settings.shortcuts.resetKeys": "Khôi phục phím mặc định",
+  "core.fileAction.renameInvalidName": "Tên tệp mới không hợp lệ: {name}",
   "main.menu.externalEditor.add": "Thêm trình chỉnh sửa…",
   "main.menu.externalEditor.add.automationName": "Thêm một chương trình chỉnh sửa ngoài vào menu này",
   "main.menu.externalEditor.setDefault": "Đặt trình chỉnh sửa mặc định…",

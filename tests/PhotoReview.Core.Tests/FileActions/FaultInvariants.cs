@@ -9,6 +9,18 @@ internal static class FaultInvariants
 
     private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The source of a Move is still there. A case-only rename (<c>a.jpg</c> to <c>A.jpg</c>) is the same entry under both spellings, so
+    /// "still there" means the entry is still stored under the SOURCE spelling (the disk's real stored names, not a case-insensitive exists).
+    /// </summary>
+    internal static bool SourceStillThere(FaultRig rig, string source, string? destination)
+    {
+        if (!rig.Disk.FileExists(source)) return false;
+        if (destination is null || string.Equals(source, destination, StringComparison.Ordinal) || !Same(source, destination)) return true;
+        var stored = rig.Disk.GetStoredFileNames(source);
+        return stored.Count != 1 || !string.Equals(stored[0], Path.GetFileName(destination), StringComparison.Ordinal);
+    }
+
     private static Dictionary<string, string> Snapshot(FaultRig rig, params string[] extraFolders) =>
         rig.Fs.Snapshot(FaultRig.Folders.Concat(extraFolders));
 
@@ -25,7 +37,7 @@ internal static class FaultInvariants
         switch (operation)
         {
             case FileOperationType.Move:
-                if (rig.Disk.FileExists(source)) violations.Add($"{ctx}: Move reported done but the source {source} is still there");
+                if (SourceStillThere(rig, source, destination)) violations.Add($"{ctx}: Move reported done but the source {source} is still there");
                 if (destination is null || !rig.HasFull(destination)) violations.Add($"{ctx}: Move reported done but {destination} is not the complete file");
                 break;
             case FileOperationType.Copy:
@@ -105,10 +117,19 @@ internal static class FaultInvariants
                     FaultRig.MembersOf(entry).Any(em => Same(um.Source, entry.Type == FileOperationType.Move ? em.Destination : em.Source))));
             foreach (var member in FaultRig.MembersOf(entry))
             {
+                // FEAT-RENAME: a Move line whose destination was moved/renamed on by a LATER line of the journal (rename twice, or
+                // the same rename re-done by a Recovery retry after its Undo) no longer describes the disk; the later line does.
+                var movedOn = entry.Type == FileOperationType.Move && member.Destination is not null
+                    && lines.FindLastIndex(l => l.Id == entry.Id) is var entryAt
+                    && latest.Values.Any(other => other.Id != entry.Id && other.Type == FileOperationType.Move
+                        && other.State is JournalState.Committed or JournalState.Prepared or JournalState.Failed
+                        && lines.FindLastIndex(l => l.Id == other.Id) > entryAt
+                        && FaultRig.MembersOf(other).Any(om => Same(om.Source, member.Destination) && !string.Equals(om.Source, om.Destination, StringComparison.Ordinal))
+                        && (other.State == JournalState.Committed || !rig.Disk.FileExists(member.Destination)));
                 switch (entry.Type)
                 {
-                    case FileOperationType.Move when entry.State == JournalState.Committed && !supersededByUndo:
-                        if (rig.Disk.FileExists(member.Source)) violations.Add($"{ctx}: Move {member.Source} is Committed but the source is still there");
+                    case FileOperationType.Move when entry.State == JournalState.Committed && !supersededByUndo && !movedOn:
+                        if (SourceStillThere(rig, member.Source, member.Destination)) violations.Add($"{ctx}: Move {member.Source} is Committed but the source is still there");
                         if (member.Destination is null || !rig.HasFull(member.Destination)) violations.Add($"{ctx}: Move {member.Source} is Committed but {member.Destination} is not the complete file");
                         break;
                     case FileOperationType.Copy:

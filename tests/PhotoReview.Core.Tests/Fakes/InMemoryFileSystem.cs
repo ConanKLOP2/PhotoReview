@@ -156,7 +156,11 @@ public sealed class InMemoryFileSystem : IFileSystem
                 throw new FileNotFoundException("Không tìm thấy tệp tin nguồn.", source);
             }
 
-            if (_files.ContainsKey(dstNorm))
+            // FEAT-RENAME: like NTFS, a move onto the SAME entry spelled with different letter case is a rename (the stored
+            // spelling changes); only a different entry at the destination is "already exists".
+            var caseOnlyRename = string.Equals(srcNorm, dstNorm, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(srcNorm, dstNorm, StringComparison.Ordinal);
+            if (!caseOnlyRename && _files.ContainsKey(dstNorm))
             {
                 throw DestinationExistsException(destination);
             }
@@ -435,6 +439,19 @@ public sealed class InMemoryFileSystem : IFileSystem
 
             return result;
         }
+    }
+
+    /// <summary>FEAT-RENAME: replaces the stored-spelling listing (e.g. two entries that differ only by case, as a case-sensitive folder reports).</summary>
+    public Func<string, IReadOnlyList<string>?>? StoredFileNamesOverride { get; set; }
+
+    public IReadOnlyList<string> GetStoredFileNames(string path)
+    {
+        if (StoredFileNamesOverride?.Invoke(path) is { } forced) return forced;
+        var directory = Path.GetDirectoryName(path);
+        var name = Path.GetFileName(path);
+        if (string.IsNullOrEmpty(directory) || name.Length == 0) return [];
+        return EnumerateFiles(directory, name).Select(Path.GetFileName).OfType<string>()
+            .Where(stored => string.Equals(stored, name, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
     public IEnumerable<string> EnumerateDirectories(string directory)

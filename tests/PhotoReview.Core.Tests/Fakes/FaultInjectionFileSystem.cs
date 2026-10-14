@@ -139,6 +139,7 @@ public sealed class FaultInjectionFileSystem(InMemoryFileSystem disk) : IFileSys
     }
 
     public bool FileExists(string path) { ThrowIfDead(); return Disk.FileExists(path); }
+    public IReadOnlyList<string> GetStoredFileNames(string path) { ThrowIfDead(); return Disk.GetStoredFileNames(path); }
     public bool DirectoryExists(string path) { ThrowIfDead(); return Disk.DirectoryExists(path); }
     public FileStat? GetFileStat(string path) { ThrowIfDead(); return Disk.GetFileStat(path); }
     public Stream OpenReadShared(string path, int bufferSize = 65536) { ThrowIfDead(); return Disk.OpenReadShared(path, bufferSize); }
@@ -156,8 +157,11 @@ public sealed class FaultInjectionFileSystem(InMemoryFileSystem disk) : IFileSys
 
     public void Move(string source, string destination)
     {
+        // FEAT-RENAME: a same-folder move is ONE atomic rename inside one volume (File.Move = MoveFileEx rename): it can never leave a
+        // truncated destination nor a complete copy beside an undeleted source, so the cross-volume fault kinds do not apply to it.
+        var rename = string.Equals(Path.GetDirectoryName(source), Path.GetDirectoryName(destination), StringComparison.OrdinalIgnoreCase);
         // Cut short: a truncated destination appears while the source is untouched (copy phase of a cross-volume move).
-        Mutate("move", () => Disk.Move(source, destination),
+        Mutate(rename ? "rename" : "move", () => Disk.Move(source, destination),
             partial: () => Truncated(source, destination),
             copiedNotDeleted: () => { Disk.Copy(source, destination); });
     }

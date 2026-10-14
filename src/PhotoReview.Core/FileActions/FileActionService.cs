@@ -1,4 +1,5 @@
 ﻿using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
@@ -92,9 +93,13 @@ public sealed class FileActionService
             if (request.Operation is not (FileOperationType.Move or FileOperationType.Copy or FileOperationType.Recycle))
                 throw new NotSupportedException(Tr.CoreFileActionUnsupportedOperation(request.Operation));
 
+            var renames = request.DestinationFileNames;
+            if (renames is not null && request.Operation != FileOperationType.Move)
+                throw new NotSupportedException(Tr.CoreFileActionUnsupportedOperation(request.Operation));
             var members = new List<JournalGroupMember>(request.Group.Paths.Count);
+            var alreadyNamed = new List<string>();
             string? destinationFolder = null;
-            if (request.Operation is FileOperationType.Move or FileOperationType.Copy)
+            if (renames is null && request.Operation is FileOperationType.Move or FileOperationType.Copy)
             {
                 if (string.IsNullOrWhiteSpace(request.Destination))
                     throw new IOException(Tr.CoreFileActionNoDestination);
@@ -138,6 +143,21 @@ public sealed class FileActionService
                         && ActionDestinationPolicy.ValidateNoEscapeViaReparsePoint(sourceFolder, destination, _fileSystem) != ActionDestinationCheck.Ok)
                         throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
                 }
+                else if (renames is not null)
+                {
+                    // FEAT-RENAME: same-folder rename of this member. Each target is validated like a single rename; a case-only
+                    // target is judged by the stored spelling, never by a case-insensitive FileExists (CaseOnlyRename).
+                    if (!renames.TryGetValue(source, out var newName) || !IsUsableRenameTarget(newName))
+                        throw new IOException(Tr.CoreFileActionRenameInvalidName(newName ?? Path.GetFileName(source)));
+                    destination = Path.Combine(Path.GetDirectoryName(source) ?? string.Empty, newName);
+                    var (conflict, named) = CaseOnlyRename.ProbeTarget(_fileSystem, source, destination);
+                    if (conflict) throw new IOException(Tr.CoreFileActionDestinationExists(destination));
+                    if (named || string.Equals(source, destination, StringComparison.Ordinal))
+                    {
+                        alreadyNamed.Add(source); // already carries the requested spelling: nothing to do for this member
+                        continue;
+                    }
+                }
 
                 var permanent = false;
                 if (request.Operation == FileOperationType.Recycle)
@@ -150,8 +170,30 @@ public sealed class FileActionService
                 members.Add(new JournalGroupMember(source, destination, stat.Length, stat.LastWriteUtc, permanent));
             }
 
+            if (renames is not null)
+            {
+                // Targets must not collide with each other nor take the name of another member that is about to be renamed.
+                var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var member in members)
+                {
+                    if (!targets.Add(member.Destination!))
+                        throw new IOException(Tr.CoreFileActionDestinationExists(member.Destination!));
+                }
+
+                foreach (var member in members)
+                {
+                    if (members.Any(other => !ReferenceEquals(other, member)
+                            && string.Equals(other.Source, member.Destination, StringComparison.OrdinalIgnoreCase)))
+                        throw new IOException(Tr.CoreFileActionDestinationExists(member.Destination!));
+                }
+
+                if (members.Count == 0 && alreadyNamed.Count > 0)
+                    return new(true, false, request.Operation, groupId, null, [], null, SkippedMissing: missingSources.Count > 0 ? missingSources : null);
+            }
+
             // Only a sidecar left (or nothing): the photo itself is gone, there is nothing to act on.
-            if (!members.Any(member => imagePaths.Contains(member.Source)))
+            if (!members.Concat(alreadyNamed.Select(path => new JournalGroupMember(path, null, 0, DateTime.MinValue)))
+                    .Any(member => imagePaths.Contains(member.Source)))
             {
                 var gone = missingSources.FirstOrDefault(imagePaths.Contains) ?? request.Group.Paths[0];
                 throw new FileNotFoundException(Tr.CoreFileActionSourceMissing(gone), gone);
@@ -402,8 +444,8 @@ public sealed class FileActionService
         {
             try
             {
-                var source = _fileSystem.GetFileStat(member.Source);
-                var destination = _fileSystem.GetFileStat(member.Destination!);
+                var source = CaseOnlyRename.StatAs(_fileSystem, member.Source, member.Destination);
+                var destination = CaseOnlyRename.StatAs(_fileSystem, member.Destination!, member.Source);
                 if (source is not null && destination is null) continue; // already back
                 if (source is not null || destination is null)
                 {
@@ -421,7 +463,7 @@ public sealed class FileActionService
 
                 _fileSystem.Move(member.Destination!, member.Source);
                 var back = _fileSystem.GetFileStat(member.Source);
-                if (back is null || back.Length != member.Size || _fileSystem.FileExists(member.Destination!)) stuck++;
+                if (back is null || back.Length != member.Size || CaseOnlyRename.ExistsAs(_fileSystem, member.Destination!, member.Source)) stuck++;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
@@ -440,7 +482,7 @@ public sealed class FileActionService
 
     private void VerifyGroupMove(JournalGroupMember member)
     {
-        if (_fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.MoveSourceNotRemoved);
+        if (CaseOnlyRename.ExistsAs(_fileSystem, member.Source, member.Destination)) throw new JournalCodedException(JournalErrors.MoveSourceNotRemoved);
         VerifyGroupDestination(member, _fileSystem.GetFileStat(member.Destination!));
     }
 
@@ -456,8 +498,9 @@ public sealed class FileActionService
                     SourceExists: source is not null);
             }
 
-            var destination = member.Destination is null ? null : _fileSystem.GetFileStat(member.Destination);
-            var sourceStat = _fileSystem.GetFileStat(member.Source);
+            // FEAT-RENAME 2.4: a case-only member pair is told apart by the stored spelling (plain pairs: plain stats).
+            var destination = member.Destination is null ? null : CaseOnlyRename.StatAs(_fileSystem, member.Destination, member.Source);
+            var sourceStat = CaseOnlyRename.StatAs(_fileSystem, member.Source, member.Destination);
             var completed = operation == FileOperationType.Move
                 ? sourceStat is null && destination?.Length == member.Size
                 : destination?.Length == member.Size;
@@ -477,11 +520,50 @@ public sealed class FileActionService
     }
 
     /// <summary>
-    /// Thực thi yêu cầu thao tác tệp tin không đồng bộ.
+    /// FEAT-RENAME-DESIGN: renames one file inside its own folder as a journaled Move (Source -> same folder + new name; no new
+    /// journal type, an older build reads it as the Move it is). Never overwrites: a target that is taken by another file is
+    /// refused before anything is journaled. A rename that changes only the letter case is a real rename (see
+    /// <see cref="CaseOnlyRename"/>); a request for the spelling the file already has succeeds with
+    /// <see cref="FileActionResult.NoChange"/> and no journal line. A failure that provably changed nothing is journaled
+    /// <see cref="JournalState.Dismissed"/> (nothing to retry in Recovery); anything unclear stays Failed.
     /// </summary>
-    public async Task<FileActionResult> ExecuteAsync(FileActionRequest request, CancellationToken cancellationToken = default)
+    public Task<FileActionResult> RenameAsync(RenameRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        var folder = Path.GetDirectoryName(request.Source) ?? string.Empty;
+        return ExecuteCoreAsync(new FileActionRequest(request.Source, FileOperationType.Move, folder), request.NewFileName, cancellationToken);
+    }
+
+    /// <summary>
+    /// FEAT-RENAME-DESIGN: renames a whole capture (JPEG + RAW [+ XMP]) to <paramref name="typedStem"/> in ONE journal group
+    /// transaction: every member keeps its own extension, an XMP sidecar follows its owner (<c>base.xmp</c> or
+    /// <c>file.ext.xmp</c>). All targets are preflighted before the manifest is journaled; a failure part-way rolls the moved
+    /// members back (the group Move compensation).
+    /// </summary>
+    public Task<CaptureGroupActionResult> RenameGroupAsync(CaptureGroup group, string typedStem, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        var plan = CaptureGroupRenamePlan.Build(group, typedStem);
+        if (!plan.Check.IsValid || plan.FileNames is null)
+        {
+            var invalid = Tr.CoreFileActionRenameInvalidName(typedStem ?? string.Empty);
+            return Task.FromResult(new CaptureGroupActionResult(false, false, FileOperationType.Move, string.Empty, null, [], invalid));
+        }
+
+        return ExecuteGroupAsync(new CaptureGroupActionRequest(group, FileOperationType.Move, null, false, plan.FileNames), cancellationToken);
+    }
+
+    /// <summary>
+    /// Thực thi yêu cầu thao tác tệp tin không đồng bộ.
+    /// </summary>
+    public Task<FileActionResult> ExecuteAsync(FileActionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return ExecuteCoreAsync(request, renameFileName: null, cancellationToken);
+    }
+
+    private async Task<FileActionResult> ExecuteCoreAsync(FileActionRequest request, string? renameFileName, CancellationToken cancellationToken)
+    {
 
         if (!TryBegin())
         {
@@ -526,12 +608,37 @@ public sealed class FileActionService
                     throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
 
                 var source = request.Source;
-                var destinationFolder = Path.IsPathRooted(request.Destination)
+                FileStat? renamedSourceStat = null;
+                string destinationFolder;
+                string sourceFolder;
+                if (renameFileName is not null)
+                {
+                    // FEAT-RENAME: same folder, new name. The "same folder" refusal below is deliberately NOT applied: it guards
+                    // Move/Copy-into-self, and a rename has no destination folder. Nothing here can leave the folder.
+                    if (!IsUsableRenameTarget(renameFileName))
+                        throw new IOException(Tr.CoreFileActionRenameInvalidName(renameFileName));
+                    sourceFolder = Path.GetFullPath(Path.GetDirectoryName(source) ?? string.Empty);
+                    destinationFolder = sourceFolder;
+                    destinationPath = Path.Combine(sourceFolder, renameFileName);
+                    renamedSourceStat = _fileSystem.GetFileStat(source)
+                        ?? throw new FileNotFoundException(Tr.CoreFileActionSourceMissing(source), source);
+                    var (conflict, named) = CaseOnlyRename.ProbeTarget(_fileSystem, source, destinationPath);
+                    if (conflict)
+                        throw new IOException(Tr.CoreFileActionDestinationExists(destinationPath));
+                    if (named || string.Equals(source, destinationPath, StringComparison.Ordinal))
+                    {
+                        return new FileActionResult(true, request.Operation, source, destinationPath,
+                            renamedSourceStat.Length, renamedSourceStat.LastWriteUtc, null, NoChange: true);
+                    }
+                }
+                else
+                {
+                destinationFolder = Path.IsPathRooted(request.Destination)
                     ? request.Destination
                     : Path.Combine(Path.GetDirectoryName(source) ?? string.Empty, request.Destination);
 
                 destinationFolder = Path.GetFullPath(destinationFolder);
-                var sourceFolder = Path.GetFullPath(Path.GetDirectoryName(source) ?? string.Empty);
+                sourceFolder = Path.GetFullPath(Path.GetDirectoryName(source) ?? string.Empty);
 
                 if (IsSamePath(destinationFolder, sourceFolder))
                     throw new IOException(Tr.CoreFileActionSameFolder);
@@ -552,15 +659,17 @@ public sealed class FileActionService
 
                 if (_fileSystem.FileExists(destinationPath))
                     throw new IOException(Tr.CoreFileActionDestinationExists(destinationPath));
+                }
 
-                var sourceStat = _fileSystem.GetFileStat(source)
+                var sourceStat = renamedSourceStat ?? _fileSystem.GetFileStat(source)
                     ?? throw new FileNotFoundException(Tr.CoreFileActionSourceMissing(source), source);
 
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
 
                 // Only after every pre-check passed: a missing source must not leave an empty destination folder behind.
-                createdDestinationFolders = CreateDestinationFolder(destinationFolder);
+                // (A rename stays in the existing source folder: nothing to create, nothing to clean up.)
+                if (renameFileName is null) createdDestinationFolders = CreateDestinationFolder(destinationFolder);
 
                 tx = new JournalTransaction(_journal, _clock, new JournalEntry(
                     operationId,
@@ -702,14 +811,20 @@ public sealed class FileActionService
             // RV-C02: cancelled before the mutation touched anything (Task.Run cancelled before its delegate ran): nothing is
             // left to retry or recover, so the outcome is a terminal Dismissed line, not a Failed Recovery item (same rule
             // as a fully rolled back group, ExecuteGroupAsync).
-            if (ex is OperationCanceledException && tx is { IsPrepared: true } && !mutationCompleted
-                && IsUntouched(request.Source, sourceSize, sourceLastWriteUtc, destinationPath))
-                _ = tx.DismissRolledBack(out journalError);
+            // FEAT-RENAME (Q7): a rename that provably changed nothing is not a Recovery item ("retry" means nothing for a typed
+            // name). A rename is one atomic same-volume File.Move, so any failure with the source still exactly as it was and no
+            // copy of it at the target left nothing to recover; every unclear state stays Failed.
+            var dismissCancelled = ex is OperationCanceledException && tx is { IsPrepared: true } && !mutationCompleted
+                && IsUntouched(request.Source, sourceSize, sourceLastWriteUtc, destinationPath);
+            var dismissRename = renameFileName is not null && tx is { IsPrepared: true } && !mutationCompleted
+                && IsRenameUntouched(request.Source, sourceSize, sourceLastWriteUtc, destinationPath);
+            if (dismissCancelled || dismissRename)
+                _ = tx!.DismissRolledBack(out journalError);
             else
                 _ = tx?.Fail(ex, out journalError);
             // F3: only a Move that was journaled (Prepared) and then failed can have removed the source; ask the disk.
             var sourceRemoved = !mutationCompleted && request.Operation == FileOperationType.Move && tx is { IsPrepared: true }
-                && IsSourceGone(request.Source);
+                && IsSourceGone(request.Source, destinationPath);
 
             return new FileActionResult(
                 Succeeded: mutationCompleted,
@@ -755,12 +870,39 @@ public sealed class FileActionService
         }
     }
 
-    /// <summary>True only when the file system positively reports the source missing; an inspection error counts as "not gone" (keeps the catalog entry).</summary>
-    private bool IsSourceGone(string source)
+    /// <summary>
+    /// FEAT-RENAME: true when the source is still stored exactly as it was (size, write time; for a case-only rename, under its own
+    /// spelling) and the target does not hold a file with the source's identity. Because a rename is one atomic same-volume
+    /// rename, this proves it did not happen. Any inspection error counts as "touched".
+    /// </summary>
+    private bool IsRenameUntouched(string source, long size, DateTime lastWriteUtc, string? destination)
     {
         try
         {
-            return !_fileSystem.FileExists(source);
+            var stat = CaseOnlyRename.StatAs(_fileSystem, source, destination);
+            if (stat is null || stat.Length != size || stat.LastWriteUtc != lastWriteUtc) return false;
+            if (destination is null || CaseOnlyRename.IsCaseOnlyPair(source, destination)) return true;
+            var atTarget = _fileSystem.GetFileStat(destination);
+            return atTarget is null || atTarget.Length != size || atTarget.LastWriteUtc != lastWriteUtc;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>A complete rename target must be ONE valid path component (no folder part, no forbidden character, no device name).</summary>
+    private static bool IsUsableRenameTarget(string? fileName) =>
+        fileName is not null
+        && RenameNamePolicy.CheckFileName(fileName) == RenameNameProblem.None
+        && string.Equals(Path.GetFileName(fileName), fileName, StringComparison.Ordinal);
+
+    /// <summary>True only when the file system positively reports the source missing; an inspection error counts as "not gone" (keeps the catalog entry).</summary>
+    private bool IsSourceGone(string source, string? destination)
+    {
+        try
+        {
+            return !CaseOnlyRename.ExistsAs(_fileSystem, source, destination);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {

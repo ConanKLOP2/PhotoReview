@@ -49,6 +49,7 @@ public sealed class CrashPointFileSystem(InMemoryFileSystem inner) : IFileSystem
     }
 
     public bool FileExists(string path) { Read(); ArgumentFault(path); return Inner.FileExists(path); }
+    public IReadOnlyList<string> GetStoredFileNames(string path) { Read(); return Inner.GetStoredFileNames(path); }
     public bool DirectoryExists(string path) { Read(); return Inner.DirectoryExists(path); }
     public FileStat? GetFileStat(string path) { Read(); ArgumentFault(path); return Inner.GetFileStat(path); }
     public void Move(string source, string destination) { Mutate("move", source + ">" + destination); Inner.Move(source, destination); }

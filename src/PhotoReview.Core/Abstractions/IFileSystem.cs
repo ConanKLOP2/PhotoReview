@@ -117,6 +117,27 @@ public interface IFileSystem
         });
     }
 
+    /// <summary>
+    /// FEAT-RENAME (đổi chỉ hoa-thường): các tên tệp ĐANG LƯU trên đĩa (đúng kiểu chữ) trong thư mục của <paramref name="path"/> mà
+    /// bằng tên của nó khi bỏ qua hoa-thường. <see cref="FileExists"/> không phân biệt hoa-thường nên không nói được tệp
+    /// đang mang tên <c>a.jpg</c> hay <c>A.jpg</c>; danh sách này nói được. Thường có 0 hoặc 1 phần tử; 2 phần tử = hai tệp khác nhau
+    /// trong thư mục phân biệt hoa-thường. Mặc định dùng <see cref="EnumerateFiles"/> (không cần P/Invoke); fake có thể ghi đè.
+    /// </summary>
+    IReadOnlyList<string> GetStoredFileNames(string path)
+    {
+        var directory = Path.GetDirectoryName(path);
+        var name = Path.GetFileName(path);
+        if (string.IsNullOrEmpty(directory) || name.Length == 0) return [];
+        var found = new List<string>(1);
+        foreach (var file in EnumerateFiles(directory, name))
+        {
+            var stored = Path.GetFileName(file);
+            if (string.Equals(stored, name, StringComparison.OrdinalIgnoreCase)) found.Add(stored);
+        }
+
+        return found;
+    }
+
     /// <summary>Liệt kê các thư mục con trong thư mục chỉ định.</summary>
     IEnumerable<string> EnumerateDirectories(string directory);
 
