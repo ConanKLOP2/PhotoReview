@@ -1,6 +1,6 @@
 ---
 id: NOWPF-FIX-EDIT-CENTER-DIALOGS
-order: 1360
+order: 1370
 summary: |-
   Ô nhập một dòng của Benchmark/ActionProfiles/ZoomPrompt cũng có lỗi "chữ dính mép trên" (CHƯA XÁC NHẬN): đo BitBlt 96/144 DPI x vi/en, khoảng cách mực trên/dưới của "HE08" lệch khi ô cao (vd. ActionProfiles @144: 8 trên / 19 dưới); sửa bằng cách gắn EditTextCentering ở một chỗ dùng chung (NativeDialog.InitializeDialog, mọi ô Edit không ES_MULTILINE của mọi hộp thoại phụ). 12 ca xanh sau sửa, 12/12 đỏ khi bỏ gắn; caret/EM_POSFROMCHAR nằm trong hàng chữ.
 ---

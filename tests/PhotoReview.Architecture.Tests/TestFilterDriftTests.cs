@@ -153,6 +153,13 @@ public sealed class TestFilterDriftTests
         Assert.Contains("./tools/publish-release.ps1 -AotOnly -RequireAot", job, StringComparison.Ordinal);
         Assert.Contains("./tools/verify-release.ps1 -AotOnly -Smoke -AotDirectory", job, StringComparison.Ordinal);
         Assert.Contains("name: release-publish-aot", job, StringComparison.Ordinal);
+        // CI-AOT-SMOKE: the job must RUN the native exe (not only inspect the files): -Smoke is what starts it, and the script
+        // runs both the plain --smoke and an image-opening --smoke.
+        var verifyLine = job.Split((char)10).Single(l => l.Contains("./tools/verify-release.ps1 -AotOnly", StringComparison.Ordinal));
+        Assert.Contains("-Smoke", verifyLine, StringComparison.Ordinal);
+        var verifyScript = ReadRepoFile("tools/verify-release.ps1");
+        Assert.Contains("Arguments = '--smoke'", verifyScript, StringComparison.Ordinal);
+        Assert.Contains("'--smoke \"' + $smokeJpg", verifyScript, StringComparison.Ordinal);
         Assert.DoesNotContain("dotnet publish", job, StringComparison.Ordinal);
         // The release gate (tag-version) must not wait for, or depend on, the experimental variant.
         var tag = ci[next..];
