@@ -267,7 +267,8 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
         steps.Add(VkDown);
         var captured = ShowMenuAndCapture(items, dpi, steps);
 
-        Assert.True(captured.Count >= 2, $"expected the root menu and the submenu windows, found {captured.Count}");
+        Assert.True(captured.Count >= 2, $"expected the root menu and the submenu windows, found {captured.Count}; dpi {dpi}, top-level {top.Count}, editorIndex {editorIndex}, "
+            + $"screen {GetSystemMetrics(0)}x{GetSystemMetrics(1)}, windows [{string.Join("; ", captured.Select(c => $"{c.Width}x{c.Height}"))}], keys [{string.Join(",", steps)}]");
         for (var level = 0; level < captured.Count; level++)
         {
             var (pixels, width, height) = captured[level];
@@ -498,7 +499,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
                 var ids = new List<string>();
                 var populate = typeof(NativePopupMenuHost).GetMethod("Populate", BindingFlags.NonPublic | BindingFlags.Static)!;
                 populate.Invoke(null, [root, items, ids, null, attached ? session : null]);
-                _ = User32.TrackPopupMenuEx(root, WindowMessages.TpmReturnCmd | WindowMessages.TpmRightButton, 150, 0, owner, 0); // y=0: a tall menu at 144 DPI must not be pushed/scrolled by a small (CI) screen
+                _ = User32.TrackPopupMenuEx(root, WindowMessages.TpmReturnCmd | WindowMessages.TpmRightButton, 150, 150, owner, 0); // as on master (y=0 broke 96 DPI on CI, run 38691424758)
                 User32.DestroyMenu(root);
                 worker.Wait(TimeSpan.FromSeconds(20));
             }
@@ -539,6 +540,9 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
     }
 
     private delegate bool EnumProc(nint hwnd, nint lParam);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll")]
     private static extern nint GetWindowDC(nint hwnd);
