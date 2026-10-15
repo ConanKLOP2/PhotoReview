@@ -1007,5 +1007,9 @@
   "externalEditors.browse": "Duyệt…",
   "externalEditors.argumentsLabel": "Tham số ({{file}} = đường dẫn ảnh)",
   "externalEditors.argumentsHint": "Mặc định: \"{{file}}\". Một số chương trình (ví dụ Lightroom Classic) không mở tệp truyền qua dòng lệnh.",
-  "externalEditors.defaultBadge": "mặc định"
+  "externalEditors.defaultBadge": "mặc định",
+  "status.renamed": "Đã đổi tên {oldName} thành {newName}. Nhấn Ctrl+Z để hoàn tác.",
+  "status.renameFailed": "Không đổi tên được {fileName}: {message}",
+  "status.renameUnchanged": "{fileName} đã có tên này.",
+  "status.renameUndone": "Đã hoàn tác đổi tên: tệp lại có tên {fileName}."
 }

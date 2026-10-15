@@ -525,6 +525,101 @@ public sealed class ReviewCatalog
     }
 
     /// <summary>
+    /// FEAT-RENAME (PR2): a file kept its place on disk but got another name -- renames <paramref name="oldPath"/> to
+    /// <paramref name="newPath"/> IN PLACE (same index, same <see cref="CurrentIndex"/>, same Length/LastWriteUtc/dimensions).
+    /// A single-member form of <see cref="RenameEntries"/>; see there for the rules and the return value.
+    /// </summary>
+    public bool RenameEntry(string oldPath, string newPath)
+    {
+        ArgumentNullException.ThrowIfNull(oldPath);
+        ArgumentNullException.ThrowIfNull(newPath);
+        return RenameEntries(new Dictionary<string, string>(1, StringComparer.OrdinalIgnoreCase) { [oldPath] = newPath });
+    }
+
+    /// <summary>
+    /// FEAT-RENAME (PR2): applies a set of file renames (old path -> new path, every member of a capture at once: JPEG, RAW and
+    /// its XMP sidecar) to the entries that list them, IN PLACE: the order, <see cref="CurrentIndex"/> and each entry's cached
+    /// Length/LastWriteUtc/dimensions stay (a rename changes none of them), so the photo on screen does not move and nothing is
+    /// re-listed from disk. An entry listed by one of the old paths gets its <see cref="CatalogEntry.Path"/> and its
+    /// <see cref="CaptureGroup"/> members re-spelled; a key that no entry lists (the sidecar of a standalone entry, a degraded
+    /// capture's other member) is ignored. Bumps <see cref="StructuralVersion"/> and rebuilds the path index lazily like every
+    /// structural change, so consumers keyed on the catalog (compare index, preload snapshot) refresh.
+    /// </summary>
+    /// <returns>
+    /// True when at least one entry was renamed. False -- and the catalog is untouched -- when no entry lists any old path, or
+    /// when a new path is already listed by an entry that is not itself being renamed, or when two entries would end up with the
+    /// same path. A rename that only changes letter case (<c>a.jpg</c> -> <c>A.jpg</c>) is valid (it is the same entry).
+    /// </returns>
+    public bool RenameEntries(IReadOnlyDictionary<string, string> renames)
+    {
+        AssertOwnerThread();
+        ArgumentNullException.ThrowIfNull(renames);
+        if (renames.Count == 0 || _entries.Count == 0) return false;
+
+        // Spelling-insensitive lookup of the map (the caller's dictionary may be Ordinal).
+        var map = new Dictionary<string, string>(renames.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var (from, to) in renames)
+        {
+            if (string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to)) return false;
+            map[from] = to;
+        }
+
+        var touched = new SortedDictionary<int, CatalogEntry>();
+        foreach (var from in map.Keys)
+        {
+            var index = IndexOf(from);
+            if (index < 0 || touched.ContainsKey(index)) continue;
+            var renamed = RenameInEntry(_entries[index], map);
+            if (renamed is not null) touched[index] = renamed;
+        }
+        if (touched.Count == 0) return false;
+
+        // Every path the renamed entries will list must be free: not listed by an untouched entry, and not listed twice.
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < _entries.Count; i++)
+        {
+            if (touched.ContainsKey(i)) continue;
+            taken.Add(_entries[i].Path);
+            if (_entries[i].CaptureGroup is { } other)
+                foreach (var member in other.ImagePaths) taken.Add(member);
+        }
+        foreach (var renamed in touched.Values)
+        {
+            if (!taken.Add(renamed.Path)) return false;
+            if (renamed.CaptureGroup is { } group)
+            {
+                foreach (var member in group.ImagePaths)
+                    if (!string.Equals(member, renamed.Path, StringComparison.OrdinalIgnoreCase) && !taken.Add(member)) return false;
+            }
+        }
+
+        foreach (var (index, renamed) in touched) _entries[index] = renamed;
+        InvalidateIndex();
+        return true;
+    }
+
+    /// <summary>The entry with every path in <paramref name="map"/> re-spelled, or null when none of its paths is in the map.</summary>
+    private static CatalogEntry? RenameInEntry(CatalogEntry entry, Dictionary<string, string> map)
+    {
+        var path = map.TryGetValue(entry.Path, out var newPath) ? newPath : entry.Path;
+        var group = entry.CaptureGroup;
+        var newGroup = group;
+        if (group is not null)
+        {
+            var jpeg = map.TryGetValue(group.JpegPath, out var j) ? j : group.JpegPath;
+            var raw = map.TryGetValue(group.RawPath, out var r) ? r : group.RawPath;
+            var xmp = group.XmpPath is not null && map.TryGetValue(group.XmpPath, out var x) ? x : group.XmpPath;
+            newGroup = new CaptureGroup(jpeg, raw, xmp);
+        }
+
+        var pathChanged = !string.Equals(path, entry.Path, StringComparison.Ordinal);
+        var groupChanged = group is not null && !(group.JpegPath == newGroup!.JpegPath && group.RawPath == newGroup.RawPath
+            && group.XmpPath == newGroup.XmpPath);
+        if (!pathChanged && !groupChanged) return null;
+        return entry with { Path = path, CaptureGroup = newGroup };
+    }
+
+    /// <summary>
     /// Creates a true copy of all entries. For consumers -- e.g. the background preload scheduler -- that need a stable
     /// snapshot including each entry's cached Length/LastWriteUtc, safe to read off the UI thread.
     /// </summary>

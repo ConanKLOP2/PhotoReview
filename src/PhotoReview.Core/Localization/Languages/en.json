@@ -1015,5 +1015,9 @@
   "externalEditors.browse": "Browse…",
   "externalEditors.argumentsLabel": "Arguments ({{file}} = the photo's path)",
   "externalEditors.argumentsHint": "Default: \"{{file}}\". Some programs (for example Lightroom Classic) do not open a file given on the command line.",
-  "externalEditors.defaultBadge": "default"
+  "externalEditors.defaultBadge": "default",
+  "status.renamed": "Renamed {oldName} to {newName}. Press Ctrl+Z to undo.",
+  "status.renameFailed": "Could not rename {fileName}: {message}",
+  "status.renameUnchanged": "{fileName} already has that name.",
+  "status.renameUndone": "Rename undone: the file is {fileName} again."
 }

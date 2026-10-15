@@ -61,6 +61,31 @@ public sealed class PreviewImageServiceGapTests2 : IAsyncLifetime
     }
 
     [Fact]
+    public async Task EvictCachedPath_DropsOnlyThatPathsOriginalDimensions()
+    {
+        var evicted = Path.Combine(_root, "dim-a.jpg");
+        var kept = Path.Combine(_root, "dim-b.jpg");
+        File.WriteAllBytes(evicted, [1, 2, 3]);
+        File.WriteAllBytes(kept, [1, 2, 3, 4]);
+        var decoder = new CountingDecoder();
+        var service = CreateService(decoder);
+        var evictedKey = service.GetCurrentCacheKey(evicted);
+        var keptKey = service.GetCurrentCacheKey(kept);
+        await service.GetOriginalDimensionsAsync(evicted, evictedKey);
+        await service.GetOriginalDimensionsAsync(kept, keptKey);
+        Assert.Equal(2, decoder.ReadInfoCalls);
+        await service.GetOriginalDimensionsAsync(evicted, evictedKey); // served from cache
+        Assert.Equal(2, decoder.ReadInfoCalls);
+
+        service.EvictCachedPath(evicted);
+
+        await service.GetOriginalDimensionsAsync(kept, keptKey);
+        Assert.Equal(2, decoder.ReadInfoCalls); // the other path is still cached
+        await service.GetOriginalDimensionsAsync(evicted, evictedKey);
+        Assert.Equal(3, decoder.ReadInfoCalls); // the evicted path is read again
+    }
+
+    [Fact]
     public async Task DecodeOriginalAsync_CancelledBeforeTheGate_NeverDecodesAndLeavesTheGateUsable()
     {
         var first = Path.Combine(_root, "g1.jpg");
@@ -91,7 +116,14 @@ public sealed class PreviewImageServiceGapTests2 : IAsyncLifetime
             return new FakeImage();
         }
 
-        public ImageInfo ReadInfo(string path) => new(10, 10);
+        private int _readInfoCalls;
+        public int ReadInfoCalls => Volatile.Read(ref _readInfoCalls);
+
+        public ImageInfo ReadInfo(string path)
+        {
+            Interlocked.Increment(ref _readInfoCalls);
+            return new(10, 10);
+        }
     }
 
     private sealed class FakeImage : IDecodedImage

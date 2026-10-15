@@ -95,6 +95,17 @@ public readonly record struct ImageCacheKey
         new(source.Path, source.Length, source.LastWriteUtcTicks, isOriginal: true, DecodeBox.Unbounded,
             source.OrientationApplied, source.Backend, sourceKind);
 
+    /// <summary>
+    /// FEAT-RENAME: the same source identity (length, write time, decode box, backend) under a new file name -- a rename changes
+    /// none of them. Normalizes <paramref name="newPath"/> like <c>Create</c> does and never touches the disk.
+    /// </summary>
+    public ImageCacheKey WithPath(string newPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPath);
+        var fullPath = System.IO.Path.GetFullPath(newPath).ToUpperInvariant();
+        return new ImageCacheKey(fullPath, Length, LastWriteUtcTicks, IsOriginal, TargetBox, OrientationApplied, Backend, SourceKind);
+    }
+
     public bool MatchesCurrentSource()
     {
         try

@@ -88,6 +88,27 @@ public sealed class ZoomDetailLoader
         _refreshHold = false;
     }
 
+    /// <summary>
+    /// FEAT-RENAME (R26): the file behind the current target was renamed (its pixels are the same). Drops the not-yet-started
+    /// decode that would still read the old path and re-arms the target under <paramref name="newPath"/> and the navigation
+    /// <paramref name="newToken"/> (the file action that renamed it bumped the generation, which would otherwise leave the
+    /// target dead and zoom detail unavailable). A held full-resolution original and the shown state are kept: it is the same
+    /// image. When the viewer is zoomed and no original is held, the decode restarts from the new path. No target = nothing to do.
+    /// </summary>
+    public void RetargetPath(long newToken, string newPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPath);
+        var target = _target;
+        if (target is null) return;
+        CancelPending();
+        StopRawDecodeIndicator();
+        // A decode that already started keeps running on the old path: LoadAsync sees a different target object when it
+        // finishes and drops its pixels (INV-1), and never touches the new load's state (its _cts was just released).
+        _target = target with { Token = newToken, Path = newPath, Key = target.Key.WithPath(newPath) };
+        if (_failedToken == target.Token) _failedToken = newToken; // a failure of the same pixels stays a failure
+        Update();
+    }
+
     /// <summary>The viewer's zoom changed: <paramref name="zoom"/> is the original-relative zoom, or
     /// null for Fit.</summary>
     public void SetZoom(double? zoom)

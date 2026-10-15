@@ -526,6 +526,260 @@ public sealed class FileActionController
         }
     }
 
+    // ---- FEAT-RENAME (PR2): rename of the photo being viewed ----
+
+    // Every old path of a rename registered for Undo in this process -> the path it was renamed to. A group undo reports only the
+    // restored (old) paths; this says under which names the catalog lists them now. Undo history is session-only, so is this.
+    private readonly Dictionary<string, string> _renamedTo = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxRememberedRenames = 512;
+
+    // The undo service's LastUndoAction record that is the latest RENAME (reference identity): tells UndoLastAsync that the next
+    // Ctrl+Z is a rename undo before it runs, so the same StopForAction protection can be applied to it.
+    private object? _lastRenameUndoAction;
+
+    /// <summary>
+    /// Renames the photo being viewed (a whole JPEG+RAW[+XMP] capture when it is one) to <paramref name="typedName"/> -- the NAME
+    /// PART, see <see cref="RenameNamePolicy"/> -- in place: one journaled Move inside the same folder (no new journal type),
+    /// registered for Undo in the single Undo slot (Q3), the catalog entry re-keyed WITHOUT re-listing the folder or presenting
+    /// the photo again (Q6: it keeps its index and the viewer's zoom/pan). The caller holds the file-action gate and has waited
+    /// for a pending Explorer order (INV-9), so no scan snapshot with the old name can arrive after the rename.
+    /// </summary>
+    /// <remarks>
+    /// Order matters: validate (pure) -> StopForAction (a stat of the old name still in flight would otherwise find it missing
+    /// and drop the renamed photo from the list) -> Cancel preload -> rename -> re-key catalog, session, presenter, caches ->
+    /// restart preload. A failure that changed nothing restores the same viewer state (Q7: the journal line is Dismissed).
+    /// </remarks>
+    public async Task<FileRenameResult> RenameAsync(string? compareSelectedPath, string? currentPath, string typedName)
+    {
+        if (_catalog.Count == 0 || _fileActions is null) return FileRenameResult.Nothing;
+        var source = compareSelectedPath ?? currentPath;
+        if (string.IsNullOrEmpty(source)) return FileRenameResult.Nothing;
+        var entry = _catalog.Find(source);
+        if (entry is null) return FileRenameResult.Nothing;
+        if (_fileActions.IsBusy) return FileRenameResult.Busy; // INV-4
+
+        var group = entry.CaptureGroup;
+        var fileName = Path.GetFileName(source);
+        var check = group is null
+            ? RenameNamePolicy.Check(typedName, source)
+            : CaptureGroupRenamePlan.Build(group, typedName).Check;
+        if (!check.IsValid)
+        {
+            _sink.SetStatusText(Tr.CoreFileActionRenameInvalidName(typedName ?? string.Empty));
+            return new FileRenameResult(FileRenameStatus.Invalid, Problem: check.Problem, InvalidCharacter: check.InvalidCharacter);
+        }
+
+        if (check.IsUnchanged)
+        {
+            _sink.SetStatusText(Tr.StatusRenameUnchanged(fileName));
+            return new FileRenameResult(FileRenameStatus.NoChange, NewPath: source);
+        }
+
+        // From here the viewer's in-flight work is stopped; every exit below puts it back (OnFilesRenamed re-arms it).
+        _clock.StopForAction();
+        _preloadController?.Cancel();
+        var folderGen = _clock.CurrentFolder;
+        FileActionResult? single = null;
+        CaptureGroupActionResult? grouped = null;
+        try
+        {
+            try
+            {
+                if (group is null) single = await _fileActions.RenameAsync(new RenameRequest(source, check.NewFileName));
+                else grouped = await _fileActions.RenameGroupAsync(group, typedName);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLog.Error($"Rename threw: {source}", ex);
+                await ResumeAfterRenameAttemptAsync(new Dictionary<string, string>(), folderGen);
+                if (_clock.IsFolderCurrent(folderGen)) _sink.SetStatusText(Tr.StatusRenameFailed(fileName, UserFacingError.Describe(ex)));
+                return new FileRenameResult(FileRenameStatus.Failed, Error: UserFacingError.Describe(ex));
+            }
+
+            // What changed on disk, per file. A failed single rename whose source is gone (SourceRemoved) is on disk under the new
+            // name even though the journal line is Failed; a failed group keeps only the members that really stayed renamed.
+            var renames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (single is not null)
+            {
+                var onDisk = single.Succeeded ? !single.NoChange : single.SourceRemoved;
+                if (onDisk && !string.IsNullOrEmpty(single.DestinationPath)) renames[source] = single.DestinationPath;
+            }
+            else
+            {
+                foreach (var member in grouped!.Members)
+                {
+                    if (member.Completed && !string.IsNullOrEmpty(member.Member.Destination))
+                        renames[member.Member.Source] = member.Member.Destination;
+                }
+            }
+
+            var succeeded = single?.Succeeded ?? grouped!.Succeeded;
+            var error = single?.Error ?? grouped?.Error;
+            var newShownPath = renames.TryGetValue(source, out var renamedSource) ? renamedSource : source;
+
+            if (!_clock.IsFolderCurrent(folderGen))
+            {
+                // The user left the folder while the rename ran: it is real on disk and undoable, but this folder's catalog,
+                // session and presenter are not touched (they belong to another folder now).
+                if (succeeded && renames.Count > 0)
+                {
+                    RegisterRenameForUndo(single, grouped, renames);
+                    _sink.ShowLateActionStatus(Tr.StatusRenamed(fileName, Path.GetFileName(newShownPath)));
+                    return new FileRenameResult(FileRenameStatus.Renamed, newShownPath);
+                }
+
+                return new FileRenameResult(succeeded ? FileRenameStatus.NoChange : FileRenameStatus.Failed, Error: error);
+            }
+
+            // The listing is renamed in place BEFORE anything is presented: same index, same Length/mtime/dimensions.
+            var listingConflict = false;
+            if (renames.Count > 0 && !_catalog.RenameEntries(renames))
+            {
+                // Cannot happen with a listing that matches the disk (a rename never overwrites): an entry already listed under
+                // the new name is a stale one. Drop the old-name entry (its file is no longer there) instead of listing two.
+                listingConflict = true;
+                AppLog.Error($"Rename: the catalog already lists the new name of {source}; dropping the old entry", new InvalidOperationException(newShownPath));
+                _catalog.Remove(source);
+                _sink.OnCatalogChanged(source);
+                renames.Clear();
+            }
+
+            if (succeeded && renames.Count > 0) RegisterRenameForUndo(single, grouped, renames);
+
+            var kept = _sink.OnFilesRenamed(renames);
+            if (listingConflict) _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
+            if (_catalog.Count > 0)
+            {
+                if (!kept || listingConflict)
+                {
+                    try { await _sink.PresentAsync(Math.Max(_catalog.CurrentIndex, 0)); }
+                    catch (Exception presentEx) when (presentEx is not OperationCanceledException)
+                    {
+                        AppLog.Error("Present after rename threw", presentEx);
+                    }
+                }
+                else
+                {
+                    // The window of neighbours is unchanged but the preload was cancelled: warm it around the shown photo again.
+                    _preloadController?.PreloadAroundAsync(Math.Max(_catalog.CurrentIndex, 0)).FireAndLog("Preload after rename failed");
+                }
+            }
+
+            // R08: the present awaited; a folder opened meanwhile must not get this rename's status.
+            if (!_clock.IsFolderCurrent(folderGen))
+                return new FileRenameResult(succeeded ? FileRenameStatus.Renamed : FileRenameStatus.Failed, newShownPath, Error: error);
+
+            if (single is { Succeeded: true, NoChange: true } || (grouped is { Succeeded: true } && renames.Count == 0 && !listingConflict))
+            {
+                _sink.SetStatusText(Tr.StatusRenameUnchanged(fileName));
+                return new FileRenameResult(FileRenameStatus.NoChange, source);
+            }
+
+            if (succeeded)
+            {
+                _sink.SetStatusText(Tr.StatusRenamed(fileName, Path.GetFileName(newShownPath)));
+                return new FileRenameResult(FileRenameStatus.Renamed, newShownPath);
+            }
+
+            _sink.SetStatusText(Tr.StatusRenameFailed(fileName, error));
+            return new FileRenameResult(FileRenameStatus.Failed, Error: error);
+        }
+        finally
+        {
+            _sink.NotifyNavigationStateChanged();
+        }
+    }
+
+    /// <summary>Puts the viewer back after a rename attempt that changed nothing (or threw): re-arms what StopForAction stopped.</summary>
+    private async Task ResumeAfterRenameAttemptAsync(Dictionary<string, string> renames, long folderGen)
+    {
+        if (!_clock.IsFolderCurrent(folderGen)) return;
+        var kept = _sink.OnFilesRenamed(renames);
+        if (_catalog.Count == 0) return;
+        try
+        {
+            if (!kept) await _sink.PresentAsync(Math.Max(_catalog.CurrentIndex, 0));
+            else _preloadController?.PreloadAroundAsync(Math.Max(_catalog.CurrentIndex, 0)).FireAndLog("Preload after rename failed");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLog.Error("Present after a failed rename threw", ex);
+        }
+    }
+
+    /// <summary>Q3: the rename takes the single Undo slot like a Move; remembers the names a group undo must re-key.</summary>
+    private void RegisterRenameForUndo(FileActionResult? single, CaptureGroupActionResult? grouped, Dictionary<string, string> renames)
+    {
+        if (_undoService is null) return;
+        if (single is not null) _undoService.Register(single);
+        else _undoService.RegisterGroup(grouped!);
+        _lastRenameUndoAction = _undoService.LastUndoAction;
+        if (_renamedTo.Count + renames.Count > MaxRememberedRenames) _renamedTo.Clear();
+        foreach (var (from, to) in renames) _renamedTo[from] = to;
+    }
+
+    /// <summary>
+    /// The Ctrl+Z that undid a rename in the open folder: the files are back under their old names, so the catalog entry is
+    /// re-keyed (new name -> old name, NOT re-inserted as an undone Move would be) and the photo stays on screen. Returns false
+    /// when the result is not a same-folder rename undo, so the generic Move/Recycle handling runs.
+    /// </summary>
+    private async Task<bool> TryHandleRenameUndoAsync(UndoResult result, string? currentFolder, long folderGen)
+    {
+        // Paths that are named again as they were, mapped from the name the catalog lists them under now.
+        var undone = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (result.Succeeded && result.RestoredPaths is not { Count: > 0 } && !string.IsNullOrEmpty(result.Destination)
+            && !string.IsNullOrEmpty(result.Source))
+        {
+            undone[result.Destination] = result.Source;
+        }
+        else if (result.RestoredPaths is { Count: > 0 } restored)
+        {
+            foreach (var oldPath in restored)
+            {
+                if (_renamedTo.TryGetValue(oldPath, out var renamedTo)) undone[renamedTo] = oldPath;
+            }
+        }
+
+        var inFolder = !string.IsNullOrEmpty(result.Source) && IsInFolder(result.Source, currentFolder);
+        if (!inFolder && result.Succeeded) return false; // made in another folder: the caller reopens that folder (RestoresOutsideFolder)
+
+        if (undone.Count == 0 && inFolder && result.Succeeded && AppLog.Enabled)
+            AppLog.Info($"Rename undo: no remembered new name for {result.Source}; the listing keeps the names it had");
+        if (undone.Count > 0 && inFolder)
+        {
+            if (!_catalog.RenameEntries(undone))
+            {
+                // The listing does not hold the new names (the folder was reloaded since and lists what is on disk): nothing to re-key.
+                undone.Clear();
+            }
+            else
+            {
+                foreach (var oldPath in undone.Values) _renamedTo.Remove(oldPath);
+            }
+        }
+
+        var kept = _sink.OnFilesRenamed(undone);
+        if (_catalog.Count > 0)
+        {
+            try
+            {
+                if (!kept) await _sink.PresentAsync(Math.Max(_catalog.CurrentIndex, 0));
+                else _preloadController?.PreloadAroundAsync(Math.Max(_catalog.CurrentIndex, 0)).FireAndLog("Preload after rename undo failed");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLog.Error("Present after rename undo threw", ex);
+            }
+        }
+
+        if (!_clock.IsFolderCurrent(folderGen)) return true;
+        if (!result.Succeeded) _sink.SetStatusText(result.ErrorMessage ?? StatusFormatter.NothingToUndo());
+        else if (!string.IsNullOrEmpty(result.ErrorMessage)) _sink.SetStatusText(result.ErrorMessage);
+        else _sink.SetStatusText(Tr.StatusRenameUndone(Path.GetFileName(result.Source)));
+        _sink.NotifyNavigationStateChanged();
+        return true;
+    }
+
     /// <summary>Upper bound of remembered Move positions; older ones fall back to the name-ordered insert.</summary>
     private const int MaxRememberedMovePositions = 256;
 
@@ -621,8 +875,24 @@ public sealed class FileActionController
     {
         if (_undoService is null) return null;
 
+        // FEAT-RENAME: undoing the latest rename renames the shown file back, so the same protection as for the rename itself
+        // applies before the file moves (a stat of the current name still in flight would find it missing and drop the photo).
+        var renameUndo = _lastRenameUndoAction is not null && ReferenceEquals(_undoService.LastUndoAction, _lastRenameUndoAction);
+        if (renameUndo && !_undoService.IsBusy)
+        {
+            _clock.StopForAction();
+            _preloadController?.Cancel();
+        }
+        else renameUndo = false;
+
         var folderGen = _clock.CurrentFolder;
         var result = await _undoService.UndoLastAsync();
+
+        if (renameUndo)
+        {
+            if (!_clock.IsFolderCurrent(folderGen)) return result;
+            if (await TryHandleRenameUndoAsync(result, currentFolder, folderGen)) return result;
+        }
 
         if (!result.Succeeded)
         {

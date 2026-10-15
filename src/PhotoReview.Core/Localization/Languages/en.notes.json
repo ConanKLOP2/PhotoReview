@@ -800,5 +800,9 @@
   "externalEditors.browse": "Button beside the program path box.",
   "externalEditors.argumentsLabel": "Label of the command-line arguments box; {file} is a literal token the user types, not a placeholder.",
   "externalEditors.argumentsHint": "Help note under the arguments box; the quoted {file} is literal.",
-  "externalEditors.defaultBadge": "Small badge on the default editor's row."
+  "externalEditors.defaultBadge": "Small badge on the default editor's row.",
+  "status.renamed": "Status bar after a successful rename of the photo being viewed (FEAT-RENAME). {oldName}/{newName} = file names (a capture shows the JPEG name). Also used as the late hint when the folder changed meanwhile.",
+  "status.renameFailed": "Status bar when renaming failed and nothing changed. {fileName} = the file's current name, {message} = reason from the file system.",
+  "status.renameUnchanged": "Status bar when the typed name is the file's current name (nothing was done). {fileName} = file name.",
+  "status.renameUndone": "Status bar after Ctrl+Z undid a rename. {fileName} = the file's name again (the old name)."
 }
