@@ -173,8 +173,8 @@ jobs:
           "PhotoReview **$v**" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Publish Release
-        # NO-WPF (WP-30): ONE folder holds both executables (PhotoReview.App.exe = WPF, PhotoReview.exe = Win32 shell), R2R,
-        # framework-dependent. -NoRestore: both projects were already restored as part of the whole-solution restore above;
+        # RELEASE-SHELL-ONLY: the folder holds ONE product, PhotoReview.exe (Win32 shell), R2R, framework-dependent; no WPF app
+        # (the script has an opt-in switch for local WPF builds). -NoRestore: the project was already restored as part of the whole-solution restore above;
         # the publish restores again by default, which is redundant work on an unchanged dependency graph.
         shell: powershell
         run: ./tools/publish-release.ps1 -NoRestore -OutputDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'

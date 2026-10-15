@@ -120,8 +120,9 @@ jobs:
       - name: Restore
         run: dotnet restore PhotoReview.slnx
 
-      # NO-WPF (WP-30): the same script as ci.yml publishes both executables (PhotoReview.App.exe + PhotoReview.exe) into one folder.
-      - name: Publish (framework-dependent, both executables)
+      # RELEASE-SHELL-ONLY: the same script as ci.yml publishes the ONE product, the Win32 + Direct2D shell (PhotoReview.exe), into
+      # one folder. No PhotoReview.App.exe (WPF) and no WPF-only library is shipped.
+      - name: Publish (framework-dependent, shell only)
         shell: powershell
         run: ./tools/publish-release.ps1 -NoRestore -OutputDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 
@@ -135,11 +136,10 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           $expected = $env:TAG.TrimStart('v')
-          foreach ($dll in 'PhotoReview.App.dll', 'PhotoReview.dll') {
-            $v = (Get-Item "src/PhotoReview.App/bin/Release/net10.0-windows/publish/$dll").VersionInfo.ProductVersion
-            Write-Host "Built $dll $v for $env:TAG"
-            if (-not $v.StartsWith("$expected+")) { throw "Built version '$v' ($dll) does not match tag '$env:TAG'" }
-          }
+          $dll = 'PhotoReview.dll'
+          $v = (Get-Item "src/PhotoReview.App/bin/Release/net10.0-windows/publish/$dll").VersionInfo.ProductVersion
+          Write-Host "Built $dll $v for $env:TAG"
+          if (-not $v.StartsWith("$expected+")) { throw "Built version '$v' ($dll) does not match tag '$env:TAG'" }
 
       - name: Zip and create the release
         shell: pwsh
@@ -151,7 +151,10 @@ jobs:
           $pub = 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
           $zip = "PhotoReview-$env:TAG-win-x64.zip"
           Compress-Archive -Path "$pub/*" -DestinationPath $zip
-          $sha = (Get-FileHash "$pub/PhotoReview.App.exe" -Algorithm SHA256).Hash
+          # Defence in depth beside verify-release.ps1: the package holds the shell only, never the WPF app.
+          foreach ($forbidden in 'PhotoReview.App.exe', 'PhotoReview.App.dll', 'PhotoReview.Imaging.Wpf.dll', 'PhotoReview.App.WpfWindows.dll') {
+            if (Test-Path "$pub/$forbidden") { throw "$forbidden must not be part of the release package" }
+          }
           $shellSha = (Get-FileHash "$pub/PhotoReview.exe" -Algorithm SHA256).Hash
           $zipSha = (Get-FileHash $zip -Algorithm SHA256).Hash
           # Previous release = the highest published (non-draft) release below this tag, so re-releasing an older
@@ -209,11 +212,10 @@ jobs:
             $changes = "## Changes since $prev`n`n" + ($sections -join "`n")
           }
           $notes = @"
-          Requires Windows 10/11 x64 and the **.NET 10 Windows Desktop Runtime**. Unzip and run ``PhotoReview.App.exe`` (the WPF app).
-          ``PhotoReview.exe`` (the Win32 + Direct2D shell) is a parallel build in the same folder; it does not change your file associations.
+          Requires Windows 10/11 x64 and the **.NET 10 Runtime** (Microsoft.NETCore.App 10.x; the Windows Desktop Runtime is not needed). Unzip and run ``PhotoReview.exe`` (Win32 + Direct2D shell).
+          This package holds only ``PhotoReview.exe``; it does not change your file associations. If .jpg files were opened with the old ``PhotoReview.App.exe``, register ``PhotoReview.exe`` again (``deploy/install-photo-review-association.ps1``).
 
           SHA256 of ``$zip``: ``$zipSha``
-          SHA256 of ``PhotoReview.App.exe``: ``$sha``
           SHA256 of ``PhotoReview.exe``: ``$shellSha``
 
           $changes
@@ -224,4 +226,4 @@ jobs:
           if ($env:DRAFT -eq 'true') { $ghArgs += '--draft' }
           gh @ghArgs
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
-          "Release $env:TAG created (draft=$env:DRAFT, changes since $prev), zip $zip (SHA256 $zipSha), App exe SHA256 $sha, shell exe SHA256 $shellSha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "Release $env:TAG created (draft=$env:DRAFT, changes since $prev), zip $zip (SHA256 $zipSha), shell exe SHA256 $shellSha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

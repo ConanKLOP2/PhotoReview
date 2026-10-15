@@ -1,8 +1,9 @@
 param(
-    # Which registration to remove: 'Wpf' (default, unchanged) = ProgId "PhotoReview.App" + folder key "PhotoReview";
-    # 'Shell' = ProgId "PhotoReview.Shell" + folder key "PhotoReview.Shell". Never both at once, never a neighbour key.
+    # Which registration to remove: 'Shell' (default since RELEASE-SHELL-ONLY) = ProgId "PhotoReview.Shell" + folder key
+    # "PhotoReview.Shell"; 'Wpf' = ProgId "PhotoReview.App" + folder key "PhotoReview" (a registration made by an older
+    # release or a WPF build). Never both at once, never a neighbour key.
     [ValidateSet('Wpf', 'Shell')]
-    [string]$Variant = 'Wpf',
+    [string]$Variant = 'Shell',
 
     # Registry root to clean. Default = the real per-user classes. Tests pass a private key.
     [string]$ClassesPath = 'HKCU:\Software\Classes'

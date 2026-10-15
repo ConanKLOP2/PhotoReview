@@ -2,6 +2,10 @@
 param(
     [string]$ReleaseDirectory = '',
     [switch]$SelfContained,
+    # RELEASE-SHELL-ONLY: the package holds ONE product, PhotoReview.exe (Win32 + Direct2D shell). Pass this for a folder built
+    # with publish-release.ps1 -IncludeWpf (also requires PhotoReview.App.exe and its WPF libraries). Without it the WPF files
+    # are FORBIDDEN, so a stale folder that still carries them fails instead of shipping a second product.
+    [switch]$IncludeWpf,
     # Also start PhotoReview.exe --smoke (creates + shows the Win32 window, then exits 0). Needs a desktop session; off by
     # default so the script stays usable on fake folders in tests. CI passes it.
     [switch]$Smoke,
@@ -152,28 +156,22 @@ if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) { $ReleaseDirectory = Join-
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $resolved = [IO.Path]::GetFullPath($ReleaseDirectory)
 $required = @(
-    'PhotoReview.App.exe',
-    'PhotoReview.App.dll',
-    'PhotoReview.App.deps.json',
-    'PhotoReview.App.runtimeconfig.json',
-    'PhotoReview.Core.dll',
-    'PhotoReview.Imaging.dll',
-    'PhotoReview.Imaging.Wpf.dll',
-    'PhotoReview.App.Shared.dll',
-    'PhotoReview.App.WpfWindows.dll',
-    'PhotoReview.Platform.Windows.dll',
-    'PhotoReview.Benchmarking.dll',
-    'PhotoReview.PerfAnalysis.dll',
-    'PhotoReview.Imaging.TurboJpeg.dll',
-    'PhotoReview.Imaging.LibRaw.dll',
-    # NO-WPF WP-30: the Win32 + Direct2D shell (PhotoReview.exe) ships in the same folder. WP-35 G5: it no longer loads a WPF
-    # bridge (every secondary window is a native Win32 dialog), so PhotoReview.Shell.WpfBridge.dll is NOT part of the package.
+    # RELEASE-SHELL-ONLY: the Win32 + Direct2D shell (PhotoReview.exe) is the one product. It loads no WPF (WP-35 G5: every
+    # secondary window is a native Win32 dialog), so no WPF library is part of the package.
     'PhotoReview.exe',
     'PhotoReview.dll',
     'PhotoReview.deps.json',
     'PhotoReview.runtimeconfig.json',
     'PhotoReview.Shell.Interop.dll',
     'PhotoReview.Shell.Rendering.dll',
+    'PhotoReview.Core.dll',
+    'PhotoReview.Imaging.dll',
+    'PhotoReview.App.Shared.dll',
+    'PhotoReview.Platform.Windows.dll',
+    'PhotoReview.Benchmarking.dll',
+    'PhotoReview.PerfAnalysis.dll',
+    'PhotoReview.Imaging.TurboJpeg.dll',
+    'PhotoReview.Imaging.LibRaw.dll',
     'turbojpeg.dll',
     'libraw.dll',
     'LibRaw-LICENSE.LGPL',
@@ -185,6 +183,22 @@ $required = @(
     # Translation catalogs (ADR 0006): English is also embedded, but shipped files let users read/edit them.
     'Languages\en.json',
     'Languages\vi.json')
+# The legacy WPF app and the libraries only it uses (Imaging.Wpf, App.WpfWindows). Required with -IncludeWpf, forbidden without.
+$wpfFiles = @(
+    'PhotoReview.App.exe',
+    'PhotoReview.App.dll',
+    'PhotoReview.App.deps.json',
+    'PhotoReview.App.runtimeconfig.json',
+    'PhotoReview.Imaging.Wpf.dll',
+    'PhotoReview.App.WpfWindows.dll')
+if ($IncludeWpf) { $required += $wpfFiles }
+else {
+    $wpfPresent = @($wpfFiles | Where-Object { Test-Path -LiteralPath (Join-Path $resolved $_) -PathType Leaf })
+    if ($wpfPresent.Count -gt 0) {
+        Write-Error ('Release folder must not contain the WPF app (shell-only package; use -IncludeWpf for a WPF build): ' + ($wpfPresent -join ', '))
+        exit 1
+    }
+}
 $required += if ($SelfContained) { @('coreclr.dll', 'hostfxr.dll') } else { @() }
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $resolved $_) -PathType Leaf) })
 if ($missing.Count -gt 0) {
@@ -237,9 +251,11 @@ foreach ($check in $legalMarkers) {
     }
 }
 
-# Both executables must come with every assembly their dependency manifest names: a missing library would only show up at the
+# Every executable must come with every assembly their dependency manifest names: a missing library would only show up at the
 # first use in the shipped app (the shell loads the WPF bridge late, so a smoke run alone would not notice).
-foreach ($depsName in 'PhotoReview.App.deps.json', 'PhotoReview.deps.json') {
+$depsNames = @('PhotoReview.deps.json')
+if ($IncludeWpf) { $depsNames = @('PhotoReview.App.deps.json') + $depsNames }
+foreach ($depsName in $depsNames) {
     try { $deps = [IO.File]::ReadAllText((Join-Path $resolved $depsName), [Text.Encoding]::UTF8) | ConvertFrom-Json }
     catch { Write-Error "$depsName is not valid JSON: $($_.Exception.Message)"; exit 1 }
     $missingLibraries = New-Object System.Collections.Generic.List[string]
@@ -260,15 +276,25 @@ foreach ($depsName in 'PhotoReview.App.deps.json', 'PhotoReview.deps.json') {
     }
 }
 
-$exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')
-if ($exe.Length -le 0) { Write-Error 'Release executable is empty.'; exit 1 }
 $shellExe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.exe')
 if ($shellExe.Length -le 0) { Write-Error 'Shell executable PhotoReview.exe is empty.'; exit 1 }
 if (-not $SkipIconCheck -and (Get-ExeGroupIconCount -Path $shellExe.FullName) -lt 1) {
     Write-Error 'Shell executable PhotoReview.exe has no icon resource (RT_GROUP_ICON): ApplicationIcon was not applied.'
     exit 1
 }
-$projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App\PhotoReview.App.csproj'
+# Runtime requirement, read from the REAL runtimeconfig.json (it is what the host uses), not guessed. A shell-only package must
+# not need the WindowsDesktop (WPF/WinForms) runtime.
+try { $runtimeConfig = [IO.File]::ReadAllText((Join-Path $resolved 'PhotoReview.runtimeconfig.json'), [Text.Encoding]::UTF8) | ConvertFrom-Json }
+catch { Write-Error "PhotoReview.runtimeconfig.json is not valid JSON: $($_.Exception.Message)"; exit 1 }
+$frameworks = @()
+if ($null -ne $runtimeConfig.runtimeOptions.framework) { $frameworks += $runtimeConfig.runtimeOptions.framework }
+if ($null -ne $runtimeConfig.runtimeOptions.frameworks) { $frameworks += @($runtimeConfig.runtimeOptions.frameworks) }
+$frameworkText = (@($frameworks | ForEach-Object { "$($_.name) $($_.version)" }) -join ', ')
+if (-not $IncludeWpf -and $frameworkText -match 'WindowsDesktop') {
+    Write-Error "PhotoReview.exe needs the WindowsDesktop runtime ($frameworkText); the shell-only package must run on Microsoft.NETCore.App alone."
+    exit 1
+}
+$projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj'
 # The version is computed from git by Directory.Build.targets (no <Version> in the csproj). Ask MSBuild
 # for the value the current commit produces, so a stale publish folder from another commit still fails.
 $versionJson = & dotnet msbuild $projectFile -nologo -t:PhotoReviewComputeVersion -getProperty:FileVersion -getProperty:InformationalVersion -p:Configuration=Release
@@ -284,8 +310,10 @@ if ($expectedInformational -match '-nogit' -or $expectedInformational -notmatch 
     exit 1
 }
 $expectedCommit = ([string]$expected.InformationalVersion -split '\+', 2)[1] -replace '\.dirty$', ''
-# Both entry assemblies must carry the same commit: a folder where only one of the two publishes is from this commit is stale.
-foreach ($entry in 'PhotoReview.App.dll', 'PhotoReview.dll') {
+# Every entry assembly must carry the same commit: a folder where only some publishes are from this commit is stale.
+$entryAssemblies = @('PhotoReview.dll')
+if ($IncludeWpf) { $entryAssemblies = @('PhotoReview.App.dll') + $entryAssemblies }
+foreach ($entry in $entryAssemblies) {
     $dllInfo = (Get-Item -LiteralPath (Join-Path $resolved $entry)).VersionInfo
     $actualFileVersion = $dllInfo.FileVersion
     $actualCommit = ([string]$dllInfo.ProductVersion -split '\+', 2)[1] -replace '\.dirty$', ''
@@ -302,7 +330,7 @@ foreach ($entry in 'PhotoReview.App.dll', 'PhotoReview.dll') {
         exit 1
     }
 }
-$dllInfo = (Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.dll')).VersionInfo
+$dllInfo = (Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.dll')).VersionInfo
 $actualFileVersion = $dllInfo.FileVersion
 
 if ($Smoke) {
@@ -331,8 +359,12 @@ if (-not [string]::IsNullOrWhiteSpace($AotDirectory)) {
 
 Write-Output "PASS: release files present ($resolved)"
 Write-Output "Version: $($dllInfo.ProductVersion) (file $actualFileVersion)"
-Write-Output "EXE bytes: $($exe.Length)"
-Write-Output "EXE SHA256: $((Get-FileHash -LiteralPath $exe.FullName -Algorithm SHA256).Hash)"
+Write-Output "Runtime required: $frameworkText"
+if ($IncludeWpf) {
+    $exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')
+    Write-Output "WPF EXE bytes: $($exe.Length)"
+    Write-Output "WPF EXE SHA256: $((Get-FileHash -LiteralPath $exe.FullName -Algorithm SHA256).Hash)"
+}
 Write-Output "SHELL EXE bytes: $($shellExe.Length)"
 Write-Output "SHELL EXE SHA256: $((Get-FileHash -LiteralPath $shellExe.FullName -Algorithm SHA256).Hash)"
 if ($SelfContained) { Write-Output 'PASS: self-contained runtime files present' }

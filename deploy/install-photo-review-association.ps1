@@ -6,13 +6,14 @@ param(
     # Skip the Explorer folder command "Browse with PhotoReview" (only the "Open with" association is registered).
     [switch]$NoFolderMenu,
 
-    # Which product the registration is for. 'Wpf' (default, unchanged) = PhotoReview.App.exe with ProgId "PhotoReview.App".
-    # 'Shell' = the Win32 + Direct2D PhotoReview.exe with its OWN ProgId "PhotoReview.Shell" and its own folder-menu key
-    # "PhotoReview.Shell", so both can be registered side by side and neither overwrites the other (NO-WPF NE-2 = a).
+    # Which product the registration is for. 'Shell' (default since RELEASE-SHELL-ONLY: the release package holds only this one)
+    # = the Win32 + Direct2D PhotoReview.exe with ProgId "PhotoReview.Shell" and folder-menu key "PhotoReview.Shell".
+    # 'Wpf' = PhotoReview.App.exe with ProgId "PhotoReview.App" and key "PhotoReview": only for a WPF build made from source
+    # (publish-release.ps1 -IncludeWpf); the two use different keys, so both can be registered side by side (NO-WPF NE-2 = a).
     [ValidateSet('Wpf', 'Shell')]
-    [string]$Variant = 'Wpf',
+    [string]$Variant = 'Shell',
 
-    # Opt-in guard for -Variant Shell: the registration asks for a typed YES unless -Force is given
+    # Opt-in guard for -Variant Shell (the default): the registration asks for a typed YES unless -Force is given
     # (a non-interactive host must pass -Force). -WhatIf prints what would be written and touches nothing.
     [switch]$Force,
 

@@ -107,8 +107,8 @@ public sealed class TestFilterDriftTests
         }
     }
 
-    [Fact(DisplayName = "Rule WP-30: CI and release.yml publish BOTH executables through tools/publish-release.ps1 into the same folder and verify it with -Smoke")]
-    public void CiAndRelease_PublishBothExecutablesTheSameWay()
+    [Fact(DisplayName = "Rule WP-30 / RELEASE-SHELL-ONLY: CI and release.yml publish the shell-only package through tools/publish-release.ps1 and verify it with -Smoke")]
+    public void CiAndRelease_PublishTheShellOnlyPackageTheSameWay()
     {
         const string folder = "src/PhotoReview.App/bin/Release/net10.0-windows/publish";
         foreach (var workflow in new[] { ".github/workflows/ci.yml", ".github/workflows/release.yml" })
@@ -116,28 +116,49 @@ public sealed class TestFilterDriftTests
             var text = ReadRepoFile(workflow);
             Assert.Contains($"./tools/publish-release.ps1 -NoRestore -OutputDirectory '{folder}'", text, StringComparison.Ordinal);
             Assert.Contains($"./tools/verify-release.ps1 -Smoke -ReleaseDirectory '{folder}'", text, StringComparison.Ordinal);
-            // No workflow may publish a single project directly again: that would ship one executable only.
+            // No workflow may publish a single project directly: only the script knows what the package holds.
             Assert.DoesNotContain("dotnet publish", text, StringComparison.Ordinal);
+            // RELEASE-SHELL-ONLY: the release package never carries the WPF app; -IncludeWpf is for local builds only.
+            Assert.DoesNotContain("-IncludeWpf", text, StringComparison.Ordinal);
         }
 
+        var release = ReadRepoFile(".github/workflows/release.yml");
+        Assert.DoesNotContain("SHA256 of ``PhotoReview.App.exe``", release, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"PhotoReview.App.exe\" -Algorithm", release, StringComparison.Ordinal);
+        Assert.Contains("must not be part of the release package", release, StringComparison.Ordinal);
+
         var script = ReadRepoFile("tools/publish-release.ps1");
-        Assert.Contains(@"src\PhotoReview.App\PhotoReview.App.csproj", script, StringComparison.Ordinal);
         Assert.Contains(@"src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj", script, StringComparison.Ordinal);
+        // The WPF project is published only behind -IncludeWpf: the default project list starts empty and is the shell alone.
+        Assert.Contains("[switch]$IncludeWpf", script, StringComparison.Ordinal);
+        Assert.Contains("if ($IncludeWpf) { $projects += 'src\\PhotoReview.App\\PhotoReview.App.csproj' }", script, StringComparison.Ordinal);
         // The local gate publishes the same two projects.
         var gate = ReadRepoFile("tools/verify-all.ps1");
         Assert.Contains("PhotoReview.Shell.Win32.csproj", gate, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "Rule WP-30: verify-release.ps1 requires both executables and every shell library of the package")]
-    public void VerifyRelease_ListsTheShellFiles()
+    [Fact(DisplayName = "Rule WP-30 / RELEASE-SHELL-ONLY: verify-release.ps1 requires the shell and its libraries and forbids the WPF files unless -IncludeWpf")]
+    public void VerifyRelease_ListsTheShellFilesAndForbidsWpf()
     {
         var script = ReadRepoFile("tools/verify-release.ps1");
         foreach (var file in new[]
         {
-            "PhotoReview.App.exe", "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.deps.json", "PhotoReview.runtimeconfig.json",
-            "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll", "PhotoReview.App.WpfWindows.dll",
+            "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.deps.json", "PhotoReview.runtimeconfig.json",
+            "PhotoReview.Shell.Interop.dll", "PhotoReview.Shell.Rendering.dll",
         })
             Assert.Contains($"'{file}'", script, StringComparison.Ordinal);
+
+        // The WPF files are listed only inside $wpfFiles, which is required with -IncludeWpf and forbidden without it.
+        Assert.Contains("[switch]$IncludeWpf", script, StringComparison.Ordinal);
+        Assert.Contains("if ($IncludeWpf) { $required += $wpfFiles }", script, StringComparison.Ordinal);
+        var wpfStart = script.IndexOf("$wpfFiles = @(", StringComparison.Ordinal);
+        Assert.True(wpfStart >= 0, "$wpfFiles list not found in verify-release.ps1");
+        var wpfBlock = script[wpfStart..script.IndexOf(')', wpfStart)];
+        foreach (var file in new[] { "PhotoReview.App.exe", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.WpfWindows.dll" })
+            Assert.Contains($"'{file}'", wpfBlock, StringComparison.Ordinal);
+        var requiredStart = script.IndexOf("$required = @(", StringComparison.Ordinal);
+        var requiredBlock = script[requiredStart..wpfStart];
+        Assert.DoesNotContain("PhotoReview.App.exe", requiredBlock.Replace("# The legacy WPF app", ""), StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "Rule WP-36: the optional Native AOT variant is a separate non-blocking CI job and is never part of the normal release folder")]
