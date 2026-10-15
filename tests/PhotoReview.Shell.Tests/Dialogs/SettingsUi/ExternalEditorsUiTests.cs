@@ -387,7 +387,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
     }
 
     /// <summary>Not one flat colour: at least 3 distinct colours and 1 % of the pixels differ from the most common one.</summary>
-    private static void AssertNotFlat(byte[] bgra, int width, int height, string what)
+    internal static void AssertNotFlat(byte[] bgra, int width, int height, string what)
     {
         var counts = new Dictionary<int, int>();
         for (var i = 0; i + 3 < bgra.Length && i / 4 < width * height; i += 4)
@@ -401,7 +401,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
         Assert.True(counts.Count >= 3 && dominant < total * 0.99, $"{what}: {counts.Count} colours, dominant covers {dominant * 100.0 / total:0.0} %");
     }
 
-    private static byte[] Crop(byte[] bgra, int width, Rect box)
+    internal static byte[] Crop(byte[] bgra, int width, Rect box)
     {
         var w = box.Right - box.Left;
         var h = box.Bottom - box.Top;
@@ -414,7 +414,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
         return result;
     }
 
-    private static byte[] Capture(nint hwnd, out int width, out int height)
+    internal static byte[] Capture(nint hwnd, out int width, out int height)
     {
         Rect rect = default;
         User32.GetWindowRect(hwnd, &rect);
@@ -453,7 +453,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
     }
 
     /// <summary>Opens the owner-draw popup on a hidden owner, drives it with keys posted from a worker, captures every menu window.</summary>
-    private static List<(byte[] Pixels, int Width, int Height)> ShowMenuAndCapture(IReadOnlyList<MenuItemModel> items, uint dpi, IReadOnlyList<nint> keys)
+    internal static List<(byte[] Pixels, int Width, int Height)> ShowMenuAndCapture(IReadOnlyList<MenuItemModel> items, uint dpi, IReadOnlyList<nint> keys)
     {
         return OnSta(() =>
         {

@@ -43,6 +43,7 @@ public sealed class MainViewModelRenameTests : IDisposable
     private readonly HoldingOrderProvider _order = new();
     private readonly List<SessionWriter> _writers = [];
     private readonly List<PreviewImageService> _services = [];
+    private readonly QuietDialog _dialog = new();
 
     public MainViewModelRenameTests()
     {
@@ -99,7 +100,7 @@ public sealed class MainViewModelRenameTests : IDisposable
 
         vm = new MainViewModel(
             catalog, clock, coordinator, presenter, _viewer, compare, _settingsStore, _sessionStore, _fileSystem,
-            fileActions, undo, new QuietDialog(), hashService, previewService, _thumbnailCache,
+            fileActions, undo, _dialog, hashService, previewService, _thumbnailCache,
             writer, preloadController: _preload, naturalComparer: ManagedNaturalComparer.Instance);
 
         var created = vm;
@@ -420,6 +421,141 @@ public sealed class MainViewModelRenameTests : IDisposable
         Assert.Equal("a.jpg", vm.Presenter.CurrentPhotoInfo?.FileName);
     }
 
+    // ---- FEAT-RENAME PR3: the name prompt (PromptRenameCurrentAsync) ---------------------------------------------
+
+    [Fact]
+    public async Task PromptRenameCurrentAsync_AsksWithTheStemAndTheFixedExtension_ThenRenamesAndUndoPutsItBack()
+    {
+        var folder = MakeFolder("prompt", "a.jpg", "b.JPG", "c.jpg");
+        var b = Path.Combine(folder, "b.JPG");
+        var vm = await OpenAsync(folder, b);
+        _dialog.OnPromptRename = request =>
+        {
+            Assert.Equal("b", request.InitialName);
+            Assert.Equal(".JPG", request.Extension); // the extension is fixed, in the case it has on disk
+            return "holiday 01";
+        };
+
+        var result = await vm.PromptRenameCurrentAsync();
+
+        var renamed = Path.Combine(folder, "holiday 01.JPG");
+        Assert.NotNull(result);
+        Assert.Equal(FileRenameStatus.Renamed, result!.Status);
+        Assert.True(File.Exists(renamed));
+        Assert.False(File.Exists(b));
+        Assert.Equal(renamed, vm.Catalog.Current?.Path);
+        Assert.Equal(1, vm.Catalog.CurrentIndex);
+
+        await vm.UndoAsync();
+
+        Assert.True(File.Exists(b));
+        Assert.False(File.Exists(renamed));
+        Assert.Equal(b, vm.Catalog.Current?.Path);
+    }
+
+    [Fact]
+    public async Task PromptRenameCurrentAsync_Cancelled_ChangesNothingAndIsSilent()
+    {
+        var folder = MakeFolder("promptcancel", "a.jpg", "b.jpg");
+        var a = Path.Combine(folder, "a.jpg");
+        var vm = await OpenAsync(folder, a);
+        _dialog.OnPromptRename = _ => null;
+        var presented = _sink.Presented.Count;
+
+        var result = await vm.PromptRenameCurrentAsync();
+
+        Assert.Null(result);
+        Assert.Equal(1, _dialog.PromptCount);
+        Assert.True(File.Exists(a));
+        Assert.Equal(presented, _sink.Presented.Count);
+        Assert.Equal([a, Path.Combine(folder, "b.jpg")], vm.Catalog.Paths);
+    }
+
+    [Fact]
+    public async Task PromptRenameCurrentAsync_TheSameNameTyped_IsNoChange_NothingTouched()
+    {
+        var folder = MakeFolder("promptsame", "a.jpg", "b.jpg");
+        var a = Path.Combine(folder, "a.jpg");
+        var vm = await OpenAsync(folder, a);
+        _dialog.OnPromptRename = _ => "a";
+
+        var result = await vm.PromptRenameCurrentAsync();
+
+        Assert.Equal(FileRenameStatus.NoChange, result!.Status);
+        Assert.True(File.Exists(a));
+        Assert.Equal([a, Path.Combine(folder, "b.jpg")], vm.Catalog.Paths);
+    }
+
+    [Fact]
+    public async Task PromptRenameCurrentAsync_ValidateFollowsThePolicy_AndTypingNeverTouchesTheDisk()
+    {
+        var folder = MakeFolder("promptvalidate", "a.jpg", "b.jpg");
+        var a = Path.Combine(folder, "a.jpg");
+        var vm = await OpenAsync(folder, a);
+        File.WriteAllBytes(Path.Combine(folder, "late.jpg"), [0xFF, 0xD8, 0xFF, 0xD9]); // on disk, not in the listing
+        var seen = new List<(string Typed, bool Commit, string? Error)>();
+        _dialog.OnPromptRename = request =>
+        {
+            foreach (var (typed, commit) in new[]
+            {
+                ("", false), ("a?", false), ("a.", false), ("CON", false), (new string('x', 300), false), ("b", false),
+                ("a", false), ("A", false), ("late", false), ("late", true), ("fresh", true),
+            })
+            {
+                seen.Add((typed, commit, request.Validate(typed, commit)));
+            }
+
+            return null;
+        };
+
+        await vm.PromptRenameCurrentAsync();
+
+        string? Error(string typed, bool commit) => seen.Single(s => s.Typed == typed && s.Commit == commit).Error;
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRenameErrorEmpty, Error("", false));
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRenameErrorInvalidCharacter, Error("a?", false));
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRenameErrorTrailingDot, Error("a.", false));
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRenameErrorReservedName, Error("CON", false));
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRenameErrorTooLong, Error(new string('x', 300), false));
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRenameErrorExists("b.jpg"), Error("b", false)); // another listed photo
+        Assert.Null(Error("a", false)); // the file itself
+        Assert.Null(Error("A", false)); // a change of letter case only is the file itself, not a clash
+        Assert.Null(Error("late", false)); // typing does not ask the disk ...
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRenameErrorExists("late.jpg"), Error("late", true)); // ... the confirming call does
+        Assert.Null(Error("fresh", true));
+    }
+
+    [Fact]
+    public async Task PromptRenameCurrentAsync_NoFolderOpen_NeverShowsTheBox()
+    {
+        var vm = CreateViewModel();
+        _dialog.OnPromptRename = _ => "x";
+
+        var result = await vm.PromptRenameCurrentAsync();
+
+        Assert.Null(result);
+        Assert.Equal(0, _dialog.PromptCount);
+    }
+
+    [Fact]
+    public async Task PromptRenameCurrentAsync_TheViewerMovedOnWhileTheBoxWasOpen_RenamesNothing()
+    {
+        var folder = MakeFolder("promptmoved", "a.jpg", "b.jpg", "c.jpg");
+        var a = Path.Combine(folder, "a.jpg");
+        var vm = await OpenAsync(folder, a);
+        _dialog.OnPromptRename = _ =>
+        {
+            vm.NextAsync().WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult(); // e.g. a refresh moved the selection
+            return "moved";
+        };
+
+        var result = await vm.PromptRenameCurrentAsync();
+
+        Assert.Null(result);
+        Assert.True(File.Exists(a));
+        Assert.False(File.Exists(Path.Combine(folder, "moved.jpg")));
+        Assert.True(File.Exists(Path.Combine(folder, "b.jpg")));
+    }
+
     // ---- test doubles -------------------------------------------------------------------------------------------
 
     private sealed class RenameDecoder : IImageDecoder
@@ -574,5 +710,15 @@ public sealed class MainViewModelRenameTests : IDisposable
         public bool ShowSettings() => false;
         public void ShowBenchmark(string? folder = null) { }
         public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
+
+        public Func<RenamePromptRequest, string?>? OnPromptRename { get; set; }
+
+        public int PromptCount { get; private set; }
+
+        public string? PromptRename(RenamePromptRequest request)
+        {
+            PromptCount++;
+            return OnPromptRename?.Invoke(request);
+        }
     }
 }

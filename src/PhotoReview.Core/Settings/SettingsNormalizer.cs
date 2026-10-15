@@ -145,6 +145,7 @@ public static class SettingsNormalizer
             shortcuts.ToggleKeepZoom = shortcuts.ToggleKeepZoom?.Trim() ?? "";
             shortcuts.Refresh = shortcuts.Refresh?.Trim() ?? "";
             shortcuts.OpenInDefaultEditor = shortcuts.OpenInDefaultEditor?.Trim() ?? "";
+            shortcuts.RenameFile = shortcuts.RenameFile?.Trim() ?? "";
         }
 
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: Return/Enter, Prior/PageUp ... are one key

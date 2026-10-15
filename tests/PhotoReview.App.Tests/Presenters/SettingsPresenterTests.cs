@@ -586,8 +586,14 @@ public sealed class SettingsPresenterTests
     public void ContextMenuRows_MatchTheItemList()
     {
         var rows = SettingsPresenter.ContextMenuRows();
-        Assert.Equal(ContextMenuItems.Items.Count, rows.Count);
-        foreach (var row in rows)
+        // FEAT-RENAME: the WPF window (default) lists no Win32-only item; the Win32 page asks for them too.
+        Assert.Equal(ContextMenuItems.Items.Count(i => !i.ShellOnly), rows.Count);
+        Assert.DoesNotContain(rows, r => r.Id == ContextMenuItemId.RenameFile);
+        var win32Rows = SettingsPresenter.ContextMenuRows(includeShellOnly: true);
+        Assert.Equal(ContextMenuItems.Items.Count, win32Rows.Count);
+        Assert.Contains(win32Rows, r => r.Id == ContextMenuItemId.RenameFile);
+        Assert.Equal(ContextMenuItems.Items.Select(i => i.Id), win32Rows.Select(r => r.Id)); // menu order
+        foreach (var row in win32Rows)
         {
             var info = ContextMenuItems.Info(row.Id);
             Assert.Equal(info.Locked, row.Locked);

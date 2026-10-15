@@ -208,6 +208,10 @@ internal sealed partial class ShellMainWindow : IShellInputHost
             case ReviewCommandType.Refresh:
                 RefreshView();
                 break;
+            case ReviewCommandType.RenameFile:
+                // FEAT-RENAME: the name box, then the rename (menu item and F2 share this branch).
+                await RunGuardedAsync(Tr.MainMenuRenameFile.TrimEnd('…', '.', ' '), async () => await _viewModel.PromptRenameCurrentAsync());
+                break;
             case ReviewCommandType.OpenInDefaultEditor:
                 _viewModel.OpenInExternalEditor(); // the default editor; opens Settings when none is declared
                 break;

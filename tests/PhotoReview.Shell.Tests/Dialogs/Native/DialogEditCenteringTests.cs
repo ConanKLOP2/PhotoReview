@@ -28,7 +28,7 @@ public sealed unsafe class DialogEditCenteringTests(ITestOutputHelper output)
 
     public static IEnumerable<object[]> Cases()
     {
-        foreach (var dialog in new[] { "benchmark", "profiles", "zoom" })
+        foreach (var dialog in new[] { "benchmark", "profiles", "zoom", "rename" })
         {
             foreach (var dpi in new[] { 96u, 144u })
             {
@@ -192,7 +192,9 @@ public sealed unsafe class DialogEditCenteringTests(ITestOutputHelper output)
             {
                 NativeDialog dialog = which == "zoom"
                     ? new ZoomPromptDialog(150)
-                    : new ActionProfilesDialog([new ReviewAction { Name = "Keep", Shortcut = "F6", Destination = "Keep" }]);
+                    : which == "rename"
+                        ? new RenamePromptDialog(new PhotoReview.Core.Abstractions.RenamePromptRequest("IMG_0001", ".jpg", (_, _) => null))
+                        : new ActionProfilesDialog([new ReviewAction { Name = "Keep", Shortcut = "F6", Destination = "Keep" }]);
                 ShowOnOwner(dialog, (d, _) =>
                 {
                     Measure(d);

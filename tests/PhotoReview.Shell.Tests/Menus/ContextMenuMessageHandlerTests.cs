@@ -182,9 +182,13 @@ public sealed class ContextMenuMessageHandlerTests
         foreach (var golden_case in golden.Items)
         {
             var photo = golden_case.Name.StartsWith("photo|", StringComparison.Ordinal);
+            // FEAT-RENAME: "Rename..." exists only in the Win32 shell (the WPF window is frozen, Q5), so the WPF golden cannot list
+            // it. Compare with that one item hidden; GMenu_RenameFile_* below pins the Win32-only item itself.
+            var settings = SettingsFrom(golden_case.SettingsOverridesJson);
+            ContextMenuItems.ApplyHidden(settings, ContextMenuItems.EffectiveHidden(settings).Append(ContextMenuItemId.RenameFile));
             var actions = new FakeContextMenuActions
             {
-                Settings = SettingsFrom(golden_case.SettingsOverridesJson),
+                Settings = settings,
                 HasImage = photo,
                 CanCopyPath = photo,
                 EffectiveZoom = 1.0,
@@ -196,6 +200,29 @@ public sealed class ContextMenuMessageHandlerTests
 
             Assert.True(host.LastItems is not null, golden_case.Name);
             Assert.Equal(golden_case.VisibleIdsInOrder, GoldenIds(host.LastItems!).ToList());
+        }
+    }
+
+    [Fact]
+    public async Task GMenu_RenameFile_IsTheOnlyWin32OnlyItem_ShownWithAPhoto_NeverWithout_AndOffWhenHidden()
+    {
+        var golden = GoldenFile.Read(GoldenFile.ContextMenu, GoldenJsonContext.Default.GoldenDocumentGoldenMenuCase);
+
+        foreach (var golden_case in golden.Items)
+        {
+            var photo = golden_case.Name.StartsWith("photo|", StringComparison.Ordinal);
+            var settings = SettingsFrom(golden_case.SettingsOverridesJson);
+            var hiddenByCase = ContextMenuItems.EffectiveHidden(settings).Contains(ContextMenuItemId.RenameFile);
+            var actions = new FakeContextMenuActions { Settings = settings, HasImage = photo, CanCopyPath = photo, EffectiveZoom = 1.0 };
+            var host = new FakePopupMenuHost();
+
+            await new ContextMenuController(actions, host).ShowAsync(default);
+
+            var ids = GoldenIds(host.LastItems!).ToList();
+            Assert.Equal(photo && !hiddenByCase, ids.Contains("RenameFile"));
+            // Everything else is exactly the WPF menu, up to the separator that only a lone Rename would bring.
+            var others = ids.Where(id => id != "RenameFile").ToList();
+            Assert.True(golden_case.VisibleIdsInOrder.All(others.Contains), golden_case.Name);
         }
     }
 

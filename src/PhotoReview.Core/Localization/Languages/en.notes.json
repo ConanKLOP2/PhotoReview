@@ -804,5 +804,21 @@
   "status.renamed": "Status bar after a successful rename of the photo being viewed (FEAT-RENAME). {oldName}/{newName} = file names (a capture shows the JPEG name). Also used as the late hint when the folder changed meanwhile.",
   "status.renameFailed": "Status bar when renaming failed and nothing changed. {fileName} = the file's current name, {message} = reason from the file system.",
   "status.renameUnchanged": "Status bar when the typed name is the file's current name (nothing was done). {fileName} = file name.",
-  "status.renameUndone": "Status bar after Ctrl+Z undid a rename. {fileName} = the file's name again (the old name)."
+  "status.renameUndone": "Status bar after Ctrl+Z undid a rename. {fileName} = the file's name again (the old name).",
+  "main.menu.renameFile": "Right-click menu item: rename the photo being viewed (FEAT-RENAME). Opens a one-line name box.",
+  "main.menu.renameFile.automationName": "Accessible name of the Rename menu item.",
+  "settings.contextMenu.item.renameFile": "Settings > Mouse: label of the check box that shows or hides the Rename item in the right-click menu.",
+  "settings.shortcut.renameFile": "Settings > Shortcuts: label of the row that binds a key (default F2) to renaming the photo being viewed.",
+  "settings.shortcut.renameFile.clearAutomationName": "Accessible name of the button that clears the Rename file shortcut.",
+  "dialog.rename.title": "Title of the dialog that asks for the new file name (FEAT-RENAME).",
+  "dialog.rename.label": "Label above the name box. The file's extension is shown, fixed, to the right of the box.",
+  "dialog.rename.ok": "Default button of the rename dialog.",
+  "dialog.rename.error.empty": "Inline error under the name box: nothing typed.",
+  "dialog.rename.error.invalidCharacter": "Inline error: forbidden character (or a control character) in the name. Lists the forbidden printable characters.",
+  "dialog.rename.error.trailingDot": "Inline error: Windows silently drops a trailing dot.",
+  "dialog.rename.error.reservedName": "Inline error: DOS device name.",
+  "dialog.rename.error.tooLong": "Inline error: file name longer than the NTFS limit.",
+  "dialog.rename.error.pathTooLong": "Inline error: the new path would reach MAX_PATH.",
+  "dialog.rename.error.sidecarNotMappable": "Inline error: a capture group's XMP sidecar name cannot be mapped to the new name.",
+  "dialog.rename.error.exists": "Inline error: the new name is taken. {name} = the complete new file name."
 }

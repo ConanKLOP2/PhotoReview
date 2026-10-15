@@ -28,7 +28,7 @@ public static class ContextMenuModelBuilder
         ArgumentNullException.ThrowIfNull(context);
         var settings = context.Settings;
         var hidden = ContextMenuItems.EffectiveHidden(settings);
-        var menuContext = new ContextMenuContext(context.HasImage && context.CanCopyPath);
+        var menuContext = new ContextMenuContext(context.HasImage && context.CanCopyPath, IncludeShellOnly: true); // this model is the Win32 shell's
 
         var result = new List<MenuItemModel>();
         foreach (var entry in ContextMenuItems.Compute(hidden, menuContext).Entries)
@@ -73,6 +73,7 @@ public static class ContextMenuModelBuilder
             ContextMenuItemId.NextFolder => Command(id, Tr.MainMenuNextFolder, shortcuts.NextFolder, Tr.MainMenuNextFolderAutomationName),
             ContextMenuItemId.PreviousFolder => Command(id, Tr.MainMenuPreviousFolder, shortcuts.PreviousFolder, Tr.MainMenuPreviousFolderAutomationName),
             ContextMenuItemId.ExternalEditor => ExternalEditorItem(context),
+            ContextMenuItemId.RenameFile => Command(id, Tr.MainMenuRenameFile, shortcuts.RenameFile, Tr.MainMenuRenameFileAutomationName),
             ContextMenuItemId.CopyFileName => Command(id, Tr.MainMenuCopyFileName, null, Tr.MainMenuCopyFileNameAutomationName),
             ContextMenuItemId.CopyFullPath => Command(id, Tr.MainMenuCopyFullPath, null, Tr.MainMenuCopyFullPathAutomationName),
             ContextMenuItemId.Settings => Command(id, Tr.MainMenuSettings, null, Tr.MainMenuSettingsAutomationName),

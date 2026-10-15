@@ -172,6 +172,7 @@ internal sealed class ContextMenuController
             nameof(ContextMenuItemId.NextFolder) => _actions.ExecuteAsync(new ReviewCommand(ReviewCommandType.NextFolder)),
             nameof(ContextMenuItemId.PreviousFolder) => _actions.ExecuteAsync(new ReviewCommand(ReviewCommandType.PreviousFolder)),
             nameof(ContextMenuItemId.ExternalEditor) => Run(_actions.OpenInExternalEditor),
+            nameof(ContextMenuItemId.RenameFile) => _actions.ExecuteAsync(new ReviewCommand(ReviewCommandType.RenameFile)),
             nameof(ContextMenuItemId.CopyFileName) => Run(_actions.CopyFileName),
             nameof(ContextMenuItemId.CopyFullPath) => Run(_actions.CopyFullPathname),
             nameof(ContextMenuItemId.Settings) => Run(_actions.ShowSettings),

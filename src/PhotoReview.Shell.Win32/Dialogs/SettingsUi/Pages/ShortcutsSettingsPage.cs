@@ -69,6 +69,8 @@ internal sealed class ShortcutsSettingsPage : SettingsPageBase
         Required(nameof(ShortcutMappings.SendToRecycleBin), () => Tr.SettingsShortcutRecycle),
         Optional(nameof(ShortcutMappings.OpenInDefaultEditor), () => Tr.SettingsShortcutOpenInDefaultEditor,
             () => Tr.SettingsShortcutOpenInDefaultEditorClearAutomationName),
+        Optional(nameof(ShortcutMappings.RenameFile), () => Tr.SettingsShortcutRenameFile,
+            () => Tr.SettingsShortcutRenameFileClearAutomationName),
     ];
 
     /// <summary>Mọi hàng của trang theo thứ tự hiển thị.</summary>

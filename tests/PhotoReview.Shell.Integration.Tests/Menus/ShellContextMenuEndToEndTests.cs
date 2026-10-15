@@ -179,7 +179,7 @@ public sealed partial class ShellContextMenuEndToEndTests
         Assert.Equal(sy / dpi, point.Y, 3);
         scripted.Shown.TryPeek(out var items);
         Assert.Equal(["Undo", "Separator.2", "Refresh", "Separator.3", "OpenFolder", "NextFolder", "PreviousFolder", "Separator.4",
-            "ExternalEditor", "Separator.5", "CopyFileName", "CopyFullPath", "Separator.6", "Settings"], items!.Select(i => i.Id).ToList());
+            "ExternalEditor", "Separator.5", "RenameFile", "CopyFileName", "CopyFullPath", "Separator.6", "Settings"], items!.Select(i => i.Id).ToList());
         Stop(run);
     }
 

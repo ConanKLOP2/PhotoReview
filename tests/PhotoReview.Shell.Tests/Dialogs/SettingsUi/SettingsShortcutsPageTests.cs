@@ -88,11 +88,11 @@ public sealed class SettingsShortcutsPageTests : IDisposable
         return d.HandleKeyForTest(message);
     }
 
-    /// <summary>28 phím khác nhau, hợp lệ, không trùng phím action mặc định (Enter, F3, F4, F5).</summary>
+    /// <summary>29 phím khác nhau, hợp lệ, không trùng phím action mặc định (Enter, F3, F4, F5).</summary>
     private static Dictionary<string, string> DistinctKeys()
     {
         var keys = new Dictionary<string, string>(StringComparer.Ordinal);
-        var names = Enumerable.Range('A', 26).Select(c => ((char)c).ToString()).Append("D5").Append("D6").ToArray();
+        var names = Enumerable.Range('A', 26).Select(c => ((char)c).ToString()).Append("D5").Append("D6").Append("D7").ToArray();
         var i = 0;
         foreach (var row in ShortcutsSettingsPage.AllRows)
         {
@@ -120,16 +120,16 @@ public sealed class SettingsShortcutsPageTests : IDisposable
     {
         using var scope = TestLocalization.Use(TestLocalization.English);
         var rows = ShortcutsSettingsPage.AllRows.ToList();
-        Assert.Equal(28, rows.Count);
-        Assert.Equal(28, SettingsFieldMap.Shortcuts.Count);
+        Assert.Equal(29, rows.Count);
+        Assert.Equal(29, SettingsFieldMap.Shortcuts.Count);
         Assert.Equal(SettingsFieldMap.Shortcuts.Select(s => s.Property).Order(StringComparer.Ordinal),
             rows.Select(r => r.Property).Order(StringComparer.Ordinal));
         Assert.Equal(ShortcutMappings.OptionalNames.Order(StringComparer.Ordinal),
             rows.Where(r => r.ClearTip is not null).Select(r => r.Property).Order(StringComparer.Ordinal));
-        Assert.Equal(15, rows.Count(r => r.ClearTip is not null));
+        Assert.Equal(16, rows.Count(r => r.ClearTip is not null));
         Assert.Equal(8, ShortcutsSettingsPage.NavigationRows.Count);
         Assert.Equal(13, ShortcutsSettingsPage.ViewRows.Count);
-        Assert.Equal(7, ShortcutsSettingsPage.ActionRows.Count);
+        Assert.Equal(8, ShortcutsSettingsPage.ActionRows.Count);
         Assert.All(rows.Where(r => r.ClearTip is not null), r => Assert.False(string.IsNullOrWhiteSpace(r.ClearTip!())));
 
         Show(new AppSettings(), (d, _) =>
@@ -161,14 +161,14 @@ public sealed class SettingsShortcutsPageTests : IDisposable
     }
 
     [Fact]
-    public void RowOrder_IsTheDocumentedReadingOrder_OfThe28Commands()
+    public void RowOrder_IsTheDocumentedReadingOrder_OfThe29Commands()
     {
         string[] expected =
         [
             "Next", "Previous", "FirstImage", "LastImage", "NextFolder", "PreviousFolder", "OpenFolder", "ToggleCaptureMember",
             "ZoomIn", "ZoomOut", "ZoomActualSize", "ToggleFit", "Fullscreen", "ToggleInfoOverlay", "ClickZoom", "FitWidth", "FitHeight",
             "FitWidth2", "ToggleKeepZoom", "CustomZoom", "Refresh",
-            "Skip", "Undo", "Compare", "MoveToFolder", "CopyToFolder", "SendToRecycleBin", "OpenInDefaultEditor",
+            "Skip", "Undo", "Compare", "MoveToFolder", "CopyToFolder", "SendToRecycleBin", "OpenInDefaultEditor", "RenameFile",
         ];
         Assert.Equal(expected, ShortcutsSettingsPage.AllRows.Select(row => row.Property).ToArray());
     }
@@ -294,8 +294,8 @@ public sealed class SettingsShortcutsPageTests : IDisposable
         using var scope = TestLocalization.Use(TestLocalization.English);
         Show(new AppSettings(), (d, _) =>
         {
-            // 15 clear buttons/summary tools of this page + 1 for the locked Settings tick box of the Mouse page (the tooltip window is the dialog's).
-            Assert.Equal(15 + 1, d.TooltipToolCount);
+            // 16 clear buttons/summary tools of this page + 1 for the locked Settings tick box of the Mouse page (the tooltip window is the dialog's).
+            Assert.Equal(16 + 1, d.TooltipToolCount);
             d.Close();
         });
     }
@@ -1115,7 +1115,7 @@ public sealed class SettingsShortcutsPageTests : IDisposable
         {
             var page = PageOf(d);
             Press(Box(d, nameof(ShortcutMappings.Previous)), 0x27); // conflict with Next
-            Press(Box(d, nameof(ShortcutMappings.Compare)), 0x71);
+            Press(Box(d, nameof(ShortcutMappings.Compare)), 0x76); // F7 (F2 is now the default of Rename file)
             var english = Txt(d, page.Cell(nameof(ShortcutMappings.Skip)).Label);
             var warningEnglish = Txt(d, page.Ids.Warning);
 
@@ -1130,7 +1130,7 @@ public sealed class SettingsShortcutsPageTests : IDisposable
             Assert.NotEqual(english, Txt(d, page.Cell(nameof(ShortcutMappings.Skip)).Label));
             Assert.Equal(Tr.SettingsShortcutsResetKeys, Txt(d, page.Ids.ResetKeys));
             Assert.Equal("Right", BoxText(d, nameof(ShortcutMappings.Previous)));
-            Assert.Equal("F2", BoxText(d, nameof(ShortcutMappings.Compare)));
+            Assert.Equal("F7", BoxText(d, nameof(ShortcutMappings.Compare)));
             Assert.NotEqual(string.Empty, Txt(d, page.Ids.Warning));
             Assert.NotEqual(warningEnglish, Txt(d, page.Ids.Warning));
             Assert.Equal(new[] { nameof(ShortcutMappings.Next), nameof(ShortcutMappings.Previous) }, page.MarkedProperties.Order(StringComparer.Ordinal));

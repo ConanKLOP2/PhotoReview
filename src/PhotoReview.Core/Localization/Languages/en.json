@@ -1019,5 +1019,21 @@
   "status.renamed": "Renamed {oldName} to {newName}. Press Ctrl+Z to undo.",
   "status.renameFailed": "Could not rename {fileName}: {message}",
   "status.renameUnchanged": "{fileName} already has that name.",
-  "status.renameUndone": "Rename undone: the file is {fileName} again."
+  "status.renameUndone": "Rename undone: the file is {fileName} again.",
+  "main.menu.renameFile": "Rename…",
+  "main.menu.renameFile.automationName": "Rename the current photo's file",
+  "settings.contextMenu.item.renameFile": "Rename…",
+  "settings.shortcut.renameFile": "Rename file",
+  "settings.shortcut.renameFile.clearAutomationName": "Clear the Rename file shortcut",
+  "dialog.rename.title": "Rename file",
+  "dialog.rename.label": "New name:",
+  "dialog.rename.ok": "Rename",
+  "dialog.rename.error.empty": "The name cannot be empty.",
+  "dialog.rename.error.invalidCharacter": "A file name cannot contain any of these characters: \\ / : * ? \" < > |",
+  "dialog.rename.error.trailingDot": "The name cannot end with a dot.",
+  "dialog.rename.error.reservedName": "Windows reserves this name for a device (CON, PRN, AUX, NUL, COM1…, LPT1…). Choose another.",
+  "dialog.rename.error.tooLong": "The name is too long (at most 255 characters).",
+  "dialog.rename.error.pathTooLong": "The full path would be too long (260 characters or more).",
+  "dialog.rename.error.sidecarNotMappable": "The XMP sidecar is not named after this photo, so the files cannot be renamed together.",
+  "dialog.rename.error.exists": "A file named {name} already exists in this folder."
 }
