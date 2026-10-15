@@ -576,6 +576,25 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     }
 
     /// <summary>
+    /// FEAT-RENAME (PR2 gate; the dialog that asks for <paramref name="newName"/> is PR3): renames the photo being viewed (the
+    /// whole capture when it is one) to <paramref name="newName"/> -- the name part, the file's own extension is kept. Same gate and
+    /// queue as Move/Delete (INV-4), waits for a pending Explorer order first (INV-9) and is dropped when another folder was
+    /// opened meanwhile (R02). The photo stays at its index and on screen: nothing is re-listed or presented again.
+    /// </summary>
+    public async Task<FileRenameResult> RenameCurrentAsync(string newName)
+    {
+        ArgumentNullException.ThrowIfNull(newName);
+        var epoch = _folderLoadEpoch;
+        var result = FileRenameResult.Busy;
+        var ran = await _fileActionGate.RunQueuedAsync(async () =>
+        {
+            if (!await WaitForQueuedTurnAsync(epoch)) return;
+            result = await _fileActionController.RenameAsync(_compare.SelectedPath, _catalog.Current?.Path, newName);
+        });
+        return ran ? result : FileRenameResult.Busy;
+    }
+
+    /// <summary>
     /// R02: identity of the folder load the user was looking at. Bumped (synchronously) each time a folder load starts; unlike
     /// the clock's folder generation it is NOT advanced by file actions, so it distinguishes "another folder was opened" from
     /// "an earlier action in this folder ran". A queued file command captures it at submission.
@@ -1342,6 +1361,48 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             _currentSession.UpdatedUtc = DateTime.UtcNow;
             PersistSession(_currentSession);
         }
+    }
+
+    bool IFileActionSink.OnFilesRenamed(IReadOnlyDictionary<string, string> renames)
+    {
+        ArgumentNullException.ThrowIfNull(renames);
+        if (renames.Count > 0)
+        {
+            var map = new Dictionary<string, string>(renames, StringComparer.OrdinalIgnoreCase);
+
+            // R06/R07: the session the next start restores from: the current photo and the skipped list keep the new names.
+            if (_currentSession is { } session)
+            {
+                var changed = false;
+                if (session.CurrentPath is { } currentPath && map.TryGetValue(currentPath, out var renamedCurrent))
+                {
+                    session.CurrentPath = renamedCurrent;
+                    changed = true;
+                }
+                for (var i = 0; i < session.Skipped.Count; i++)
+                {
+                    if (!map.TryGetValue(session.Skipped[i], out var renamedSkipped)) continue;
+                    session.Skipped[i] = renamedSkipped;
+                    changed = true;
+                }
+                if (changed)
+                {
+                    session.UpdatedUtc = DateTime.UtcNow;
+                    PersistSession(session);
+                }
+            }
+
+            // R11: the viewer must see the same file, not a new image (a new image forgets the Fit axis / zoom).
+            if (_lastNotifiedImagePath is { } lastNotified && map.TryGetValue(lastNotified, out var renamedNotified))
+                _lastNotifiedImagePath = renamedNotified;
+
+            // R15/R16/R19/R21: the old names' cached previews, original sizes, source bytes and preloaded keys are orphans now.
+            foreach (var oldPath in map.Keys) _presenter.EvictCachedPath(oldPath);
+            CatalogChanged?.Invoke();
+        }
+
+        // R08/R09/R10/R26/R36: the presenter re-keys what it holds by path without presenting again.
+        return _presenter.RetargetPath(renames);
     }
 
     void IFileActionSink.NotifyNavigationStateChanged()

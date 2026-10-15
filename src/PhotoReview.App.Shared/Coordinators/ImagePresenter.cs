@@ -222,8 +222,74 @@ public sealed class ImagePresenter
     /// <summary>
     /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
     /// </summary>
-    public Task PresentAsync(int index, bool allowCompare = true, string? pathOverride = null, bool includeCaptureGroupInCompare = false) =>
-        PresentCoreAsync(index, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetries: 0, originalPreviousNavigationPath: null);
+    public Task PresentAsync(int index, bool allowCompare = true, string? pathOverride = null, bool includeCaptureGroupInCompare = false)
+    {
+        var present = PresentCoreAsync(index, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetries: 0, originalPreviousNavigationPath: null);
+        // Only a present that really suspended is counted (the common one awaits its stat): see IsPresentInFlight.
+        if (!present.IsCompleted)
+        {
+            Interlocked.Increment(ref _presentsInFlight);
+            _ = present.ContinueWith(static (_, state) => Interlocked.Decrement(ref ((ImagePresenter)state!)._presentsInFlight),
+                this, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
+        return present;
+    }
+
+    private int _presentsInFlight;
+
+    /// <summary>
+    /// True while a <see cref="PresentAsync"/> has started and not yet finished (a superseded one counts until it notices it was
+    /// superseded). A file action that bumps the navigation generation (<see cref="GenerationClock.StopForAction"/>) kills such a
+    /// present silently, so <see cref="RetargetPath"/> asks for the photo to be presented again.
+    /// </summary>
+    public bool IsPresentInFlight => Volatile.Read(ref _presentsInFlight) > 0;
+
+    /// <summary>
+    /// FEAT-RENAME (R08/R09/R26/R36): files were renamed on disk (old path -> new path, every member of a capture) and the
+    /// catalog already lists the new names. Re-keys what the presenter holds by path WITHOUT presenting again, so the bitmap,
+    /// the viewer's zoom/pan/Keep zoom and the preload of the neighbours are untouched: the presented and shown-file paths, the
+    /// photo information line, the status line's file name and the zoom-detail target (re-armed under the current navigation
+    /// generation, which the rename's StopForAction bumped). Also the recovery after a rename attempt that changed nothing
+    /// (<paramref name="renames"/> empty): it re-arms the zoom detail the same way.
+    /// </summary>
+    /// <returns>
+    /// True when the displayed image was kept in place. False when the caller must present the current entry again: Compare is
+    /// visible (it was cleared, its pair is keyed by the old names) or a present was in flight and has been cancelled by the
+    /// action, so the screen would otherwise stay on its loading state.
+    /// </returns>
+    public bool RetargetPath(IReadOnlyDictionary<string, string> renames)
+    {
+        ArgumentNullException.ThrowIfNull(renames);
+        var map = new Dictionary<string, string>(renames, StringComparer.OrdinalIgnoreCase);
+        if (_presentedFilePath is not null && map.TryGetValue(_presentedFilePath, out var presented)) _presentedFilePath = presented;
+
+        var compareWasVisible = _compareViewModel.IsVisible;
+        if (compareWasVisible) _compareViewModel.Clear(); // R10: its pair is keyed by the old names
+
+        var shown = _currentNavigationPath;
+        if (compareWasVisible || IsPresentInFlight)
+        {
+            // The caller's present sets every path and key again; only the file identity (above) must not look like a new file.
+            return false;
+        }
+        if (shown is null) return true;
+
+        if (map.TryGetValue(shown, out var renamedShown))
+        {
+            var oldName = Path.GetFileName(shown);
+            var newName = Path.GetFileName(renamedShown);
+            _currentNavigationPath = renamedShown;
+            shown = renamedShown;
+            if (CurrentPhotoInfo is { } info) CurrentPhotoInfo = info with { FileName = newName };
+            if (_infoWhileOriginalShown is { } held) _infoWhileOriginalShown = held with { FileName = newName };
+            // The status line (index / size / name) was built from the old name; keep the rest of it as it is.
+            if (StatusText.EndsWith(oldName, StringComparison.OrdinalIgnoreCase))
+                StatusText = string.Concat(StatusText.AsSpan(0, StatusText.Length - oldName.Length), newName);
+        }
+
+        _zoomDetail.RetargetPath(_clock.CurrentNavigation, shown);
+        return true;
+    }
 
     /// <summary>Re-presents after a stale FileNotFound are bounded: the file system is re-checked each time and a file that exists is kept.</summary>
     private const int MaxStaleNotFoundRetries = 3;

@@ -28,6 +28,16 @@ public interface IFileActionSink
     /// </summary>
     void EvictCachedPaths(IReadOnlyList<string> paths) { }
 
+    /// <summary>
+    /// FEAT-RENAME: files of the folder were renamed in place and the catalog already lists the new names
+    /// (<paramref name="renames"/>: old path -> new path, every member of a capture; empty after a rename attempt that
+    /// changed nothing, where it only re-arms what the action's StopForAction stopped). The sink re-keys the session
+    /// (current path, skipped list), drops the old names' cached previews and lets the presenter keep the shown image under
+    /// the new name WITHOUT presenting again (zoom/pan stay).
+    /// </summary>
+    /// <returns>True when the shown image was kept in place; false when the caller must present the current entry again.</returns>
+    bool OnFilesRenamed(IReadOnlyDictionary<string, string> renames) => false;
+
     /// <summary>Yêu cầu hiển thị ảnh tại vị trí chỉ định.</summary>
     Task PresentAsync(int index);
 

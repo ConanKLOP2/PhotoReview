@@ -704,6 +704,8 @@ public sealed class PreviewImageService : IPreloadTarget
         lock (_cacheLifecycleGate)
         {
             _cache.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal));
+            // FEAT-RENAME R16: the original-size lookup is keyed by the same path; a renamed/moved file must not leave its entry behind.
+            _originalDimensions.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal));
             alsoInvalidate?.Invoke(normalized);
         }
     }
