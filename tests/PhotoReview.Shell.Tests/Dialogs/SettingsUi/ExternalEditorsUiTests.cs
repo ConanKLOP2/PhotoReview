@@ -31,7 +31,9 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
 
     private static AppSettings ThreeEditors() => new()
     {
-        HiddenContextMenuItems = [],
+        // Rename... (FEAT-RENAME) is not under test here: hidden, so the menu keeps the height this test was calibrated on (a taller
+        // menu at 144 DPI on the small CI screen scrolls and the VK_DOWN steps no longer reach the editor entry).
+        HiddenContextMenuItems = ["RenameFile"],
         ExternalEditors =
         [
             new ExternalEditor { Id = "lr", Name = "Lightroom", Path = @"C:\Adobe\Lightroom\lightroom.exe" },
@@ -496,7 +498,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
                 var ids = new List<string>();
                 var populate = typeof(NativePopupMenuHost).GetMethod("Populate", BindingFlags.NonPublic | BindingFlags.Static)!;
                 populate.Invoke(null, [root, items, ids, null, attached ? session : null]);
-                _ = User32.TrackPopupMenuEx(root, WindowMessages.TpmReturnCmd | WindowMessages.TpmRightButton, 150, 150, owner, 0);
+                _ = User32.TrackPopupMenuEx(root, WindowMessages.TpmReturnCmd | WindowMessages.TpmRightButton, 150, 0, owner, 0); // y=0: a tall menu at 144 DPI must not be pushed/scrolled by a small (CI) screen
                 User32.DestroyMenu(root);
                 worker.Wait(TimeSpan.FromSeconds(20));
             }

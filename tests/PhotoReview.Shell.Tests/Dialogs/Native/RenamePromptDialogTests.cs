@@ -347,7 +347,7 @@ public sealed class RenamePromptDialogTests(ITestOutputHelper output)
         using var scope = TestLocalization.Use(language == "vi" ? TestLocalization.Vietnamese : TestLocalization.English);
         var with = Menu(hideRename: false);
         var without = Menu(hideRename: true);
-        var top = ContextMenuModelBuilder.Build(Context(new AppSettings { HiddenContextMenuItems = [] }, true))
+        var top = ContextMenuModelBuilder.Build(Context(new AppSettings(), true))
             .Where(i => i.Kind != MenuItemKind.Separator).ToList();
         var index = top.FindIndex(i => i.Id == nameof(ContextMenuItemId.RenameFile));
         Assert.True(index >= 0, "the menu model has no Rename entry");
@@ -374,10 +374,11 @@ public sealed class RenamePromptDialogTests(ITestOutputHelper output)
 
     private static (IReadOnlyList<MenuItemModel> Items, AppSettings Settings) Menu(bool hideRename)
     {
-        var settings = new AppSettings { HiddenContextMenuItems = [] };
+        // The default hidden set (no zoom cluster / recycle): a short menu fits any CI screen at 144 DPI.
+        var settings = new AppSettings();
         if (hideRename)
         {
-            ContextMenuItems.ApplyHidden(settings, [ContextMenuItemId.RenameFile]);
+            ContextMenuItems.ApplyHidden(settings, [.. ContextMenuItems.DefaultHidden, ContextMenuItemId.RenameFile]);
         }
 
         return (ContextMenuModelBuilder.Build(Context(settings, true)), settings);
