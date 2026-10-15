@@ -48,6 +48,9 @@ internal interface ISecondaryWindowPort
     /// <summary>FEAT-EXTERNAL-EDITORS ("Set default editor..."): danh sách chọn một; id hoặc null.</summary>
     string? PromptDefaultExternalEditor(nint ownerHwnd, IReadOnlyList<PhotoReview.Core.Settings.ExternalEditor> editors,
         string? currentId) => null;
+
+    /// <summary>FEAT-RENAME ("Rename..." / F2): hộp nhập tên mới (modal); chữ đã được kiểm hợp lệ, hoặc null khi huỷ.</summary>
+    string? PromptRename(nint ownerHwnd, RenamePromptRequest request) => null;
 }
 
 /// <summary>Các cửa sổ phụ mà <see cref="ISecondaryWindowPort"/> có thể thực thi.</summary>
@@ -66,6 +69,9 @@ internal enum SecondaryWindowKind
 
     /// <summary>FEAT-EXTERNAL-EDITORS: danh sách trình chỉnh sửa + hai hộp thoại nhỏ của menu chuột phải.</summary>
     ExternalEditors,
+
+    /// <summary>FEAT-RENAME: hộp nhập tên mới của "Rename..." / F2 (modal).</summary>
+    RenamePrompt,
 }
 
 /// <summary>
@@ -161,4 +167,6 @@ internal sealed class Win32DialogService : IDialogService
 
     public string? PromptDefaultExternalEditor(IReadOnlyList<PhotoReview.Core.Settings.ExternalEditor> editors, string? currentId)
         => Port()?.PromptDefaultExternalEditor(_ownerProvider(), editors, currentId);
+
+    public string? PromptRename(RenamePromptRequest request) => Port()?.PromptRename(_ownerProvider(), request);
 }

@@ -28,7 +28,9 @@ public sealed class SettingsWindowContextMenuTests
             var window = new SettingsWindow(new AppSettings { HiddenContextMenuItems = ["Undo", "ZoomFitWidth2"] });
             try
             {
-                Assert.Equal(ContextMenuItems.Items.Count, window.ContextMenuChecks.Count);
+                // FEAT-RENAME: the Win32-only item (Rename...) has no tick box in the WPF window: the WPF menu has no such element.
+                Assert.Equal(ContextMenuItems.Items.Count(i => !i.ShellOnly), window.ContextMenuChecks.Count);
+                Assert.False(window.ContextMenuChecks.ContainsKey(ContextMenuItemId.RenameFile));
                 Assert.False(window.ContextMenuChecks[ContextMenuItemId.Undo].IsChecked);
                 Assert.False(window.ContextMenuChecks[ContextMenuItemId.ZoomFitWidth2].IsChecked);
                 Assert.True(window.ContextMenuChecks[ContextMenuItemId.ZoomFitWidth].IsChecked);
@@ -89,6 +91,38 @@ public sealed class SettingsWindowContextMenuTests
         var expected = new[] { "MoveToRecycleBin", "ZoomToLevel", "ZoomSubmenu", "ExternalEditor", "ZoomFitWidth2" };
         Assert.Equal(expected, store.Current.HiddenContextMenuItems);
         Assert.Equal(expected, new SettingsStore(appPaths, new PhysicalFileSystem(), NullLog.Instance).Load().HiddenContextMenuItems);
+    }
+
+    [Theory(DisplayName = "FEAT-RENAME: Save from the WPF window keeps the choice made for the Win32-only Rename item (it has no tick box here)")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Save_KeepsTheWin32OnlyItemsChoice(bool renameHidden)
+    {
+        using var root = new TempRoot("ctx-menu-shellonly-" + renameHidden);
+        var appPaths = new AppPaths(root.Path);
+        var store = new SettingsStore(appPaths, new PhysicalFileSystem(), NullLog.Instance);
+        store.Load();
+        store.Current.HiddenContextMenuItems = renameHidden ? ["RenameFile"] : [];
+        store.Save(store.Current);
+
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(store)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false,
+            };
+            window.Loaded += (_, _) =>
+            {
+                window.ContextMenuChecks[ContextMenuItemId.ExternalEditor].IsChecked = false; // some other change, so Save has work to do
+                SaveClick.Invoke(window, [window, new RoutedEventArgs()]);
+            };
+            Assert.True(window.ShowDialog());
+            return Task.CompletedTask;
+        });
+
+        var reloaded = new SettingsStore(appPaths, new PhysicalFileSystem(), NullLog.Instance).Load();
+        Assert.Equal(renameHidden, ContextMenuItems.EffectiveHidden(reloaded).Contains(ContextMenuItemId.RenameFile));
+        Assert.Contains(ContextMenuItemId.ExternalEditor, ContextMenuItems.EffectiveHidden(reloaded));
     }
 
     [Fact(DisplayName = "Restore defaults brings back the default hidden set (zoom cluster and Recycle Bin)")]

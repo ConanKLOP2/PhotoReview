@@ -160,6 +160,8 @@ internal static class DialogConstants
     public const uint BmSetStyle = 0x00F4;
     public const uint EmSetSel = 0x00B1;
     public const uint EmGetSel = 0x00B0;
+    /// <summary>EN_CHANGE: the text of an edit control changed (WM_COMMAND notification code).</summary>
+    public const int EnChange = 0x0300;
     public const uint EmSetLimitText = 0x00C5;
     public const uint EmGetRect = 0x00B2;
     public const uint EmSetRect = 0x00B3;

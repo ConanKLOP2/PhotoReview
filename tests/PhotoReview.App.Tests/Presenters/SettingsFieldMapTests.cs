@@ -74,8 +74,8 @@ public sealed class SettingsFieldMapTests
     [Fact(DisplayName = "Every shortcut round-trips through Load and Save (canonical name kept, MoveToFolder2 carried over)")]
     public void Shortcuts_RoundTripEachProperty()
     {
-        // Distinct valid key names for the 28 boxes (a duplicate would be refused by the validator).
-        var keys = new[] { "A", "B", "C", "D", "E", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "F1", "F2", "F3" };
+        // Distinct valid key names for the 29 boxes (a duplicate would be refused by the validator).
+        var keys = new[] { "A", "B", "C", "D", "E", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "F1", "F2", "F3", "F4" };
         Assert.Equal(SettingsFieldMap.Shortcuts.Count, keys.Length);
         var source = new AppSettings { Actions = [] };
         for (var i = 0; i < keys.Length; i++) SettingsFieldMap.Shortcuts[i].Set(source.Shortcuts, keys[i]);

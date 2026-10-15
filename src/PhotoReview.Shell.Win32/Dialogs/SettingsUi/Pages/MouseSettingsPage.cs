@@ -132,7 +132,7 @@ internal sealed class MouseSettingsPage : SettingsPageBase
         {
             g.Note(() => Tr.SettingsContextMenuHint, aligned: false);
             // One tick box per right-click menu item, built from the single item list (menu order; zoom children indented).
-            foreach (var row in SettingsPresenter.ContextMenuRows())
+            foreach (var row in SettingsPresenter.ContextMenuRows(includeShellOnly: true))
             {
                 var id = row.Id;
                 _menuChecks[id] = g.Check(() => SettingsPresenter.ContextMenuItemLabel(id), indentDlu: row.IsChild ? 12 : 0);
@@ -151,7 +151,7 @@ internal sealed class MouseSettingsPage : SettingsPageBase
     {
         base.Attach(context);
         // A locked item stays enabled-looking and re-ticks itself (OnCommand), because a disabled window never shows a tooltip.
-        foreach (var row in SettingsPresenter.ContextMenuRows())
+        foreach (var row in SettingsPresenter.ContextMenuRows(includeShellOnly: true))
         {
             if (row.Locked && _menuChecks.TryGetValue(row.Id, out var id))
             {

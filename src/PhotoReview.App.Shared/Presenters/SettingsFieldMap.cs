@@ -59,6 +59,7 @@ internal static class SettingsFieldMap
         new(nameof(ShortcutMappings.FitWidth2), m => m.FitWidth2, (m, v) => m.FitWidth2 = v),
         new(nameof(ShortcutMappings.Refresh), m => m.Refresh, (m, v) => m.Refresh = v),
         new(nameof(ShortcutMappings.OpenInDefaultEditor), m => m.OpenInDefaultEditor, (m, v) => m.OpenInDefaultEditor = v),
+        new(nameof(ShortcutMappings.RenameFile), m => m.RenameFile, (m, v) => m.RenameFile = v),
     ];
 
     /// <summary>Settings -> text boxes.</summary>

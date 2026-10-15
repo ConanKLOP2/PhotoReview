@@ -38,7 +38,7 @@ public sealed class ContextMenuLayoutTests
         Assert.Equal(ContextMenuItems.Items.Count, ContextMenuItems.Items.Select(i => i.Id).Distinct().Count());
         // These names are written to config.json: renaming one silently un-hides/hides an item for existing users.
         Assert.Equal(["Undo", "MoveToRecycleBin", "Fit", "ZoomToLevel", "ZoomSubmenu", "OpenFolder", "NextFolder", "PreviousFolder",
-            "ExternalEditor", "CopyFileName", "CopyFullPath", "Settings", "ZoomFitWidth", "ZoomFitWidth2", "ZoomFitHeight", "ZoomPresets", "ZoomLevelOptions", "Refresh"],
+            "ExternalEditor", "CopyFileName", "CopyFullPath", "Settings", "ZoomFitWidth", "ZoomFitWidth2", "ZoomFitHeight", "ZoomPresets", "ZoomLevelOptions", "Refresh", "RenameFile"],
             Enum.GetNames<ContextMenuItemId>());
     }
 

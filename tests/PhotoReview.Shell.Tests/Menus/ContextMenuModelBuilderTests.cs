@@ -40,7 +40,7 @@ public sealed class ContextMenuModelBuilderTests
 
         Assert.Equal(
             ["Undo", "-", "Refresh", "-", "OpenFolder", "NextFolder", "PreviousFolder", "-", "ExternalEditor", "-",
-                "CopyFileName", "CopyFullPath", "-", "Settings"],
+                "RenameFile", "CopyFileName", "CopyFullPath", "-", "Settings"],
             TopIds(items));
     }
 
@@ -53,7 +53,7 @@ public sealed class ContextMenuModelBuilderTests
 
         Assert.Equal(
             ["Undo", "MoveToRecycleBin", "-", "Fit", "ZoomToLevel", "ZoomSubmenu", "Refresh", "-", "OpenFolder", "NextFolder",
-                "PreviousFolder", "-", "ExternalEditor", "-", "CopyFileName", "CopyFullPath", "-", "Settings"],
+                "PreviousFolder", "-", "ExternalEditor", "-", "RenameFile", "CopyFileName", "CopyFullPath", "-", "Settings"],
             TopIds(items));
         Assert.Equal(
             ["ZoomFitWidth", "ZoomFitWidth2", "ZoomFitHeight", "-", "Zoom.Preset.50", "Zoom.Preset.70", "Zoom.Preset.100",
@@ -67,6 +67,7 @@ public sealed class ContextMenuModelBuilderTests
     {
         var items = ContextMenuModelBuilder.Build(Context(Hiding(), hasImage: false, canCopyPath: false));
 
+        Assert.DoesNotContain("RenameFile", TopIds(items)); // FEAT-RENAME: NeedsPhoto like the copy items
         Assert.DoesNotContain("CopyFileName", TopIds(items));
         Assert.DoesNotContain("CopyFullPath", TopIds(items));
         Assert.Equal(["ExternalEditor", "-", "Settings"], TopIds(items).Skip(TopIds(items).IndexOf("ExternalEditor")));
@@ -103,7 +104,7 @@ public sealed class ContextMenuModelBuilderTests
 
         Assert.Equal(
             ["Undo", "MoveToRecycleBin", "-", "Fit", "ZoomToLevel", "ZoomSubmenu", "Refresh", "-", "ExternalEditor", "-",
-                "CopyFileName", "CopyFullPath", "-", "Settings"],
+                "RenameFile", "CopyFileName", "CopyFullPath", "-", "Settings"],
             TopIds(items));
     }
 
@@ -125,7 +126,7 @@ public sealed class ContextMenuModelBuilderTests
                 ContextMenuItems.ApplyHidden(settings, hidden);
                 var items = ContextMenuModelBuilder.Build(Context(settings, hasImage: hasPhoto, canCopyPath: hasPhoto));
 
-                var expected = ContextMenuItems.Compute(ContextMenuItems.EffectiveHidden(settings), new ContextMenuContext(hasPhoto));
+                var expected = ContextMenuItems.Compute(ContextMenuItems.EffectiveHidden(settings), new ContextMenuContext(hasPhoto, IncludeShellOnly: true));
                 Assert.Equal(expected.Entries.Select(e => e.Item?.ToString() ?? "-"), TopIds(items));
                 AssertNoStraySeparators(items);
                 AssertNoEmptySubmenu(items);

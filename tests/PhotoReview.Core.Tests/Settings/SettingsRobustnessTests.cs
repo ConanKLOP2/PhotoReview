@@ -403,6 +403,7 @@ public sealed class SettingsRobustnessTests : IDisposable
                 OpenFolder = r.Next(3) == 0 ? "" : Key(), CustomZoom = r.Next(3) == 0 ? "" : Key(),
                 ToggleCaptureMember = r.Next(3) == 0 ? "" : Key(), FitWidth2 = r.Next(3) == 0 ? "" : Key(),
                 Refresh = r.Next(3) == 0 ? "" : Key(),
+                RenameFile = r.Next(3) == 0 ? "" : Key(), // FEAT-RENAME: default F2 would collide with a drawn "F2"
             },
             Actions = [],
         };

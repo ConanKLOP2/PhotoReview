@@ -411,8 +411,9 @@ internal sealed class SettingsPresenter
     // ---- Context menu page ----
 
     /// <summary>One tick-box row per right-click menu item, in menu order (built from the single item list).</summary>
-    public static IReadOnlyList<ContextMenuRow> ContextMenuRows() =>
-        ContextMenuItems.Items.Select(item =>
+    /// <param name="includeShellOnly">The Win32 shell lists the Win32-only items too; the WPF window (default) does not: it has no such menu element.</param>
+    public static IReadOnlyList<ContextMenuRow> ContextMenuRows(bool includeShellOnly = false) =>
+        ContextMenuItems.Items.Where(item => includeShellOnly || !item.ShellOnly).Select(item =>
         {
             var label = ContextMenuItemLabel(item.Id);
             return new ContextMenuRow(item.Id, label, Tr.SettingsContextMenuItemAutomationName(label), item.Parent is not null, item.Locked,
@@ -430,6 +431,7 @@ internal sealed class SettingsPresenter
         ContextMenuItemId.NextFolder => Tr.SettingsContextMenuItemNextFolder,
         ContextMenuItemId.PreviousFolder => Tr.SettingsContextMenuItemPreviousFolder,
         ContextMenuItemId.ExternalEditor => Tr.SettingsContextMenuItemExternalEditor,
+        ContextMenuItemId.RenameFile => Tr.SettingsContextMenuItemRenameFile,
         ContextMenuItemId.CopyFileName => Tr.SettingsContextMenuItemCopyFileName,
         ContextMenuItemId.CopyFullPath => Tr.SettingsContextMenuItemCopyFullPath,
         ContextMenuItemId.Settings => Tr.SettingsContextMenuItemSettings,

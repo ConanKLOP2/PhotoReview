@@ -1011,5 +1011,21 @@
   "status.renamed": "Đã đổi tên {oldName} thành {newName}. Nhấn Ctrl+Z để hoàn tác.",
   "status.renameFailed": "Không đổi tên được {fileName}: {message}",
   "status.renameUnchanged": "{fileName} đã có tên này.",
-  "status.renameUndone": "Đã hoàn tác đổi tên: tệp lại có tên {fileName}."
+  "status.renameUndone": "Đã hoàn tác đổi tên: tệp lại có tên {fileName}.",
+  "main.menu.renameFile": "Đổi tên…",
+  "main.menu.renameFile.automationName": "Đổi tên tệp của ảnh hiện tại",
+  "settings.contextMenu.item.renameFile": "Đổi tên…",
+  "settings.shortcut.renameFile": "Đổi tên tệp",
+  "settings.shortcut.renameFile.clearAutomationName": "Xóa phím tắt Đổi tên tệp",
+  "dialog.rename.title": "Đổi tên tệp",
+  "dialog.rename.label": "Tên mới:",
+  "dialog.rename.ok": "Đổi tên",
+  "dialog.rename.error.empty": "Tên không được để trống.",
+  "dialog.rename.error.invalidCharacter": "Tên tệp không được chứa các ký tự sau: \\ / : * ? \" < > |",
+  "dialog.rename.error.trailingDot": "Tên không được kết thúc bằng dấu chấm.",
+  "dialog.rename.error.reservedName": "Windows dành tên này cho thiết bị (CON, PRN, AUX, NUL, COM1…, LPT1…). Hãy chọn tên khác.",
+  "dialog.rename.error.tooLong": "Tên quá dài (tối đa 255 ký tự).",
+  "dialog.rename.error.pathTooLong": "Đường dẫn đầy đủ sẽ quá dài (từ 260 ký tự).",
+  "dialog.rename.error.sidecarNotMappable": "Tệp XMP đi kèm không đặt tên theo ảnh này nên không thể đổi tên cùng lúc.",
+  "dialog.rename.error.exists": "Thư mục này đã có tệp tên {name}."
 }

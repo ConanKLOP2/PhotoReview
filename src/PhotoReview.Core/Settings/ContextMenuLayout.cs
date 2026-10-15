@@ -27,13 +27,23 @@ public enum ContextMenuItemId
     ZoomLevelOptions,
     /// <summary>Refresh (re-render the current view at full quality); sits at the end of the zoom cluster so it follows that cluster's separator.</summary>
     Refresh,
+    /// <summary>FEAT-RENAME: rename the photo being viewed (one-line name box; Undo undoes it). Needs an open photo; Win32 shell only.</summary>
+    RenameFile,
 }
 
-/// <summary>One entry of the item table: where it sits (parent, group), and whether it can be turned off / needs an open photo.</summary>
-public sealed record ContextMenuItemInfo(ContextMenuItemId Id, ContextMenuItemId? Parent, int Group, bool Locked = false, bool NeedsPhoto = false);
+/// <summary>
+/// One entry of the item table: where it sits (parent, group), and whether it can be turned off / needs an open photo.
+/// <paramref name="ShellOnly"/>: the item exists only in the Win32 shell (the frozen WPF window has no such menu element), so a layout
+/// computed for the WPF window (<see cref="ContextMenuContext.IncludeShellOnly"/> false) never counts it, nor its separator.
+/// </summary>
+public sealed record ContextMenuItemInfo(ContextMenuItemId Id, ContextMenuItemId? Parent, int Group, bool Locked = false, bool NeedsPhoto = false,
+    bool ShellOnly = false);
 
-/// <summary>What the menu is opened over (the context part of the visibility rule).</summary>
-public sealed record ContextMenuContext(bool HasPhoto);
+/// <summary>
+/// What the menu is opened over (the context part of the visibility rule). <paramref name="IncludeShellOnly"/> true = the Win32 shell
+/// (it shows the items flagged <see cref="ContextMenuItemInfo.ShellOnly"/>); the default false is what the WPF window computes.
+/// </summary>
+public sealed record ContextMenuContext(bool HasPhoto, bool IncludeShellOnly = false);
 
 /// <summary>One line of a computed menu: an item, or (Item = null) the separator drawn right before <see cref="Group"/>.</summary>
 public sealed record ContextMenuEntry(ContextMenuItemId? Item, int Group);
@@ -70,6 +80,7 @@ public static class ContextMenuItems
         new(ContextMenuItemId.NextFolder, null, 3),
         new(ContextMenuItemId.PreviousFolder, null, 3),
         new(ContextMenuItemId.ExternalEditor, null, 4),
+        new(ContextMenuItemId.RenameFile, null, 5, NeedsPhoto: true, ShellOnly: true),
         new(ContextMenuItemId.CopyFileName, null, 5, NeedsPhoto: true),
         new(ContextMenuItemId.CopyFullPath, null, 5, NeedsPhoto: true),
         new(ContextMenuItemId.Settings, null, 6, Locked: true),
@@ -175,6 +186,7 @@ public static class ContextMenuItems
     {
         if (!item.Locked && hidden.Contains(item.Id)) return false;
         if (item.NeedsPhoto && !context.HasPhoto) return false;
+        if (item.ShellOnly && !context.IncludeShellOnly) return false;
         // A submenu with nothing left to show would be an empty arrow: collapse it too.
         if (Items.Any(i => i.Parent == item.Id)) return Items.Where(i => i.Parent == item.Id).Any(c => ItemShows(c, hidden, context));
         return true;

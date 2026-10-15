@@ -81,7 +81,7 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
     public bool Supports(SecondaryWindowKind kind)
         => kind is SecondaryWindowKind.Diagnostics or SecondaryWindowKind.SkippedFiles or SecondaryWindowKind.BatchReview
             or SecondaryWindowKind.ZoomPrompt or SecondaryWindowKind.Benchmark or SecondaryWindowKind.ActionProfiles
-            or SecondaryWindowKind.Recovery or SecondaryWindowKind.ExternalEditors
+            or SecondaryWindowKind.Recovery or SecondaryWindowKind.ExternalEditors or SecondaryWindowKind.RenamePrompt
             || (kind == SecondaryWindowKind.Settings && SettingsEnabled);
 
     /// <summary>
@@ -320,6 +320,14 @@ internal sealed class Win32SecondaryWindowPort : ISecondaryWindowPort, IDisposab
         return Run(dialog, ownerHwnd) == NativeDialog.IdOk ? dialog.Value : null;
     }
 
+    /// <summary>FEAT-RENAME: hộp nhập tên mới (modal); chữ đã kiểm hợp lệ khi OK, null khi huỷ.</summary>
+    public string? PromptRename(nint ownerHwnd, RenamePromptRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var dialog = new RenamePromptDialog(request, _chrome);
+        return Run(dialog, ownerHwnd) == NativeDialog.IdOk ? dialog.Value : null;
+    }
+
     private int Run(NativeDialog dialog, nint owner)
     {
         if (_disposed)
@@ -426,6 +434,9 @@ internal sealed class SecondaryWindowRouter : ISecondaryWindowPort, IDisposable
 
     public string? PromptDefaultExternalEditor(nint ownerHwnd, IReadOnlyList<ExternalEditor> editors, string? currentId)
         => Pick(SecondaryWindowKind.ExternalEditors) is { } port ? port.PromptDefaultExternalEditor(ownerHwnd, editors, currentId) : null;
+
+    public string? PromptRename(nint ownerHwnd, RenamePromptRequest request)
+        => Pick(SecondaryWindowKind.RenamePrompt) is { } port ? port.PromptRename(ownerHwnd, request) : null;
 
     /// <summary>Cổng Win32 nếu nó làm được; ngược lại null (người gọi dùng cổng tạm).</summary>
     private ISecondaryWindowPort? Pick(SecondaryWindowKind kind) => _native.Supports(kind) ? _native : null;

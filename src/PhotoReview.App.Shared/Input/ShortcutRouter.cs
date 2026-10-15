@@ -36,6 +36,7 @@ public sealed class ShortcutRouter
     private KeyId? _toggleCaptureMemberKey;
     private KeyId? _refreshKey;
     private KeyId? _openInDefaultEditorKey;
+    private KeyId? _renameFileKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -81,6 +82,7 @@ public sealed class ShortcutRouter
         _toggleCaptureMemberKey = ParseKey(settings.Shortcuts.ToggleCaptureMember);
         _refreshKey = ParseKey(settings.Shortcuts.Refresh);
         _openInDefaultEditorKey = ParseKey(settings.Shortcuts.OpenInDefaultEditor);
+        _renameFileKey = ParseKey(settings.Shortcuts.RenameFile);
 
         _actionKeys.Clear();
         for (var i = 0; i < settings.Actions.Count; i++)
@@ -206,6 +208,12 @@ public sealed class ShortcutRouter
         if (noModifier && _recycleKey.HasValue && key == _recycleKey.Value)
         {
             return ReviewCommand.Recycle;
+        }
+
+        // 9b. FEAT-RENAME: Rename file (F2 by default). A file-changing command like Recycle: no modifier (Ctrl+F2 does nothing).
+        if (noModifier && _renameFileKey.HasValue && key == _renameFileKey.Value)
+        {
+            return ReviewCommand.RenameFile;
         }
 
         // 10. Skip

@@ -58,6 +58,13 @@ public interface IDialogService
     /// The default offers nothing: returns null.
     /// </summary>
     string? PromptDefaultExternalEditor(IReadOnlyList<PhotoReview.Core.Settings.ExternalEditor> editors, string? currentId) => null;
+
+    /// <summary>
+    /// FEAT-RENAME ("Rename..." / F2): a modal one-line box for the new name of the photo being viewed (name part only, the
+    /// extension stays). Returns what the user typed (already accepted by <see cref="RenamePromptRequest.Validate"/>), or null when
+    /// cancelled. The default (the frozen WPF shell) offers nothing: returns null.
+    /// </summary>
+    string? PromptRename(RenamePromptRequest request) => null;
 }
 
 /// <summary>Which part of the Settings dialog to open on.</summary>

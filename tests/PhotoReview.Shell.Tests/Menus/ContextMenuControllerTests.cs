@@ -145,6 +145,7 @@ public sealed class ContextMenuControllerTests(Xunit.Abstractions.ITestOutputHel
     [InlineData("NextFolder", "Execute:NextFolder")]
     [InlineData("PreviousFolder", "Execute:PreviousFolder")]
     [InlineData("ExternalEditor", "ExternalEditor")]
+    [InlineData("RenameFile", "Execute:RenameFile")]
     [InlineData("CopyFileName", "CopyFileName")]
     [InlineData("CopyFullPath", "CopyFullPathname")]
     [InlineData("Settings", "ShowSettings")]

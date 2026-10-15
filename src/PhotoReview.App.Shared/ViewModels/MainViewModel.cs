@@ -1,10 +1,12 @@
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoReview.App.Coordinators;
+using PhotoReview.App.Presenters;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
@@ -592,6 +594,36 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             result = await _fileActionController.RenameAsync(_compare.SelectedPath, _catalog.Current?.Path, newName);
         });
         return ran ? result : FileRenameResult.Busy;
+    }
+
+    /// <summary>
+    /// FEAT-RENAME ("Rename..." menu item and F2): asks for the new name (modal box over the viewer, name part pre-selected, the
+    /// extension fixed) and renames the photo being viewed through <see cref="RenameCurrentAsync"/>. Null when cancelled, when there
+    /// is nothing to rename or no dialog is available; the status bar already carries the outcome otherwise.
+    /// </summary>
+    public async Task<FileRenameResult?> PromptRenameCurrentAsync()
+    {
+        if (_dialogService is null || _catalog.Count == 0) return null;
+        var source = _compare.SelectedPath ?? _catalog.Current?.Path;
+        if (string.IsNullOrEmpty(source)) return null;
+        var group = _catalog.Find(source)?.CaptureGroup;
+        var folder = Path.GetDirectoryName(source) ?? string.Empty;
+        var presenter = new RenamePromptPresenter(
+            source,
+            typed => group is null ? RenameNamePolicy.Check(typed, source) : CaptureGroupRenamePlan.Build(group, typed).Check,
+            // Typing asks the listing only (no I/O); the confirming call also asks the disk (one stat), which covers files the
+            // listing does not know (sidecars, other formats).
+            (fileName, isCommit) =>
+            {
+                var candidate = Path.Combine(folder, fileName);
+                return _catalog.Find(candidate) is not null || (isCommit && _fileSystem.FileExists(candidate));
+            });
+        var typedName = _dialogService.PromptRename(presenter.ToRequest());
+        if (typedName is null) return null;
+        // The viewer may have moved on while the box was open (a folder refresh): never rename a photo the user was not asked about.
+        var now = _compare.SelectedPath ?? _catalog.Current?.Path;
+        if (!string.Equals(now, source, StringComparison.OrdinalIgnoreCase)) return null;
+        return await RenameCurrentAsync(typedName);
     }
 
     /// <summary>

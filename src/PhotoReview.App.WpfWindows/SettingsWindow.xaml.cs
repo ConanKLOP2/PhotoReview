@@ -459,6 +459,14 @@ public partial class SettingsWindow : Window
         f.DefaultExternalEditorId = carried.DefaultExternalEditorId;
         f.ExternalEditorSendsRawOriginal = carried.ExternalEditorSendsRawOriginal;
         f.ShortcutTexts[nameof(ShortcutMappings.OpenInDefaultEditor)] = carried.ShortcutTexts[nameof(ShortcutMappings.OpenInDefaultEditor)];
+        // FEAT-RENAME: same for the Rename file key (the Win32 Shortcuts page owns it) and for the Win32-only menu items (no tick box
+        // here: leaving them out of the shown set would HIDE them in the Win32 menu on Save).
+        foreach (var shellOnly in ContextMenuItems.Items.Where(item => item.ShellOnly))
+        {
+            if (carried.ContextMenuShown.Contains(shellOnly.Id)) f.ContextMenuShown.Add(shellOnly.Id);
+        }
+
+        f.ShortcutTexts[nameof(ShortcutMappings.RenameFile)] = carried.ShortcutTexts[nameof(ShortcutMappings.RenameFile)];
         f.ActionsJson = ActionsText.Text;
         f.ViewModeIndex = ViewModeCombo.SelectedIndex;
         f.FitWidthAnchorIndex = FitWidthAnchorCombo.SelectedIndex;

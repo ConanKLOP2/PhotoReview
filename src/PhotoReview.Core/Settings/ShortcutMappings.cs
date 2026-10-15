@@ -89,13 +89,19 @@ public class ShortcutMappings
     public string OpenInDefaultEditor { get; set; } = "";
 
     /// <summary>
+    /// FEAT-RENAME: opens the "Rename file" box for the photo being viewed (the Explorer convention). Optional: empty = disabled;
+    /// no modifier is accepted (a file-changing command, like Recycle). Default <c>F2</c>.
+    /// </summary>
+    public string RenameFile { get; set; } = "F2";
+
+    /// <summary>
     /// Shortcuts that may be empty (= feature disabled). The older shortcuts are mandatory: an empty value is invalid.
     /// A field, not a property: code that reflects over the shortcut PROPERTIES (validator) must not see it.
     /// </summary>
     public static readonly IReadOnlyList<string> OptionalNames =
         [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder), nameof(ClickZoom),
          nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom), nameof(OpenFolder), nameof(CustomZoom), nameof(ToggleCaptureMember), nameof(FitWidth2),
-         nameof(Refresh), nameof(OpenInDefaultEditor)];
+         nameof(Refresh), nameof(OpenInDefaultEditor), nameof(RenameFile)];
 
     public static bool IsOptional(string propertyName) => OptionalNames.Contains(propertyName, StringComparer.Ordinal);
 

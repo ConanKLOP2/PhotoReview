@@ -31,7 +31,9 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
 
     private static AppSettings ThreeEditors() => new()
     {
-        HiddenContextMenuItems = [],
+        // Rename... (FEAT-RENAME) is not under test here: hidden, so the menu keeps the height this test was calibrated on (a taller
+        // menu at 144 DPI on the small CI screen scrolls and the VK_DOWN steps no longer reach the editor entry).
+        HiddenContextMenuItems = ["RenameFile"],
         ExternalEditors =
         [
             new ExternalEditor { Id = "lr", Name = "Lightroom", Path = @"C:\Adobe\Lightroom\lightroom.exe" },
@@ -265,7 +267,8 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
         steps.Add(VkDown);
         var captured = ShowMenuAndCapture(items, dpi, steps);
 
-        Assert.True(captured.Count >= 2, $"expected the root menu and the submenu windows, found {captured.Count}");
+        Assert.True(captured.Count >= 2, $"expected the root menu and the submenu windows, found {captured.Count}; dpi {dpi}, top-level {top.Count}, editorIndex {editorIndex}, "
+            + $"screen {GetSystemMetrics(0)}x{GetSystemMetrics(1)}, windows [{string.Join("; ", captured.Select(c => $"{c.Width}x{c.Height}"))}], keys [{string.Join(",", steps)}]");
         for (var level = 0; level < captured.Count; level++)
         {
             var (pixels, width, height) = captured[level];
@@ -387,7 +390,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
     }
 
     /// <summary>Not one flat colour: at least 3 distinct colours and 1 % of the pixels differ from the most common one.</summary>
-    private static void AssertNotFlat(byte[] bgra, int width, int height, string what)
+    internal static void AssertNotFlat(byte[] bgra, int width, int height, string what)
     {
         var counts = new Dictionary<int, int>();
         for (var i = 0; i + 3 < bgra.Length && i / 4 < width * height; i += 4)
@@ -401,7 +404,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
         Assert.True(counts.Count >= 3 && dominant < total * 0.99, $"{what}: {counts.Count} colours, dominant covers {dominant * 100.0 / total:0.0} %");
     }
 
-    private static byte[] Crop(byte[] bgra, int width, Rect box)
+    internal static byte[] Crop(byte[] bgra, int width, Rect box)
     {
         var w = box.Right - box.Left;
         var h = box.Bottom - box.Top;
@@ -414,7 +417,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
         return result;
     }
 
-    private static byte[] Capture(nint hwnd, out int width, out int height)
+    internal static byte[] Capture(nint hwnd, out int width, out int height)
     {
         Rect rect = default;
         User32.GetWindowRect(hwnd, &rect);
@@ -453,7 +456,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
     }
 
     /// <summary>Opens the owner-draw popup on a hidden owner, drives it with keys posted from a worker, captures every menu window.</summary>
-    private static List<(byte[] Pixels, int Width, int Height)> ShowMenuAndCapture(IReadOnlyList<MenuItemModel> items, uint dpi, IReadOnlyList<nint> keys)
+    internal static List<(byte[] Pixels, int Width, int Height)> ShowMenuAndCapture(IReadOnlyList<MenuItemModel> items, uint dpi, IReadOnlyList<nint> keys)
     {
         return OnSta(() =>
         {
@@ -496,7 +499,7 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
                 var ids = new List<string>();
                 var populate = typeof(NativePopupMenuHost).GetMethod("Populate", BindingFlags.NonPublic | BindingFlags.Static)!;
                 populate.Invoke(null, [root, items, ids, null, attached ? session : null]);
-                _ = User32.TrackPopupMenuEx(root, WindowMessages.TpmReturnCmd | WindowMessages.TpmRightButton, 150, 150, owner, 0);
+                _ = User32.TrackPopupMenuEx(root, WindowMessages.TpmReturnCmd | WindowMessages.TpmRightButton, 150, 150, owner, 0); // as on master (y=0 broke 96 DPI on CI, run 38691424758)
                 User32.DestroyMenu(root);
                 worker.Wait(TimeSpan.FromSeconds(20));
             }
@@ -537,6 +540,9 @@ public sealed unsafe class ExternalEditorsUiTests(ITestOutputHelper output)
     }
 
     private delegate bool EnumProc(nint hwnd, nint lParam);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll")]
     private static extern nint GetWindowDC(nint hwnd);

@@ -16,7 +16,7 @@ namespace PhotoReview.Shell.Tests.Dialogs.SettingsUi;
 /// <summary>
 /// WP-35 GĐ3b: trang Mouse của Settings Win32 (20 thuộc tính: 17 giá trị + ImageTransition(+Ms) + Touchpad(+Distance) + menu chuột phải).
 /// Mỗi thuộc tính có ca Load -&gt; Collect -&gt; Save (qua <c>SettingsFieldMap</c>/<c>SettingsPresenter</c> thật), thứ tự mục combobox theo
-/// chỉ số, 18 ô menu (bật/tắt từng mục, thứ tự, mục khoá), kiểm hợp lệ theo trường, phụ thuộc, tóm tắt phím zoom, ngôn ngữ, Reset trang,
+/// chỉ số, 19 ô menu (bật/tắt từng mục, thứ tự, mục khoá), kiểm hợp lệ theo trường, phụ thuộc, tóm tắt phím zoom, ngôn ngữ, Reset trang,
 /// Tab, rò handle. Bố cục/DPI/cuộn của khung đã được <see cref="SettingsDialogTests"/> duyệt qua mọi trang của <c>SettingsPresenter.Pages</c>.
 /// </summary>
 [Collection("GlobalState")]
@@ -389,7 +389,7 @@ public sealed class MouseSettingsPageTests : IDisposable
     private static string[] Items(SettingsDialog d, int combo)
         => Enumerable.Range(0, ComboCount(d, combo)).Select(i => ComboText(d, combo, i)).ToArray();
 
-    // ---- the right-click menu: 18 tick boxes -------------------------------------------------------------------------------------
+    // ---- the right-click menu: 19 tick boxes -------------------------------------------------------------------------------------
 
     [Fact]
     public void ContextMenu_HasOneTickBoxPerItem_InMenuOrder_WithTheItemsLabel()
@@ -399,7 +399,7 @@ public sealed class MouseSettingsPageTests : IDisposable
         {
             GoTo(d, MouseIndex);
             var items = ContextMenuItems.Items;
-            Assert.Equal(18, items.Count);
+            Assert.Equal(19, items.Count); // FEAT-RENAME added RenameFile
             Assert.Equal(items.Select(i => i.Id).ToArray(), Page(d).MenuChecks.Keys.ToArray());
             var ids = Page(d).MenuChecks.Values.ToArray();
             Assert.Equal(ids.OrderBy(id => id).ToArray(), ids); // declared (= Tab) order is the menu order

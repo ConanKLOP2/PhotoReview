@@ -216,6 +216,7 @@ public sealed class SettingsWindowFieldMapTests
     {
         nameof(ShortcutMappings.MoveToFolder2),
         nameof(ShortcutMappings.OpenInDefaultEditor), // FEAT-EXTERNAL-EDITORS: no WPF box; ReadFields carries the working copy's key
+        nameof(ShortcutMappings.RenameFile), // FEAT-RENAME: no WPF box (Win32-only command); ReadFields carries the working copy's key
     };
 
     [Fact(DisplayName = "Tripwire: every ShortcutMappings property is either read from a shortcut text box or explicitly carried over on Save (catches the MoveToFolder2 regression)")]

@@ -181,12 +181,12 @@ public sealed class SettingsWindowUserFeedbackBatchTests
             {
                 window.Loaded += (_, _) =>
                 {
-                    window.OpenFolderText.Text = "F2";
+                    window.OpenFolderText.Text = "F8"; // not F2: that is the default of the optional Rename file key (FEAT-RENAME)
                     window.CustomZoomText.Text = "D7";
                     InvokeSave(window);
                 };
                 Assert.True(window.ShowDialog());
-                Assert.Equal("F2", window.Settings.Shortcuts.OpenFolder);
+                Assert.Equal("F8", window.Settings.Shortcuts.OpenFolder);
                 Assert.Equal("D7", window.Settings.Shortcuts.CustomZoom);
             }
             finally { if (window.IsLoaded) window.Close(); }
