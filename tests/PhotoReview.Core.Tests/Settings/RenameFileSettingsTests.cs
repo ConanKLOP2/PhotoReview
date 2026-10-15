@@ -97,6 +97,20 @@ public sealed class RenameFileSettingsTests
     }
 
     [Fact]
+    public void TheShortcut_IsTrimmed_AndANullBecomesCleared()
+    {
+        var padded = new AppSettings();
+        padded.Shortcuts.RenameFile = "  F6  ";
+        SettingsNormalizer.Normalize(padded);
+        Assert.Equal("F6", padded.Shortcuts.RenameFile);
+
+        var missing = new AppSettings();
+        missing.Shortcuts.RenameFile = null!;
+        SettingsNormalizer.Normalize(missing);
+        Assert.Equal(string.Empty, missing.Shortcuts.RenameFile);
+    }
+
+    [Fact]
     public void AnOldConfigWithoutTheKey_GetsF2_AndAClearedKeyIsKeptThroughSaveAndLoad()
     {
         _fs.AddFile(_paths.ConfigFile, """{ "ConfigVersion": 4, "UiLanguage": "en", "Shortcuts": { "Refresh": "R", "Next": "Right" } }""");

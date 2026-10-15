@@ -61,7 +61,49 @@ Không dùng SendInput/SetCursorPos/SetForegroundWindow: tin nhắn cửa sổ t
 
 ## 5. Đột biến thủ công (hai bước, `docs/MUTATION-TESTING.md`)
 
-MUTATION_TABLE
+33 mutant (U1-U33), mọi mutant biên dịch: **31 killed bước 1, 2 sống ở lượt đầu (U16, U32), 0 tương đương đã xác nhận**. Sau đó thêm test cho U16
+(`MainViewModelRenameTests.PromptRenameCurrentAsync_ACaptureGroup_IsValidatedWithTheGroupsPlan_NotTheJpegAlone`, sidecar không đặt tên theo ảnh) và U32
+(`RenameFileSettingsTests.TheShortcut_IsTrimmed_AndANullBecomesCleared`; U32 sống vì `ShortcutKeyCanonical` cũng cắt khoảng trắng nên dòng trim ở
+`SettingsNormalizer` gần như thừa: giữ làm phòng thủ). Hai test mới chưa chạy lại dưới đột biến (chỉ chạy xanh trên mã thật).
+
+| Id | Vị trí | Đột biến | Kết quả | Test bắt được |
+|---|---|---|---|---|
+| U1 | ContextMenuLayout.Items | bỏ `ShellOnly` | killed 1 | RenameFileSettingsTests.TheWpfLayout_NeverCountsTheWin32OnlyItem... |
+| U2 | ContextMenuLayout.Items | `NeedsPhoto: false` | killed 1 | RenameFileSettingsTests (NeedsPhoto, WithAndWithoutAPhoto) |
+| U3 | ContextMenuItems.ItemShows | bỏ kiểm `IncludeShellOnly` | killed 1 | RenameFileSettingsTests.TheWpfLayout... |
+| U4 | ContextMenuModelBuilder.Build | `IncludeShellOnly: false` | killed 1 | ContextMenuModelBuilderTests (10 đỏ) |
+| U5 | ContextMenuModelBuilder | không chữ phím | killed 1 | RenameFileMenuModelTests.WithAPhoto_..., ARebind_... |
+| U6 | ContextMenuController | RenameFile không nối | killed 1 | ContextMenuControllerTests.ChoosingAnItem_... |
+| U7 | ShellMainWindow.Input | bỏ nhánh RenameFile (F2/menu không nối) | killed 1 | ShellRenameEndToEndTests |
+| U8 | ShortcutRouter | bỏ khối RenameFile | killed 1 | RenameFileShortcutRouterTests |
+| U9 | ShortcutRouter | bỏ `noModifier` | killed 1 | RenameFileShortcutRouterTests.WithAModifier_DoesNotRename |
+| U10 | ShortcutMappings | mặc định `""` | killed 1 | RenameFileSettingsTests, router tests |
+| U11 | ShortcutMappings.OptionalNames | bỏ RenameFile | killed 1 | RenameFileSettingsTests |
+| U12 | ReviewCommand.IgnoresAutoRepeat | bỏ RenameFile | killed 1 | RenameFileShortcutRouterTests.HoldingTheKey... |
+| U13 | MainViewModel.PromptRenameCurrentAsync | bỏ chốt "ảnh đã đổi" | killed 1 | ..._TheViewerMovedOnWhileTheBoxWasOpen_RenamesNothing |
+| U14 | MainViewModel nameTaken | chỉ hỏi đĩa | killed 1 | ..._ValidateFollowsThePolicy_AndTypingNeverTouchesTheDisk |
+| U15 | MainViewModel nameTaken | chỉ hỏi catalog | killed 1 | cùng test |
+| U16 | MainViewModel | bỏ kế hoạch nhóm | SỐNG -> thêm test | ..._ACaptureGroup_IsValidatedWithTheGroupsPlan... |
+| U17 | RenamePromptPresenter | bỏ miễn trừ cùng tên/hoa-thường | killed 1 | RenamePromptPresenterTests.NotRefused_... |
+| U18 | RenamePromptPresenter | đổi ánh xạ lỗi | killed 1 | RenamePromptPresenterTests.EveryPolicyProblem... |
+| U19 | RenamePromptPresenter | tên có đuôi | killed 1 | RenamePromptPresenterTests.Initial_... |
+| U20 | RenamePromptDialog | không chọn sẵn tên | killed 1 | RenamePromptDialogTests.Opens_WithTheStemSelected... |
+| U21 | RenamePromptDialog | bỏ kiểm khi gõ (EN_CHANGE) | killed 1 | RenamePromptDialogTests (23 đỏ) |
+| U22 | RenamePromptDialog | không tắt OK khi lỗi | killed 1 | RenamePromptDialogTests.InvalidNames_... (18 đỏ) |
+| U23 | RenamePromptDialog.OnOk | bỏ kiểm lúc xác nhận | killed 1 | ..._ANameThatIsTaken_... |
+| U24 | RenamePromptDialog.OnOk | `Value = null` | killed 1 | Enter_InTheBox_..., ValidNames_... |
+| U25 | RenamePromptDialog | không hiện đuôi | killed 1 | Dialog_PaintsTheBox... (BitBlt) |
+| U26 | Win32SecondaryWindowPort.Supports | bỏ RenamePrompt | killed 1 | SecondaryWindowRoutingTests |
+| U27 | Win32DialogService.PromptRename | `=> null` | killed 1 | ShellRenameEndToEndTests |
+| U28 | WPF SettingsWindow | bỏ mang giữ mục Win32-only | killed 1 | SettingsWindowContextMenuTests |
+| U29 | SettingsPresenter.ContextMenuRows | bỏ lọc ShellOnly | killed 1 | SettingsPresenterTests |
+| U30 | ShortcutsSettingsPage | bỏ hàng | killed 1 | SettingsShortcutsPageTests |
+| U31 | SettingsFieldMap | bỏ ánh xạ | killed 1 | SettingsFieldMapTests |
+| U32 | SettingsNormalizer | bỏ trim | SỐNG (gần tương đương) -> thêm test | RenameFileSettingsTests.TheShortcut_IsTrimmed... |
+| U33 | MouseSettingsPage | không liệt kê mục Win32-only | killed 1 | MouseSettingsPageTests |
+
+Ghi chú: một lần chạy bước 2 của U32 đỏ bởi `ZoomDetailTests.NavigatingAway_...` (chập chờn, không liên quan; cũng thấy `RandomNavigationSequence`
+seed 1 đỏ một lần ở lượt đầu rồi xanh).
 
 ## 6. Chưa kiểm
 

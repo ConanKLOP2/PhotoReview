@@ -556,6 +556,27 @@ public sealed class MainViewModelRenameTests : IDisposable
         Assert.True(File.Exists(Path.Combine(folder, "b.jpg")));
     }
 
+    [Fact]
+    public async Task PromptRenameCurrentAsync_ACaptureGroup_IsValidatedWithTheGroupsPlan_NotTheJpegAlone()
+    {
+        var folder = MakeFolder("promptgroup", "a.jpg", "b.jpg");
+        var a = Path.Combine(folder, "a.jpg");
+        var vm = await OpenAsync(folder, a);
+        var group = new CaptureGroup(a, Path.Combine(folder, "a.cr2"), Path.Combine(folder, "unrelated.xmp")); // sidecar not named after the photo
+        vm.Catalog.Reset([new CatalogEntry(a) { CaptureGroup = group }, new CatalogEntry(Path.Combine(folder, "b.jpg"))], RawPairMode.Separate);
+        vm.Catalog.SetCurrent(0);
+        string? error = null;
+        _dialog.OnPromptRename = request =>
+        {
+            error = request.Validate("fresh", false);
+            return null;
+        };
+
+        await vm.PromptRenameCurrentAsync();
+
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogRenameErrorSidecarNotMappable, error);
+    }
+
     // ---- test doubles -------------------------------------------------------------------------------------------
 
     private sealed class RenameDecoder : IImageDecoder
