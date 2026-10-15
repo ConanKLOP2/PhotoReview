@@ -35,7 +35,7 @@ PhotoReview.Shell.WpfBridge (UseWPF; mồ côi từ WP-35 GĐ5, chỉ test dùng
 
 ## Hai exe, shell Win32 và luật NO-WPF
 
-Gói phát hành có hai exe trong một thư mục (WP-30, `tools/publish-release.ps1`): `PhotoReview.App.exe` (WPF, mặc định) và `PhotoReview.exe` (assembly của `PhotoReview.Shell.Win32`, Win32 + Direct2D). Hai bản dùng prefix instance khác nhau (`PhotoReview` và `PhotoReviewShell`, hằng `ShellInstanceNames.Prefix`) nên không forward nhầm cho nhau. Liên kết "Open with" của shell là opt-in: `deploy/install-photo-review-association.ps1 -Variant Shell` (ProgId `PhotoReview.Shell`, không đổi ứng dụng mặc định của loại tệp nào).
+Gói phát hành (WP-30, `tools/publish-release.ps1`; từ [RELEASE-SHELL-ONLY](refactoring/decisions/RELEASE-SHELL-ONLY.md)) chỉ chứa MỘT sản phẩm: `PhotoReview.exe` (assembly của `PhotoReview.Shell.Win32`, Win32 + Direct2D), phụ thuộc framework `Microsoft.NETCore.App 10.x` (không cần Windows Desktop Runtime). `PhotoReview.App.exe` (WPF) và `Imaging.Wpf`, `App.WpfWindows` KHÔNG nằm trong gói: `publish-release.ps1` mặc định chỉ publish shell, `-IncludeWpf` (và `verify-release.ps1 -IncludeWpf`) dựng lại gói hai exe cho ai tự build từ mã nguồn; `verify-release.ps1` mặc định CẤM các tệp WPF. Mã WPF vẫn nằm trong repo và vẫn build/test (gỡ hẳn là WP-37). Hai bản vẫn dùng prefix instance khác nhau (`PhotoReview` và `PhotoReviewShell`, hằng `ShellInstanceNames.Prefix`). Liên kết "Open with" là opt-in: `deploy/install-photo-review-association.ps1` (mặc định `-Variant Shell`, ProgId `PhotoReview.Shell`, không đổi ứng dụng mặc định của loại tệp nào; `-Variant Wpf` cho bản WPF tự build).
 
 **Project NO-WPF:**
 - `App.Shared`: ViewModel, coordinator, input và composition không WPF; hai exe cùng dùng.

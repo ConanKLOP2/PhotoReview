@@ -300,8 +300,8 @@ public sealed class ToolScriptEncodingTests : IDisposable
 
     private static readonly string[] ReleaseFiles =
     [
-        "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
-        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.Shared.dll", "PhotoReview.App.WpfWindows.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
+        // RELEASE-SHELL-ONLY: no WPF app and no WPF-only library in the package.
+        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.App.Shared.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll", "turbojpeg.dll",
         // WP-30: the Win32 shell executable and the libraries only it needs.
         "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.deps.json", "PhotoReview.runtimeconfig.json",
@@ -507,8 +507,8 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
 
     private static readonly string[] ReleaseFileNames =
     [
-        "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
-        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.Shared.dll", "PhotoReview.App.WpfWindows.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
+        // RELEASE-SHELL-ONLY: no WPF app and no WPF-only library in the package.
+        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.App.Shared.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll",
         "PhotoReview.exe", "PhotoReview.dll", "PhotoReview.runtimeconfig.json", "PhotoReview.Shell.Interop.dll",
         "PhotoReview.Shell.Rendering.dll",
@@ -524,10 +524,11 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
     /// <param name="thirdParty">Content of THIRD-PARTY-NOTICES.md in the release folder; null omits the file.</param>
     /// <param name="fullPass">
     /// Also fakes the version step so a fully valid folder can reach the final PASS line: the stub project reports exactly the version
-    /// resource of a real, git-versioned assembly of this build, which is copied in as PhotoReview.App.dll.
+    /// resource of a real, commit-versioned assembly of this build, which is copied in as PhotoReview.dll.
     /// </param>
     private (int ExitCode, string Output) Run(string lgpl, string cddl, string notice, string? thirdParty = GoodThirdParty, bool fullPass = false,
-        string? skipFile = null, string? depsExtra = null, string? emptyFile = null, bool smoke = false)
+        string? skipFile = null, string? depsExtra = null, string? emptyFile = null, bool smoke = false, string? extraFile = null,
+        string framework = "Microsoft.NETCore.App", bool includeWpf = false)
     {
         var name = "repo-" + Guid.NewGuid().ToString("N");
         var repo = _root.Dir(name);
@@ -543,8 +544,17 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
             if (file == skipFile) continue;
             _root.File(Path.Combine(name, "release", file), file == emptyFile ? [] : [1]);
         }
-        File.WriteAllText(Path.Combine(release, "PhotoReview.App.deps.json"), Deps(depsExtra));
-        File.WriteAllText(Path.Combine(release, "PhotoReview.deps.json"), Deps());
+        File.WriteAllText(Path.Combine(release, "PhotoReview.deps.json"), Deps(depsExtra));
+        if (skipFile != "PhotoReview.runtimeconfig.json")
+            File.WriteAllText(Path.Combine(release, "PhotoReview.runtimeconfig.json"),
+            "{\"runtimeOptions\":{\"tfm\":\"net10.0\",\"framework\":{\"name\":\"" + framework + "\",\"version\":\"10.0.0\"}}}");
+        if (extraFile is not null) _root.File(Path.Combine(name, "release", extraFile), [1]);
+        if (includeWpf)
+        {
+            foreach (var wpf in new[] { "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.runtimeconfig.json", "PhotoReview.Imaging.Wpf.dll", "PhotoReview.App.WpfWindows.dll" })
+                if (wpf != skipFile) _root.File(Path.Combine(name, "release", wpf), [1]);
+            File.WriteAllText(Path.Combine(release, "PhotoReview.App.deps.json"), Deps());
+        }
         File.WriteAllBytes(Path.Combine(release, "turbojpeg.dll"), turbo);
         File.WriteAllBytes(Path.Combine(release, "libraw.dll"), libraw);
         File.WriteAllBytes(Path.Combine(release, "LibRaw-SOURCE.zip"), package);
@@ -555,19 +565,20 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         if (fullPass)
         {
             var assembly = typeof(PhotoReview.Benchmark.Cli.RawSurvey).Assembly.Location;
-            File.Copy(assembly, Path.Combine(release, "PhotoReview.App.dll"), overwrite: true);
+            if (includeWpf && skipFile != "PhotoReview.App.dll") File.Copy(assembly, Path.Combine(release, "PhotoReview.App.dll"), overwrite: true);
             if (skipFile != "PhotoReview.dll") File.Copy(assembly, Path.Combine(release, "PhotoReview.dll"), overwrite: true);
             var version = FileVersionInfo.GetVersionInfo(assembly);
-            var projectDir = Path.Combine(repo, "src", "PhotoReview.App");
+            var projectDir = Path.Combine(repo, "src", "PhotoReview.Shell.Win32");
             Directory.CreateDirectory(projectDir);
-            File.WriteAllText(Path.Combine(projectDir, "PhotoReview.App.csproj"),
+            File.WriteAllText(Path.Combine(projectDir, "PhotoReview.Shell.Win32.csproj"),
                 "<Project><PropertyGroup><FileVersion>" + version.FileVersion + "</FileVersion><InformationalVersion>" + version.ProductVersion +
                 "</InformationalVersion></PropertyGroup><Target Name=\"PhotoReviewComputeVersion\" /></Project>");
         }
 
-        return smoke
-            ? PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release, "-Smoke", "-SkipIconCheck")
-            : PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release, "-SkipIconCheck");
+        var args = new List<string> { "-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release, "-SkipIconCheck" };
+        if (smoke) args.Add("-Smoke");
+        if (includeWpf) args.Add("-IncludeWpf");
+        return PowerShellRunner.Run([.. args]);
     }
 
     private const string GoodThirdParty = "# Third-Party Software Notices\n## libjpeg-turbo\nBSD-3-Clause / IJG License / zlib License";
@@ -673,7 +684,50 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         Assert.NotEqual(0, code);
         // Windows PowerShell wraps long Write-Error lines at the console width: compare on collapsed whitespace.
         var flat = System.Text.RegularExpressions.Regex.Replace(output, @"\s+", " ");
-        Assert.Contains("PhotoReview.App.deps.json names assemblies that are not in the release folder: PhotoReview.Gone.dll", flat, StringComparison.Ordinal);
+        Assert.Contains("PhotoReview.deps.json names assemblies that are not in the release folder: PhotoReview.Gone.dll", flat, StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "verify-release (RELEASE-SHELL-ONLY): a folder that still carries a WPF file fails and names it")]
+    [InlineData("PhotoReview.App.exe")]
+    [InlineData("PhotoReview.Imaging.Wpf.dll")]
+    [InlineData("PhotoReview.App.WpfWindows.dll")]
+    public void VerifyRelease_WpfFilePresent_Fails(string file)
+    {
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, extraFile: file);
+
+        Assert.NotEqual(0, code);
+        var flat = System.Text.RegularExpressions.Regex.Replace(output, @"\s+", " ");
+        Assert.Contains("must not contain the WPF app", flat, StringComparison.Ordinal);
+        Assert.Contains(file, flat, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release (RELEASE-SHELL-ONLY): a runtimeconfig that needs the WindowsDesktop runtime fails")]
+    public void VerifyRelease_NeedsWindowsDesktopRuntime_Fails()
+    {
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, framework: "Microsoft.WindowsDesktop.App");
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("WindowsDesktop", output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release (RELEASE-SHELL-ONLY): the shell-only folder passes and reports the runtime from runtimeconfig.json")]
+    public void VerifyRelease_ShellOnly_PassesAndReportsRuntime()
+    {
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true);
+
+        Assert.True(code == 0, output);
+        Assert.Contains("Runtime required: Microsoft.NETCore.App 10.0.0", output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release (RELEASE-SHELL-ONLY): -IncludeWpf requires the WPF app and passes for a complete WPF-bearing folder")]
+    public void VerifyRelease_IncludeWpf_RequiresAndAcceptsWpf()
+    {
+        var (okCode, okOutput) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, includeWpf: true);
+        Assert.True(okCode == 0, okOutput);
+
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true, includeWpf: true, skipFile: "PhotoReview.App.exe");
+        Assert.NotEqual(0, code);
+        Assert.Contains("Missing release file(s): PhotoReview.App.exe", output, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "verify-release (WP-30): -Smoke fails when PhotoReview.exe cannot be started or does not exit 0 (control: same folder passes without -Smoke)")]
@@ -790,7 +844,7 @@ public sealed class ShellAssociationScriptTests : IDisposable
     {
         SeedUserJpgDefault();
         var wpfExe = Exe("PhotoReview.App.exe");
-        Assert.Equal(0, Install(wpfExe).ExitCode);
+        Assert.Equal(0, Install(wpfExe, "-Variant", "Wpf").ExitCode);
 
         var (code, output) = Install(Exe(), "-Variant", "Shell", "-Force");
 
@@ -814,12 +868,12 @@ public sealed class ShellAssociationScriptTests : IDisposable
         Assert.Null(Open(@"Directory\Background\shell\PhotoReview.Shell"));
     }
 
-    [Fact(DisplayName = "association (WP-30): the default variant keeps the WPF ProgId and verb key and needs no confirmation")]
-    public void Wpf_DefaultVariant_Unchanged()
+    [Fact(DisplayName = "association (RELEASE-SHELL-ONLY): -Variant Wpf keeps the WPF ProgId and verb key and needs no confirmation")]
+    public void Wpf_ExplicitVariant_Unchanged()
     {
         var exe = Exe("PhotoReview.App.exe");
 
-        var (code, output) = Install(exe);
+        var (code, output) = Install(exe, "-Variant", "Wpf");
 
         Assert.True(code == 0, output);
         Assert.Equal("Photo Review", Default("PhotoReview.App"));
@@ -834,7 +888,7 @@ public sealed class ShellAssociationScriptTests : IDisposable
     {
         SeedUserJpgDefault();
         var wpfExe = Exe("PhotoReview.App.exe");
-        Install(wpfExe);
+        Install(wpfExe, "-Variant", "Wpf");
         Install(Exe(), "-Variant", "Shell", "-Force");
 
         var (code, output) = Uninstall("-Variant", "Shell");

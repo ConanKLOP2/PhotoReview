@@ -7,7 +7,7 @@
 <a name="english"></a>
 ## English
 
-PhotoReview is a Windows application for browsing, comparing, and organizing photos in Explorer order. It ships as two executables from one code base: the WPF app (`PhotoReview.App.exe`) and a Win32 + Direct2D shell (`PhotoReview.exe`, see [Two executables](#two-executables-wpf-app-and-win32-shell)). The application prioritizes fast image rendering, recoverable file operations, and entirely local data processing.
+PhotoReview is a Windows application for browsing, comparing, and organizing photos in Explorer order. The release package is one executable: the Win32 + Direct2D shell `PhotoReview.exe` (the legacy WPF app is no longer shipped, see [The executable](#the-executable-win32-shell)). The application prioritizes fast image rendering, recoverable file operations, and entirely local data processing.
 
 ### Key Features
 
@@ -38,7 +38,7 @@ dotnet build PhotoReview.slnx -c Release
 .\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```
 
-`tools/publish-release.ps1` publishes BOTH executables (`PhotoReview.App.exe` and `PhotoReview.exe`) into one folder; add `-Aot` (skipped with a warning when MSVC is missing) or `-RequireAot` (fails then) to also build the optional Native AOT variant of `PhotoReview.exe` into the sibling folder `publish-aot`. `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) is the only supported release folder; CI builds it and uploads it as the `release-publish` artifact (the AOT variant is a separate `release-publish-aot` artifact). Tests: `tools/verify-all.ps1` runs all eight xUnit projects (add `-Parallel`, `-Hidden`); a single project on a hidden desktop: `.\tools\run-tests-hidden.ps1 tests/PhotoReview.Shell.Tests --filter "Category!=Manual&Category!=Native&Category!=Slow" --blame-hang --blame-hang-timeout 120s` (details: [docs/TESTING.md](docs/TESTING.md)). CI runs the tests as six parallel jobs (`test-core`, `test-app`, `test-shell`, `test-shell-settings`, `test-integration`, `test-integration-slow`; the test builds skip the analyzers) beside `compile-gate` (whole solution, analyzers on) and `build-publish`; the aggregate job `build-test-publish` requires them all ([CI-OPTIMIZE-ROUND2](docs/refactoring/decisions/CI-OPTIMIZE-ROUND2.md)). Verification for self-contained builds uses separate scripts and paths in `tools/`; a successful build/test pass does not replace runtime benchmarks or GUI acceptance testing.
+`tools/publish-release.ps1` publishes the shell (`PhotoReview.exe`) alone into one folder (add `-IncludeWpf` to also publish the legacy WPF `PhotoReview.App.exe` from source; verify it with `verify-release.ps1 -IncludeWpf`); add `-Aot` (skipped with a warning when MSVC is missing) or `-RequireAot` (fails then) to also build the optional Native AOT variant of `PhotoReview.exe` into the sibling folder `publish-aot`. `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) is the only supported release folder; CI builds it and uploads it as the `release-publish` artifact (the AOT variant is a separate `release-publish-aot` artifact). Tests: `tools/verify-all.ps1` runs all eight xUnit projects (add `-Parallel`, `-Hidden`); a single project on a hidden desktop: `.\tools\run-tests-hidden.ps1 tests/PhotoReview.Shell.Tests --filter "Category!=Manual&Category!=Native&Category!=Slow" --blame-hang --blame-hang-timeout 120s` (details: [docs/TESTING.md](docs/TESTING.md)). CI runs the tests as six parallel jobs (`test-core`, `test-app`, `test-shell`, `test-shell-settings`, `test-integration`, `test-integration-slow`; the test builds skip the analyzers) beside `compile-gate` (whole solution, analyzers on) and `build-publish`; the aggregate job `build-test-publish` requires them all ([CI-OPTIMIZE-ROUND2](docs/refactoring/decisions/CI-OPTIMIZE-ROUND2.md)). Verification for self-contained builds uses separate scripts and paths in `tools/`; a successful build/test pass does not replace runtime benchmarks or GUI acceptance testing.
 
 **Releasing:** CI tags every merge to `master` (`v2.0.N`) but does not create a release. A maintainer runs the **Release** workflow by hand (Actions → Release → Run workflow), enters an existing tag and chooses whether to create it as a **draft** (input `draft`, default off). It requires the CI check to have succeeded on the tagged commit, then attaches the framework-dependent zip with the zip and exe SHA256 and generated notes. A draft is invisible to the public until you press **Publish** under Releases.
 
@@ -68,8 +68,10 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 Register "Open with" for the seven raster extensions (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); the uninstall script removes exactly these seven. Camera RAW extensions are not registered: with Camera RAW support enabled in Settings, open RAW files by dragging them onto the window or by opening their folder. WebP/HEIC/HEIF (`.webp`, `.heic`, `.heif`, Settings > WebP and HEIC/HEIF, on by default) are not registered either; they decode through the Windows codecs only (HEIC needs "HEIF Image Extensions" + "HEVC Video Extensions" from the Microsoft Store, see Q-FMT-WEBP-HEIC).
 
 ```powershell
-.\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
+.\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.exe'   # asks you to type YES (-Force in a non-interactive host)
 ```
+
+The default is `-Variant Shell` (ProgId `PhotoReview.Shell`). A WPF build made from source registers with `-Variant Wpf -ExePath '...\PhotoReview.App.exe'`. If your `.jpg` association still points to an old `PhotoReview.App.exe` that you deleted, register `PhotoReview.exe` again (and optionally `.\deploy\uninstall-photo-review-association.ps1 -Variant Wpf` to clear the stale entry).
 
 Unregister:
 
@@ -79,17 +81,16 @@ Unregister:
 
 The same script also adds **Browse with PhotoReview** to Explorer's right-click menu of folders (and of the empty space inside a folder); pass `-NoFolderMenu` to skip it. It is per user (HKCU, no administrator rights). The app can also add or remove it itself: Settings → General → Explorer integration (it also repairs the path after the app is moved).
 
-### Two executables (WPF app and Win32 shell)
+### The executable (Win32 shell)
 
-The release zip holds two executables in one folder (framework-dependent, ReadyToRun; same .NET 10 Windows Desktop Runtime):
+The release zip holds ONE executable (framework-dependent, ReadyToRun; needs the .NET 10 Runtime, Microsoft.NETCore.App 10.x; the Windows Desktop Runtime is not required). The WPF app (`PhotoReview.App.exe`, `Imaging.Wpf`, `App.WpfWindows`) is no longer in the package; it still builds from source (`publish-release.ps1 -IncludeWpf`), see [RELEASE-SHELL-ONLY](docs/refactoring/decisions/RELEASE-SHELL-ONLY.md).
 
-- `PhotoReview.App.exe`: the WPF app. Default; your existing file associations and Explorer menu point to it and are never changed by the other exe.
-- `PhotoReview.exe`: the Win32 + Direct2D shell, a parallel build (single-instance prefix `PhotoReviewShell`, so the two can run side by side). It has no WPF dependency; every secondary window is a native Win32 dialog: Settings (7 pages), Recovery, Diagnostics, Zoom prompt, Batch review, Skipped files, Action profiles and Benchmark. `PhotoReview.exe --smoke` creates the window and exits 0. Design record: [ADR 0010](docs/adr/0010-win32-direct2d-shell.md).
+- `PhotoReview.exe`: the Win32 + Direct2D shell (single-instance prefix `PhotoReviewShell`). It has no WPF dependency; every secondary window is a native Win32 dialog: Settings (7 pages), Recovery, Diagnostics, Zoom prompt, Batch review, Skipped files, Action profiles and Benchmark. `PhotoReview.exe --smoke` creates the window and exits 0. Design record: [ADR 0010](docs/adr/0010-win32-direct2d-shell.md).
 - Optional Native AOT build of `PhotoReview.exe` (experimental, NOT in the release zip): `tools/publish-release.ps1 -AotOnly -RequireAot` (needs the Visual Studio C++ build tools and a Windows SDK; CI artifact `release-publish-aot`). One 11 MB exe + native DLLs (about 19 MB, no .NET install needed), first image ~2.5x faster than R2R. It has the same secondary windows as the normal `PhotoReview.exe` (the WPF bridge was removed from the shell, WP-35 step 5).
 
-Open a file or folder with `PhotoReview.exe <path>`: the first existing file opens and its folder is browsed; without a file, the first existing folder opens. The release zip holds 51 files (about 8.6 MB zipped, 17.6 MB unpacked; measured 2026-10-12, the WPF-only zip was 7.7 MB).
+Open a file or folder with `PhotoReview.exe <path>`: the first existing file opens and its folder is browsed; without a file, the first existing folder opens. The shell-only release folder is about 18 MB unpacked (measured 2026-10-15; the old two-executable zip was 17.6 MB and held 51 files).
 
-Registering the shell for "Open with" is opt-in and separate (own ProgId `PhotoReview.Shell`; it does not change the default app of any file type and does not touch the WPF registration):
+Registering the shell for "Open with" is opt-in (ProgId `PhotoReview.Shell`; it does not change the default app of any file type and does not touch a WPF registration):
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -Variant Shell -ExePath 'C:\path\to\PhotoReview.exe'   # asks you to type YES
@@ -125,7 +126,7 @@ Explorer ordering depends on open folder windows and valid Shell snapshots; fall
 <a name="tiếng-việt"></a>
 ## Tiếng Việt
 
-PhotoReview là ứng dụng Windows để duyệt, so sánh và phân loại ảnh theo thứ tự Explorer. Từ một mã nguồn có hai exe: bản WPF (`PhotoReview.App.exe`) và shell Win32 + Direct2D (`PhotoReview.exe`, xem [Hai exe](#hai-exe-ứng-dụng-wpf-và-shell-win32)). Ứng dụng ưu tiên hiển thị ảnh nhanh, giữ thao tác file có thể phục hồi và xử lý dữ liệu cục bộ.
+PhotoReview là ứng dụng Windows để duyệt, so sánh và phân loại ảnh theo thứ tự Explorer. Gói phát hành chỉ có một exe: shell Win32 + Direct2D `PhotoReview.exe` (bản WPF cũ không còn được phát hành, xem [Exe duy nhất](#exe-duy-nhất-shell-win32)). Ứng dụng ưu tiên hiển thị ảnh nhanh, giữ thao tác file có thể phục hồi và xử lý dữ liệu cục bộ.
 
 ### Điểm chính
 
@@ -155,7 +156,7 @@ dotnet build PhotoReview.slnx -c Release
 .\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```
 
-`tools/publish-release.ps1` publish CẢ HAI exe (`PhotoReview.App.exe` và `PhotoReview.exe`) vào một thư mục; thêm `-Aot` (thiếu MSVC thì bỏ qua và cảnh báo) hoặc `-RequireAot` (thiếu thì báo lỗi) để build thêm bản Native AOT tùy chọn của `PhotoReview.exe` vào thư mục anh em `publish-aot`. `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) là thư mục release duy nhất được hỗ trợ; CI build và upload thư mục này thành artifact `release-publish` (bản AOT là artifact riêng `release-publish-aot`). Test: `tools/verify-all.ps1` chạy cả tám project xUnit (thêm `-Parallel`, `-Hidden`); một project trên desktop ẩn: `.\tools\run-tests-hidden.ps1 tests/PhotoReview.Shell.Tests --filter "Category!=Manual&Category!=Native&Category!=Slow" --blame-hang --blame-hang-timeout 120s` (chi tiết: [docs/TESTING.md](docs/TESTING.md)). CI chạy test thành sáu job song song (`test-core`, `test-app`, `test-shell`, `test-shell-settings`, `test-integration`, `test-integration-slow`; build của test bỏ analyzer) cạnh `compile-gate` (cả solution, bật analyzer) và `build-publish`; job tổng hợp `build-test-publish` đòi tất cả ([CI-OPTIMIZE-ROUND2](docs/refactoring/decisions/CI-OPTIMIZE-ROUND2.md)). Verification cho self-contained dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
+`tools/publish-release.ps1` chỉ publish shell (`PhotoReview.exe`) vào một thư mục (thêm `-IncludeWpf` để publish thêm `PhotoReview.App.exe` WPF cũ từ mã nguồn; kiểm bằng `verify-release.ps1 -IncludeWpf`); thêm `-Aot` (thiếu MSVC thì bỏ qua và cảnh báo) hoặc `-RequireAot` (thiếu thì báo lỗi) để build thêm bản Native AOT tùy chọn của `PhotoReview.exe` vào thư mục anh em `publish-aot`. `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) là thư mục release duy nhất được hỗ trợ; CI build và upload thư mục này thành artifact `release-publish` (bản AOT là artifact riêng `release-publish-aot`). Test: `tools/verify-all.ps1` chạy cả tám project xUnit (thêm `-Parallel`, `-Hidden`); một project trên desktop ẩn: `.\tools\run-tests-hidden.ps1 tests/PhotoReview.Shell.Tests --filter "Category!=Manual&Category!=Native&Category!=Slow" --blame-hang --blame-hang-timeout 120s` (chi tiết: [docs/TESTING.md](docs/TESTING.md)). CI chạy test thành sáu job song song (`test-core`, `test-app`, `test-shell`, `test-shell-settings`, `test-integration`, `test-integration-slow`; build của test bỏ analyzer) cạnh `compile-gate` (cả solution, bật analyzer) và `build-publish`; job tổng hợp `build-test-publish` đòi tất cả ([CI-OPTIMIZE-ROUND2](docs/refactoring/decisions/CI-OPTIMIZE-ROUND2.md)). Verification cho self-contained dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
 
 **Phát hành:** CI gắn tag cho mỗi lần merge vào `master` (`v2.0.N`) nhưng không tự tạo release. Người bảo trì chạy tay workflow **Release** (Actions → Release → Run workflow), nhập một tag có sẵn và chọn tạo dưới dạng **bản nháp (draft)** hay không (input `draft`, mặc định tắt). Workflow yêu cầu check CI của commit được tag đã thành công, rồi đính kèm zip framework-dependent cùng SHA256 của zip và exe, release notes tự sinh. Bản nháp không hiện công khai cho đến khi bấm **Publish** trong Releases.
 
@@ -183,7 +184,7 @@ Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh
 Đăng ký Open With cho bảy đuôi ảnh thường (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); script gỡ đăng ký xóa đúng bảy đuôi này. Các đuôi Camera RAW không được đăng ký: khi đã bật hỗ trợ Camera RAW trong Cài đặt, hãy mở tệp RAW bằng cách kéo thả vào cửa sổ hoặc mở thư mục chứa chúng. WebP/HEIC/HEIF (`.webp`, `.heic`, `.heif`, Cài đặt > WebP và HEIC/HEIF, mặc định bật) cũng không được đăng ký; chúng chỉ được giải mã qua codec của Windows (HEIC cần "HEIF Image Extensions" + "HEVC Video Extensions" từ Microsoft Store, xem Q-FMT-WEBP-HEIC):
 
 ```powershell
-.\deploy\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'
+.\deploy\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.exe'   # yêu cầu gõ YES (-Force khi không tương tác)
 ```
 
 Gỡ đăng ký:
@@ -194,17 +195,16 @@ Gỡ đăng ký:
 
 Script này cũng thêm mục **Browse with PhotoReview** vào menu chuột phải của thư mục (và của chỗ trống bên trong thư mục) trong Explorer; thêm `-NoFolderMenu` để bỏ qua. Chỉ cho tài khoản Windows hiện tại (HKCU, không cần quyền quản trị). Ứng dụng cũng tự thêm/gỡ được: Cài đặt → Chung → Tích hợp Explorer (và sửa lại đường dẫn khi ứng dụng bị di chuyển).
 
-### Hai exe (ứng dụng WPF và shell Win32)
+### Exe duy nhất (shell Win32)
 
-Gói phát hành có hai exe trong một thư mục (phụ thuộc framework, ReadyToRun; cùng .NET 10 Windows Desktop Runtime):
+Gói phát hành chỉ có MỘT exe (phụ thuộc framework, ReadyToRun; cần .NET 10 Runtime, Microsoft.NETCore.App 10.x; không cần Windows Desktop Runtime). Ứng dụng WPF (`PhotoReview.App.exe`, `Imaging.Wpf`, `App.WpfWindows`) không còn trong gói; vẫn build từ mã nguồn (`publish-release.ps1 -IncludeWpf`), xem [RELEASE-SHELL-ONLY](docs/refactoring/decisions/RELEASE-SHELL-ONLY.md).
 
-- `PhotoReview.App.exe`: ứng dụng WPF. Mặc định; liên kết tệp và menu Explorer hiện có trỏ tới nó và exe kia không bao giờ đổi chúng.
-- `PhotoReview.exe`: shell Win32 + Direct2D, bản song song (prefix single-instance `PhotoReviewShell` nên chạy cạnh nhau được). Không phụ thuộc WPF; mọi cửa sổ phụ là hộp thoại Win32 gốc: Settings (7 trang), Recovery, Diagnostics, Zoom prompt, Batch review, Skipped files, Action profiles và Benchmark. `PhotoReview.exe --smoke` tạo cửa sổ rồi thoát mã 0. Hồ sơ thiết kế: [ADR 0010](docs/adr/0010-win32-direct2d-shell.md).
+- `PhotoReview.exe`: shell Win32 + Direct2D (prefix single-instance `PhotoReviewShell`). Không phụ thuộc WPF; mọi cửa sổ phụ là hộp thoại Win32 gốc: Settings (7 trang), Recovery, Diagnostics, Zoom prompt, Batch review, Skipped files, Action profiles và Benchmark. `PhotoReview.exe --smoke` tạo cửa sổ rồi thoát mã 0. Hồ sơ thiết kế: [ADR 0010](docs/adr/0010-win32-direct2d-shell.md).
 - Bản Native AOT tùy chọn của `PhotoReview.exe` (thử nghiệm, KHÔNG nằm trong zip phát hành): `tools/publish-release.ps1 -AotOnly -RequireAot` (cần Visual Studio C++ build tools và Windows SDK; artifact CI `release-publish-aot`). Một exe 11 MB + DLL native (khoảng 19 MB, không cần cài .NET), ảnh đầu nhanh hơn R2R khoảng 2,5 lần. Có đúng các cửa sổ phụ như `PhotoReview.exe` thường (cầu WPF đã gỡ khỏi shell, WP-35 GĐ5).
 
-Mở tệp hoặc thư mục bằng `PhotoReview.exe <đường-dẫn>`: tệp tồn tại đầu tiên được mở và thư mục của nó được duyệt; không có tệp thì mở thư mục tồn tại đầu tiên. Gói phát hành có 51 tệp (khoảng 8,6 MB nén, 17,6 MB giải nén; đo ngày 2026-10-12, zip chỉ WPF là 7,7 MB).
+Mở tệp hoặc thư mục bằng `PhotoReview.exe <đường-dẫn>`: tệp tồn tại đầu tiên được mở và thư mục của nó được duyệt; không có tệp thì mở thư mục tồn tại đầu tiên. Thư mục phát hành chỉ shell khoảng 18 MB giải nén (đo 2026-10-15; gói hai exe cũ 17,6 MB, 51 tệp).
 
-Đăng ký shell vào "Open with" là tùy chọn và tách riêng (ProgId riêng `PhotoReview.Shell`; không đổi ứng dụng mặc định của loại tệp nào, không đụng đăng ký của bản WPF):
+Đăng ký shell vào "Open with" là tùy chọn (ProgId `PhotoReview.Shell`; không đổi ứng dụng mặc định của loại tệp nào, không đụng đăng ký của bản WPF):
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -Variant Shell -ExePath 'C:\duong-dan\PhotoReview.exe'   # yêu cầu gõ YES

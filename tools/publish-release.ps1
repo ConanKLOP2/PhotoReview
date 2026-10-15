@@ -1,9 +1,13 @@
 [CmdletBinding()]
 param(
-    # Where both executables and every library they need are published (one folder = one zip).
+    # Where the executable and every library it needs are published (one folder = one zip).
     [string]$OutputDirectory = '',
-    # CI restores the whole solution once; pass this so the two publishes do not restore again.
+    # CI restores the whole solution once; pass this so the publish does not restore again.
     [switch]$NoRestore,
+    # RELEASE-SHELL-ONLY: ALSO publish the legacy WPF app (PhotoReview.App.exe + its WPF-only libraries) into the same folder.
+    # Off by default: the release package holds ONE product, the Win32 + Direct2D shell (PhotoReview.exe). Pass it only to build
+    # a WPF-bearing package yourself (and pass -IncludeWpf to verify-release.ps1 as well).
+    [switch]$IncludeWpf,
     # WP-36: ALSO publish the OPTIONAL Native AOT variant of PhotoReview.exe (no WPF bridge; since WP-35 GD5 (#500) every
     # secondary window is a Win32 dialog, so the AOT build opens Settings/Diagnostics/Recovery too) into its own folder. Needs the MSVC C++ build tools; without them the AOT step is skipped with a
     # warning and the normal publish is untouched. The default release (framework-dependent R2R hybrid) never changes.
@@ -18,12 +22,11 @@ param(
     [switch]$AotOnly
 )
 
-# NO-WPF WP-30: the release package holds TWO executables in ONE folder (NE-2 = a):
-#   PhotoReview.App.exe  - the WPF app (unchanged behaviour, default for existing users)
-#   PhotoReview.exe      - the Win32 + Direct2D shell (parallel product, own single-instance prefix)
-# Both are framework-dependent ReadyToRun (PublishReadyToRun is set in each csproj), not self-contained. The shared libraries
-# (Core, Imaging.*, App.Shared, Platform.Windows, ...) are byte-identical in both publishes (R2R is deterministic), so the
-# second publish into the same folder only adds the shell files and overwrites the shared ones with the same bytes.
+# RELEASE-SHELL-ONLY (supersedes the two-executable package of NO-WPF WP-30): the release package holds ONE product, the
+# Win32 + Direct2D shell (PhotoReview.exe). Framework-dependent ReadyToRun (PublishReadyToRun is set in the csproj), not
+# self-contained. The WPF app (PhotoReview.App.exe) is NOT published unless -IncludeWpf is passed; the WPF code stays in the
+# repository (its removal is WP-37). With -IncludeWpf the App is published FIRST and the shell second into the same folder:
+# the shared libraries are byte-identical in both publishes (R2R is deterministic).
 # One script for ci.yml and release.yml so the two workflows cannot drift on what is shipped.
 $ErrorActionPreference = 'Stop'
 
@@ -89,9 +92,9 @@ function Publish-AotVariant {
 }
 
 if (-not $AotOnly) {
-    $projects = @(
-        'src\PhotoReview.App\PhotoReview.App.csproj',
-        'src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj')
+    $projects = @()
+    if ($IncludeWpf) { $projects += 'src\PhotoReview.App\PhotoReview.App.csproj' }
+    $projects += 'src\PhotoReview.Shell.Win32\PhotoReview.Shell.Win32.csproj'
 
     foreach ($project in $projects) {
         $projectPath = Join-Path $repoRoot $project
@@ -102,11 +105,13 @@ if (-not $AotOnly) {
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $project (exit $LASTEXITCODE)" }
     }
 
-    foreach ($exe in 'PhotoReview.App.exe', 'PhotoReview.exe') {
+    $executables = @('PhotoReview.exe')
+    if ($IncludeWpf) { $executables = @('PhotoReview.App.exe') + $executables }
+    foreach ($exe in $executables) {
         if (-not (Test-Path -LiteralPath (Join-Path $out $exe) -PathType Leaf)) { throw "$exe is missing from $out after publish." }
     }
     $bytes = (Get-ChildItem -LiteralPath $out -Recurse -File | Measure-Object -Property Length -Sum).Sum
-    Write-Output ('PASS: both executables published to {0} ({1:N1} MB)' -f $out, ($bytes / 1MB))
+    Write-Output ('PASS: {0} published to {1} ({2:N1} MB)' -f ($executables -join ' + '), $out, ($bytes / 1MB))
 }
 
 # Last on purpose: its restore is RID-specific and must not precede the normal --no-restore publishes above.
