@@ -38,6 +38,12 @@ The application must prioritize the following principles when processing and rev
 5. **Nullable warnings (`CS8603` and similar):** Fix these for real — they flag a genuine possible-null-return path, not style. Do not suppress.
 6. **New analyzer suppressions:** Any new `#pragma warning disable` or `.editorconfig` rule change needs a one-line justification (architecture decision, false positive, etc.) — never suppress silently to make CI green. Release build treats warnings as errors (AR12b).
 
+## Language Convention
+
+1. **English** for code comments, commit messages, PR titles/descriptions, release notes (`release.yml`), and all scripts under `tools/` and `deploy/` (ASCII-only, see BOM rule).
+2. **Vietnamese with full diacritics** only for decision fragments in `docs/refactoring/decisions/` and for chat with the user. Never write Vietnamese without diacritics.
+3. User-facing app UI text stays Vietnamese. Existing Vietnamese comments are not rewritten in bulk; translate a comment only when you are already editing that line.
+
 ## Mandatory Build, Publish, and Git Push Workflow
 
 - After each completed change: commit, and push to an appropriate branch for me to review and merge.
