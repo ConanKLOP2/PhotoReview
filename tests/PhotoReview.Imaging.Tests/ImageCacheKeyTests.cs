@@ -73,5 +73,48 @@ public sealed class ImageCacheKeyTests : IDisposable
         Assert.True(original == ImageCacheKey.Create(_path, true, 0));
         Assert.True(ImageCacheKey.CreateOriginal(ImageCacheKey.Create(_path, false, new DecodeBox(2304, 1280))) == original);
     }
-}
 
+    [Fact(DisplayName = "WithPath keeps the source identity, normalizes the path and never touches the disk")]
+    public void WithPath_NewNameOnNonexistentFile_KeepsIdentityAndNormalizesPath()
+    {
+        var box = new DecodeBox(2304, 1280);
+        var key = ImageCacheKey.Create(_path, false, box, orientationApplied: false, backend: PhotoReview.Core.Model.DecoderBackend.Wpf, sourceKind: ImageSourceKind.RawPreview);
+        var newPath = _root.Combine("sub", "..", "does-not-exist-renamed.jpg");
+
+        var renamed = key.WithPath(newPath);
+
+        Assert.Equal(System.IO.Path.GetFullPath(newPath).ToUpperInvariant(), renamed.Path);
+        Assert.Equal(key.Length, renamed.Length);
+        Assert.Equal(key.LastWriteUtcTicks, renamed.LastWriteUtcTicks);
+        Assert.Equal(key.IsOriginal, renamed.IsOriginal);
+        Assert.Equal(box, renamed.TargetBox);
+        Assert.Equal(key.OrientationApplied, renamed.OrientationApplied);
+        Assert.Equal(key.Backend, renamed.Backend);
+        Assert.Equal(key.SourceKind, renamed.SourceKind);
+        Assert.NotEqual(key, renamed);
+        Assert.False(File.Exists(renamed.Path));
+    }
+
+    [Fact(DisplayName = "WithPath on an Original key stays Original and CreateOriginal(newKey) keeps the new path")]
+    public void WithPath_OriginalKey_CreateOriginalOfNewKeyHasNewPath()
+    {
+        var preview = ImageCacheKey.Create(_path, false, 2400);
+        var newPath = System.IO.Path.Combine(_root.Path, "renamed-original.jpg");
+
+        var renamedPreview = preview.WithPath(newPath);
+        var original = ImageCacheKey.CreateOriginal(renamedPreview);
+        var renamedOriginal = ImageCacheKey.CreateOriginal(preview).WithPath(newPath);
+
+        Assert.Equal(System.IO.Path.GetFullPath(newPath).ToUpperInvariant(), original.Path);
+        Assert.True(original.IsOriginal);
+        Assert.Equal(original, renamedOriginal);
+        Assert.NotEqual(ImageCacheKey.CreateOriginal(preview), original);
+    }
+
+    [Fact(DisplayName = "WithPath rejects a blank path")]
+    public void WithPath_BlankPath_Throws()
+    {
+        var key = ImageCacheKey.Create(_path, false, 2400);
+        Assert.ThrowsAny<ArgumentException>(() => key.WithPath(" "));
+    }
+}
