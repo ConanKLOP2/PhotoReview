@@ -1,6 +1,7 @@
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App.Presenters;
 
@@ -26,12 +27,63 @@ internal static class ActionListJson
         JsonSerializer.Serialize(actions.ToList(), ActionListJsonContext.Default.ListReviewAction);
 
     /// <summary>Parses a list; the JSON literal <c>null</c> is an empty list. Throws <see cref="JsonException"/> on malformed text.</summary>
-    public static List<ReviewAction> Deserialize(string text) =>
-        JsonSerializer.Deserialize(text, ActionListJsonContext.Default.ListReviewAction) ?? [];
+    public static List<ReviewAction> Deserialize(string text)
+    {
+        ThrowIfUnknownOperation(text);
+        return JsonSerializer.Deserialize(text, ActionListJsonContext.Default.ListReviewAction) ?? [];
+    }
 
     /// <summary>Like <see cref="Deserialize"/> but the literal <c>null</c> stays null (the importer rejects it as "invalid file").</summary>
-    public static List<ReviewAction>? DeserializeOrNull(string text) =>
-        JsonSerializer.Deserialize(text, ActionListJsonContext.Default.ListReviewAction);
+    public static List<ReviewAction>? DeserializeOrNull(string text)
+    {
+        ThrowIfUnknownOperation(text);
+        return JsonSerializer.Deserialize(text, ActionListJsonContext.Default.ListReviewAction);
+    }
+
+    private static readonly LenientEnumConverter<FileOperationType> StrictOperation = new();
+
+    /// <summary>
+    /// The lenient enum converter turns an unrecognised <c>Operation</c> into Move (the config.json loader keeps that so
+    /// one typo never discards the file). Here, where the user types or imports the list, a bad value is an error
+    /// (a wrong guess would move files): throws <see cref="JsonException"/> when an element's <c>Operation</c> is neither
+    /// a known name/alias nor a defined number. A missing <c>Operation</c> still means the default.
+    /// </summary>
+    private static void ThrowIfUnknownOperation(string text)
+    {
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(text);
+        }
+        catch (JsonException ex)
+        {
+            // JsonDocument throws a JsonException subtype; callers (and tests) expect the plain type the serializer throws.
+            throw new JsonException(ex.Message, ex);
+        }
+
+        using var parsed = document;
+        if (parsed.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var item in parsed.RootElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            foreach (var property in item.EnumerateObject())
+            {
+                if (string.Equals(property.Name, nameof(ReviewAction.Operation), StringComparison.OrdinalIgnoreCase)
+                    && !StrictOperation.TryReadStrict(property.Value, out _))
+                {
+                    throw new JsonException("An action has an unknown operation.");
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// The Save-time checks of a typed action list: every action has a name, a parsable shortcut and a defined operation,
