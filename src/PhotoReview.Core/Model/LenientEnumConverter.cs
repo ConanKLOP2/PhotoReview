@@ -70,6 +70,48 @@ public sealed class LenientEnumConverter<T> : JsonConverter<T> where T : struct,
         writer.WritePropertyName(ToText(value));
     }
 
+    /// <summary>
+    /// Strict twin of <see cref="Read"/> for callers that must report a bad value instead of falling back to the default:
+    /// true only for a recognised name/alias (case-insensitive) or a defined number, as a string or a JSON number.
+    /// </summary>
+    public bool TryReadStrict(JsonElement element, out T value)
+    {
+        value = default;
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                var text = element.GetString()?.Trim();
+                if (string.IsNullOrEmpty(text))
+                {
+                    return false;
+                }
+
+                if (LookupTable.TryGetValue(text, out value))
+                {
+                    return true;
+                }
+
+                if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedText)
+                    && Enum.IsDefined(typeof(T), parsedText))
+                {
+                    value = (T)(object)parsedText;
+                    return true;
+                }
+
+                return false;
+            case JsonValueKind.Number:
+                if (element.TryGetInt32(out var number) && Enum.IsDefined(typeof(T), number))
+                {
+                    value = (T)(object)number;
+                    return true;
+                }
+
+                return false;
+            default:
+                return false;
+        }
+    }
+
     private T ParseText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
