@@ -99,6 +99,10 @@ public sealed class DuplicateCleanupController
         if (candidates.Length == 0) return;
 
         List<string> remove;
+        List<DuplicateGroup> groups;
+        // D2: size + write time of every candidate as it was when it was hashed. The recycle loop below compares against
+        // these, so a file replaced or deleted while the (modal) review dialog was open is never acted on.
+        var hashedStats = new System.Collections.Concurrent.ConcurrentDictionary<string, FileStat?>(StringComparer.OrdinalIgnoreCase);
         var cts = new CancellationTokenSource();
         lock (_hashGate)
         {
@@ -109,7 +113,7 @@ public sealed class DuplicateCleanupController
         _sink.SetStatusText(StatusFormatter.DuplicateCheckRunning());
         try
         {
-            remove = await DuplicateFinder.FindAsync(
+            groups = await DuplicateFinder.FindGroupsAsync(
                 candidates,
                 removeNumbered,
                 (path, ct) =>
@@ -117,6 +121,7 @@ public sealed class DuplicateCleanupController
                     // Minimize disk reads: once the folder changed the result is discarded anyway (guard below),
                     // so stop hashing the remaining same-size files instead of reading them all.
                     if (!_clock.IsFolderCurrent(preHashGeneration)) throw new OperationCanceledException();
+                    hashedStats[path] = SafeStat(path);
                     return _hashService?.GetAsync(path, ct) ?? throw UserFacingError.Localized(
                         new InvalidOperationException("Duplicate detection needs a hash service; without one every same-size file would look identical."),
                         () => Tr.ErrIoHashServiceMissing);
@@ -125,6 +130,7 @@ public sealed class DuplicateCleanupController
                 cts.Token);
             // Esc pressed just as the last hash finished: honor the user's intent, apply nothing.
             cts.Token.ThrowIfCancellationRequested();
+            remove = groups.SelectMany(group => group.Remove).ToList();
         }
         catch (OperationCanceledException) when (!_clock.IsFolderCurrent(preHashGeneration))
         {
@@ -208,8 +214,18 @@ public sealed class DuplicateCleanupController
         var failures = new List<string>();
         var succeeded = 0;
 
+        var groupOf = new Dictionary<string, DuplicateGroup>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in groups)
+            foreach (var path in group.Remove) groupOf[path] = group;
+
         foreach (var path in remove)
         {
+            // D2: the review dialog (or anything else) may have given the kept copy away or touched this file since it was hashed.
+            if (!await Task.Run(() => StillMatchesHashedGroup(path, groupOf, hashedStats)))
+            {
+                failures.Add($"{Path.GetFileName(path)}: {Tr.CoreDuplicateFileChanged}");
+                continue;
+            }
             var request = new FileActionRequest(path, FileOperationType.Recycle);
             // ADR 0005: ExecuteAsync stats + fsyncs its journal entry before its first await; run it
             // on the pool so a batch of N files does not do N synchronous fsyncs on the UI thread.
@@ -271,6 +287,19 @@ public sealed class DuplicateCleanupController
             _dialogService.ShowError(Tr.DialogBatchErrorsTitle, string.Join(Environment.NewLine, failures));
         }
     }
+
+    private FileStat? SafeStat(string path)
+    {
+        try { return _fileSystem.GetFileStat(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { return null; }
+    }
+
+    private bool Unchanged(string path, IReadOnlyDictionary<string, FileStat?> hashedStats) =>
+        hashedStats.TryGetValue(path, out var before) && before is not null && SafeStat(path) == before;
+
+    /// <summary>The file to delete and at least one copy that stays are both still exactly what was hashed.</summary>
+    private bool StillMatchesHashedGroup(string path, Dictionary<string, DuplicateGroup> groupOf, IReadOnlyDictionary<string, FileStat?> hashedStats) =>
+        groupOf.TryGetValue(path, out var group) && Unchanged(path, hashedStats) && group.Keep.Any(keep => Unchanged(keep, hashedStats));
 
     public async Task ClearCacheAsync()
     {

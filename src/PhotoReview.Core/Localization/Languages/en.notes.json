@@ -131,6 +131,7 @@
   "core.fileAction.sameFolder": "IOException message -> result.Error. Not journaled.",
   "core.fileAction.sourceMissing": "FileNotFoundException message (Move/Copy branch). Not journaled. Same text at line 174 (Recycle branch).",
   "core.fileAction.unsupportedOperation": "NotSupportedException -> result.Error. Practically unreachable (guarded by Enum.IsDefined in the App).",
+  "core.duplicate.fileChanged": "DuplicateCleanupController batch failure line (after the file name): the file changed since it was hashed or no copy to keep is left, so it was not recycled.",
   "core.fileAction.verifyFailedSizeChanged": "Thrown AFTER prepared -> PERSISTED as JournalEntry.Error via ex.Message (line 243) and shown later in RecoveryWindow; also result.Error -> status bar.",
   "core.journal.pendingUnconfirmed": "PERSISTED journal Error (see core.journal.sourceStillExists).",
   "core.journal.sourceStillExists": "PERSISTED: written to the journal as Error at startup reconcile; displayed in RecoveryWindow (recovery.entry.withError). L06: store an error code + English text, localize by code; old journal files keep the Vietnamese text.",

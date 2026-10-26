@@ -138,6 +138,7 @@
   "core.fileAction.sameFolder": "Cannot Move/Copy into the source folder itself.",
   "core.fileAction.sourceMissing": "The source does not exist: {path}",
   "core.fileAction.unsupportedOperation": "Operation not supported: {operation}",
+  "core.duplicate.fileChanged": "The file changed, or the copy to keep is gone; skipped to protect your data.",
   "core.fileAction.verifyFailedSizeChanged": "Post-operation check failed: the destination size changed.",
   "core.journal.pendingUnconfirmed": "Could not confirm the pending operation; it will not be replayed automatically.",
   "core.journal.sourceStillExists": "The source still exists after session recovery.",

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core;
@@ -80,6 +80,31 @@ public sealed class DuplicateCleanupControllerReviewGapTests : IDisposable
         Assert.True(File.Exists(files[1]) && File.Exists(files[2]));
         Assert.Equal(StatusFormatter.BatchCanceled(), sink.Statuses[^1]);
         Assert.Equal(0, sink.Reloads);
+    }
+
+    [Fact]
+    public async Task RemoveDuplicatesAsync_KeptCopyDeletedWhileReviewOpen_RecyclesNothing()
+    {
+        var (controller, _, sink, bin, dialog, files) = NewBatch();
+        dialog.OnReview = _ => File.Delete(files[0]); // a.jpg is the only copy that stays
+
+        await controller.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Empty(bin.Recycled);
+        Assert.True(File.Exists(files[1]) && File.Exists(files[2]));
+        Assert.Equal(StatusFormatter.BatchDone(0, 2), sink.Statuses[^1]);
+    }
+
+    [Fact]
+    public async Task RemoveDuplicatesAsync_FileEditedWhileReviewOpen_IsNotRecycledButItsSiblingIs()
+    {
+        var (controller, _, _, bin, dialog, files) = NewBatch();
+        dialog.OnReview = _ => File.WriteAllBytes(files[1], new byte[4096]); // edited after it was hashed
+
+        await controller.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Equal([files[2]], bin.Recycled);
+        Assert.True(File.Exists(files[1]));
     }
 
     private sealed class CountingBin : IRecycleBin
