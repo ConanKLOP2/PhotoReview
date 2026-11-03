@@ -7,7 +7,7 @@ summary: |-
 
 # RP-JOURNAL-NOTICE-01 - thao tác tệp thành công nhưng không ghi được nhật ký thì im lặng
 
-Nguồn: rà soát khi port sang Rust (P-72, bị chặn bởi P-84). Chưa có thay đổi mã ở C#.
+Nguồn: rà soát khi port sang Rust (P-72, bị chặn bởi P-84). Phần mã đã được cài ở PR #537 (nhánh `feat/journal-not-saved-notice`); tài liệu này giữ lại lý do và các phương án.
 
 ## Hiện trạng trong C#
 
@@ -49,9 +49,9 @@ Catalog nằm ở `src/PhotoReview.Core/Localization/Languages/`: `en.json` (ngu
 (`core.recovery.succeededJournalFailed` -> `Tr.CoreRecoverySucceededJournalFailed`, `status.moveUnverified` -> `Tr.StatusMoveUnverified`). Quy tắc từ `docs/TRANSLATING.md`:
 giữ nguyên placeholder, khóa đổi nghĩa thì dùng khóa mới. Cần sửa đúng 3 file:
 
-- `en.json`: `"status.actionJournalNotSaved": "{fileName}: the action succeeded, but its journal entry could not be saved, so Undo and Recovery may not see it."`
-- `vi.json`: `"status.actionJournalNotSaved": "{fileName}: thao tác đã thực hiện xong nhưng không ghi được vào nhật ký, nên Hoàn tác và Khôi phục có thể không thấy thao tác này."`
-- `en.notes.json`: `"status.actionJournalNotSaved": "Status bar (warning) after a Move/Copy/Recycle that succeeded while FileActionResult.JournalPersisted is false (journal append failed). {fileName} = file name the action started on. Detail is in the log."`
+- `en.json`: `"status.actionJournalNotSaved": "Warning: the action succeeded, but its journal entry could not be saved, so Undo and Recovery may not see it."`
+- `vi.json`: `"status.actionJournalNotSaved": "Cảnh báo: thao tác đã thực hiện xong nhưng không ghi được vào nhật ký, nên Hoàn tác và Phục hồi có thể không thấy thao tác này."`
+- `en.notes.json`: `"status.actionJournalNotSaved": "Status bar (warning) after a Move/Copy/Recycle that succeeded while FileActionResult.JournalPersisted is false (journal append failed). Detail is in the log."`
 
 Đặt cạnh `status.moveUnverified` (`en.json:663`, `vi.json:656`, `en.notes.json:566`), cùng tiền tố `status.` như các thông báo tương tự; khóa `core.recovery.*`
 dành cho thông điệp trả từ Core, không phải cho thanh trạng thái. Chạy `tools/i18n-check.ps1` sau khi thêm. Phía Rust sau đó đồng bộ bằng `tools/sync-from-csharp.ps1`.
