@@ -654,6 +654,7 @@
   "action.default.backup": "Sao lưu",
   "dialog.importActions.failed.message": "Không đọc được tệp thiết lập hành động: {error}",
   "status.moveUnverified": "Cảnh báo: đã di chuyển {fileName} nhưng không xác minh được kết quả (kích thước khác). Hãy kiểm tra trong Phục hồi.",
+  "status.actionJournalNotSaved": "Cảnh báo: thao tác đã thực hiện xong nhưng không ghi được vào nhật ký, nên Hoàn tác và Phục hồi có thể không thấy thao tác này.",
   "compare.hash.unknown": " | hash không xác định",
   "status.lateMoveUndoable": "Đã di chuyển {fileName} tới {folder} sau khi bạn rời thư mục chứa tệp. Nhấn Ctrl+Z để hoàn tác.",
   "status.lateRecycleUndoable": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp. Nhấn Ctrl+Z để hoàn tác.",
