@@ -85,6 +85,34 @@ public sealed class FileActionControllerUnexpectedThrowTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecutorThrows_AfterTheSourceIsGone_StatusSaysOutcomeUnknown_NotActionFailed()
+    {
+        var a = _h.Make("a.jpg");
+        var b = _h.Make("b.jpg");
+        _h.Catalog.Reset([a, b]);
+        var boom = new InvalidOperationException("boom");
+
+        await NewController(new ScriptedExecutor(single: _ => { File.Delete(a); throw boom; })).RunActionAsync(0, null, a);
+
+        Assert.Equal(Tr.StatusActionOutcomeUnknown("MoveToSub", "a.jpg", UserFacingError.Describe(boom)), _sink.Statuses[^1]);
+        Assert.NotEqual(StatusFormatter.ActionFailed("MoveToSub", UserFacingError.Describe(boom)), _sink.Statuses[^1]);
+        Assert.Contains("File action Move threw", _log.Text(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GroupExecutorThrows_AfterOneMemberIsGone_StatusSaysOutcomeUnknown()
+    {
+        var jpeg = _h.Make("pair.jpg");
+        var raw = _h.Make("pair.cr2", 8);
+        _h.Catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg, null);
+        var boom = new IOException("group boom");
+
+        await NewController(new ScriptedExecutor(group: _ => { File.Delete(raw); throw boom; })).RunActionAsync(0, null, jpeg);
+
+        Assert.Equal(Tr.StatusActionOutcomeUnknown("MoveToSub", "pair.jpg", UserFacingError.Describe(boom)), _sink.Statuses[^1]);
+    }
+
+    [Fact]
     public async Task ExecutorThrows_WhileThePresentOfTheNextPhotoFaults_StillRestoresAndKeepsTheRealErrorText()
     {
         var a = _h.Make("a.jpg");
