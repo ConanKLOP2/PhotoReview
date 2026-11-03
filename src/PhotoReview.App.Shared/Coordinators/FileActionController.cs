@@ -371,7 +371,11 @@ public sealed class FileActionController
                         }
                     }
                 }
-                else if (singleResult!.Succeeded && journalNotSaved) _sink.ShowLateActionStatus(Tr.StatusActionJournalNotSaved);
+                else if (singleResult!.Succeeded && journalNotSaved)
+                {
+                    _undoService?.Register(singleResult); // Register ignores a Rejected result; the notice replaces the Ctrl+Z hint
+                    _sink.ShowLateActionStatus(Tr.StatusActionJournalNotSaved);
+                }
                 else if (singleResult.Succeeded) ReportLateCompletion(singleResult);
                 else if (operation == FileOperationType.Move && singleResult.SourceRemoved)
                 {

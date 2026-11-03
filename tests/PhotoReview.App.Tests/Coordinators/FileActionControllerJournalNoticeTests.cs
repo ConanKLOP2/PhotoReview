@@ -1,6 +1,9 @@
 using System.IO;
 using PhotoReview.App.Coordinators;
+using PhotoReview.Core;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
@@ -132,6 +135,30 @@ public sealed class FileActionControllerJournalNoticeTests : IDisposable
         Assert.Contains(Tr.StatusActionJournalNotSaved, _sink.LateStatuses);
         Assert.Empty(_sink.Statuses);
         Assert.Contains(JournalError, ReadLog(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SingleMove_JournalNotPersistedAfterFolderSwitch_IsStillRegisteredForUndoAndTheNoticeIsShown()
+    {
+        var (a, _) = OpenTwoFiles();
+        var other = _h.Make("b.jpg");
+        var journal = new OperationJournal(new AppPaths(_h.Root), _h.Fs, new SystemClock());
+        var undo = new UndoService(journal, _h.Fs, _h.Bin, new FileActionService(journal, _h.Fs, new SystemClock(), _h.Bin));
+        var inner = new FakeExecutor(Single(a, journalPersisted: false));
+        var controller = new FileActionController(
+            _h.Catalog, _h.Clock, fileActionService: null, undo, dialogService: null, preloadController: null,
+            ManagedNaturalComparer.Instance,
+            () => FileActionControllerMutationGapHarness.Settings(FileActionControllerMutationGapHarness.MoveAction()), _sink,
+            null, _h.Fs)
+        {
+            FileActionsOverride = new SwitchingExecutor(inner, () => { _h.Clock.NextFolder(); _h.Catalog.Reset([other]); }),
+        };
+
+        await controller.RunActionAsync(0, null, a);
+
+        Assert.NotNull(undo.LastUndoAction);
+        Assert.Equal([Tr.StatusActionJournalNotSaved], _sink.LateStatuses);
+        Assert.Empty(_sink.Statuses);
     }
 
     private sealed class SwitchingExecutor(IFileActionExecutor inner, Action beforeResult) : IFileActionExecutor
