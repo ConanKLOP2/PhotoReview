@@ -459,6 +459,45 @@ public sealed class ShellComWp33Tests
         Assert.Empty(log.Errors);
     }
 
+    // P-331: RecycleBinRestorer.Contains is the read-only question the startup reconcile asks.
+    [Fact]
+    public void Contains_OneOrMoreMatches_IsTrue_InvokesNoVerb_AndReleasesEveryEntryAndTheSession()
+    {
+        using var photo = new TempPhoto(present: false);
+        var match = new FakeEntry(photo.Folder, "photo", 5, Stamp);
+        var stranger = new FakeEntry(@"C:\elsewhere", "photo", 5, Stamp);
+        var session = new FakeSession(stranger, match);
+
+        var found = RecycleBinRestorer.Contains(() => session, photo.Path_, 5, Stamp, new RecordingLog());
+
+        Assert.True(found);
+        Assert.Empty(match.Verbs.ByIndex);
+        Assert.Empty(match.Verbs.Canonical);
+        Assert.Equal(1, match.Disposed);
+        Assert.Equal(1, stranger.Disposed);
+        Assert.Equal(1, session.Disposed);
+    }
+
+    [Fact]
+    public void Contains_NoMatchOtherSizeOrOtherTime_IsFalse()
+    {
+        using var photo = new TempPhoto(present: false);
+        var session = new FakeSession(new FakeEntry(photo.Folder, "photo", 6, Stamp), new FakeEntry(photo.Folder, "photo", 5, Stamp.AddMinutes(5)));
+
+        Assert.False(RecycleBinRestorer.Contains(() => session, photo.Path_, 5, Stamp, new RecordingLog()));
+    }
+
+    [Fact]
+    public void Contains_BinCannotBeOpenedOrRead_ThrowsInsteadOfAnsweringNo()
+    {
+        using var photo = new TempPhoto(present: false);
+
+        Assert.Throws<InvalidOperationException>(() => RecycleBinRestorer.Contains(() => null, photo.Path_, 5, Stamp, new RecordingLog()));
+        var unreadable = new FakeSession { Override = () => throw new IOException("enumeration failed") };
+        Assert.Throws<IOException>(() => RecycleBinRestorer.Contains(() => unreadable, photo.Path_, 5, Stamp, new RecordingLog()));
+        Assert.Equal(1, unreadable.Disposed);
+    }
+
     [Fact]
     public void Restore_NoRestoreNamedVerb_FallsBackToTheCanonicalUndelete()
     {

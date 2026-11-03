@@ -120,6 +120,8 @@ public sealed class OperationJournal
     private readonly Func<JournalDurability> _durability;
     private readonly Action<TimeSpan> _appendRetryDelay;
     private readonly ILiveOperationRegistry _liveOperations;
+    /// <summary>P-331: asked by the startup reconcile before a single Recycle whose source is gone is confirmed. Null = trust "source gone" (tests that have no bin).</summary>
+    private readonly IRecycleBin? _recycleBin;
     private readonly IJournalCompactionFiles? _compactionFiles;
 
     /// <summary>
@@ -145,8 +147,9 @@ public sealed class OperationJournal
     /// </param>
     public OperationJournal(IAppPaths paths, IFileSystem fileSystem, IClock clock, Func<JournalDurability>? durability = null,
         Action<TimeSpan>? appendRetryDelay = null, ILiveOperationRegistry? liveOperations = null,
-        IJournalCompactionFiles? compactionFiles = null)
+        IJournalCompactionFiles? compactionFiles = null, IRecycleBin? recycleBin = null)
     {
+        _recycleBin = recycleBin;
         _compactionFiles = compactionFiles;
         _liveOperations = liveOperations ?? new InProcessLiveOperationRegistry();
         _durability = durability ?? (() => JournalDurability.Fast);
@@ -499,8 +502,19 @@ public sealed class OperationJournal
         }
         else if (pending.Type == FileOperationType.Recycle)
         {
-            var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
-            var entry = WithOutcome(pending, state, JournalErrors.SourceStillExistsAfterRecovery);
+            // P-331: the source being gone is not proof of a recycle (it can be deleted for good or moved away): with a bin
+            // wired, the item must be in it. Not in the bin = Failed/PendingUnconfirmed. A bin that cannot be asked throws:
+            // the per-entry guard of ReconcilePendingOperations logs "skipped" and the entry stays Prepared (retried next start).
+            JournalState state;
+            string failureCode = JournalErrors.SourceStillExistsAfterRecovery;
+            if (_fileSystem.FileExists(pending.Source)) state = JournalState.Failed;
+            else if (_recycleBin is null || _recycleBin.ContainsRecycledItem(pending.Source, pending.Size, pending.LastWriteUtc)) state = JournalState.Committed;
+            else
+            {
+                state = JournalState.Failed;
+                failureCode = JournalErrors.PendingUnconfirmed;
+            }
+            var entry = WithOutcome(pending, state, failureCode);
             if (TryReconcileAppend(() => AppendIfStillPending(entry), entry.Id)) reconciled.Add(entry);
         }
         else if (pending.Type is FileOperationType.Move or FileOperationType.Copy)

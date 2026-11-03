@@ -32,4 +32,13 @@ public interface IRecycleBin
     /// Default true for fakes.
     /// </summary>
     bool FitsInRecycleBin(string path, long fileSize) => true;
+
+    /// <summary>
+    /// P-331 / reconcile: read-only question "is the file recorded as <paramref name="originalPath"/>, <paramref name="expectedSize"/> bytes,
+    /// last written <paramref name="expectedLastWriteUtc"/>, in the Recycle Bin right now?" (the same metadata match as <see cref="TryRestore"/>,
+    /// nothing is restored). Returns false when no such item is there. THROWS when the bin cannot be asked: the caller must treat that as
+    /// "unknown", never as "not in the bin" and never as "in the bin". Default: not supported (throws), so a bin that cannot answer never
+    /// confirms a recycle by guess.
+    /// </summary>
+    bool ContainsRecycledItem(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => throw new NotSupportedException();
 }

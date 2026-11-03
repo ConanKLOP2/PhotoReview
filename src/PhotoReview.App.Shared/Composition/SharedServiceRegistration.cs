@@ -79,7 +79,8 @@ public static class SharedServiceRegistration
             sp.GetRequiredService<IClock>(),
             () => sp.GetRequiredService<SettingsStore>().Current.JournalDurability,
             liveOperations: sp.GetRequiredService<ILiveOperationRegistry>(),
-            compactionFiles: new PhysicalJournalCompactionFiles()));
+            compactionFiles: new PhysicalJournalCompactionFiles(),
+            recycleBin: sp.GetRequiredService<IRecycleBin>()));
         services.AddSingleton<RecoveryRetryService>(sp => ServiceFactories.CreateRecoveryRetryService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),

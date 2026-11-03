@@ -394,6 +394,99 @@ public sealed class OperationJournalUnitTests
         Assert.Equal("Nguồn vẫn tồn tại sau khi khôi phục phiên.", JournalErrors.Describe(recFail));
     }
 
+    // P-331: with a Recycle Bin wired, "source gone" alone is not proof of a recycle.
+    private sealed class QueryableBin(Func<string, long, DateTime, bool> contains) : IRecycleBin
+    {
+        public int Asked { get; private set; }
+        public void SendToRecycleBin(string path) => throw new NotSupportedException();
+        public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => throw new NotSupportedException();
+        public bool ContainsRecycledItem(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
+        {
+            Asked++;
+            return contains(originalPath, expectedSize, expectedLastWriteUtc);
+        }
+    }
+
+    private OperationJournal CreateJournalWithBin(IRecycleBin bin) =>
+        new(new FakeAppPaths(_journalPath), _fs, _clock, recycleBin: bin);
+
+    [Fact(DisplayName = "ReconcilePendingOperations for Recycle with a bin: source gone and item in the bin is committed")]
+    public void ReconcileRecycle_SourceGoneAndItemInBin_IsCommitted()
+    {
+        var stamp = _clock.UtcNow;
+        var bin = new QueryableBin((path, size, written) => path == @"C:\photos\a.jpg" && size == 5 && written == stamp);
+        var journal = CreateJournalWithBin(bin);
+        journal.Append(new JournalEntry("rec", FileOperationType.Recycle, JournalState.Prepared, @"C:\photos\a.jpg", null, 5, stamp, stamp));
+
+        var reconciled = journal.ReconcilePendingOperations();
+
+        var rec = Assert.Single(reconciled);
+        Assert.Equal(JournalState.Committed, rec.State);
+        Assert.Null(rec.Error);
+        Assert.Equal(1, bin.Asked);
+    }
+
+    [Fact(DisplayName = "ReconcilePendingOperations for Recycle with a bin: source gone but item not in the bin is failed, PendingUnconfirmed")]
+    public void ReconcileRecycle_SourceGoneButItemNotInBin_IsFailedPendingUnconfirmed()
+    {
+        var bin = new QueryableBin((_, _, _) => false);
+        var journal = CreateJournalWithBin(bin);
+        journal.Append(new JournalEntry("gone", FileOperationType.Recycle, JournalState.Prepared, @"C:\photos\a.jpg", null, 5, _clock.UtcNow, _clock.UtcNow));
+
+        var reconciled = journal.ReconcilePendingOperations();
+
+        var gone = Assert.Single(reconciled);
+        Assert.Equal(JournalState.Failed, gone.State);
+        Assert.Equal(JournalErrors.PendingUnconfirmed, gone.ErrorCode);
+        Assert.Equal(JournalState.Failed, journal.ReadFailedOperations().Single(x => x.Id == "gone").State);
+    }
+
+    [Fact(DisplayName = "ReconcilePendingOperations for Recycle with a bin that cannot be asked: the entry stays Prepared")]
+    public void ReconcileRecycle_BinQueryThrows_LeavesEntryPrepared_AndRetriesNextStart()
+    {
+        var broken = true;
+        var bin = new QueryableBin((_, _, _) => broken ? throw new IOException("shell unavailable") : true);
+        var journal = CreateJournalWithBin(bin);
+        journal.Append(new JournalEntry("err", FileOperationType.Recycle, JournalState.Prepared, @"C:\photos\a.jpg", null, 5, _clock.UtcNow, _clock.UtcNow));
+
+        Assert.Empty(journal.ReconcilePendingOperations());
+        Assert.Equal("err", Assert.Single(journal.ReadPendingOperations()).Id);
+
+        broken = false;
+        Assert.Equal(JournalState.Committed, Assert.Single(journal.ReconcilePendingOperations()).State);
+    }
+
+    [Fact(DisplayName = "ReconcilePendingOperations for Recycle with a bin that does not implement the query: the entry stays Prepared")]
+    public void ReconcileRecycle_BinWithoutQuery_LeavesEntryPrepared()
+    {
+        var journal = CreateJournalWithBin(new NoQueryBin());
+        journal.Append(new JournalEntry("silent", FileOperationType.Recycle, JournalState.Prepared, @"C:\photos\a.jpg", null, 5, _clock.UtcNow, _clock.UtcNow));
+
+        Assert.Empty(journal.ReconcilePendingOperations());
+        Assert.Single(journal.ReadPendingOperations());
+    }
+
+    private sealed class NoQueryBin : IRecycleBin
+    {
+        public void SendToRecycleBin(string path) => throw new NotSupportedException();
+        public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => throw new NotSupportedException();
+    }
+
+    [Fact(DisplayName = "ReconcilePendingOperations for Recycle with a bin: source present is failed without asking the bin")]
+    public void ReconcileRecycle_SourcePresent_IsFailedWithoutAskingTheBin()
+    {
+        var bin = new QueryableBin((_, _, _) => true);
+        var journal = CreateJournalWithBin(bin);
+        _fs.WriteAllTextAtomic(@"C:\photos\present.jpg", "hello");
+        journal.Append(new JournalEntry("present", FileOperationType.Recycle, JournalState.Prepared, @"C:\photos\present.jpg", null, 5, _clock.UtcNow, _clock.UtcNow));
+
+        var present = Assert.Single(journal.ReconcilePendingOperations());
+
+        Assert.Equal(JournalState.Failed, present.State);
+        Assert.Equal(JournalErrors.SourceStillExistsAfterRecovery, present.ErrorCode);
+        Assert.Equal(0, bin.Asked);
+    }
+
     [Fact(DisplayName = "ReconcilePendingOperations for Move: committed if source absent and destination size matches")]
     public void ReconcileMove()
     {

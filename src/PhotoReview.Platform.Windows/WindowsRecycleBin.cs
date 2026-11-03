@@ -16,6 +16,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
     private readonly IRecycleBinSettingsSource _settings;
     private readonly Action<string> _shellRecycle;
     private readonly Func<string, long, DateTime, bool> _shellRestore;
+    private readonly Func<string, long, DateTime, bool> _shellContains;
     private readonly Func<string, DriveType?> _driveTypeOf;
     private readonly Func<string, string?> _mountPointOf;
     private readonly Action<string> _fileDelete;
@@ -35,8 +36,9 @@ public sealed class WindowsRecycleBin : IRecycleBin
     internal WindowsRecycleBin(ILog? log, IRecycleBinSettingsSource settings, Action<string>? shellRecycle = null,
         Func<string, long, DateTime, bool>? shellRestore = null,
         Func<string, DriveType?>? driveTypeOf = null, Func<string, string?>? mountPointOf = null, Action<string>? fileDelete = null,
-        Func<string, long>? fileLength = null)
+        Func<string, long>? fileLength = null, Func<string, long, DateTime, bool>? shellContains = null)
     {
+        _shellContains = shellContains ?? ContainsViaShell;
         _fileLength = fileLength ?? (path => new FileInfo(path).Length);
         _driveTypeOf = driveTypeOf ?? RecycleEligibility.QueryDriveType;
         _mountPointOf = mountPointOf ?? RecycleEligibility.QueryMountPoint;
@@ -126,6 +128,16 @@ public sealed class WindowsRecycleBin : IRecycleBin
         }
         return _shellRestore(originalPath, expectedSize, expectedLastWriteUtc);
     }
+
+    /// <summary>P-331: see <see cref="IRecycleBin.ContainsRecycledItem"/>. Blocking and slow like <see cref="TryRestore"/> (enumerates the bin), read-only, never shows shell UI. Throws when the bin cannot be asked.</summary>
+    public bool ContainsRecycledItem(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalPath);
+        return _shellContains(originalPath, expectedSize, expectedLastWriteUtc);
+    }
+
+    private bool ContainsViaShell(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
+        => ComRecycleBinSession.Contains(originalPath, expectedSize, expectedLastWriteUtc, _log);
 
     private bool RestoreViaShell(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
         => ComRecycleBinSession.Restore(originalPath, expectedSize, expectedLastWriteUtc, _log);
