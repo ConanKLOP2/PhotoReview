@@ -137,6 +137,7 @@
   "core.fileAction.sameFolder": "Không thể Di chuyển/Sao chép vào chính thư mục nguồn.",
   "core.fileAction.sourceMissing": "Nguồn không tồn tại: {path}",
   "core.fileAction.unsupportedOperation": "Thao tác không được hỗ trợ: {operation}",
+  "core.duplicate.fileChanged": "Tệp đã thay đổi hoặc bản giữ lại không còn; bỏ qua để bảo vệ dữ liệu.",
   "core.fileAction.verifyFailedSizeChanged": "Kiểm tra sau thao tác thất bại: kích thước đích đã thay đổi.",
   "core.journal.pendingUnconfirmed": "Không thể xác nhận thao tác đang chờ; sẽ không tự động chạy lại.",
   "core.journal.sourceStillExists": "Nguồn vẫn tồn tại sau khi khôi phục phiên.",
