@@ -20,7 +20,7 @@ Nguồn: rà soát khi port sang Rust (P-66). Chưa có thay đổi mã ở C#.
 - Khác với đường **Load**: `SettingsStoreFailureTests.cs:117` (`Load_SalvageBackupFails_ConfigNeverOverwritten`) và `SettingsStoreLoadRepairPersistenceTests.cs:218`
   (`Load_RepairBackupFails_ConfigUntouchedAndRepairedInMemory`) cho thấy khi sao lưu trước salvage/repair lỗi thì C# **không** ghi đè. Chỉ nhánh "bản mới hơn" là best effort.
 - Người gọi `Save` đã bắt lỗi I/O (ví dụ `MainViewModel.cs:740-746` ghi `AppLog.Error` rồi tiếp tục), nên từ chối Save không làm ứng dụng sập; các chỗ gọi khác:
-  `MainViewModel.cs:873,1506`, `MainWindow.xaml.cs:796,1104,1121,1143`, `ShellMainWindow.Input.cs:293` (chưa rà từng chỗ bắt ngoại lệ nào; xem mục kiểm thử).
+  `MainViewModel.cs:873,1506`, `MainWindow.xaml.cs:796,1104,1121,1143`, `ShellMainWindow.Input.cs:293` (đã rà: cả 8 chỗ gọi đều nằm trong khối `try`/`catch` cách dòng gọi tối đa 6 dòng; loại ngoại lệ được bắt ở từng chỗ chưa kiểm từng cái, xem mục kiểm thử). `Persist` vốn đã ném `IOException` khi `WriteAllTextAtomic` lỗi (`:252`), nên từ chối Save khi sao lưu lỗi dùng cùng đường lỗi mà người gọi đã xử lý.
 
 ## Vì sao quan trọng
 
