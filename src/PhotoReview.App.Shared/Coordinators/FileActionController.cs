@@ -328,6 +328,11 @@ public sealed class FileActionController
                 groupResult = await _fileActions.ExecuteGroupAsync(new CaptureGroupActionRequest(group, operation, destination, allowPermanent));
             var succeeded = groupResult?.Succeeded ?? singleResult!.Succeeded;
             actionSucceeded = succeeded;
+            // RP-JOURNAL-NOTICE-01: the action is real on disk but its journal line was not written, so Undo/Recovery may not see it.
+            var journalNotSaved = succeeded && (groupResult is not null ? !groupResult.JournalPersisted : !singleResult!.JournalPersisted);
+            if (journalNotSaved)
+                AppLog.Error($"File action {operation} on {Path.GetFileName(source)} succeeded but its journal entry could not be saved: "
+                    + (groupResult is not null ? groupResult.JournalError : singleResult!.JournalError));
             var sourceRemoved = groupResult is not null
                 ? groupResult.Members.Any(member => member.Completed && (operation is FileOperationType.Move or FileOperationType.Recycle))
                 : singleResult!.SourceRemoved;
@@ -342,7 +347,9 @@ public sealed class FileActionController
                 if (groupResult is not null)
                 {
                     _undoService?.RegisterGroup(groupResult); // also the completed members of a part-way failed Delete
-                    if (groupResult.Succeeded)
+                    if (groupResult.Succeeded && journalNotSaved)
+                        _sink.ShowLateActionStatus(Tr.StatusActionJournalNotSaved); // more important than "press Ctrl+Z": Undo may not see it
+                    else if (groupResult.Succeeded)
                     {
                         var name = Path.GetFileName(source);
                         var target = groupResult.Entry?.Destination;
@@ -364,7 +371,12 @@ public sealed class FileActionController
                         }
                     }
                 }
-                else if (singleResult!.Succeeded) ReportLateCompletion(singleResult);
+                else if (singleResult!.Succeeded && journalNotSaved)
+                {
+                    _undoService?.Register(singleResult); // Register ignores a Rejected result; the notice replaces the Ctrl+Z hint
+                    _sink.ShowLateActionStatus(Tr.StatusActionJournalNotSaved);
+                }
+                else if (singleResult.Succeeded) ReportLateCompletion(singleResult);
                 else if (operation == FileOperationType.Move && singleResult.SourceRemoved)
                 {
                     // D-04: a Move whose destination could not be verified after the source was removed: the journal has a
@@ -399,17 +411,26 @@ public sealed class FileActionController
                     {
                         var missing = Tr.StatusGroupPartnerMissing(Path.GetFileName(source), string.Join(", ", skipped.Select(Path.GetFileName)));
                         _lastPartnerMissingWarning = missing;
-                        _sink.SetStatusText(isRemove && _catalog.Count == 0 ? StatusFormatter.AllImagesProcessed() + " " + missing : missing);
+                        _sink.SetStatusText((isRemove && _catalog.Count == 0 ? StatusFormatter.AllImagesProcessed() + " " + missing : missing)
+                            + (journalNotSaved ? " " + Tr.StatusActionJournalNotSaved : string.Empty));
                     }
                 }
                 else if (_catalog.Count == 0)
                 {
-                    _sink.SetStatusText(isRemove ? StatusFormatter.AllImagesProcessed() : StatusFormatter.ActionCompleted(actionName));
+                    _sink.SetStatusText((isRemove ? StatusFormatter.AllImagesProcessed() : StatusFormatter.ActionCompleted(actionName))
+                        + (journalNotSaved ? " " + Tr.StatusActionJournalNotSaved : string.Empty));
                 }
                 else if (operation == FileOperationType.Copy)
                 {
                     var dest = groupResult?.Entry?.Destination ?? singleResult!.DestinationPath;
-                    _sink.SetStatusText(StatusFormatter.CopiedTo(Path.GetFileName(dest)));
+                    _sink.SetStatusText(StatusFormatter.CopiedTo(Path.GetFileName(dest))
+                        + (journalNotSaved ? " " + Tr.StatusActionJournalNotSaved : string.Empty));
+                }
+                else if (journalNotSaved)
+                {
+                    // Nothing else wrote a status for this success except the fire-and-forget presenter: let it finish first.
+                    if (presentTask is not null) await presentTask;
+                    if (_clock.IsFolderCurrent(folderGen)) _sink.SetStatusText(Tr.StatusActionJournalNotSaved);
                 }
                 return true;
             }

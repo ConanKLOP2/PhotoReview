@@ -219,12 +219,20 @@ public sealed class RecoveryRetryService
                             || !IsRestoredFile(member))
                             throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
                     }
-                    else if (member.Permanent)
+                    else
                     {
-                        if (_recycleBin!.CanRecycle(member.Source)) throw new IOException(Tr.CoreRecoverySourceChanged);
-                        _recycleBin.DeletePermanently(member.Source);
+                        // D1: the pre-check ran before Prepared was journaled; re-stat right before the mutation (like the Move/Copy
+                        // branch) so a file replaced in between is never recycled or deleted for good under the old fingerprint.
+                        var current = _fileSystem.GetFileStat(member.Source);
+                        if (current is null || current.Length != member.Size || current.LastWriteUtc != member.LastWriteUtc)
+                            throw new IOException(Tr.CoreRecoverySourceChanged);
+                        if (member.Permanent)
+                        {
+                            if (_recycleBin!.CanRecycle(member.Source)) throw new IOException(Tr.CoreRecoverySourceChanged);
+                            _recycleBin.DeletePermanently(member.Source);
+                        }
+                        else _recycleBin!.SendToRecycleBin(member.Source);
                     }
-                    else _recycleBin!.SendToRecycleBin(member.Source);
                     if (failed.Undo != true && _fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.SourceStillExistsAfterRecovery);
                     if (failed.Undo == true && !IsRestoredFile(member))
                         throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));

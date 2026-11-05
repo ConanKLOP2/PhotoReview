@@ -29,6 +29,21 @@ public static class DuplicateFinder
         IFileSystem? fileSystem = null,
         CancellationToken cancellationToken = default)
     {
+        var groups = await FindGroupsAsync(files, removeNumbered, hash, fileSystem, cancellationToken).ConfigureAwait(false);
+        return groups.SelectMany(group => group.Remove).ToList();
+    }
+
+    /// <summary>
+    /// Same selection as <see cref="FindAsync"/>, but keeps the groups: <see cref="DuplicateGroup.Keep"/> are the identical
+    /// files that stay, so a caller can confirm one still exists before it deletes the others (D2).
+    /// </summary>
+    public static async Task<List<DuplicateGroup>> FindGroupsAsync(
+        IReadOnlyList<string> files,
+        bool removeNumbered,
+        Func<string, CancellationToken, Task<string>> hash,
+        IFileSystem? fileSystem = null,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(hash);
 
@@ -96,7 +111,7 @@ public static class DuplicateFinder
         }
 
         // Bước 3: Lọc tệp theo quy tắc tên tệp (bản sao có số vs bản gốc)
-        var remove = new List<string>();
+        var result = new List<DuplicateGroup>();
         foreach (var group in groups.Values.Where(group => group.Count > 1))
         {
             var matching = group.Where(path =>
@@ -112,9 +127,14 @@ public static class DuplicateFinder
                 matching.RemoveAt(0);
             }
 
-            remove.AddRange(matching);
+            if (matching.Count == 0) continue;
+            var removeSet = new HashSet<string>(matching, StringComparer.OrdinalIgnoreCase);
+            result.Add(new DuplicateGroup(group.Where(path => !removeSet.Contains(path)).ToList(), matching));
         }
 
-        return remove;
+        return result;
     }
 }
+
+/// <summary>One set of byte-identical files: <paramref name="Keep"/> stay, <paramref name="Remove"/> are the ones to recycle.</summary>
+public sealed record DuplicateGroup(IReadOnlyList<string> Keep, IReadOnlyList<string> Remove);

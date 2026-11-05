@@ -121,6 +121,35 @@ public sealed class RecoveryRecycleGroupTests
         Assert.Empty(_journal.ReadPendingOperations());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retry_MemberReplacedAfterPreparedWasJournaled_TouchesNothingAndFailsAsSourceChanged(bool permanent)
+    {
+        // D1: the pre-check passed, then (while Prepared is written) another program replaced the file. The mutation must
+        // re-stat first like the Move/Copy branch, or the replacement is deleted/recycled while the journal names the old file.
+        _fs.AddFile(Raw, new string('r', 10), Stamp);
+        if (permanent) _bin.NoBinPaths.Add(Raw);
+        var service = new RecoveryRetryService(_journal, _fs, new FixedClock(Stamp.AddMinutes(2)), _bin, () => true);
+        var failed = FailedGroup(Member(Raw, permanent: permanent));
+        _journal.Append(failed);
+        _fs.OpenAppendHook = _ =>
+        {
+            _fs.OpenAppendHook = null;
+            _fs.AddFile(Raw, new string('x', 25), Stamp.AddHours(1));
+            return null;
+        };
+
+        var result = await service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Tr.CoreRecoverySourceChanged, result.Message);
+        Assert.Empty(_bin.Recycled);
+        Assert.Empty(_bin.PermanentlyDeleted);
+        Assert.True(_fs.FileExists(Raw));
+        Assert.Equal(JournalState.Failed, result.Entry!.State);
+    }
+
     [Fact]
     public void Retry_GroupRecycle_RunsTheBinCallsOffTheCallerThread()
     {
