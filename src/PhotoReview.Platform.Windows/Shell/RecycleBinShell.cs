@@ -44,6 +44,39 @@ internal interface IRecycleVerbs : IDisposable
 
 internal static class RecycleBinRestorer
 {
+    /// <summary>
+    /// P-331: read-only twin of <see cref="Restore"/>. True when at least one bin item matches the recorded file; nothing is restored.
+    /// Unlike Restore it does NOT swallow failures: a bin that cannot be opened or read throws, so the caller never mistakes
+    /// "could not ask" for "not in the bin".
+    /// </summary>
+    internal static bool Contains(Func<IRecycleBinSession?> openSession, string originalPath, long expectedSize,
+        DateTime expectedLastWriteUtc, ILog log)
+    {
+        using var session = openSession() ?? throw new InvalidOperationException("The Recycle Bin could not be opened.");
+        var found = false;
+        foreach (var entry in session.Entries())
+        {
+            try
+            {
+                var deletedFrom = entry.DeletedFrom();
+                var name = entry.DisplayName();
+                if (!entry.TryGetSize(out var size)) continue;
+                if (!entry.TryGetModifiedUtc(out var modified)) continue;
+                if (RecycleCandidateSelector.IsMatch(new RecycleCandidate(deletedFrom, name, size, modified), originalPath, expectedSize, expectedLastWriteUtc))
+                    found = true;
+            }
+            catch (Exception ex) when (RecycleItemFailure.IsPerItem(ex))
+            {
+                log.Error("Recycle Bin item inspection failed", ex);
+            }
+            finally
+            {
+                entry.Dispose();
+            }
+        }
+        return found;
+    }
+
     /// <param name="openSession">Mở phiên thùng rác (null = thùng rác không khả dụng).</param>
     internal static bool Restore(Func<IRecycleBinSession?> openSession, string originalPath, long expectedSize,
         DateTime expectedLastWriteUtc, ILog log)
@@ -115,6 +148,10 @@ internal sealed class ComRecycleBinSession : IRecycleBinSession
     /// <summary>Chạy trên luồng STA riêng (xem <see cref="ShellStaRunner"/>); mọi đối tượng COM sống và chết trong cùng lần gọi.</summary>
     internal static bool Restore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc, ILog log)
         => ShellStaRunner.Run(() => RecycleBinRestorer.Restore(Open, originalPath, expectedSize, expectedLastWriteUtc, log));
+
+    /// <summary>P-331: see <see cref="RecycleBinRestorer.Contains"/>; same STA thread as the restore.</summary>
+    internal static bool Contains(string originalPath, long expectedSize, DateTime expectedLastWriteUtc, ILog log)
+        => ShellStaRunner.Run(() => RecycleBinRestorer.Contains(Open, originalPath, expectedSize, expectedLastWriteUtc, log));
 
     internal static IRecycleBinSession? Open()
     {

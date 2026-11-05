@@ -39,6 +39,25 @@ public sealed class WindowsRecycleBinRestoreGuardTests
         Assert.Equal(stamp, seen.Value.Stamp);
     }
 
+    [Fact(DisplayName = "P-331: ContainsRecycledItem delegates the recorded identity to the shell query and keeps its answer or its failure")]
+    public void ContainsRecycledItem_DelegatesToShellQuery_AndKeepsAnswerOrFailure()
+    {
+        var stamp = new DateTime(2026, 9, 25, 1, 2, 3, DateTimeKind.Utc);
+        (string Path, long Size, DateTime Stamp)? seen = null;
+        var answer = true;
+        var bin = new WindowsRecycleBin(null, new NoSettings(), shellContains: (p, size, t) =>
+        {
+            seen = (p, size, t);
+            return answer ? true : throw new IOException("shell unavailable");
+        });
+
+        Assert.True(bin.ContainsRecycledItem(@"C:\photos\a.jpg", 7, stamp));
+        Assert.Equal((@"C:\photos\a.jpg", 7L, stamp), seen!.Value);
+        answer = false;
+        Assert.Throws<IOException>(() => bin.ContainsRecycledItem(@"C:\photos\a.jpg", 7, stamp));
+        Assert.Throws<ArgumentException>(() => bin.ContainsRecycledItem(" ", 7, stamp));
+    }
+
     [Fact(DisplayName = "R18: the restore proof compares size AND write time (a same-timestamp file of another size is not the restored photo)")]
     public void IsExpectedFile_SameTimestampDifferentSize_IsNotTheRestoredFile()
     {
