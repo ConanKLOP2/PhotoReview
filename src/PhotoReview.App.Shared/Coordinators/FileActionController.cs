@@ -518,6 +518,19 @@ public sealed class FileActionController
             }
 
             AppLog.Error($"File action {operation} threw: {source}", ex);
+            // P-330: when the executor threw and the source is no longer where it was, the file may already be moved, recycled or
+            // deleted: ActionFailed would claim "could not run". Say the outcome is unknown instead. Only with a file system seam;
+            // a group counts when any image member is gone. The catalog restore below stays unconditional (presenter heals it).
+            var outcomeUnknown = false;
+            try
+            {
+                outcomeUnknown = _fileSystem is not null
+                    && (group is null ? !_fileSystem.FileExists(source) : group.ImagePaths.Any(p => !_fileSystem.FileExists(p)));
+            }
+            catch (Exception probeEx) when (probeEx is not OperationCanceledException)
+            {
+                AppLog.Error("Probing the source after a thrown file action failed", probeEx);
+            }
             if (isRemove && sourceIndex >= 0 && _clock.IsFolderCurrent(folderGen))
             {
                 if (group is null) _catalog.Restore(source, sourceIndex);
@@ -537,7 +550,9 @@ public sealed class FileActionController
                 }
             }
             if (!_clock.IsFolderCurrent(folderGen)) return false; // R08: never write this status into a newly opened folder
-            _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, UserFacingError.Describe(ex)));
+            _sink.SetStatusText(outcomeUnknown
+                ? Tr.StatusActionOutcomeUnknown(actionName, Path.GetFileName(source), UserFacingError.Describe(ex))
+                : StatusFormatter.ActionFailed(actionName, UserFacingError.Describe(ex)));
             if (operation == FileOperationType.Recycle) ReportRecycleFailure(source, UserFacingError.Describe(ex));
             return false;
         }
