@@ -505,10 +505,13 @@ public sealed class OperationJournal
             // P-331: the source being gone is not proof of a recycle (it can be deleted for good or moved away): with a bin
             // wired, the item must be in it. Not in the bin = Failed/PendingUnconfirmed. A bin that cannot be asked throws:
             // the per-entry guard of ReconcilePendingOperations logs "skipped" and the entry stays Prepared (retried next start).
+            // A Permanent entry (Q-R8: drive without a Recycle Bin) was deleted for good on purpose: the bin never holds it, so
+            // "source gone" is its completed outcome and the bin is not asked.
             JournalState state;
             string failureCode = JournalErrors.SourceStillExistsAfterRecovery;
             if (_fileSystem.FileExists(pending.Source)) state = JournalState.Failed;
-            else if (_recycleBin is null || _recycleBin.ContainsRecycledItem(pending.Source, pending.Size, pending.LastWriteUtc)) state = JournalState.Committed;
+            else if (_recycleBin is null || pending.Permanent == true
+                || _recycleBin.ContainsRecycledItem(pending.Source, pending.Size, pending.LastWriteUtc)) state = JournalState.Committed;
             else
             {
                 state = JournalState.Failed;

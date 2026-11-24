@@ -441,6 +441,22 @@ public sealed class OperationJournalUnitTests
         Assert.Equal(JournalState.Failed, journal.ReadFailedOperations().Single(x => x.Id == "gone").State);
     }
 
+    [Fact(DisplayName = "ReconcilePendingOperations for a permanent Recycle with a bin: source gone is committed without asking the bin")]
+    public void ReconcileRecycle_PermanentAndSourceGone_IsCommittedWithoutAskingTheBin()
+    {
+        var bin = new QueryableBin((_, _, _) => false);
+        var journal = CreateJournalWithBin(bin);
+        journal.Append(new JournalEntry("perm", FileOperationType.Recycle, JournalState.Prepared, @"Z:\photos\a.jpg", null, 5, _clock.UtcNow, _clock.UtcNow,
+            Permanent: true));
+
+        var perm = Assert.Single(journal.ReconcilePendingOperations());
+
+        Assert.Equal(JournalState.Committed, perm.State);
+        Assert.Null(perm.Error);
+        Assert.True(perm.Permanent);
+        Assert.Equal(0, bin.Asked);
+    }
+
     [Fact(DisplayName = "ReconcilePendingOperations for Recycle with a bin that cannot be asked: the entry stays Prepared")]
     public void ReconcileRecycle_BinQueryThrows_LeavesEntryPrepared_AndRetriesNextStart()
     {
